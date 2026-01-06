@@ -11,16 +11,17 @@ from PySide6 import QtWidgets
 
 from config.settings import settings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, DEFAULT_MOCK_MODE, Preset, \
     CATEGORY_MAX, MUSIC_TAGS, MUSIC_CATEGORIES, PRESETS, CATEGORY_MIN
-from logic import mp3, analyzer
+from logic import analyzer, mp3
 from config.theme import app_theme
 
 from logic.analyzer import Analyzer
 from components.CategorySlider import CategorySlider
 from components.QJumpSlider import QJumpSlider
-from components.QToggle import QToggle
+from components.VolumeSlider import VolumeSlider
 from components.StarRating import StarRating
+from components.QToggle import QToggle
 from components.Visualizer import Visualizer
-from components.VolumeSlider import RepeatMode, RepeatButton, VolumeSlider
+from components.VolumeSlider import RepeatMode, RepeatButton
 from logic.mp3 import Mp3Entry
 from logic.audioengine import AudioEngine
 
@@ -1703,7 +1704,6 @@ class MusicPlayer(QMainWindow):
                 QMessageBox.critical(self, "Analysis Error", f"Failed to analyze file: {e}")
 
     def pick_load_playlist(self):
-
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Playlist to Load",
                                                    dir=settings.value(SettingKeys.LAST_DIRECTORY),
                                                    filter="Playlist (*.m3u *.M3U);;All (*)")
@@ -1723,7 +1723,6 @@ class MusicPlayer(QMainWindow):
                 QMessageBox.critical(self, "Save Error", f"Failed to save file: {e}")
 
     def pick_analyze_directory(self):
-        global settings
         dir_path = QFileDialog.getExistingDirectory(self, "Select Directory to Analyze",
                                                     dir=settings.value(SettingKeys.LAST_DIRECTORY))
         if dir_path:
@@ -1737,7 +1736,6 @@ class MusicPlayer(QMainWindow):
                 QMessageBox.critical(self, "Analysis Error", f"Failed to analyze directory: {e}")
 
     def pick_load_directory(self):
-        global settings
         directory = QFileDialog.getExistingDirectory(self, "Select Music Directory",
                                                      dir=settings.value(SettingKeys.LAST_DIRECTORY))
         if directory:
