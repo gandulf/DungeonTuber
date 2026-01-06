@@ -245,7 +245,6 @@ class SettingsDialog(QDialog):
         layout.addWidget(button_box)
 
     def init_general_tab(self):
-        global settings
         layout =  QVBoxLayout(self.general_tab)
 
         analyzer_layout = QFormLayout()
@@ -392,7 +391,7 @@ class SettingsDialog(QDialog):
         self.categories_table.resizeRowsToContents()
 
     def reset_categories(self):
-        global MUSIC_CATEGORIES, settings
+        global MUSIC_CATEGORIES
         settings.remove(SettingKeys.CATEGORIES)
 
         MUSIC_CATEGORIES = _original_music_categories.copy()
@@ -400,7 +399,7 @@ class SettingsDialog(QDialog):
         self.fill_categories()
 
     def reset_tags(self):
-        global MUSIC_TAGS, settings
+        global MUSIC_TAGS
         settings.remove(SettingKeys.TAGS)
 
         MUSIC_TAGS = _original_music_tags.copy()
@@ -424,7 +423,6 @@ class SettingsDialog(QDialog):
             self.tags_table.removeRow(row)
 
     def accept(self):
-        global settings
         settings.setValue(SettingKeys.GEMINI_API_KEY, self.api_key_input.text())
         settings.setValue(SettingKeys.MOCK_MODE, self.mock_mode_checkbox.isChecked())
         settings.setValue(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())

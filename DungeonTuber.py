@@ -712,8 +712,6 @@ class SongTable(QTableView):
                                   type=bool) or self.tableModel.slider_values.get(category, 0) > 0
 
     def update_category_column_visibility(self):
-        global all_categories
-
         self.setColumnHidden(FAV_COL, not settings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
         self.setColumnHidden(TITLE_COL, not settings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
         self.setColumnHidden(ARTIST_COL, not settings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
@@ -1553,7 +1551,6 @@ class MusicPlayer(QMainWindow):
         return sliders_widget
 
     def toggle_tag(self, state):
-        global selected_tags
         toggle = self.sender()
         tag = toggle.property("tag")
         if state == 0 and tag in selected_tags:
@@ -1786,8 +1783,6 @@ class MusicPlayer(QMainWindow):
         self.update_tags_and_presets()
 
     def load_files(self, table: SongTable, mp3_files: list[Path]):
-        global selected_tags, slider_values, available_tags
-
         if not mp3_files:
             QMessageBox.information(self, "Scan", "No MP3 files found.")
             return
@@ -1830,7 +1825,6 @@ class MusicPlayer(QMainWindow):
             self.player.current_index = table.index_of(data)
 
     def load_initial_directory(self):
-        global settings
         last_dir = settings.value(SettingKeys.LAST_DIRECTORY)
         if last_dir and os.path.isdir(last_dir):
             self.load_directory(last_dir)
