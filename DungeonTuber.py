@@ -1,22 +1,28 @@
 import functools
-import platform
 import sys
 import os
 import json
 import tempfile
 import threading
 import traceback
-
+import logging
 import jsonpickle
+from PySide6 import QtWidgets
 
-import analyzer
-import mp3
-import theme
-from theme import app_theme
-from analyzer import Analyzer
-from mp3 import Mp3Entry
-from audioengine import AudioEngine
-from components import *
+from config.settings import settings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, DEFAULT_MOCK_MODE, Preset, \
+    CATEGORY_MAX, MUSIC_TAGS, MUSIC_CATEGORIES, PRESETS, CATEGORY_MIN
+from logic import mp3, analyzer
+from config.theme import app_theme
+
+from logic.analyzer import Analyzer
+from components.CategorySlider import CategorySlider
+from components.QJumpSlider import QJumpSlider
+from components.QToggle import QToggle
+from components.StarRating import StarRating
+from components.Visualizer import Visualizer
+from components.VolumeSlider import RepeatMode, RepeatButton, VolumeSlider
+from logic.mp3 import Mp3Entry
+from logic.audioengine import AudioEngine
 
 from pathlib import Path
 from PySide6.QtWidgets import (
@@ -24,16 +30,14 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel,
     QFileDialog, QMessageBox, QAbstractItemView, QMenu, QDialog, QFormLayout, QLineEdit, QCheckBox,
     QDialogButtonBox, QTextEdit, QStatusBar, QProgressBar, QHeaderView, QTableView, QStyleOptionViewItem,
-    QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QFrame
+    QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QStyle, QSlider
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
-    QPersistentModelIndex, QFileInfo, QObject, QEvent
-from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QLinearGradient, \
-    QPainter, QKeyEvent, QFont, QFontMetrics, QGradient, QActionGroup
+    QPersistentModelIndex, QFileInfo, QEvent, QRect
+from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QKeyEvent, QFont, QFontMetrics, \
+    QActionGroup
 
-from settings import settings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, DEFAULT_MOCK_MODE, PRESETS, Preset, \
-    CATEGORY_MAX, MUSIC_TAGS, MUSIC_CATEGORIES, CATEGORY_MIN
-from theme import AppTheme
+
 
 # --- Constants ---
 logger = logging.getLogger("main")
@@ -1104,7 +1108,7 @@ class MusicPlayer(QMainWindow):
         self.setWindowTitle(application.applicationName() + " " + application.applicationVersion())
         self.resize(1200, 700)
 
-        global all_categories, PRESETS, MUSIC_CATEGORIES
+        global all_categories
         # Load custom categories and tags
         try:
             custom_categories = settings.value(SettingKeys.CATEGORIES)
@@ -1892,8 +1896,8 @@ def main():
     app.setApplicationName("DungeonTuber")
     app.setApplicationVersion("0.1.0")
 
-    theme.app_theme.application = app
-    theme.app_theme.apply_stylesheet()  # Initial load
+    app_theme.application = app
+    app_theme.apply_stylesheet()  # Initial load
 
     try:
         import vlc
@@ -1916,12 +1920,12 @@ def get_icon_path():
     """Gets the correct icon path for runtime"""
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
-        icon_path = os.path.join(os.path.dirname(sys.executable), 'icon.ico')
+        icon_path = os.path.join(os.path.dirname(sys.executable), 'docs/icon.ico')
         if not os.path.exists(icon_path):
-            icon_path = os.path.join(os.getcwd(), 'icon.ico')
+            icon_path = os.path.join(os.getcwd(), 'docs/icon.ico')
     else:
         # Running as Python script
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon.ico')
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs/icon.ico')
     return icon_path
 
 

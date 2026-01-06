@@ -135,7 +135,7 @@ settings: QSettings = QSettings("Gandulf", "DungeonTuber")
 
 def default_gemini_api_key() -> str | None:
     try:
-        return str(open("apikey.txt","r").readline())
+        return str(open("../apikey.txt", "r").readline())
     except FileNotFoundError:
         return None
 

@@ -27,4 +27,4 @@ dev = [
 ]
 
 [project.scripts]
-voxtube = "main:main"
+voxtube = "DungeonTuber:main"

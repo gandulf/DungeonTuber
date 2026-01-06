@@ -3,10 +3,9 @@ import platform
 import vlc
 
 from PySide6.QtCore import QTimer, Signal, QObject, QSize
-from PySide6.QtWidgets import QFrame
 
-from components import VisualizerFrame
-from settings import settings, SettingKeys
+from components.Visualizer import VisualizerFrame
+from config.settings import settings, SettingKeys
 
 DEFAULT_VOLUME = 70
 

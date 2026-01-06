@@ -14,11 +14,11 @@ from google import genai
 from google.genai.errors import ClientError
 from google.genai.types import UploadFileConfig, Content, Part, GenerateContentConfig, Schema, Type, ThinkingConfig
 
-import mp3
-from mp3 import Mp3Entry
+from logic import mp3
+from logic.mp3 import Mp3Entry
 from pathlib import Path
 
-from settings import settings, SettingKeys, MUSIC_CATEGORIES, MUSIC_TAGS, CATEGORY_MIN, CATEGORY_MAX, MusicCategory
+from config.settings import settings, SettingKeys, MUSIC_CATEGORIES, MUSIC_TAGS, CATEGORY_MIN, CATEGORY_MAX, MusicCategory
 
 logger = logging.getLogger("main")
 

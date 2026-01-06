@@ -2,7 +2,7 @@ from PySide6.QtCore import QObject, Property, Qt
 from PySide6.QtGui import QColor, QPalette, QBrush, QGradient
 from PySide6.QtWidgets import QApplication
 
-from settings import settings, SettingKeys
+from config.settings import settings, SettingKeys
 
 def _alpha(color: QColor, alpha: int = None):
     if alpha is None:
