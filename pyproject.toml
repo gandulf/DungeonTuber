@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "DungeonTuber"
+version = "0.1.0"
+description = "RPG music player wit advanced categorization"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+  {name = "Gandulf Kohlweiss", email = "gandulf.k@gmail.com"}
+]
+dependencies = [
+    "google-genai==1.56.0",
+    "jsonpickle==4.1.1",
+    "mutagen==1.47.0",
+    "PySide6_Essentials==6.10.1",
+    "shiboken6==6.10.1",
+    "python-vlc==3.0.21203"
+]
+
+[project.optional-dependencies]
+dev = [
+    "Nuitka==2.8.9",
+    "pyinstaller==6.17.0"
+]
+
+[project.scripts]
+voxtube = "main:main"

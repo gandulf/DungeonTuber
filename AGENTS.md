@@ -1,0 +1,1 @@
+This is a python project that uses PyQT6 and native vlc 
