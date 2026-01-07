@@ -12,6 +12,7 @@
 # nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/splash.png=docs/splash.png
 # nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/splash.png=docs/splash.png
 # nuitka-project: --mingw64
+# nuitka-project: --output-dir=dist
 
 import functools
 import locale

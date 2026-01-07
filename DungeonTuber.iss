@@ -1,12 +1,13 @@
-; -- Example1.iss --
-; Demonstrates copying 3 files and creating an icon.
+; Setup script for pyinstaller or nuitka generated exe
 
-; SEE THE DOCUMENTATION FOR DETAILS ON CREATING .ISS SCRIPT FILES!
+#ifexist "dist\DungeonTuber\DungeonTuber.exe"
+  #define SourceFolder "dist\DungeonTuber"
+#endif
+#ifexist "dist\DungeonTuber.dist\DungeonTuber.exe"
+  #define SourceFolder "dist\DungeonTuber.dist"
+#endif
 
-;#define SourceFolder "DungeonTuber.dist"
-#define SourceFolder "dist\DungeonTuber"
 #define AppVersion GetVersionNumbersString(SourceFolder+"\DungeonTuber.exe")
-
 
 [Setup]
 AppName=Dungeon Tuber

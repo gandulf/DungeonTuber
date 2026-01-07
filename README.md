@@ -73,7 +73,7 @@ msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonT
 
 ### Using PyInstaller
 ```bash
-pyinstaller DungeonTuber.py --windowed --icon docs/icon.ico --add-data="docs/icon.ico:docs" --add-data="docs/splash.png:docs"
+pyinstaller DungeonTuber.spec
 ```
 
 ### Using Nuitka (Recommended)
