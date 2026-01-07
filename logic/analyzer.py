@@ -30,7 +30,7 @@ def is_analyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     else:
         entry = mp3.parse_mp3(file_path)
 
-    return set(categories) == set(entry.categories.keys()) and entry.summary != "This is a mock summary." and not entry.summary.__contains__("Voxalyzer")
+    return set(categories) == set(entry.categories.keys()) and entry.summary is not None and entry.summary != "This is a mock summary." and not entry.summary.__contains__("Voxalyzer")
 
 def is_voxalyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
@@ -38,7 +38,7 @@ def is_voxalyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     else:
         entry = mp3.parse_mp3(file_path)
 
-    return entry.summary.__contains__("Voxalyzer")
+    return entry.summary is not None and entry.summary.__contains__("Voxalyzer")
 
 class Analyzer(QObject):
     error = Signal(object)
@@ -101,7 +101,7 @@ class Analyzer(QObject):
     def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
 
         if not self.api_key:
-            logger.warning("API Key is missing")
+            logger.warning(_("API Key is missing"))
             return None
 
         try:
@@ -110,16 +110,8 @@ class Analyzer(QObject):
             with open(file_path, "rb") as file_content:
                 myfile = client.files.upload(file=file_content, config=UploadFileConfig(mime_type="audio/mpeg"))
 
-            prompt = f"""Aufgabe:
-Ordne das folgende Musikstück für die Nutzung im Rollenspiel „Das Schwarze Auge“ ein.
-Bewerte das Stück anhand der untenstehenden Kategorien jeweils mit einem Wert von {CATEGORY_MIN} bis {CATEGORY_MAX}.
+            prompt =_("GeminiUserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, self.categories_to_string(MUSIC_CATEGORIES), self.tags_to_string(MUSIC_TAGS))
 
-Hier ist die Liste der Kategorien nach denen du das Musikstück bewerten sollst mit zugehörigen Beschreibungen:
-{self.categories_to_string(MUSIC_CATEGORIES)}
-
-Danach vergib noch ein paar Tags aus folgender Liste, die am besten passen. Hier ist keine Skala notwendig:
-{self.tags_to_string(MUSIC_TAGS)}
-"""
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=[
@@ -133,26 +125,17 @@ Danach vergib noch ein paar Tags aus folgender Liste, die am besten passen. Hier
                 config=GenerateContentConfig(
                     thinking_config=ThinkingConfig(thinking_budget=0),  # Disables thinking
                     response_mime_type="application/json",
-                    system_instruction=f"""Du bist ein erfahrener Hörer von Fantasy-, Film- und Rollenspielmusik.
-Du bewertest Musik so, wie sie von einem durchschnittlichen Hörer wahrgenommen wird,
-nicht technisch und nicht analytisch, sondern emotional und szenisch.
-
-Deine Bewertungen müssen über viele hundert Tracks hinweg konsistent bleiben.
-Eine 3 bedeutet immer dasselbe, egal welcher Track zuvor bewertet wurde.
-Werte sollen relativ zueinander sinnvoll verteilt sein (nicht alles {CATEGORY_MIN} oder {CATEGORY_MAX}).
-Nutze die gesamte Skala von {CATEGORY_MIN} bis {CATEGORY_MAX}, wenn passend.
-Du hältst dich strikt an die vorgegebenen Kategorien, Tags und deren Beschreibungen.
-Du gibst ausschließlich JSON zurück, ohne zusätzliche Erklärungen.""",
+                    system_instruction=_("GeminiSystemPrompt").format(CATEGORY_MIN,CATEGORY_MAX),
                     response_schema=Schema(
                         type=Type.OBJECT,
                         properties={
                             "summary": Schema(
                                 type=Type.STRING,
-                                description="Eine kurze Zusammenfassung des Musikstückes bezüglich Stimmung (ca. 20 Wörter).",
+                                description=_("GeminiSummaryDescription"),
                             ),
                             "categories": Schema(
                                 type=Type.ARRAY,
-                                description=f"Liste alle Kategorien auf und bewerte sie auf eine Skala von {CATEGORY_MIN} bis {CATEGORY_MAX}",
+                                description=_("GeminiCategoriesDescription").format(CATEGORY_MIN,CATEGORY_MAX),
                                 items=Schema(
                                     type=Type.OBJECT,
                                     properties={
@@ -164,7 +147,7 @@ Du gibst ausschließlich JSON zurück, ohne zusätzliche Erklärungen.""",
                             ),
                             "tags": Schema(
                                 type=Type.ARRAY,
-                                description="Eine Liste von Tags die auf das Musikstück am besten zutreffen.",
+                                description=_("GeminiTagsDescription"),
                                 items=Schema(
                                     type=Type.STRING
                                 )
@@ -262,11 +245,11 @@ class Worker(QRunnable):
         logger.debug(f"Processing {file_path}...")
 
         if (settings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool) and is_analyzed(file_path)):
-            self.analyzer.progress.emit(f"Skipping already analyzed file {Path(file_path).name}")
+            self.analyzer.progress.emit(_("Skipping already analyzed file {0}").format(Path(file_path).name))
             logger.debug(f"Skipping already analyzed file {Path(file_path).name}")
             return
 
-        self.analyzer.progress.emit(f"Analyzing {Path(file_path).name}...")
+        self.analyzer.progress.emit(_("Analyzing {0}...").format(Path(file_path).name))
 
         if self.analyzer.mock_mode:
             response_data = self.analyzer.analyze_mp3_mock(file_path)
@@ -288,7 +271,7 @@ class Worker(QRunnable):
             else:
                 logger.warning(f"Could not find summary or categories for {file_path}.")
 
-            self.analyzer.progress.emit(f"Processed {Path(file_path).name}.")
+            self.analyzer.progress.emit(_("Processed {0}.").format(Path(file_path).name))
         except Exception as e:
             traceback.print_exc()
             logger.error(f"An error occurred while adding tags to {file_path}: {e}")

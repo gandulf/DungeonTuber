@@ -15,19 +15,19 @@ authors = [
   {name = "Gandulf Kohlweiss", email = "gandulf.k@gmail.com"}
 ]
 dependencies = [
-    "google-genai==1.56.0",
-    "jsonpickle==4.1.1",
-    "mutagen==1.47.0",
-    "PySide6_Essentials==6.10.1",
-    "shiboken6==6.10.1",
-    "python-vlc==3.0.21203"
+    "google-genai>=1.56.0",
+    "jsonpickle>=4.1.1",
+    "mutagen>=1.47.0",
+    "PySide6_Essentials>=6.10.1",
+    "shiboken6>=6.10.1",
+    "python-vlc>=3.0.21203"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "Nuitka==2.8.9",
-    "pyinstaller==6.17.0"
+    "Nuitka>=2.8.9",
+    "pyinstaller>=6.17.0"
 ]
 
 [project.scripts]
-dungeontuber = "dungeontuber.DungeonTuber:main"
+dungeontuber = "DungeonTuber:main"

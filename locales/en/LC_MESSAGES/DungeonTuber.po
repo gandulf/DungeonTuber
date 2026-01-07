@@ -1,0 +1,321 @@
+msgid ""
+msgstr ""
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "File"
+msgstr "File"
+
+msgid "Open"
+msgstr "Open"
+
+msgid "Open Directory"
+msgstr "Open Directory"
+
+msgid "Open Playlist"
+msgstr "Open Playlist"
+
+msgid "Save Favorites"
+msgstr "Save Favorites"
+
+msgid "Analyze File"
+msgstr "Analyze File"
+
+msgid "Analyze Directory"
+msgstr "Analyze Directory"
+
+msgid "Settings"
+msgstr "Settings"
+
+msgid "Exit"
+msgstr "Exit"
+
+msgid "View"
+msgstr "View"
+
+msgid "Toggle Filter"
+msgstr "Toggle Filter"
+
+msgid "Directory Tree"
+msgstr "Directory Tree"
+
+msgid "Font Size"
+msgstr "Font Size"
+
+msgid "Small"
+msgstr "Small"
+
+msgid "Medium"
+msgstr "Medium"
+
+msgid "Large"
+msgstr "Large"
+
+msgid "Visualizer"
+msgstr "Visualizer"
+
+msgid "VLC Spectrum"
+msgstr "VLC Spectrum"
+
+msgid "Fake"
+msgstr "Fake"
+
+msgid "None"
+msgstr "None"
+
+msgid "Theme"
+msgstr "Theme"
+
+msgid "Light"
+msgstr "Light"
+
+msgid "Dark"
+msgstr "Dark"
+
+msgid "Save As Preset"
+msgstr "Save As Preset"
+
+msgid "Filter songs..."
+msgstr "Filter songs..."
+
+msgid "General"
+msgstr "General"
+
+msgid "Remove"
+msgstr "Remove"
+
+msgid "Reset Presets"
+msgstr "Reset Presets"
+
+msgid "Select File to Analyze"
+msgstr "Select File to Analyze"
+
+msgid "Mp3 (*.mp3 *.MP3);;All (*)"
+msgstr "Mp3 (*.mp3 *.MP3);;All (*)"
+
+msgid "Analysis Error"
+msgstr "Analysis Error"
+
+msgid "Failed to analyze file: {0}"
+msgstr "Failed to analyze file: {0}"
+
+msgid "Failed to analyze directory: {0}"
+msgstr "Failed to analyze directory: {0}"
+
+msgid "Failed to scan directory: {0}"
+msgstr "Failed to scan directory: {0}"
+
+msgid "Select Playlist to Load"
+msgstr "Select Playlist to Load"
+
+msgid "Playlist (*.m3u *.M3U);;All (*)"
+msgstr "Playlist (*.m3u *.M3U);;All (*)"
+
+msgid "Select Playlist to Save"
+msgstr "Select Playlist to Save"
+
+msgid "Playlist (*.m3u *M3U);;All (*)"
+msgstr "Playlist (*.m3u *M3U);;All (*)"
+
+msgid "Save Complete"
+msgstr "Save Complete"
+
+msgid "Save Error"
+msgstr "Save Error"
+
+msgid "File {0} processed."
+msgstr "File {0} processed."
+
+msgid "Failed to save file: {0}"
+msgstr "Failed to save file: {0}"
+
+msgid "Select Directory to Analyze"
+msgstr "Select Directory to Analyze"
+
+msgid "Select Music Directory"
+msgstr "Select Music Directory"
+
+msgid "Open Error"
+msgstr "Open Error"
+
+msgid "Failed to load playlist: {0}"
+msgstr "Failed to load playlist: {0}"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "Scan"
+msgstr "Scan"
+
+msgid "No MP3 files found."
+msgstr "No MP3 files found."
+
+msgid "Python-VLC module not found."
+msgstr "Python-VLC module not found."
+
+msgid "Categories"
+msgstr "Categories"
+
+msgid "Tags"
+msgstr "Tags"
+
+msgid "Analyzer"
+msgstr "Analyzer"
+
+msgid "Gemini API Key"
+msgstr "Gemini API Key"
+
+msgid "Enable Mock Mode"
+msgstr "Enable Mock Mode"
+
+msgid "Skip Analyzed Music"
+msgstr "Skip Analyzed Music"
+
+msgid "Song Table"
+msgstr "Song Table"
+
+msgid "Use mp3 title instead of file name"
+msgstr "Use mp3 title instead of file name"
+
+msgid "Dynamic Category Columns"
+msgstr "Dynamic Category Columns"
+
+msgid "Favorite Column Visible"
+msgstr "Favorite Column Visible"
+
+msgid "Title Column Visible"
+msgstr "Title Column Visible"
+
+msgid "Artist Column Visible"
+msgstr "Artist Column Visible"
+
+msgid "Album Column Visible"
+msgstr "Album Column Visible"
+
+msgid "Summary Visible"
+msgstr "Summary Visible"
+
+msgid "Category"
+msgstr "Category"
+
+msgid "Group"
+msgstr "Group"
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Levels (json)"
+msgstr "Levels (json)"
+
+msgid "Add"
+msgstr "Add"
+
+msgid "Reset All"
+msgstr "Reset All"
+
+msgid "Tag"
+msgstr "Tag"
+
+msgid "New Category"
+msgstr "New Category"
+
+msgid "New Tag"
+msgstr "New Tag"
+
+msgid "Set As Home"
+msgstr "Set As Home"
+
+msgid "Clear Home"
+msgstr "Clear Home"
+
+msgid "Favorite"
+msgstr "Favorite"
+
+msgid "Title"
+msgstr "Title"
+
+msgid "Artist"
+msgstr "Artist"
+
+msgid "Album"
+msgstr "Album"
+
+msgid "Summary"
+msgstr "Summary"
+
+msgid "Dynamic Columns"
+msgstr "Dynamic Columns"
+
+msgid "Update Error"
+msgstr "Update Error"
+
+msgid "Failed to update summary: {0}"
+msgstr "Failed to update summary: {0}"
+
+msgid "Failed to update title: {0}"
+msgstr "Failed to update title: {0}"
+
+msgid "Failed to update favorite: {0}"
+msgstr "Failed to update favorite: {0}"
+
+msgid "Failed to update tags: {0}"
+msgstr "Failed to update tags: {0}"
+
+msgid "Failed to rename file: {0}"
+msgstr "Failed to rename file: {0}"
+
+msgid "Analyze"
+msgstr "Analyze"
+
+msgid "Edit Description"
+msgstr "Edit Description"
+
+msgid "No Track Selected"
+msgstr "No Track Selected"
+
+msgid "Error loading file"
+msgstr "Error loading file"
+
+msgid "Score"
+msgstr "Score"
+
+msgid "Edit Song"
+msgstr "Edit Song"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "GeminiUserPrompt"
+msgstr "Task:"
+"Categorize the following piece of music for use in the role-playing game \"The Dark Eye.\""
+"Rate the piece based on the categories below with a value from {0} to {1} each."
+"\n"
+"Here is the list of categories to rate the music piece by, along with their descriptions:\n"
+"{2}"
+"\n"
+"Then, assign a few tags from the following list that fit best. No scale is necessary here:\n"
+"{3}"
+
+msgid "GeminiSystemPrompt"
+msgstr "You are an experienced listener of fantasy, film, and role-playing music."
+"You evaluate music as perceived by an average listener,"
+"not technically or analytically, but emotionally and scenically."
+"\n"
+"Your ratings must remain consistent across many hundreds of tracks.\n"
+"A 3 always means the same thing, regardless of which track was rated before.\n"
+"Values should be meaningfully distributed relative to each other (not everything {0} or {1}).\n"
+"Use the full scale from {0} to {1} when appropriate.\n"
+"Strictly adhere to the specified categories, tags, and their descriptions.\n"
+"Return only JSON, without additional explanations."
+
+msgid "GeminiSummaryDescription"
+msgstr "A brief summary of the musical piece regarding mood (approx. 20 words)."
+
+msgid "GeminiCategoriesDescription"
+msgstr "List all categories and rate them on a scale from {0} to {1}"
+
+msgid "GeminiTagsDescription"
+msgstr "A list of tags that best apply to the musical piece."

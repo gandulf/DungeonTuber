@@ -215,7 +215,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Settings")
+        self.setWindowTitle(_("Settings"))
         self.resize(800, 600)
 
         layout = QVBoxLayout(self)
@@ -227,17 +227,17 @@ class SettingsDialog(QDialog):
         # General Tab
         self.general_tab = QWidget()
         self.init_general_tab()
-        self.tabs.addTab(self.general_tab, "General")
+        self.tabs.addTab(self.general_tab, _("General"))
 
         # Categories Tab
         self.categories_tab = QWidget()
         self.init_categories_tab()
-        self.tabs.addTab(self.categories_tab, "Categories")
+        self.tabs.addTab(self.categories_tab, _("Categories"))
 
         # Tags Tab
         self.tags_tab = QWidget()
         self.init_tags_tab()
-        self.tabs.addTab(self.tags_tab, "Tags")
+        self.tabs.addTab(self.tags_tab, _("Tags"))
 
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept)
@@ -248,56 +248,56 @@ class SettingsDialog(QDialog):
         layout =  QVBoxLayout(self.general_tab)
 
         analyzer_layout = QFormLayout()
-        analyzerGroup = QGroupBox("Analyzer")
+        analyzerGroup = QGroupBox(_("Analyzer"))
         analyzerGroup.setLayout(analyzer_layout)
 
         layout.addWidget(analyzerGroup,0)
 
         self.api_key_input = QLineEdit()
         self.api_key_input.setText(settings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
-        analyzer_layout.addRow("Gemini API Key:", self.api_key_input)
+        analyzer_layout.addRow(_("Gemini API Key")+":", self.api_key_input)
 
-        self.mock_mode_checkbox = QCheckBox("Enable Mock Mode")
+        self.mock_mode_checkbox = QCheckBox(_("Enable Mock Mode"))
         self.mock_mode_checkbox.setChecked(settings.value(SettingKeys.MOCK_MODE, DEFAULT_MOCK_MODE, type=bool))
         analyzer_layout.addRow("", self.mock_mode_checkbox)
 
-        self.skip_analyzed_mp3 = QCheckBox("Skip Analyzed Music")
+        self.skip_analyzed_mp3 = QCheckBox(_("Skip Analyzed Music"))
         self.skip_analyzed_mp3.setChecked(settings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
         analyzer_layout.addRow("", self.skip_analyzed_mp3)
 
         #
 
         table_layout = QFormLayout()
-        tableGroup = QGroupBox("Song Table")
+        tableGroup = QGroupBox(_("Song Table"))
         tableGroup.setLayout(table_layout)
 
         layout.addWidget(tableGroup,0)
 
-        self.title_file_name_columns = QCheckBox("Use mp3 title instead of file name")
+        self.title_file_name_columns = QCheckBox(_("Use mp3 title instead of file name"))
         self.title_file_name_columns.setChecked(settings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False, type=bool))
         table_layout.addRow("", self.title_file_name_columns)
 
-        self.dynamic_table_columns = QCheckBox("Dynamic Category Columns")
+        self.dynamic_table_columns = QCheckBox(_("Dynamic Category Columns"))
         self.dynamic_table_columns.setChecked(settings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
         table_layout.addRow("", self.dynamic_table_columns)
 
-        self.fav_column = QCheckBox("Favorite Column Visible")
+        self.fav_column = QCheckBox(_("Favorite Column Visible"))
         self.fav_column.setChecked(settings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
         table_layout.addRow("", self.fav_column)
 
-        self.title_column = QCheckBox("Title Column Visible")
+        self.title_column = QCheckBox(_("Title Column Visible"))
         self.title_column.setChecked(settings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
         table_layout.addRow("", self.title_column)
 
-        self.artist_column = QCheckBox("Artist Column Visible")
+        self.artist_column = QCheckBox(_("Artist Column Visible"))
         self.artist_column.setChecked(settings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
         table_layout.addRow("", self.artist_column)
 
-        self.album_column = QCheckBox("Album Column Visible")
+        self.album_column = QCheckBox(_("Album Column Visible"))
         self.album_column.setChecked(settings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
         table_layout.addRow("", self.album_column)
 
-        self.summary_column = QCheckBox("Summary Visible")
+        self.summary_column = QCheckBox(_("Summary Visible"))
         self.summary_column.setChecked(settings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool))
         table_layout.addRow("", self.summary_column)
 
@@ -314,7 +314,7 @@ class SettingsDialog(QDialog):
         self.categories_table = QTableWidget()
         self.categories_table.setItemDelegate(SettingsDialog.SettingsTableDelegate(groups))
         self.categories_table.setColumnCount(4)
-        self.categories_table.setHorizontalHeaderLabels(["Category", "Group", "Description","Levels (json)"])
+        self.categories_table.setHorizontalHeaderLabels([_("Category"), _("Group"), _("Description"),_("Levels (json)")])
         self.categories_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 
         self.fill_categories()
@@ -322,14 +322,14 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.categories_table)
 
         btn_layout = QHBoxLayout()
-        add_btn = QPushButton("Add")
+        add_btn = QPushButton(_("Add"))
         add_btn.clicked.connect(self.add_category)
         btn_layout.addWidget(add_btn)
-        remove_btn = QPushButton("Remove")
+        remove_btn = QPushButton(_("Remove"))
         remove_btn.clicked.connect(self.remove_category)
         btn_layout.addWidget(remove_btn)
 
-        reset_cat_btn = QPushButton("Reset All")
+        reset_cat_btn = QPushButton(_("Reset All"))
         reset_cat_btn.clicked.connect(self.reset_categories)
         btn_layout.addWidget(reset_cat_btn)
         layout.addLayout(btn_layout)
@@ -348,7 +348,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self.tags_tab)
         self.tags_table = QTableWidget()
         self.tags_table.setColumnCount(2)
-        self.tags_table.setHorizontalHeaderLabels(["Tag", "Description"])
+        self.tags_table.setHorizontalHeaderLabels([_("Tag"), _("Description")])
         self.tags_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
         self.fill_tags()
@@ -356,15 +356,15 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.tags_table)
 
         btn_layout = QHBoxLayout()
-        add_btn = QPushButton("Add")
+        add_btn = QPushButton(_("Add"))
         add_btn.clicked.connect(self.add_tag)
         btn_layout.addWidget(add_btn)
 
-        remove_btn = QPushButton("Remove")
+        remove_btn = QPushButton(_("Remove"))
         remove_btn.clicked.connect(self.remove_tag)
         btn_layout.addWidget(remove_btn)
 
-        reset_tags_btn = QPushButton("Reset All")
+        reset_tags_btn = QPushButton(_("Reset All"))
         reset_tags_btn.clicked.connect(self.reset_tags)
         btn_layout.addWidget(reset_tags_btn)
         layout.addLayout(btn_layout)
@@ -380,9 +380,9 @@ class SettingsDialog(QDialog):
     def add_category(self):
         row = self.categories_table.rowCount()
         self.categories_table.insertRow(row)
-        self.categories_table.setItem(row, 0, QTableWidgetItem("New Category"))
-        self.categories_table.setItem(row, 1, QTableWidgetItem("Group"))
-        self.categories_table.setItem(row, 2, QTableWidgetItem("Description"))
+        self.categories_table.setItem(row, 0, QTableWidgetItem(_("New Category")))
+        self.categories_table.setItem(row, 1, QTableWidgetItem(_("Group")))
+        self.categories_table.setItem(row, 2, QTableWidgetItem(_("Description")))
         self.categories_table.setItem(row, 3, QTableWidgetItem("""{
   "1":"",
   "5":"",
@@ -414,8 +414,8 @@ class SettingsDialog(QDialog):
     def add_tag(self):
         row = self.tags_table.rowCount()
         self.tags_table.insertRow(row)
-        self.tags_table.setItem(row, 0, QTableWidgetItem("New Tag"))
-        self.tags_table.setItem(row, 1, QTableWidgetItem("Description"))
+        self.tags_table.setItem(row, 0, QTableWidgetItem(_("New Tag")))
+        self.tags_table.setItem(row, 1, QTableWidgetItem(_("Description")))
 
     def remove_tag(self):
         row = self.tags_table.currentRow()

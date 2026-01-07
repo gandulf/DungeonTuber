@@ -21,7 +21,7 @@
 Use the **File** menu to import your audio files or navigate through the directory tree and open directories in the table below or play songs directly.
 The app uses **Gemini** to scan your tracks, to use it you have to create a Gemini API Key or AI Studio Key and insert it under **Settings**.
 > [!Note]
-> For information how to obtain a API Key please consult the **Internet** e.g. [How to Generate Gemini API Key for Free in 2025](https://wedevs.com/blog/510096/how-to-generate-gemini-api-key/)
+> For information how to obtain an API Key please consult the **Internet** e.g. [How to Generate Gemini API Key for Free in 2025](https://wedevs.com/blog/510096/how-to-generate-gemini-api-key/)
 
 
 ### 2. Filtering by Mood
@@ -72,7 +72,7 @@ pyinstaller DungeonTuber.py --windowed --icon docs/icon.ico --onefile --add-data
 The following command uses MinGW64. If you experience slow compilation, ensure your build directory is excluded from Antivirus scanning.
 
 ```bash
-python -m nuitka --mingw64 --onefile --windows-console-mode=hide --enable-plugin=pyside6 --windows-icon-from-ico=docs/icon.ico --include-data-files=docs/icon.ico=icon.ico --follow-imports --onefile-windows-splash-screen-image=docs/splash.png --jobs=16 DungeonTuber.py
+python -m nuitka --mingw64 --jobs=16 DungeonTuber.py
 ```
 
 *Note: The `--jobs` flag sets the number of parallel compilation jobs. Adjust based on your CPU cores.*
