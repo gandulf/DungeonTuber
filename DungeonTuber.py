@@ -8,8 +8,8 @@
 #    nuitka-project: --macos-create-app-bundle
 # 
 # nuitka-project: --enable-plugin=pyside6 
-# nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/icon.ico=/docs/icon.ico
-# nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/splash.png=/docs/splash.png
+# nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/icon.ico=docs/icon.ico
+# nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/splash.png=docs/splash.png
 
 import functools
 import locale
