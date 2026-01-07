@@ -292,12 +292,6 @@ def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
         logger.error("ERROR occured when processing directory '%s'. Ignoring." % dir)
         logger.error("Text: ", sys.exc_info()[0])
 
-class track():
-    def __init__(self, length, title, path):
-        self.length = length
-        self.title = title
-        self.path = path
-
 def parse_m3u(infile : TextIOWrapper | str | PathLike[str]) -> list[Path] | None:
     try:
         assert(type(infile) == '_io.TextIOWrapper')
@@ -327,7 +321,7 @@ def parse_m3u(infile : TextIOWrapper | str | PathLike[str]) -> list[Path] | None
             #pull length and title from #EXTINF line
             #length,title=line.split('#EXTINF:')[1].split(',',1)
             #song=track(length,title,None)
-        elif (len(line) != 0):
+        elif len(line) != 0:
             # pull song path from all other, non-blank lines
             #song.path=line
             if Path(line).is_absolute():

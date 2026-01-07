@@ -19,7 +19,6 @@ import locale
 import sys
 import os
 import json
-import tempfile
 import threading
 import traceback
 import logging
@@ -49,12 +48,12 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel,
     QFileDialog, QMessageBox, QAbstractItemView, QMenu, QDialog, QFormLayout, QLineEdit, QCheckBox,
     QDialogButtonBox, QTextEdit, QStatusBar, QProgressBar, QHeaderView, QTableView, QStyleOptionViewItem,
-    QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QStyle, QSlider, QSplashScreen
+    QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QStyle, QSlider
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
     QPersistentModelIndex, QFileInfo, QEvent, QRect
 from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QKeyEvent, QFont, QFontMetrics, \
-    QActionGroup, QPixmap
+    QActionGroup
 
 # --- Constants ---
 logger = logging.getLogger("main")
@@ -583,6 +582,9 @@ class DirectoryTree(QTreeView):
 class SongTable(QTableView):
     play_track = Signal(int, Mp3Entry)
 
+    tableModel : TableModel
+    proxyModel : QSortFilterProxyModel
+
     def __init__(self, _analyzer: Analyzer, /):
         super().__init__()
 
@@ -895,8 +897,8 @@ class Player(QWidget):
 
     _update_progress_ticks: bool = True
 
-    def __init__(self, audioEngine: AudioEngine, parent=None, repeatMode: RepeatMode = RepeatMode.NO_REPEAT):
-        super().__init__()
+    def __init__(self, audioEngine: AudioEngine, parent=None):
+        super().__init__(parent)
 
         player_layout = QVBoxLayout(self)
         player_layout.setSpacing(8)
@@ -1128,6 +1130,10 @@ class Player(QWidget):
 
 class MusicPlayer(QMainWindow):
     trackChanged = Signal(int)
+
+    dir_tree_action : QAction
+    light_theme_action : QAction
+    dark_themne_action : QAction
 
     def __init__(self, application: QApplication):
         super().__init__()

@@ -199,8 +199,10 @@ class SettingsDialog(QDialog):
         def setEditorData(self, editor, index):
             if index.column() == 1:
                 editor.setText(index.data())
+                return None
             elif index.column() == 2 or index.column() == 3:
                 editor.setPlainText(index.data())
+                return None
             else:
                 return super(SettingsDialog.SettingsTableDelegate, self).setEditorData(editor, index)
 
@@ -208,8 +210,10 @@ class SettingsDialog(QDialog):
             if index.column() == 1:
                 model.setData(index, editor.text())
                 self.groups.add(editor.text())
+                return None
             elif index.column() == 2 or index.column() == 3:
                 model.setData(index, editor.toPlainText())
+                return None
             else:
                 return super(SettingsDialog.SettingsTableDelegate, self).setModelData(editor, model, index)
 
