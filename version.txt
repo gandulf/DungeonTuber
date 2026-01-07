@@ -31,12 +31,12 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', 'Gandulf Kohlweiss'),
         StringStruct('FileDescription', 'A specialized music player designed for Role-Playing Game Masters'),
-        StringStruct('FileVersion', '${VERSION}'),
+        StringStruct('FileVersion', '0.1.0'),
         StringStruct('InternalName', 'DungeonTuber'),
         StringStruct('LegalCopyright', 'Gandulf Kohlweiss. All rights reserved.'),
         StringStruct('OriginalFilename', 'DungeonTuber.exe'),
         StringStruct('ProductName', 'DungeonTuber'),
-        StringStruct('ProductVersion', '${VERSION}')])
+        StringStruct('ProductVersion', '0.1.0')])
       ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
