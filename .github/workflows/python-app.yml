@@ -43,7 +43,7 @@ jobs:
         script-name: DungeonTuber.py
         mode: app        
         low-memory: true
-        msvc-setting: force-64bit
+        msvc: force-64bit
         jobs: 1
         enable-plugins: pyside6
 
