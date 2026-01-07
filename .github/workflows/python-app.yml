@@ -22,7 +22,10 @@ jobs:
     - name: Increase Pagefile
       uses: al-cheb/configure-pagefile-action@v1.5
       with:
-        minimum-size: 16    
+        minimum-size: 12GB
+    - name: swap
+      run: |
+        (Get-CimInstance Win32_PageFileUsage).AllocatedBaseSize        
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
