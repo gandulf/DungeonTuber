@@ -10,6 +10,8 @@
 # nuitka-project: --enable-plugin=pyside6 
 # nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/icon.ico=docs/icon.ico
 # nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/splash.png=docs/splash.png
+# nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/splash.png=docs/splash.png
+# nuitka-project: --mingw64
 
 import functools
 import locale
