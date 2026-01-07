@@ -49,10 +49,8 @@ jobs:
         enable-plugins: pyside6
 
     - name: Create Pyinstaller Executable
-      uses: sayyid5416/pyinstaller@v1.2.0
-      with:
-        python_ver: '3.12'
-        spec: 'DungeonTuber.spec'
+      run: |
+        pyinstaller DungeonTuber.spec
     
     - name: Compile .ISS to .EXE Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
