@@ -2,12 +2,13 @@
 
 #ifexist "dist\DungeonTuber\DungeonTuber.exe"
   #define SourceFolder "dist\DungeonTuber"
-#endif
-#ifexist "dist\DungeonTuber.dist\DungeonTuber.exe"
-  #define SourceFolder "dist\DungeonTuber.dist"
+#else
+  #ifexist "dist\DungeonTuber.dist\DungeonTuber.exe"
+    #define SourceFolder "dist\DungeonTuber.dist"
+  #endif
 #endif
 
-#define AppVersion GetVersionNumbersString(SourceFolder+"\DungeonTuber.exe")
+#define AppVersion GetFileProductVersion(SourceFolder+"\DungeonTuber.exe")
 
 [Setup]
 AppName=Dungeon Tuber
