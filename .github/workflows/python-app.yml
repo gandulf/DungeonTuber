@@ -1,7 +1,5 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
-name: Python application
+# This workflow will install Python dependencies, lint with a single version of Python and build a exe
+name: Dungeon Tuber Windows 
 
 on:
   push:
@@ -15,7 +13,7 @@ permissions:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v4
@@ -26,36 +24,31 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
-        if [ -f pyproject.toml ]; then pip install . ; fi
-        if [ -f pyproject.toml ]; then pip install .[dev] ; fi
+        pip install flake8
+        pip install .
+        pip install .[dev]
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
-      run: |
-        pytest
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics    
 
-
-    - name: Build Executable with Nuitka
-      uses: Nuitka/Nuitka-Action@main
+    - name: Build python script into a single execute
+    - uses: Nuitka/Nuitka-Action@main
       with:
-         nuitka-version: main
-         script-name: DungeonTuber.py
-         # many more Nuitka options available, see action doc, but it's best
-         # to use nuitka-project: options in your code, so e.g. you can make
-         # a difference for macOS and create an app bundle there.
-         mode: app
-
-    - name: Upload Artifacts
+        nuitka-version: main
+        script-name: DungeonTuber.py
+        mode: app
+        enable-plugins: pyside6
+    
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-         name: Nuitka Build
-         path: | # match what's created for the 3 OSes
-            build/*.exe
-            build/*.bin
-            build/*.app/**/*
-         include-hidden-files: true        
+        name: exe
+        path: |
+          build/*.exe
+          build/*.bin
+          build/*.app/**/*
+          build/*.dist/**/*
+        include-hidden-files: true
