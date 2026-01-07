@@ -1,3 +1,18 @@
+# Compilation mode, standalone everywhere, except on macOS there app bundle
+# nuitka-project-if: {OS} in ("Windows", "Linux", "FreeBSD"):
+#    nuitka-project: --mode=onefile 
+#    nuitka-project: --windows-console-mode=hide
+#    nuitka-project: --windows-icon-from-ico=docs/icon.ico 
+#    nuitka-project: --onefile-windows-splash-screen-image=docs/splash.png
+# nuitka-project-else:
+#    nuitka-project: --mode=standalone
+#    nuitka-project: --macos-create-app-bundle
+#
+
+# The PySide6 plugin covers qt-plugins
+#    nuitka-project: --enable-plugin=pyside6 
+#    nuitka-project: --include-data-files=docs/icon.ico=icon.ico 
+
 import functools
 import sys
 import os
