@@ -18,7 +18,10 @@ jobs:
     steps:
 
     - uses: actions/checkout@v4    
-    
+
+    - name: get volume
+      run: |
+        Get-Volume
     - name: Increase Pagefile
       uses: al-cheb/configure-pagefile-action@v1.5
       with:
