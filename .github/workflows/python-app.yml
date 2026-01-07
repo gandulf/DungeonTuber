@@ -38,3 +38,24 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
+
+
+    - name: Build Executable with Nuitka
+      uses: Nuitka/Nuitka-Action@main
+      with:
+         nuitka-version: main
+         script-name: DungeonTuber.py
+         # many more Nuitka options available, see action doc, but it's best
+         # to use nuitka-project: options in your code, so e.g. you can make
+         # a difference for macOS and create an app bundle there.
+         mode: app
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+         name: Nuitka Build
+         path: | # match what's created for the 3 OSes
+            build/*.exe
+            build/*.bin
+            build/*.app/**/*
+         include-hidden-files: true        
