@@ -18,17 +18,7 @@ jobs:
     steps:
 
     - uses: actions/checkout@v4    
-
-    - name: get volume
-      run: |
-        Get-Volume
-    - name: Increase Pagefile
-      uses: al-cheb/configure-pagefile-action@v1.5
-      with:
-        minimum-size: 12GB
-    - name: swap
-      run: |
-        (Get-CimInstance Win32_PageFileUsage).AllocatedBaseSize        
+    
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
@@ -53,6 +43,7 @@ jobs:
         script-name: DungeonTuber.py
         mode: app        
         low-memory: true
+        msvc-setting: force-64bit
         jobs: 1
         enable-plugins: pyside6
     
