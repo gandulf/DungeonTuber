@@ -18,13 +18,11 @@ jobs:
     steps:
 
     - uses: actions/checkout@v4    
-    # GitHub runners have 7GB RAM, which isn't enough for MSVC to compile huge C files.
+    
     - name: Increase Pagefile
-      uses: al-cheb/configure-pagefile-action@v1.4
+      uses: al-cheb/configure-pagefile-action@v1.5
       with:
-        minimum-size: 16GB
-        maximum-size: 16GB
-        disk-root: 'D'
+        minimum-size: 16    
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
