@@ -42,8 +42,7 @@ jobs:
         nuitka-version: main
         script-name: DungeonTuber.py
         mode: app        
-        low-memory: true
-        msvc: force-64bit
+        low-memory: true        
         jobs: 1
         enable-plugins: pyside6
 
