@@ -36,21 +36,30 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics    
 
-    - name: Build python script into a single execute
+    - name: Create Nuitka Executable
+      if: false
       uses: Nuitka/Nuitka-Action@main
       with:
         nuitka-version: main
         script-name: DungeonTuber.py
         mode: app        
         low-memory: true        
+        output-dir: build
         jobs: 1
         enable-plugins: pyside6
 
+    - name: Create Pyinstaller Executable
+      uses: sayyid5416/pyinstaller@v1.2.0
+      with:
+        python_ver: '3.12'
+        spec: 'DungeonTuber.spec'
+    
     - name: Compile .ISS to .EXE Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
       with:
         path: DungeonTuber.iss
         options: /O+
+    
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
