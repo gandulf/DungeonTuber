@@ -63,6 +63,14 @@ The power of DungeonTuber lies in the top control panel:
 
 ## 🛠️ Build Instructions
 
+
+## Update translations:
+Edit translations in _locales/**/LC_MESSAGES/DungeonTuber.po_ files and then run the following commands to update mo files. 
+```bash
+msgfmt -o locales/en/LC_MESSAGES/DungeonTuber.mo locales/en/LC_MESSAGES/DungeonTuber.po"
+msgfmt -o locales/dn/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonTuber.po"
+```
+
 ### Using PyInstaller
 ```bash
 pyinstaller DungeonTuber.py --windowed --icon docs/icon.ico --onefile --add-data="docs/icon.ico:icon.ico;."
