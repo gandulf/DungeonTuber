@@ -288,6 +288,21 @@ msgstr "Edit Song"
 msgid "Name"
 msgstr "Name"
 
+msgid "Requires restart"
+msgstr "Requires restart"
+
+msgid "Language"
+msgstr "Language"
+
+msgid "System Default"
+msgstr "System Default"
+
+msgid "English"
+msgstr "English"
+
+msgid "German"
+msgstr "German"
+
 msgid "GeminiUserPrompt"
 msgstr "Task:"
 "Categorize the following piece of music for use in the role-playing game \"The Dark Eye.\""

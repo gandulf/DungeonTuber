@@ -1134,7 +1134,7 @@ class MusicPlayer(QMainWindow):
         self.setWindowTitle(application.applicationName() + " " + application.applicationVersion())
         self.resize(1200, 700)
 
-        global all_categories
+        global all_categories, MUSIC_CATEGORIES, MUSIC_TAGS, PRESETS
         # Load custom categories and tags
         try:
             custom_categories = settings.value(SettingKeys.CATEGORIES)
@@ -1145,8 +1145,7 @@ class MusicPlayer(QMainWindow):
 
             custom_tags = settings.value(SettingKeys.TAGS)
             if custom_tags:
-                MUSIC_TAGS.clear()
-                MUSIC_TAGS.update(json.loads(custom_tags))
+                MUSIC_TAGS = json.loads(custom_tags)
 
             custom_presets = settings.value(SettingKeys.PRESETS)
             if custom_presets:
@@ -1851,13 +1850,11 @@ window: QMainWindow
 light_palette: QPalette
 dark_palette: QPalette
 
-
 def main():
     global app, window
 
-    loc,encoding = locale.getlocale()
-
-    logging.basicConfig(level=logging.WARNING, filename="error.log", filemode="w")
+    #logging.basicConfig(level=logging.WARNING, filename="error.log", filemode="w")
+    logging.basicConfig(level=logging.WARNING)
 
     if "DEBUG" in os.environ:
         logger.setLevel(logging.DEBUG)
@@ -1865,14 +1862,16 @@ def main():
     app = QApplication(sys.argv)
 
     # Set up Gettext
-    en_i18n = gettext.translation("DungeonTuber", "./locales", fallback=True, languages=[loc])
+
+    language = settings.value(SettingKeys.Locale, type=str)
+    if language is None or language =="":
+        loc, encoding = locale.getlocale()
+        language = loc
+
+    en_i18n = gettext.translation("DungeonTuber", "./locales", fallback=True, languages=[language])
 
     # Create the "magic" function
     en_i18n.install()
-
-    pixmap = QPixmap(get_path("docs/splash.png"))
-    splash = QSplashScreen(pixmap, Qt.WindowStaysOnTopHint)
-    splash.show()
 
     app.setOrganizationName("Gandulf")
     app.setApplicationName("DungeonTuber")
@@ -1889,7 +1888,6 @@ def main():
         return
 
     window = MusicPlayer(app)
-    splash.finish(window)
     window.show()
 
     icon_path = get_path("docs/icon.ico")
@@ -1901,17 +1899,18 @@ def main():
 
 # end get_darkModePalette def
 def get_path(path:str):
-    """Gets the correct icon path for runtime"""
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
-        icon_path = os.path.join(os.path.dirname(sys.executable), path)
-        if not os.path.exists(icon_path):
-            icon_path = os.path.join(os.getcwd(), path)
+        if sys._MEIPASS is not None:
+            icon_path = os.path.join(sys._MEIPASS, path)
+        else:
+            icon_path = os.path.join(os.path.dirname(sys.executable), path)
+            if not os.path.exists(icon_path):
+                icon_path = os.path.join(os.getcwd(), path)
     else:
         # Running as Python script
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
     return icon_path
-
 
 if __name__ == "__main__":
     try:

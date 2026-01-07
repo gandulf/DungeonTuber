@@ -6,7 +6,7 @@ from PySide6 import QtWidgets
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLayout, QTabWidget, QWidget, \
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
-    QGroupBox
+    QGroupBox, QComboBox
 
 # --- Configuration ---
 CATEGORY_MIN = 1
@@ -21,9 +21,8 @@ class Preset:
         self.categories = categories
 
 PRESETS = [
-    Preset("Kampf",
-           {"Tempo": 8, "Dunkelheit": 8, "Heroik": 6, "Emotional": 3, "Mystik": 3, "Spannung": 8}),
-
+    Preset("Düster",
+           { "Dunkelheit": 8, "Heroik": 4, "Emotional": 3, "Mystik": 4, "Spannung": 8}),
 ]
 
 _original_presets = PRESETS.copy()
@@ -160,6 +159,7 @@ class SettingKeys(StrEnum):
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"
     THEME = "theme"
+    Locale = "locale"
 
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
     COLUMN_FAVORITE_VISIBLE = "columnFavoriteVisible"
@@ -265,6 +265,23 @@ class SettingsDialog(QDialog):
         self.skip_analyzed_mp3.setChecked(settings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
         analyzer_layout.addRow("", self.skip_analyzed_mp3)
 
+        self.locale_combo = QComboBox(editable=False)
+        self.locale_combo.setToolTip(_("Requires restart"))
+        self.locale_combo.addItem(_("System Default"), "")
+        self.locale_combo.addItem(_("English"), "en")
+        self.locale_combo.addItem(_("German"), "de", )
+        language = settings.value(SettingKeys.Locale,type=str)
+        if language is None or language =="":
+            self.locale_combo.setCurrentIndex(0)
+        elif language == "en":
+            self.locale_combo.setCurrentIndex(1)
+        elif language == "de":
+           self.locale_combo.setCurrentIndex(2)
+
+        analyzer_layout.addRow(_("Language")+" *", self.locale_combo)
+
+        self.skip_analyzed_mp3.setChecked(settings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
+        analyzer_layout.addRow("", self.skip_analyzed_mp3)
         #
 
         table_layout = QFormLayout()
@@ -433,6 +450,7 @@ class SettingsDialog(QDialog):
         settings.setValue(SettingKeys.COLUMN_ARTIST_VISIBLE, self.artist_column.isChecked())
         settings.setValue(SettingKeys.COLUMN_ALBUM_VISIBLE, self.album_column.isChecked())
         settings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())
+        settings.setValue(SettingKeys.Locale, self.locale_combo.currentData())
 
         MUSIC_CATEGORIES.clear()
         for row in range(self.categories_table.rowCount()):

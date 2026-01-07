@@ -200,6 +200,23 @@ class AppTheme(QObject):
                 QMenu::item:selected {{                
                     background: rgba(100, 100, 100, 150);
                 }}
+                
+                QMenu::item:selected {{                
+                    background: rgba(100, 100, 100, 150);
+                }}
+
+                QComboBox {{
+                    background-color: rgb(42, 42, 42);
+                    padding:2px;
+                    border: 1px solid rgb(80, 80, 80);
+                    border-radius:2px
+                }}        
+                                        
+                QComboBox QListView {{
+                    background-color: rgb(42, 42, 42);                    
+                }}
+                
+                
             """
 
         self.application.setStyleSheet(style)

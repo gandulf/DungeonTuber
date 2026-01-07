@@ -1,6 +1,6 @@
 # DungeonTuber
 
-**DungeonTuber** is a specialized music player designed for TTRPG Game Masters, streamers, and storytellers who need the perfect atmosphere at their fingertips. Unlike standard players, DungeonTuber allows you to categorize and filter your music based on emotional weight, intensity, and genre-specific metadata.
+**DungeonTuber** is a specialized music player designed for Role-Playing Game Masters, streamers, and storytellers who need the perfect atmosphere at their fingertips. Unlike standard players, DungeonTuber allows you to categorize and filter your music based on emotional weight, intensity, and genre-specific metadata.
 
 ![Screenshot of application](docs/screen1.png)
 
@@ -67,20 +67,23 @@ The power of DungeonTuber lies in the top control panel:
 ## Update translations:
 Edit translations in _locales/**/LC_MESSAGES/DungeonTuber.po_ files and then run the following commands to update mo files. 
 ```bash
-msgfmt -o locales/en/LC_MESSAGES/DungeonTuber.mo locales/en/LC_MESSAGES/DungeonTuber.po"
-msgfmt -o locales/dn/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonTuber.po"
+msgfmt -o locales/en/LC_MESSAGES/DungeonTuber.mo locales/en/LC_MESSAGES/DungeonTuber.po
+msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonTuber.po
 ```
 
 ### Using PyInstaller
 ```bash
-pyinstaller DungeonTuber.py --windowed --icon docs/icon.ico --onefile --add-data="docs/icon.ico:icon.ico;."
+pyinstaller DungeonTuber.py --windowed --icon docs/icon.ico --add-data="docs/icon.ico:docs" --add-data="docs/splash.png:docs"
 ```
 
 ### Using Nuitka (Recommended)
 The following command uses MinGW64. If you experience slow compilation, ensure your build directory is excluded from Antivirus scanning.
 
 ```bash
-python -m nuitka --mingw64 --jobs=16 DungeonTuber.py
+python -m nuitka --jobs=16 DungeonTuber.py --product-version=0.0.1.0 --file-version=0.0.1.0
 ```
+> [!Note]
+> Add `--product-version=X.Y.Z.Q` and `--file-version=X.Y.Z.Q` to define version of created exe
 
-*Note: The `--jobs` flag sets the number of parallel compilation jobs. Adjust based on your CPU cores.*
+> [!Note]
+> The `--jobs` flag sets the number of parallel compilation jobs. Adjust based on your CPU cores.*

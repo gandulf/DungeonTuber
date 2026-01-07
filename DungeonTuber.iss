@@ -3,9 +3,14 @@
 
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING .ISS SCRIPT FILES!
 
+;#define SourceFolder "DungeonTuber.dist"
+#define SourceFolder "dist\DungeonTuber"
+#define AppVersion GetVersionNumbersString(SourceFolder+"\DungeonTuber.exe")
+
+
 [Setup]
 AppName=Dungeon Tuber
-AppVersion=0.1.0
+AppVersion={#AppVersion}
 WizardStyle=modern dynamic
 WizardImageFile=docs/splash.png
 DefaultDirName={autopf}\DungeonTuber
@@ -13,10 +18,11 @@ DefaultGroupName=DungeonTuber
 UninstallDisplayIcon={app}\DungeonTuber.exe
 Compression=lzma2
 SolidCompression=yes
-OutputDir=userdocs:DungeonTuber
+OutputDir=./
+OutputBaseFilename=DungeonTuber-{#AppVersion}
 
 [Files]
-Source: "DungeonTuber.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceFolder}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\DungeonTuber"; Filename: "{app}\DungeonTuber.exe"; WorkingDir: "{app}"

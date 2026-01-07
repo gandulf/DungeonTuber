@@ -288,6 +288,21 @@ msgstr "Song bearbeiten"
 msgid "Name"
 msgstr "Name"
 
+msgid "Requires restart"
+msgstr "Neustart erforderlich"
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "System Default"
+msgstr "System Standard"
+
+msgid "English"
+msgstr "Englisch"
+
+msgid "German"
+msgstr "Deutsch"
+
 msgid "GeminiUserPrompt"
 msgstr "Aufgabe:"
  "Ordne das folgende Musikstück für die Nutzung im Rollenspiel „Das Schwarze Auge“ ein."
