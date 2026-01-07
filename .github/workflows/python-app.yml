@@ -61,7 +61,7 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: exe
+        name: installer
         path: |
           *.exe
         include-hidden-files: true
