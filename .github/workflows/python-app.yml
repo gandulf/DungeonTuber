@@ -18,7 +18,12 @@ jobs:
     steps:
 
     - uses: actions/checkout@v4    
-    
+
+    - name: Update version
+      uses: eball/write-tag-to-version-file@latest
+      with:
+        filename: 'version.txt'
+        placeholder: '${VERSION}'
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
