@@ -24,7 +24,7 @@ jobs:
       with:
         minimum-size: 16GB
         maximum-size: 16GB
-        disk-label: 'C'
+        disk-root: 'D'
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
