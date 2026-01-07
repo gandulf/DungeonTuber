@@ -16,7 +16,15 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+
+    - uses: actions/checkout@v4    
+    # GitHub runners have 7GB RAM, which isn't enough for MSVC to compile huge C files.
+    - name: Increase Pagefile
+      uses: al-cheb/configure-pagefile-action@v1.4
+      with:
+        minimum-size: 16GB
+        maximum-size: 16GB
+        disk-label: 'C'
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
@@ -39,7 +47,9 @@ jobs:
       with:
         nuitka-version: main
         script-name: DungeonTuber.py
-        mode: app
+        mode: app        
+        low-memory: true
+        jobs: 1
         enable-plugins: pyside6
     
     - name: Upload Artifact
