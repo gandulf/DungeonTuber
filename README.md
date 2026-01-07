@@ -20,6 +20,8 @@
 ### 1. Building Your Library
 Use the **File** menu to import your audio files or navigate through the directory tree and open directories in the table below or play songs directly.
 The app uses **Gemini** to scan your tracks, to use it you have to create a Gemini API Key or AI Studio Key and insert it under **Settings**.
+> [!Note]
+> For information how to obtain a API Key please consult the **Internet** e.g. [How to Generate Gemini API Key for Free in 2025](https://wedevs.com/blog/510096/how-to-generate-gemini-api-key/)
 
 
 ### 2. Filtering by Mood
@@ -39,9 +41,12 @@ The power of DungeonTuber lies in the top control panel:
 
 ---
 
-## 🛠 Attribute Reference WIP
+## 🛠 Category Reference 
 
-| Attribute      | Description                                 |
+> [!IMPORTANT]
+> **WIP** Final default categories may change and also can be updated by yourself under settings to fit your personal needs
+
+| Category      | Description                                 |
 |:---------------|:--------------------------------------------|
 | **Tempo**      | The speed and energy of the track.          |
 | **Dunkelheit** | Dark, grim, or somber tones.                |
