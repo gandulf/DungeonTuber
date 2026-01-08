@@ -1,24 +1,26 @@
-# This workflow will install Python dependencies, lint with a single version of Python and build a exe
-name: Dungeon Tuber Windows 
+name: Create Dungeon Tuber Windows 
 
 on:
   push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+    tags:
+      - 'v*' # Trigger only on version tags
 
 permissions:
   contents: read
 
 jobs:
-  build:
-
+  release:
     runs-on: windows-latest
-
+    
     steps:
 
     - uses: actions/checkout@v4    
-    
+
+    - name: Update version with current reference
+      run: |
+        (Get-Content version.txt) -replace '\{version\}', $GITHUB_REF_NAME | Out-File -encoding ASCII version.txt
+        (Get-Content version.rc) -replace '\{version\}', $GITHUB_REF_NAME | Out-File -encoding UTF-8 version.rc
+        echo $GITHUB_REF_NAME
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
