@@ -24,6 +24,7 @@ import traceback
 import logging
 
 from config import log
+from config.utils import get_path
 
 log.setup_logging()
 
@@ -1899,7 +1900,7 @@ dark_palette: QPalette
 
 def version() -> str | None:
     try:
-        return str(open("version.txt", "r").readline())
+        return str(open(get_path("version.txt"), "r").readline())
     except FileNotFoundError:
         return "v0.1.0"
 
@@ -1945,22 +1946,6 @@ def main():
         window.setWindowIcon(QIcon(icon_path))
 
     sys.exit(app.exec())
-
-
-# end get_darkModePalette def
-def get_path(path:str):
-    if getattr(sys, 'frozen', False):
-        # Running as compiled executable
-        if sys._MEIPASS is not None:
-            icon_path = os.path.join(sys._MEIPASS, path)
-        else:
-            icon_path = os.path.join(os.path.dirname(sys.executable), path)
-            if not os.path.exists(icon_path):
-                icon_path = os.path.join(os.getcwd(), path)
-    else:
-        # Running as Python script
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
-    return icon_path
 
 if __name__ == "__main__":
     try:

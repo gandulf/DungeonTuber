@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLa
 from google import genai
 from google.genai.types import ListModelsConfig
 
+from config.utils import get_path
 
 logger = logging.getLogger("main")
 
@@ -143,7 +144,7 @@ AppSettings: QSettings = QSettings("Gandulf", "DungeonTuber")
 
 def default_gemini_api_key() -> str | None:
     try:
-        return str(open("../apikey.txt", "r").readline())
+        return str(open(get_path("apikey.txt"), "r").readline())
     except FileNotFoundError:
         return None
 
