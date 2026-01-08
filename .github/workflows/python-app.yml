@@ -18,9 +18,10 @@ jobs:
 
     - name: Update version with current tag reference
       run: |        
-        $GITHUB_REF_NAME.TrimStart("v") | Set-Content -Encoding ASCII version.txt
-        (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '"+$GITHUB_REF_NAME.TrimStart("v")+"'") | Out-File -encoding UTF-8 version.rc
-        (Get-Content pyproject.toml) -replace 'version = "(.*?)"', ('version = "'+$GITHUB_REF_NAME.TrimStart("v")+'"') | Out-File -encoding UTF-8 pyproject.toml
+        $version = $env:GITHUB_REF_NAME.TrimStart("v")
+        $version | Set-Content -Encoding ASCII version.txt
+        (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '"+$version+"'") | Out-File -encoding UTF-8 version.rc
+        (Get-Content pyproject.toml) -replace 'version = "(.*?)"', ('version = "'+$version+'"') | Out-File -encoding UTF-8 pyproject.toml
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
