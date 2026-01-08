@@ -17,11 +17,13 @@ jobs:
     - uses: actions/checkout@v4    
 
     - name: Update version with current tag reference
+      id: vars
       run: |        
         $version = $env:GITHUB_REF_NAME.TrimStart("v")
         $version | Set-Content -Encoding ASCII version.txt
         (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '"+$version+"'") | Out-File -encoding UTF8noBom version.rc
         (Get-Content pyproject.toml) -replace 'version = "(.*?)"', ('version = "'+$version+'"') | Out-File -encoding UTF8noBom pyproject.toml
+        echo "app_version=$version" >> $env:GITHUB_OUTPUT
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
@@ -64,7 +66,7 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: installer
+        name: DungeonTuber-${{ steps.vars.outputs.app_version }}
         path: |
           *.exe
         include-hidden-files: true
