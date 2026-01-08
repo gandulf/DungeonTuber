@@ -18,18 +18,14 @@ import functools
 import locale
 import sys
 import os
-import json
+
 import threading
 import traceback
 import logging
 
-from components.widgets import IconLabel
+from config import log
 
-logging.basicConfig(
-    level=logging.WARNING,
-    style='{',
-    format='[{levelname}] {message}'
-)
+log.setup_logging()
 
 import gettext
 from pathlib import Path
@@ -49,7 +45,7 @@ from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel
 from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QKeyEvent, QFont, QFontMetrics, \
     QActionGroup, QPixmap
 
-from config.settings import AppSettings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, DEFAULT_MOCK_MODE, Preset, \
+from config.settings import AppSettings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, Preset, \
     CATEGORY_MAX, CATEGORY_MIN, MusicCategory, CATEGORIES, set_music_categories, \
     get_music_categories, set_music_tags, get_music_tags, set_presets, add_preset, get_presets, remove_preset, reset_presets, get_music_category
 from config.theme import app_theme
@@ -63,8 +59,8 @@ from logic.analyzer import Analyzer
 from logic.mp3 import Mp3Entry
 from logic.audioengine import AudioEngine
 
-
 # --- Constants ---
+
 logger = logging.getLogger("main")
 
 FAV_COL = 0
@@ -1196,9 +1192,7 @@ class MusicPlayer(QMainWindow):
             logger.error("Failed to load custom settings: {0}",e)
 
         # Initialize Analyzer with settings
-        api_key: str = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY, type=str)
-        mock_mode: bool = AppSettings.value(SettingKeys.MOCK_MODE, True, type=bool)
-        self.analyzer = Analyzer(api_key=api_key, mock_mode=mock_mode)
+        self.analyzer = Analyzer()
 
         self.current_index = -1
         self.engine = AudioEngine()
@@ -1406,9 +1400,8 @@ class MusicPlayer(QMainWindow):
         if dialog.exec():
             # Update analyzer with new settings
             api_key = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
-            mock_mode = AppSettings.value(SettingKeys.MOCK_MODE, DEFAULT_MOCK_MODE, type=bool)
+
             self.analyzer.api_key = api_key
-            self.analyzer.mock_mode = mock_mode
             self.update_sliders()
             self.update_tags_and_presets()
             if self.current_table() is not None:

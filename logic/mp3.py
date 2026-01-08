@@ -34,6 +34,7 @@ class Mp3Entry(object):
         self.path = path if isinstance(path,Path) else Path(path)
         self.artist = artist
         self.album = album
+        self.favorite = False
         if categories:
             self.categories = categories
         else:
@@ -43,6 +44,8 @@ class Mp3Entry(object):
             self.tags = tags
         else:
             self.tags = []
+
+        self.all_tags = None
 
     def set_tags(self, tags: list[str]):
         self.tags = tags

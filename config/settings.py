@@ -1,5 +1,5 @@
 import json
-import typing
+import logging
 from collections import namedtuple
 from enum import StrEnum
 
@@ -8,6 +8,11 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLayout, QTabWidget, QWidget, \
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
     QGroupBox, QComboBox, QStyledItemDelegate
+from google import genai
+from google.genai.types import ListModelsConfig
+
+
+logger = logging.getLogger("main")
 
 # --- Configuration ---
 CATEGORY_MIN = 1
@@ -144,8 +149,7 @@ def default_gemini_api_key() -> str | None:
 
 
 DEFAULT_GEMINI_API_KEY = default_gemini_api_key()
-DEFAULT_MOCK_MODE = False
-
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 def reset_presets():
     global _PRESETS
@@ -153,8 +157,45 @@ def reset_presets():
     AppSettings.remove(SettingKeys.PRESETS)
 
 
+_GEMINI_MODLES = None
+_DEFAUL_GEMINI_MODLES = [
+                "gemini-2.0-flash",
+                "gemini-2.5-flash",
+                "gemini-3.0-flash",
+                "gemini-2.5-pro",
+                "gemini-3.0-pro",
+                "mock"
+            ]
+
+def get_gemini_models():
+    global _GEMINI_MODLES
+    if _GEMINI_MODLES is None:
+        try:
+            audio_capable_families = ['gemini-4', 'gemini-3.5', 'gemini-3', 'gemini-2.5', 'gemini-1.5']
+            client = genai.Client(api_key=AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
+            _GEMINI_MODLES = []
+            for model in client.models.list(config=ListModelsConfig(page_size=100, query_base=True)):
+                # Filter for models that support multimodal input (Audio/Video/Images)
+                if any(family in model.name for family in audio_capable_families):
+                    # We look for 'multimodal' or specific audio support in the description
+                    capabilities = "Audio/Multimodal" if "flash" in model.name or "pro" in model.name else "Text Only"
+
+                    if capabilities == "Audio/Multimodal":
+                        _GEMINI_MODLES.append(model.name.removeprefix("models/"))
+
+        except Exception as e:
+            logger.exception("Failed to list models: {0}",e)
+
+        if _GEMINI_MODLES is None or len(_GEMINI_MODLES) ==0:
+            _GEMINI_MODLES = _DEFAUL_GEMINI_MODLES
+        else:
+            _GEMINI_MODLES.append("mock")
+
+    return _GEMINI_MODLES
+
 class SettingKeys(StrEnum):
     GEMINI_API_KEY = "geminiApiKey"
+    GEMINI_MODEL = "geminiModel"
     MOCK_MODE = "mockMode"
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
@@ -254,6 +295,8 @@ class SettingsDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+
+
     def init_general_tab(self):
         layout = QVBoxLayout(self.general_tab)
 
@@ -267,9 +310,11 @@ class SettingsDialog(QDialog):
         self.api_key_input.setText(AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
         analyzer_layout.addRow(_("Gemini API Key") + ":", self.api_key_input)
 
-        self.mock_mode_checkbox = QCheckBox(_("Enable Mock Mode"))
-        self.mock_mode_checkbox.setChecked(AppSettings.value(SettingKeys.MOCK_MODE, DEFAULT_MOCK_MODE, type=bool))
-        analyzer_layout.addRow("", self.mock_mode_checkbox)
+        self.model_combo = QComboBox()
+        self.model_combo.setEditable(False)
+        self.model_combo.addItems(get_gemini_models())
+        self.model_combo.setCurrentText(AppSettings.value(SettingKeys.GEMINI_MODEL, DEFAULT_GEMINI_MODEL))
+        analyzer_layout.addRow(_("Gemini Model") + ":", self.model_combo)
 
         self.skip_analyzed_mp3 = QCheckBox(_("Skip Analyzed Music"))
         self.skip_analyzed_mp3.setChecked(AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
@@ -444,7 +489,7 @@ class SettingsDialog(QDialog):
 
     def accept(self):
         AppSettings.setValue(SettingKeys.GEMINI_API_KEY, self.api_key_input.text())
-        AppSettings.setValue(SettingKeys.MOCK_MODE, self.mock_mode_checkbox.isChecked())
+        AppSettings.setValue(SettingKeys.GEMINI_MODEL, self.model_combo.currentText())
         AppSettings.setValue(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
         AppSettings.setValue(SettingKeys.SKIP_ANALYZED_MUSIC, self.skip_analyzed_mp3.isChecked())

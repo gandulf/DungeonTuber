@@ -47,17 +47,44 @@ The power of DungeonTuber lies in the top control panel:
 > **WIP** Final default categories may change and also can be updated by yourself under settings to fit your personal needs
 
 | Category      | Description                                 |
-|:---------------|:--------------------------------------------|
-| **Tempo**      | The speed and energy of the track.          |
-| **Dunkelheit** | Dark, grim, or somber tones.                |
-| **Emotional**  | Emotional soft tones.                       |
-| **Mystik**     | Ethereal, magical, or mysterious qualities. |
-| **Spannung**   | Tension and suspense.                       |
-| **Heroik**     | Epic, triumphant, and orchestral energy.    |
-
-
+|:--------------|:--------------------------------------------|
+| **Tempo**     | The speed and energy of the track.          |
+| **Darkness**  | Dark, grim, or somber tones.                |
+| **Emotional** | Emotional soft tones.                       |
+| **Mysticism** | Ethereal, magical, or mysterious qualities. |
+| **Tension**   | Tension and suspense.                       |
+| **Heroism**   | Epic, triumphant, and orchestral energy.    |
 
 *Happy Adventuring!*
+
+---
+
+## 🧠 AI Analysis Details
+
+DungeonTuber leverages Google's **Gemini 2.5 Flash** model to analyze and categorize audio files. 
+The process involves uploading the audio file to the Gemini API and providing a specific prompt to generate metadata.
+
+### System Instruction
+The system prompt defines the persona and scoring philosophy:
+> You are an experienced listener of fantasy, film, and role-playing music. You evaluate music as perceived by an average listener, not technically or analytically, but emotionally and scenically.
+>
+> * Your ratings must remain consistent across many hundreds of tracks.
+> * A 3 always means the same thing, regardless of which track was rated before.
+> * Values should be meaningfully distributed relative to each other (not everything 1 or 10).
+> * Use the full scale from 1 to 10 when appropriate.
+> * Strictly adhere to the specified categories, tags, and their descriptions.
+> * Return only JSON, without additional explanations.
+
+### User Prompt
+The user prompt provides the context (specifically tailored for RPGs like "The Dark Eye" or "D&D) and the definitions for categories and tags:
+> Task: Categorize the following piece of music for use in a role-playing game
+> Rate the piece based on the categories below with a value from 1 to 10 each.
+>
+> Here is the list of categories to rate the music piece by, along with their descriptions:<br/>
+> *[Dynamic list of categories, descriptions, and intensity levels]*
+>
+> Then, assign a few tags from the following list that fit best. No scale is necessary here:<br/>
+> *[Dynamic list of tags and descriptions]*
 
 ---
 

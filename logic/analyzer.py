@@ -18,7 +18,8 @@ from google.genai.types import UploadFileConfig, Content, Part, GenerateContentC
 from logic import mp3
 from logic.mp3 import Mp3Entry
 
-from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, CATEGORIES, get_music_categories, get_music_tags
+from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, CATEGORIES, get_music_categories, get_music_tags, \
+    DEFAULT_GEMINI_MODEL, default_gemini_api_key, DEFAULT_GEMINI_API_KEY
 
 logger = logging.getLogger("main")
 
@@ -46,10 +47,9 @@ class Analyzer(QObject):
 
     workerQueue = Queue()
 
-    def __init__(self, /, api_key: str, mock_mode: bool):
+    def __init__(self):
         super().__init__()
-        self.api_key = api_key
-        self.mock_mode = mock_mode
+
         self.threadpool = QThreadPool(maxThreadCount=8)
 
         self.result.connect(self._try_next_worker)
@@ -96,22 +96,28 @@ class Analyzer(QObject):
         return mock_response
 
     def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+        api_key: str = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
+        model = AppSettings.value(SettingKeys.GEMINI_MODEL, DEFAULT_GEMINI_MODEL)
 
-        if not self.api_key:
+        if "mock" == model:
+            return self.analyze_mp3_mock(file_path)
+
+        if not api_key:
             logger.warning(_("API Key is missing"))
             self.error.emit(_("API Key is missing"))
             return None
 
         try:
-            client = genai.Client(api_key=self.api_key)
+            client = genai.Client(api_key=api_key)
 
             with open(file_path, "rb") as file_content:
                 myfile = client.files.upload(file=file_content, config=UploadFileConfig(mime_type="audio/mpeg"))
 
             prompt =_("GeminiUserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, self.categories_to_string(get_music_categories()), self.tags_to_string(get_music_tags()))
 
+
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=model,
                 contents=[
                     Content(
                         parts=[
@@ -163,13 +169,13 @@ class Analyzer(QObject):
             return json.loads(response.text)
         except json.JSONDecodeError as e:
             traceback.print_exc()
-            logger.error("Failed to decode JSON from response: {0}",e)
+            logger.error("Failed to decode JSON from response: {0}",e.message)
         except ClientError as e:
             self.error.emit(e.message)
-            logger.error("Failed to analyze file: {0}",e)
+            logger.error("Failed to analyze file: {0}",e.message)
         except Exception as e:
             traceback.print_exc()
-            logger.error("Failed to analyze file: {0}",e)
+            logger.error("Failed to analyze file: {0}",e.message)
         return None
 
     def process(self, file_path: str | PathLike[str]) -> bool:
@@ -252,10 +258,7 @@ class Worker(QRunnable):
 
         self.analyzer.progress.emit(_("Analyzing {0}...").format(Path(file_path).name))
 
-        if self.analyzer.mock_mode:
-            response_data = self.analyzer.analyze_mp3_mock(file_path)
-        else:
-            response_data = self.analyzer.analyze_mp3(file_path)
+        response_data = self.analyzer.analyze_mp3(file_path)
 
         if not response_data:
             return

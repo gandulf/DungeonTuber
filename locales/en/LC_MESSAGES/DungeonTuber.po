@@ -320,7 +320,7 @@ msgstr "Help"
 
 msgid "GeminiUserPrompt"
 msgstr "Task:"
-"Categorize the following piece of music for use in the role-playing game \"The Dark Eye.\""
+"Categorize the following piece of music for use in a role-playing game like \"The Dark Eye\" or \"Dungeons and Dragons\"."
 "Rate the piece based on the categories below with a value from {0} to {1} each."
 "\n"
 "Here is the list of categories to rate the music piece by, along with their descriptions:\n"
@@ -338,7 +338,8 @@ msgstr "You are an experienced listener of fantasy, film, and role-playing music
 "A 3 always means the same thing, regardless of which track was rated before.\n"
 "Values should be meaningfully distributed relative to each other (not everything {0} or {1}).\n"
 "Use the full scale from {0} to {1} when appropriate.\n"
-"Strictly adhere to the specified categories, tags, and their descriptions.\n"
+"Strictly adhere to the specified categories, and their descriptions.\n"
+"Strictly adhere to the specified tags, and their descriptions, do not use any other new tags.\n"
 "Return only JSON, without additional explanations."
 
 msgid "GeminiSummaryDescription"
