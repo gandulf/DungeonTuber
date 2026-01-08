@@ -1896,6 +1896,13 @@ window: QMainWindow
 light_palette: QPalette
 dark_palette: QPalette
 
+
+def version() -> str | None:
+    try:
+        return str(open("version.txt", "r").readline())
+    except FileNotFoundError:
+        return "v0.1.0"
+
 def main():
     global app, window
 
@@ -1918,7 +1925,7 @@ def main():
 
     app.setOrganizationName("Gandulf")
     app.setApplicationName("DungeonTuber")
-    app.setApplicationVersion("0.1.0")
+    app.setApplicationVersion(version())
 
     app_theme.application = app
     app_theme.apply_stylesheet()  # Initial load

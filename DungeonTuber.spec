@@ -5,7 +5,7 @@ a = Analysis(
     ['DungeonTuber.py'],
     pathex=[],
     binaries=[],
-    datas=[('docs/icon.ico', 'docs'), ('docs/splash.png', 'docs')],
+    datas=[('docs/icon.ico', 'docs'), ('docs/splash.png', 'docs'), ('version.txt','.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -33,7 +33,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['docs\\icon.ico'],
-    version='version.txt'
+    version='version.rc'
 )
 coll = COLLECT(
     exe,
