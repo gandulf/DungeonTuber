@@ -19,6 +19,10 @@
 
 ---
 
+## 📥 Installationshinweis
+> [!Tip]
+> Wahrscheinlich erscheint beim Ausführen des Installers die blaue Meldung „Der Computer wurde durch Windows geschützt“ (SmartScreen). Dies liegt daran, dass ich (noch) über keine gültige Signatur verfüge, um den Installer zu zertifizieren. Klicke einfach auf „Weitere Informationen“ und anschließend auf „Trotzdem ausführen“.
+
 ## 📖 Tutorial: So nutzt du DungeonTuber
 
 ### 1. Bibliothek aufbauen

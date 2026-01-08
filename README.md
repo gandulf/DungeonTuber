@@ -19,6 +19,12 @@
 
 ---
 
+## 📥 Installation note
+
+> [!Tip]
+>You will probably get the blue "Windows Smart Screen Notification" once you run the installer, this is because I do not _(yet)_ have a valid >signature to sign the installer. 
+>Just click on *"More Info"* and then *"Run anyway"*
+
 ## 📖 Tutorial: How to Use DungeonTuber
 
 ### 1. Building Your Library
