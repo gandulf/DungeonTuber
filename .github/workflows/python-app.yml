@@ -17,10 +17,10 @@ jobs:
     - uses: actions/checkout@v4    
 
     - name: Update version with current reference
-      run: |
-        (Get-Content version.txt) -replace '\{version\}', $GITHUB_REF_NAME | Out-File -encoding ASCII version.txt
-        (Get-Content version.rc) -replace '\{version\}', $GITHUB_REF_NAME | Out-File -encoding UTF-8 version.rc
-        echo $GITHUB_REF_NAME
+      run: |        
+        $GITHUB_REF_NAME | Set-Content -Encoding ASCII version.txt
+        (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '"+$GITHUB_REF_NAME+"'") | Out-File -encoding UTF-8 version.rc
+        (Get-Content pyproject.toml) -replace 'version = "(.*?)"', ('version = "'+$GITHUB_REF_NAME+'"') | Out-File -encoding UTF-8 pyproject.toml
     - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
