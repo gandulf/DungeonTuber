@@ -1,5 +1,9 @@
 # DungeonTuber
 
+[![en](https://img.shields.io/badge/lang-en-green.svg)](https://github.com/gandulf/DungeonTuber/blob/master/README.md)
+[![de](https://img.shields.io/badge/lang-de-green.svg)](https://github.com/gandulf/DungeonTuber/blob/master/README.de.md)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/gandulf/DungeonTuber)
+
 **DungeonTuber** is a specialized music player designed for Role-Playing Game Masters, streamers, and storytellers who need the perfect atmosphere at their fingertips. Unlike standard players, DungeonTuber allows you to categorize and filter your music based on emotional weight, intensity, and genre-specific metadata.
 
 ![Screenshot of application](docs/screen1.png)
@@ -98,12 +102,12 @@ msgfmt -o locales/en/LC_MESSAGES/DungeonTuber.mo locales/en/LC_MESSAGES/DungeonT
 msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonTuber.po
 ```
 
-### Using PyInstaller
+### Using PyInstaller (Recommended)
 ```bash
 pyinstaller DungeonTuber.spec
 ```
 
-### Using Nuitka (Recommended)
+### Using Nuitka 
 The following command uses MinGW64. If you experience slow compilation, ensure your build directory is excluded from Antivirus scanning.
 
 ```bash
