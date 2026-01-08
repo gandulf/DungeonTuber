@@ -6,31 +6,30 @@ import traceback
 import logging
 from queue import Queue
 from typing import Any
+from os import PathLike
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
 
-from os import PathLike
 from google import genai
 from google.genai.errors import ClientError
 from google.genai.types import UploadFileConfig, Content, Part, GenerateContentConfig, Schema, Type, ThinkingConfig
 
 from logic import mp3
 from logic.mp3 import Mp3Entry
-from pathlib import Path
 
-from config.settings import settings, SettingKeys, MUSIC_CATEGORIES, MUSIC_TAGS, CATEGORY_MIN, CATEGORY_MAX, MusicCategory
+from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, CATEGORIES, get_music_categories, get_music_tags
 
 logger = logging.getLogger("main")
 
 def is_analyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
-    categories = MUSIC_CATEGORIES.keys()
-
     if isinstance(file_path, Mp3Entry):
         entry= file_path
     else:
         entry = mp3.parse_mp3(file_path)
 
-    return set(categories) == set(entry.categories.keys()) and entry.summary is not None and entry.summary != "This is a mock summary." and not entry.summary.__contains__("Voxalyzer")
+    return (set(CATEGORIES) == set(entry.categories.keys()) and entry.summary is not None
+            and entry.summary != "This is a mock summary." and not "Voxalyzer" in entry.summary)
 
 def is_voxalyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
@@ -38,7 +37,7 @@ def is_voxalyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     else:
         entry = mp3.parse_mp3(file_path)
 
-    return entry.summary is not None and entry.summary.__contains__("Voxalyzer")
+    return entry.summary is not None and "Voxalyzer" in entry.summary
 
 class Analyzer(QObject):
     error = Signal(object)
@@ -59,10 +58,10 @@ class Analyzer(QObject):
     def active_worker(self) -> int:
         return self.threadpool.activeThreadCount()
 
-    def categories_to_string(self, list: dict[str, MusicCategory]):
+    def categories_to_string(self, categories: list[MusicCategory]):
         lines = []
         # Iteriere über die Einträge und zähle mit, um Absätze zu setzen
-        for key,cat in list.items():
+        for cat in categories:
             lines.append(f"{cat.name}: {cat.description}\n {cat.levels}")
 
         return "\n\n".join(lines)
@@ -70,21 +69,19 @@ class Analyzer(QObject):
     def tags_to_string(self, data: dict[str, str]):
         lines = []
         # Iteriere über die Einträge und zähle mit, um Absätze zu setzen
-        for i, (cat) in enumerate(data.items()):
+        for cat in data.items():
             lines.append(f"{cat[0]}: {cat[1]}")
 
         return "\n".join(lines)
 
     def analyze_mp3_mock(self, file_path: str | PathLike[str]) -> Any:
         """Generates a mock response simulating a call to the Gemini API."""
-        logger.debug(f"--- MOCK MODE: Simulating analysis for {file_path} ---")
+        logger.debug("--- MOCK MODE: Simulating analysis for {0} ---", file_path)
 
-        categories = MUSIC_CATEGORIES.keys()
-
-        selected_tags = random.sample(sorted(MUSIC_TAGS.keys()), random.randint(0, len(MUSIC_TAGS)))
+        selected_tags = random.sample(sorted(get_music_tags().keys()), random.randint(0, len(get_music_tags())))
 
         mock_categories = []
-        for category in categories:
+        for category in CATEGORIES:
             mock_categories.append({
                 "category": category,
                 "scale": random.randint(CATEGORY_MIN, CATEGORY_MAX)
@@ -102,6 +99,7 @@ class Analyzer(QObject):
 
         if not self.api_key:
             logger.warning(_("API Key is missing"))
+            self.error.emit(_("API Key is missing"))
             return None
 
         try:
@@ -110,7 +108,7 @@ class Analyzer(QObject):
             with open(file_path, "rb") as file_content:
                 myfile = client.files.upload(file=file_content, config=UploadFileConfig(mime_type="audio/mpeg"))
 
-            prompt =_("GeminiUserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, self.categories_to_string(MUSIC_CATEGORIES), self.tags_to_string(MUSIC_TAGS))
+            prompt =_("GeminiUserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, self.categories_to_string(get_music_categories()), self.tags_to_string(get_music_tags()))
 
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
@@ -165,26 +163,27 @@ class Analyzer(QObject):
             return json.loads(response.text)
         except json.JSONDecodeError as e:
             traceback.print_exc()
-            logger.error(f"Failed to decode JSON from response: {e}")
+            logger.error("Failed to decode JSON from response: {0}",e)
         except ClientError as e:
             self.error.emit(e.message)
-            logger.error(f"Failed to analyze file: {e}")
+            logger.error("Failed to analyze file: {0}",e)
         except Exception as e:
             traceback.print_exc()
-            logger.error(f"Failed to analyze file: {e}")
+            logger.error("Failed to analyze file: {0}",e)
+        return None
 
     def process(self, file_path: str | PathLike[str]) -> bool:
         try:
 
-            logger.debug(f"Analyzing {file_path}")
+            logger.debug("Analyzing {0}", file_path)
 
             if Path(file_path).is_dir():
-                self.process_directory(file_path)
+                return self.process_directory(file_path)
             else:
                 return self._process_file(file_path)
         except Exception as e:
             traceback.print_exc()
-            logger.error(f"An error occurred while analyzing: {e}")
+            logger.error("An error occurred while analyzing: {0}",e)
             return False
     def _process_file(self,file_path: PathLike[str]) -> bool:
         worker = Worker(file_path, self)
@@ -194,32 +193,34 @@ class Analyzer(QObject):
     def _try_worker(self, worker):
         success = self.threadpool.tryStart(worker)
         if success:
-            logger.debug(f"Success: {success}")
+            logger.debug("Success: {0}", success)
             return True
         else:
-            logger.info(f"Queue full waiting")
+            logger.info("Queue full waiting")
             self.workerQueue.put(worker)
             return False
 
     def _try_next_worker(self):
         try:
             if not self.workerQueue.empty():
-                logger.info(f"Trying next worker")
+                logger.info("Trying next worker")
                 worker = self.workerQueue.get_nowait()
                 return self._try_worker(worker)
         except Exception as e:
             traceback.print_exc()
-            logger.error(f"An error occurred while fetching next worker: {e}")
+            logger.error("An error occurred while fetching next worker: {0}",e)
             return False
 
-    def process_directory(self, directory_path: str | PathLike[str]):
-        logger.debug(f"Processing {directory_path}...")
+    def process_directory(self, directory_path: str | PathLike[str]) -> bool:
+        logger.debug("Processing {0}...",directory_path)
         files = mp3.list_mp3s(directory_path)
 
+        result = False
         # Parses all MP3 files in a given directory.
         for filename in files:
             file_path =Path(os.path.join(directory_path, filename))
-            self._process_file(file_path)
+            result = self._process_file(file_path) or result
+        return result
 
 class Worker(QRunnable):
     analyzer: Analyzer
@@ -242,11 +243,11 @@ class Worker(QRunnable):
             self.analyzer.result.emit(self.file_path)  # Return the result of the processing
 
     def process_file(self, file_path: str | PathLike[str]):
-        logger.debug(f"Processing {file_path}...")
+        logger.debug("Processing {0}...", file_path)
 
-        if (settings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool) and is_analyzed(file_path)):
+        if AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool) and is_analyzed(file_path):
             self.analyzer.progress.emit(_("Skipping already analyzed file {0}").format(Path(file_path).name))
-            logger.debug(f"Skipping already analyzed file {Path(file_path).name}")
+            logger.debug("Skipping already analyzed file {0}", Path(file_path).name)
             return
 
         self.analyzer.progress.emit(_("Analyzing {0}...").format(Path(file_path).name))
@@ -269,9 +270,9 @@ class Worker(QRunnable):
                 mp3.add_tags_to_mp3(file_path, summary, categories, tags)
                 mp3.print_mp3_tags(file_path)  # Print tags after adding them
             else:
-                logger.warning(f"Could not find summary or categories for {file_path}.")
+                logger.warning("Could not find summary or categories for {0}.", file_path)
 
             self.analyzer.progress.emit(_("Processed {0}.").format(Path(file_path).name))
         except Exception as e:
             traceback.print_exc()
-            logger.error(f"An error occurred while adding tags to {file_path}: {e}")
+            logger.error("An error occurred while adding tags to {0}: {1}", file_path,e)

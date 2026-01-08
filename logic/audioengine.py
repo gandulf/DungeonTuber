@@ -4,8 +4,8 @@ import vlc
 
 from PySide6.QtCore import QTimer, Signal, QObject, QSize
 
-from components.Visualizer import VisualizerFrame
-from config.settings import settings, SettingKeys
+from components.visualizer import VisualizerFrame
+from config.settings import AppSettings, SettingKeys
 
 DEFAULT_VOLUME = 70
 
@@ -25,7 +25,7 @@ class AudioEngine(QObject):
     def __init__(self):
         super().__init__()
 
-        vis = settings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
+        vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
         if vis == "VLC":
             self.instance = vlc.Instance('--audio-visual=visual', '--effect-list=spectrum')  # Audio only
         else:
@@ -134,7 +134,8 @@ class AudioEngine(QObject):
         )
 def format_time(ms):
     """Converts milliseconds to MM:SS string."""
-    if ms < 0: return "00:00"
+    if ms < 0:
+        return "00:00"
     seconds = ms // 1000
     mins = seconds // 60
     secs = seconds % 60

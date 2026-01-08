@@ -26,7 +26,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "Nuitka>=2.8.9",
-    "pyinstaller>=6.17.0"
+    "pyinstaller>=6.17.0",
+    "pylint>=4.0.4"
 ]
 
 [project.scripts]

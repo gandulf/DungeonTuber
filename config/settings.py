@@ -1,136 +1,140 @@
 import json
+import typing
+from collections import namedtuple
 from enum import StrEnum
 
 import jsonpickle
-from PySide6 import QtWidgets
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLayout, QTabWidget, QWidget, \
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
-    QGroupBox, QComboBox
+    QGroupBox, QComboBox, QStyledItemDelegate
 
 # --- Configuration ---
 CATEGORY_MIN = 1
 CATEGORY_MAX = 10
 
-class Preset:
+CAT_TEMPO = "Tempo"
+CAT_DARKNESS = "Darkness"
+CAT_EMOTIONAL = "Emotional"
+CAT_MYSTICISM = "Mysticism"
+CAT_TENSION = "Tension"
+CAT_HEROISM = "Heroism"
+
+class MusicCategory():
     name: str
-    categories: dict[str, int]
+    description: str
+    levels: dict[int, str]
+    group: str = None
 
-    def __init__(self, name, categories):
+    def __init__(self, name: str, description: str, levels: dict[int, str], group: str = None):
         self.name = name
-        self.categories = categories
-
-PRESETS = [
-    Preset("Düster",
-           { "Dunkelheit": 8, "Heroik": 4, "Emotional": 3, "Mystik": 4, "Spannung": 8}),
-]
-
-_original_presets = PRESETS.copy()
-
-MUSIC_TAGS = {"Reise": "Nordische Musik, Wikinger, Russland (Tempo<6, Spannung<4, Heroik<4, Mystik<5)",
-              "Kampf": "Hektische, spannende treibende Musik (Tempo>6, Spannung>6, Heroik>5)"}
-
-_original_music_tags = MUSIC_TAGS.copy()
-
-class MusicCategory:
-    def __init__(self, name: str, description: str, levels: dict[int,str], group :str = None) -> None:
-        self.name = name
-        self.group = group
         self.description = description
         self.levels = levels
+        self.group = group
 
-# music_categories = {
-#     "Dynamik": MusicCategory("Dynamik","",{
-#         -5: "Minimalistisch (langsam, leise, dezent)",
-#         0: "Moderat (fließend, neutral)",
-#         +5: "Antreibend (schnell, energetisch, brachial)"
-#     }),
-#     "Moral": MusicCategory("Moral","",{
-#         -5: "Abgründig (düster, bösartig, bedrohlich)",
-#         0: "Neutral (sachlich, unvoreingenommen)",
-#         +5: "Strahlend (heroisch, hoffnungsvoll, göttlich)"
-#     }),
-#     "Realität": MusicCategory("Realität","", {
-#         -5: "Rustikal (bodenständig, Taverne, handgemacht)",
-#         0: "Zivilisiert (klassisch-orchestral, geordnet)",
-#         +5: "Sphärisch (magisch, transzendent, fremdartig)"
-#     }),
-#     "Gefühl": MusicCategory("Gefühl","", {
-#         -5: "Kühl (distanziert, analytisch, einsam)",
-#         0: "Ausgeglichen (ruhig erzählend)",
-#         +5: "Herzergreifend (warm, intim, voller Pathos)"
-#     }),
-#     "Spannung": MusicCategory("Spannung","",{
-#         -5: "Erlösend (abgeschlossen, sicher, entspannend)",
-#         0: "Beiläufig (plätschernd, unaufgeregt)",
-#         +5: "Nervenaufreibend (hochspannend, lauernd, kurz vor dem Knall)"
-#     })
-# }
+    @classmethod
+    def from_key(cls, key: str):
+        name = _(key)
+        description = _(key + " Description")
+        levels = {1: _(key + " Low"),
+                       5: _(key + " Medium"),
+                       10: _(key + " High")
+                       }
 
-# music_categories = [
-#     ("Tempo", None,
-#      "Tempo / Bewegung, Wie schnell sich die Musik anfühlt:\n1 = sehr langsam, getragen.\n10 = sehr schnell, treibend (Gut für Reise, Kampf, Verfolgung, hektische Szenen)."),
-#     ("Intensität", None,
-#      "Energie / Intensität, Wie „kraftvoll“ oder zurückhaltend die Musik wirkt.\n1 = ruhig, dezent.\n10 = überwältigend, episch."),
-#     ("Dunkelheit", None,
-#      "Dunkelheit / Bedrohung, Wie unheimlich, düster oder gefährlich die Musik wirkt.\n1 = hell, freundlich.\n10 = finster, bedrohlich, albtraumhaft (Perfekt für Dämonisches, Intrigen, finstere Orte)."),
-#     ("Emotional", None,
-#      "Emotionale Wärme, Wie emotional nah oder berührend die Musik ist.\n1 = kühl, distanziert.\n10 = sehr emotional, herzergreifend (Abschiede, Liebesszenen, Tragik, Erinnerungen)."),
-#     ("Mystik", None,
-#      "Mystik / Übernatürlichkeit, Wie stark Magie, Götter oder das Fremde mitschwingen.\n1 = weltlich, bodenständig.\n10 = stark magisch, transzendent (Magie, Feenreiche, Visionen, alte Artefakte)."),
-#     ("Spannung", None,
-#      "Spannung / Erwartung, Wie sehr die Musik „auf etwas hinführt“.\n1 = entspannend, abgeschlossen.\n10 = hochspannend, nervös (Schleichen, Intrigen, kurz vor dem Kampf)."),
-#     ("Bodenständigkeit", None,
-#      "Weltnähe / Bodenständigkeit, Wie „irdisch“ oder „alltäglich“ die Musik wirkt.\n1 = abstrakt, sphärisch.\n10 = tavernentauglich, volksnah (Tavernen, Städte, Reisen, Alltagsszenen)."),
-#     ("Heroik", None,
-#      "Heroik / Erhabenheit, Wie sehr die Musik Größe, Mut oder Heldentum vermittelt.\n1 = schlicht, persönlich, alltäglich, unscheinbar. intim, klein, persönlich (Kneipe, Alltag, Reise)\n10 = heroisch, göttlich, legendär, welterschütternd, schicksalshaft, königlich, imperial, göttlich (Schlachten, große Auftritte, Siege, Prophezeiungen)."),
-# ]
+        return MusicCategory(name, description, levels)
 
-MUSIC_CATEGORIES = {
-    "Tempo": MusicCategory("Tempo", "Tempo / Bewegung & Intensität", {
-        1: "Ruhig, dezent und sehr langsam (getragen)",
-        5: "Moderat (fließend, neutral)",
-        10: "Antreibend, schnell und überwältigend (episch, hektisch, treibend)"
-    }),
-    "Dunkelheit": MusicCategory("Dunkelheit", "Bedrohung & Licht", {
-        1: "Hell, freundlich und einladend",
-        5: "Neutral (unvoreingenommen, beobachtend)",
-        10: "Finster, bedrohlich und albtraumhaft (Dämonisches, Intrigen)"
-    }),
-    "Emotional": MusicCategory("Emotional", "Emotionale Wärme & Distanz", {
-        1: "Kühl, distanziert und sachlich",
-        5: "Ausgeglichen (ruhig erzählend)",
-        10: "Sehr emotional, herzergreifend und intim (Tragik, Abschiede)"
-    }),
-    "Mystik": MusicCategory("Mystik", "Übernatürlichkeit vs. Weltlichkeit", {
-        1: "Weltlich, bodenständig und irdisch, Tavernentauglich, volksnah und handgemacht (Reise, Alltag)",
-        5: "Gelegentliche magische Nuancen, Zivilisiert (klassisch-orchestral, geordnet)",
-        10: "Stark magisch, transzendent, abstrakt, sphärisch entfremdet und fremdartig (Visionen, Götter)"
-    }),
-    "Spannung": MusicCategory("Spannung", "Erwartung & Entspannung", {
-        1: "Entspannend, abgeschlossen und sicher",
-        5: "Beiläufig (plätschernd, unaufgeregt)",
-        10: "Hochspannend, nervös und lauernd (kurz vor dem Kampf)"
-    }),
-    "Heroik": MusicCategory("Heroik", "Größe & Schlichtheit", {
-        1: "Schlicht, persönlich, intim und klein (Kneipe, Alltag)",
-        5: "Solidarisch (gefestigt, mutig)",
-        10: "Heroisch, legendär, schicksalhaft und göttlich (Schlachten, Siege)"
-    })
-}
 
-_original_music_categories = MUSIC_CATEGORIES.copy()
 
-def get_category_description(category: str) -> str | None:
-    cat = MUSIC_CATEGORIES[category]
-    tooltip = cat.description+"\n"
+    def get_detailed_description(self):
+        tooltip = self.description + "\n"
 
-    for level, descr in cat.levels.items():
-        tooltip += str(level)+": "+descr+"\n"
+        for level, descr in self.levels.items():
+            tooltip += str(level) + ": " + descr + "\n"
 
-    return tooltip.removesuffix("\n")
+        return tooltip.removesuffix("\n")
 
-settings: QSettings = QSettings("Gandulf", "DungeonTuber")
+
+Preset = namedtuple("Preset", ["name", "categories"], defaults=[None, None])
+_PRESETS = None
+
+_TAGS =["Travel","Fight"]
+_MUSIC_TAGS = None
+
+_DEFAULT_CATEGORIES =[CAT_TEMPO, CAT_DARKNESS, CAT_EMOTIONAL, CAT_MYSTICISM, CAT_TENSION, CAT_HEROISM]
+CATEGORIES = _DEFAULT_CATEGORIES.copy()
+_MUSIC_CATEGORIES = None
+
+
+def get_presets() -> list[Preset]:
+    global _PRESETS
+    if _PRESETS is None:
+        _PRESETS =[
+            Preset(_("Grim"),
+                   {_(CAT_DARKNESS): 8, _(CAT_HEROISM): 4, _(CAT_EMOTIONAL): 3, _(CAT_MYSTICISM): 4, _(CAT_TENSION): 8}),
+        ]
+
+    return _PRESETS
+
+def remove_preset(preset: Preset):
+    global _PRESETS
+
+    _PRESETS.remove(preset)
+    AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(_PRESETS))
+
+def add_preset(preset: Preset):
+    global _PRESETS
+
+    _PRESETS.append(preset)
+    AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(_PRESETS))
+
+def set_presets(presets: list[Preset]):
+    global _PRESETS
+    if presets is None:
+        _PRESETS = None
+        AppSettings.remove(SettingKeys.PRESETS)
+    else:
+        _PRESETS = presets
+        AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(presets))
+
+def get_music_tags() -> dict[str,str]:
+    global _MUSIC_TAGS
+    if _MUSIC_TAGS is None:
+        _MUSIC_TAGS = {_("Tag " +key):_("Tag "+key +" Description") for key in _TAGS}
+
+    return _MUSIC_TAGS
+
+def set_music_tags(tags :dict[str,str] | None):
+    global _MUSIC_TAGS
+    if tags is None:
+        _MUSIC_TAGS = None
+        AppSettings.remove(SettingKeys.TAGS)
+    else:
+        _MUSIC_TAGS = tags
+        AppSettings.setValue(SettingKeys.TAGS, jsonpickle.encode(tags))
+
+
+def get_music_category(key: str) -> MusicCategory:
+    return next(cat for cat in get_music_categories() if cat.name == key)
+
+def get_music_categories() -> list[MusicCategory]:
+    global _MUSIC_CATEGORIES
+    if _MUSIC_CATEGORIES is None:
+        _MUSIC_CATEGORIES = [MusicCategory.from_key(key) for key in CATEGORIES]
+    return _MUSIC_CATEGORIES
+
+def set_music_categories(categories: list[MusicCategory] | None):
+    global _MUSIC_CATEGORIES, CATEGORIES
+    if categories is None:
+        AppSettings.remove(SettingKeys.CATEGORIES)
+        CATEGORIES = _DEFAULT_CATEGORIES.copy()
+    else:
+        AppSettings.setValue(SettingKeys.CATEGORIES, jsonpickle.encode(categories))
+        CATEGORIES = [cat.name for cat in categories]
+
+    _MUSIC_CATEGORIES = categories
+
+AppSettings: QSettings = QSettings("Gandulf", "DungeonTuber")
+
 
 def default_gemini_api_key() -> str | None:
     try:
@@ -138,12 +142,16 @@ def default_gemini_api_key() -> str | None:
     except FileNotFoundError:
         return None
 
+
 DEFAULT_GEMINI_API_KEY = default_gemini_api_key()
 DEFAULT_MOCK_MODE = False
 
+
 def reset_presets():
-    global PRESETS
-    PRESETS = _original_presets.copy()
+    global _PRESETS
+    _PRESETS = None
+    AppSettings.remove(SettingKeys.PRESETS)
+
 
 class SettingKeys(StrEnum):
     GEMINI_API_KEY = "geminiApiKey"
@@ -159,24 +167,24 @@ class SettingKeys(StrEnum):
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"
     THEME = "theme"
-    Locale = "locale"
+    LOCALE = "locale"
 
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
     COLUMN_FAVORITE_VISIBLE = "columnFavoriteVisible"
-    COLUMN_TITLE_VISIBLE="columnTitleVisible"
+    COLUMN_TITLE_VISIBLE = "columnTitleVisible"
     COLUMN_ALBUM_VISIBLE = "columnAlbumVisible"
-    COLUMN_ARTIST_VISIBLE="columnArtistVisible"
-    COLUMN_SUMMARY_VISIBLE ="columnSummaryVisible"
+    COLUMN_ARTIST_VISIBLE = "columnArtistVisible"
+    COLUMN_SUMMARY_VISIBLE = "columnSummaryVisible"
 
     TITLE_INSTEAD_OF_FILE_NAME = "titleInsteadOfFilename"
 
     TAGS = "tags"
     CATEGORIES = "categories"
-    PRESETS ="presets"
+    PRESETS = "presets"
 
 
 class SettingsDialog(QDialog):
-    class SettingsTableDelegate(QtWidgets.QStyledItemDelegate):
+    class SettingsTableDelegate(QStyledItemDelegate):
 
         def __init__(self, groups: set[str]):
             super().__init__()
@@ -184,38 +192,36 @@ class SettingsDialog(QDialog):
 
         def createEditor(self, parent, option, index):
             if index.column() == 1:
-                lineEdit = QLineEdit(parent)
+                line_edit = QLineEdit(parent)
                 completer = QCompleter(sorted(list(self.groups)))
                 completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
                 completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
-                lineEdit.setCompleter(completer)
-                return lineEdit
-            elif index.column() == 2 or index.column() == 3:
-                textEdit = QTextEdit(parent)
-                return textEdit
-            else:
-                return super(SettingsDialog.SettingsTableDelegate, self).createEditor(parent, option, index)
+                line_edit.setCompleter(completer)
+                return line_edit
+            if index.column() == 2 or index.column() == 3:
+                text_edit = QTextEdit(parent)
+                return text_edit
+
+            return super(SettingsDialog.SettingsTableDelegate, self).createEditor(parent, option, index)
 
         def setEditorData(self, editor, index):
             if index.column() == 1:
                 editor.setText(index.data())
                 return None
-            elif index.column() == 2 or index.column() == 3:
+            if index.column() == 2 or index.column() == 3:
                 editor.setPlainText(index.data())
                 return None
-            else:
-                return super(SettingsDialog.SettingsTableDelegate, self).setEditorData(editor, index)
+            return super(SettingsDialog.SettingsTableDelegate, self).setEditorData(editor, index)
 
         def setModelData(self, editor, model, index):
             if index.column() == 1:
                 model.setData(index, editor.text())
                 self.groups.add(editor.text())
                 return None
-            elif index.column() == 2 or index.column() == 3:
+            if index.column() == 2 or index.column() == 3:
                 model.setData(index, editor.toPlainText())
                 return None
-            else:
-                return super(SettingsDialog.SettingsTableDelegate, self).setModelData(editor, model, index)
+            return super(SettingsDialog.SettingsTableDelegate, self).setModelData(editor, model, index)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -249,24 +255,24 @@ class SettingsDialog(QDialog):
         layout.addWidget(button_box)
 
     def init_general_tab(self):
-        layout =  QVBoxLayout(self.general_tab)
+        layout = QVBoxLayout(self.general_tab)
 
         analyzer_layout = QFormLayout()
-        analyzerGroup = QGroupBox(_("Analyzer"))
-        analyzerGroup.setLayout(analyzer_layout)
+        analyzer_group = QGroupBox(_("Analyzer"))
+        analyzer_group.setLayout(analyzer_layout)
 
-        layout.addWidget(analyzerGroup,0)
+        layout.addWidget(analyzer_group, 0)
 
         self.api_key_input = QLineEdit()
-        self.api_key_input.setText(settings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
-        analyzer_layout.addRow(_("Gemini API Key")+":", self.api_key_input)
+        self.api_key_input.setText(AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
+        analyzer_layout.addRow(_("Gemini API Key") + ":", self.api_key_input)
 
         self.mock_mode_checkbox = QCheckBox(_("Enable Mock Mode"))
-        self.mock_mode_checkbox.setChecked(settings.value(SettingKeys.MOCK_MODE, DEFAULT_MOCK_MODE, type=bool))
+        self.mock_mode_checkbox.setChecked(AppSettings.value(SettingKeys.MOCK_MODE, DEFAULT_MOCK_MODE, type=bool))
         analyzer_layout.addRow("", self.mock_mode_checkbox)
 
         self.skip_analyzed_mp3 = QCheckBox(_("Skip Analyzed Music"))
-        self.skip_analyzed_mp3.setChecked(settings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
+        self.skip_analyzed_mp3.setChecked(AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
         analyzer_layout.addRow("", self.skip_analyzed_mp3)
 
         self.locale_combo = QComboBox(editable=False)
@@ -274,52 +280,52 @@ class SettingsDialog(QDialog):
         self.locale_combo.addItem(_("System Default"), "")
         self.locale_combo.addItem(_("English"), "en")
         self.locale_combo.addItem(_("German"), "de", )
-        language = settings.value(SettingKeys.Locale,type=str)
-        if language is None or language =="":
+        language = AppSettings.value(SettingKeys.LOCALE, type=str)
+        if language is None or language == "":
             self.locale_combo.setCurrentIndex(0)
         elif language == "en":
             self.locale_combo.setCurrentIndex(1)
         elif language == "de":
-           self.locale_combo.setCurrentIndex(2)
+            self.locale_combo.setCurrentIndex(2)
 
-        analyzer_layout.addRow(_("Language")+" *", self.locale_combo)
+        analyzer_layout.addRow(_("Language") + " *", self.locale_combo)
 
-        self.skip_analyzed_mp3.setChecked(settings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
+        self.skip_analyzed_mp3.setChecked(AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
         analyzer_layout.addRow("", self.skip_analyzed_mp3)
         #
 
         table_layout = QFormLayout()
-        tableGroup = QGroupBox(_("Song Table"))
-        tableGroup.setLayout(table_layout)
+        table_group = QGroupBox(_("Song Table"))
+        table_group.setLayout(table_layout)
 
-        layout.addWidget(tableGroup,0)
+        layout.addWidget(table_group, 0)
 
         self.title_file_name_columns = QCheckBox(_("Use mp3 title instead of file name"))
-        self.title_file_name_columns.setChecked(settings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False, type=bool))
+        self.title_file_name_columns.setChecked(AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False, type=bool))
         table_layout.addRow("", self.title_file_name_columns)
 
         self.dynamic_table_columns = QCheckBox(_("Dynamic Category Columns"))
-        self.dynamic_table_columns.setChecked(settings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
+        self.dynamic_table_columns.setChecked(AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
         table_layout.addRow("", self.dynamic_table_columns)
 
         self.fav_column = QCheckBox(_("Favorite Column Visible"))
-        self.fav_column.setChecked(settings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
+        self.fav_column.setChecked(AppSettings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
         table_layout.addRow("", self.fav_column)
 
         self.title_column = QCheckBox(_("Title Column Visible"))
-        self.title_column.setChecked(settings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
+        self.title_column.setChecked(AppSettings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
         table_layout.addRow("", self.title_column)
 
         self.artist_column = QCheckBox(_("Artist Column Visible"))
-        self.artist_column.setChecked(settings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
+        self.artist_column.setChecked(AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
         table_layout.addRow("", self.artist_column)
 
         self.album_column = QCheckBox(_("Album Column Visible"))
-        self.album_column.setChecked(settings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
+        self.album_column.setChecked(AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
         table_layout.addRow("", self.album_column)
 
         self.summary_column = QCheckBox(_("Summary Visible"))
-        self.summary_column.setChecked(settings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool))
+        self.summary_column.setChecked(AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool))
         table_layout.addRow("", self.summary_column)
 
         layout.addStretch()
@@ -327,7 +333,7 @@ class SettingsDialog(QDialog):
     def init_categories_tab(self):
 
         groups = set()
-        for cat in MUSIC_CATEGORIES.values():
+        for cat in get_music_categories():
             if cat.group is not None and cat.group != "":
                 groups.add(cat.group)
 
@@ -335,7 +341,7 @@ class SettingsDialog(QDialog):
         self.categories_table = QTableWidget()
         self.categories_table.setItemDelegate(SettingsDialog.SettingsTableDelegate(groups))
         self.categories_table.setColumnCount(4)
-        self.categories_table.setHorizontalHeaderLabels([_("Category"), _("Group"), _("Description"),_("Levels (json)")])
+        self.categories_table.setHorizontalHeaderLabels([_("Category"), _("Group"), _("Description"), _("Levels (json)")])
         self.categories_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 
         self.fill_categories()
@@ -356,8 +362,8 @@ class SettingsDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def fill_categories(self):
-        self.categories_table.setRowCount(len(MUSIC_CATEGORIES))
-        for row, cat in enumerate(MUSIC_CATEGORIES.values()):
+        self.categories_table.setRowCount(len(CATEGORIES))
+        for row, cat in enumerate(get_music_categories()):
             self.categories_table.setItem(row, 0, QTableWidgetItem(cat.name))
             self.categories_table.setItem(row, 1, QTableWidgetItem(cat.group))
             self.categories_table.setItem(row, 2, QTableWidgetItem(cat.description))
@@ -391,8 +397,8 @@ class SettingsDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def fill_tags(self):
-        self.tags_table.setRowCount(len(MUSIC_TAGS))
-        for row, (tag, desc) in enumerate(MUSIC_TAGS.items()):
+        self.tags_table.setRowCount(len(get_music_tags()))
+        for row, (tag, desc) in enumerate(get_music_tags().items()):
             self.tags_table.setItem(row, 0, QTableWidgetItem(tag))
             self.tags_table.setItem(row, 1, QTableWidgetItem(desc))
 
@@ -412,19 +418,12 @@ class SettingsDialog(QDialog):
         self.categories_table.resizeRowsToContents()
 
     def reset_categories(self):
-        global MUSIC_CATEGORIES
-        settings.remove(SettingKeys.CATEGORIES)
-
-        MUSIC_CATEGORIES = _original_music_categories.copy()
+        set_music_categories(None)
 
         self.fill_categories()
 
     def reset_tags(self):
-        global MUSIC_TAGS
-        settings.remove(SettingKeys.TAGS)
-
-        MUSIC_TAGS = _original_music_tags.copy()
-
+        set_music_tags(None)
         self.fill_tags()
 
     def remove_category(self):
@@ -444,19 +443,19 @@ class SettingsDialog(QDialog):
             self.tags_table.removeRow(row)
 
     def accept(self):
-        settings.setValue(SettingKeys.GEMINI_API_KEY, self.api_key_input.text())
-        settings.setValue(SettingKeys.MOCK_MODE, self.mock_mode_checkbox.isChecked())
-        settings.setValue(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
-        settings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
-        settings.setValue(SettingKeys.SKIP_ANALYZED_MUSIC, self.skip_analyzed_mp3.isChecked())
-        settings.setValue(SettingKeys.COLUMN_FAVORITE_VISIBLE, self.fav_column.isChecked())
-        settings.setValue(SettingKeys.COLUMN_TITLE_VISIBLE, self.title_column.isChecked())
-        settings.setValue(SettingKeys.COLUMN_ARTIST_VISIBLE, self.artist_column.isChecked())
-        settings.setValue(SettingKeys.COLUMN_ALBUM_VISIBLE, self.album_column.isChecked())
-        settings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())
-        settings.setValue(SettingKeys.Locale, self.locale_combo.currentData())
+        AppSettings.setValue(SettingKeys.GEMINI_API_KEY, self.api_key_input.text())
+        AppSettings.setValue(SettingKeys.MOCK_MODE, self.mock_mode_checkbox.isChecked())
+        AppSettings.setValue(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
+        AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
+        AppSettings.setValue(SettingKeys.SKIP_ANALYZED_MUSIC, self.skip_analyzed_mp3.isChecked())
+        AppSettings.setValue(SettingKeys.COLUMN_FAVORITE_VISIBLE, self.fav_column.isChecked())
+        AppSettings.setValue(SettingKeys.COLUMN_TITLE_VISIBLE, self.title_column.isChecked())
+        AppSettings.setValue(SettingKeys.COLUMN_ARTIST_VISIBLE, self.artist_column.isChecked())
+        AppSettings.setValue(SettingKeys.COLUMN_ALBUM_VISIBLE, self.album_column.isChecked())
+        AppSettings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())
+        AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
 
-        MUSIC_CATEGORIES.clear()
+        _categories= []
         for row in range(self.categories_table.rowCount()):
             cat_item = self.categories_table.item(row, 0)
             group_item = self.categories_table.item(row, 1)
@@ -468,10 +467,10 @@ class SettingsDialog(QDialog):
                 desc = desc_item.text()
                 levels = json.loads(level_item.text())
                 if cat:
-                    MUSIC_CATEGORIES[cat]= MusicCategory(cat, desc, levels, group = group)
-        settings.setValue(SettingKeys.CATEGORIES, jsonpickle.encode(MUSIC_CATEGORIES))
+                    _categories.append(MusicCategory(cat, desc, levels, group=group))
+        set_music_categories(_categories)
 
-        MUSIC_TAGS.clear()
+        _tags = {}
         for row in range(self.tags_table.rowCount()):
             tag_item = self.tags_table.item(row, 0)
             desc_item = self.tags_table.item(row, 1)
@@ -479,8 +478,8 @@ class SettingsDialog(QDialog):
                 tag = tag_item.text()
                 desc = desc_item.text()
                 if tag:
-                    MUSIC_TAGS[tag] = desc
+                    _tags[tag] = desc
 
-        settings.setValue(SettingKeys.TAGS, json.dumps(MUSIC_TAGS))
+        set_music_tags(_tags)
 
         super().accept()

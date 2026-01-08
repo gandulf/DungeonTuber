@@ -303,6 +303,21 @@ msgstr "English"
 msgid "German"
 msgstr "German"
 
+msgid "Analyzing {0}..."
+msgstr "Analyzing {0}..."
+
+msgid "API Key is missing"
+msgstr "Gemini API Key is missing"
+
+msgid "No favorites found."
+msgstr "No favorites found."
+
+msgid "About"
+msgstr "About"
+
+msgid "Help"
+msgstr "Help"
+
 msgid "GeminiUserPrompt"
 msgstr "Task:"
 "Categorize the following piece of music for use in the role-playing game \"The Dark Eye.\""
@@ -334,3 +349,116 @@ msgstr "List all categories and rate them on a scale from {0} to {1}"
 
 msgid "GeminiTagsDescription"
 msgstr "A list of tags that best apply to the musical piece."
+
+# Tempo
+msgid "Tempo"
+msgstr "Tempo"
+
+msgid "Tempo Description"
+msgstr "Tempo / Movement & Intensity"
+
+msgid "Tempo Low"
+msgstr "Calm, subtle, and very slow (stately)"
+
+msgid "Tempo Medium"
+msgstr "Moderate (fluid, neutral)"
+
+msgid "Tempo High"
+msgstr "Driving, fast, and overwhelming (epic, hectic, pulsing)"
+
+# Darkness
+msgid "Darkness"
+msgstr "Darkness"
+
+msgid "Darkness Description"
+msgstr "Threat & Light"
+
+msgid "Darkness Low"
+msgstr "Bright, friendly, and inviting"
+
+msgid "Darkness Medium"
+msgstr "Neutral (unbiased, observant)"
+
+msgid "Darkness High"
+msgstr "Sinister, threatening, and nightmarish (demonic, intrigue)"
+
+# Emotional
+msgid "Emotional"
+msgstr "Emotional"
+
+msgid "Emotional Description"
+msgstr "Emotional Warmth & Distance"
+
+msgid "Emotional Low"
+msgstr "Cool, distant, and objective"
+
+msgid "Emotional Medium"
+msgstr "Balanced (calmly narrative)"
+
+msgid "Emotional High"
+msgstr "Deeply emotional, heart-wrenching, and intimate (tragedy, farewells)"
+
+# Mysticism
+msgid "Mysticism"
+msgstr "Mysticism"
+
+msgid "Mysticism Description"
+msgstr "Supernatural vs. Mundane"
+
+msgid "Mysticism Low"
+msgstr "Mundane, down-to-earth, and earthly; tavern-ready, folksy, and acoustic"
+
+msgid "Mysticism Medium"
+msgstr "Occasional magical nuances, civilized (classic-orchestral, orderly)"
+
+msgid "Mysticism High"
+msgstr "Strongly magical, transcendent, abstract, spherically alienated and otherworldly"
+
+# Tension
+msgid "Tension"
+msgstr "Tension"
+
+msgid "Tension Description"
+msgstr "Anticipation & Relaxation"
+
+msgid "Tension Low"
+msgstr "Relaxing, resolved, and safe"
+
+msgid "Tension Medium"
+msgstr "Casual (background, unexcited)"
+
+msgid "Tension High"
+msgstr "High-tension, nervous, and lurking (just before combat)"
+
+# Heroism
+msgid "Heroism"
+msgstr "Heroism"
+
+msgid "Heroism Description"
+msgstr "Grandeur & Simplicity"
+
+msgid "Heroism Low"
+msgstr "Simple, personal, intimate, and small-scale (pub, daily life)"
+
+msgid "Heroism Medium"
+msgstr "Solidary (steadfast, courageous)"
+
+msgid "Heroism High"
+msgstr "Heroic, legendary, fateful, and divine (battles, victories)"
+
+#TAG Fight
+msgid "Tag Fight"
+msgstr "Fight"
+
+msgid "Tag Fight Description"
+msgstr "Hectic, exciting, driving music (Tempo>6, Tension>6, Heroism>5)"
+
+#TAG Travel
+msgid "Tag Travel"
+msgstr "Travel"
+
+msgid "Tag Travel Description"
+msgstr "Nordic music, Vikings, Russia (Tempo<6, Tension<4, Heroism<4, Mysticism<5)"
+
+msgid "Grim"
+msgstr "Grim"

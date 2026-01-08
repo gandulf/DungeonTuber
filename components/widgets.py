@@ -1,7 +1,8 @@
 import math
 
-from PySide6.QtCore import QPointF, QSize, Qt
-from PySide6.QtGui import QPolygonF, QPainterStateGuard, QBrush, QPainter
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect
+from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette
 
 PAINTING_SCALE_FACTOR = 20
 
@@ -27,7 +28,7 @@ class StarRating:
     def size_hint(self):
         return QSize(PAINTING_SCALE_FACTOR, PAINTING_SCALE_FACTOR)
 
-    def paint(self, painter, filled, rect, palette, brush: QBrush = None):
+    def paint(self, painter, filled: bool, rect: QRect, palette: QPalette, brush: QBrush = None):
         """ Paint the stars (and/or diamonds if we're in editing mode). """
         with QPainterStateGuard(painter):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -43,6 +44,46 @@ class StarRating:
             painter.scale(PAINTING_SCALE_FACTOR, PAINTING_SCALE_FACTOR)
 
             if filled:
-                painter.drawPolygon(self._star_polygon, Qt.FillRule.OddEvenFill)
-            else:
                 painter.drawPolygon(self._star_polygon, Qt.FillRule.WindingFill)
+            else:
+                painter.drawPolygon(self._star_polygon, Qt.FillRule.OddEvenFill)
+
+
+
+class IconLabel(QWidget):
+
+    icon_size = QSize(16, 16)
+    horizontal_spacing = 2
+
+    def __init__(self, icon: QIcon, text, final_stretch=True):
+        super(IconLabel, self).__init__()
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+
+        self.icon_label = QLabel()
+        if icon is not None:
+            self.icon_label.setPixmap(icon.pixmap(self.icon_size))
+            self.icon_label.setVisible(True)
+        else:
+            self.icon_label.setVisible(False)
+
+        layout.addWidget(self.icon_label)
+        layout.addSpacing(self.horizontal_spacing)
+
+        self.text_label = QLabel(text)
+        layout.addWidget(self.text_label)
+
+        if final_stretch:
+            layout.addStretch()
+
+    def set_text(self, text:str):
+        self.text_label.setText(text)
+
+    def set_icon(self, icon:QIcon):
+        if icon is not None:
+            self.icon_label.setPixmap(icon.pixmap(self.icon_size))
+            self.icon_label.setVisible(True)
+        else:
+            self.icon_label.setVisible(False)

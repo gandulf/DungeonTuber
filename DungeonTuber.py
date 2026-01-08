@@ -6,8 +6,8 @@
 # nuitka-project-else:
 #    nuitka-project: --mode=standalone
 #    nuitka-project: --macos-create-app-bundle
-# 
-# nuitka-project: --enable-plugin=pyside6 
+#
+# nuitka-project: --enable-plugin=pyside6
 # nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/icon.ico=docs/icon.ico
 # nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/splash.png=docs/splash.png
 # nuitka-project: --include-data-files={MAIN_DIRECTORY}/docs/splash.png=docs/splash.png
@@ -22,27 +22,21 @@ import json
 import threading
 import traceback
 import logging
-import jsonpickle
+
+from components.widgets import IconLabel
+
+logging.basicConfig(
+    level=logging.WARNING,
+    style='{',
+    format='[{levelname}] {message}'
+)
+
 import gettext
-from PySide6 import QtWidgets
-
-from config.settings import settings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, DEFAULT_MOCK_MODE, Preset, \
-    CATEGORY_MAX, MUSIC_TAGS, MUSIC_CATEGORIES, PRESETS, CATEGORY_MIN
-from logic import analyzer, mp3
-from config.theme import app_theme
-
-from logic.analyzer import Analyzer
-from components.CategorySlider import CategorySlider
-from components.QJumpSlider import QJumpSlider
-from components.VolumeSlider import VolumeSlider
-from components.StarRating import StarRating
-from components.QToggle import QToggle
-from components.Visualizer import Visualizer
-from components.VolumeSlider import RepeatMode, RepeatButton
-from logic.mp3 import Mp3Entry
-from logic.audioengine import AudioEngine
-
 from pathlib import Path
+
+import jsonpickle
+
+from PySide6 import QtWidgets
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel,
@@ -53,7 +47,22 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
     QPersistentModelIndex, QFileInfo, QEvent, QRect
 from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QKeyEvent, QFont, QFontMetrics, \
-    QActionGroup
+    QActionGroup, QPixmap
+
+from config.settings import AppSettings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, DEFAULT_MOCK_MODE, Preset, \
+    CATEGORY_MAX, CATEGORY_MIN, MusicCategory, CATEGORIES, set_music_categories, \
+    get_music_categories, set_music_tags, get_music_tags, set_presets, add_preset, get_presets, remove_preset, reset_presets, get_music_category
+from config.theme import app_theme
+
+from components.sliders import CategorySlider, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider
+from components.widgets import StarRating, IconLabel
+from components.visualizer import Visualizer
+
+from logic import analyzer, mp3
+from logic.analyzer import Analyzer
+from logic.mp3 import Mp3Entry
+from logic.audioengine import AudioEngine
+
 
 # --- Constants ---
 logger = logging.getLogger("main")
@@ -66,12 +75,9 @@ ALBUM_COL = 4
 SCORE_COL = 5
 CAT_COL = 6
 
-
-
 all_categories: list[str] = []
 available_tags: list[str] = []
 selected_tags: list[str] = []
-slider_values: dict[str, int] = {}
 
 class EditSongDialog(QDialog):
     def __init__(self, data: Mp3Entry, parent=None):
@@ -135,8 +141,7 @@ class StarDelegate(QStyledItemDelegate):
         """ Returns the size needed to display the item in a QSize object. """
         if index.column() == FAV_COL:
             return self.star_rating.size_hint()
-        else:
-            return QStyledItemDelegate.sizeHint(self, option, index)
+        return QStyledItemDelegate.sizeHint(self, option, index)
 
 
 class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
@@ -156,12 +161,12 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
         pen = painter.pen()
 
         # draw tags
-        tagsFont = QFont(option.font)
-        tagsFont.setBold(False)
-        tagsFont.setPixelSize(app_theme.font_size - 2)
+        tags_font = QFont(option.font)
+        tags_font.setBold(False)
+        tags_font.setPixelSize(app_theme.font_size - 2)
 
-        fm = QFontMetrics(tagsFont)
-        painter.setFont(tagsFont)
+        fm = QFontMetrics(tags_font)
+        painter.setFont(tags_font)
 
         tag_left = content_rect.right()
         tag_top = content_rect.top() + 2
@@ -172,8 +177,8 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
 
             tag_padding = 3
 
-            tagsRect = QRect(tag_left - bouding_rect.width(), tag_top, bouding_rect.width(), bouding_rect.height())
-            tagsRect.adjust(-tag_padding * 2, -tag_padding, tag_padding * 2, tag_padding)
+            tags_rect = QRect(tag_left - bouding_rect.width(), tag_top, bouding_rect.width(), bouding_rect.height())
+            tags_rect.adjust(-tag_padding * 2, -tag_padding, tag_padding * 2, tag_padding)
 
             if tag in selected_tags:
                 painter.setBrush(QBrush(app_theme.get_green()))
@@ -181,16 +186,16 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
                 painter.setBrush(option.palette.highlight())
 
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(tagsRect, 6.0, 6.0)
+            painter.drawRoundedRect(tags_rect, 6.0, 6.0)
 
             pen.setColor(option.palette.color(QPalette.ColorRole.HighlightedText))
 
             painter.setPen(pen)
             tag_padding = 2
-            tagsRect.adjust(tag_padding * 2, tag_padding, -tag_padding * 2, -tag_padding)
-            painter.drawText(tagsRect, Qt.AlignmentFlag.AlignRight, tag)
+            tags_rect.adjust(tag_padding * 2, tag_padding, -tag_padding * 2, -tag_padding)
+            painter.drawText(tags_rect, Qt.AlignmentFlag.AlignRight, tag)
 
-            tag_left = tagsRect.left() - 12
+            tag_left = tags_rect.left() - 12
 
         # draw rest
 
@@ -201,35 +206,35 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
         pen.setColor(color)
         painter.setPen(pen)
 
-        titleFont = QFont(option.font)
-        titleFont.setBold(True)
-        titleFont.setPixelSize(app_theme.font_size)
+        title_font = QFont(option.font)
+        title_font.setBold(True)
+        title_font.setPixelSize(app_theme.font_size)
 
-        fm = QFontMetrics(titleFont)
+        fm = QFontMetrics(title_font)
 
-        titleRect = QRect(content_rect)
-        titleRect.setRight(tag_left)
-        titleRect.setHeight(fm.height())
+        title_rect = QRect(content_rect)
+        title_rect.setRight(tag_left)
+        title_rect.setHeight(fm.height())
 
         painter.save()
 
-        painter.setFont(titleFont)
+        painter.setFont(title_font)
 
-        title = data.title if settings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False,
-                                             type=bool) else data.name.removesuffix(".mp3").removesuffix(".MP3")
-        painter.drawText(titleRect, title)
+        title = data.title if AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False,
+                                                type=bool) else data.name.removesuffix(".mp3").removesuffix(".MP3")
+        painter.drawText(title_rect, title)
 
-        if settings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
-            summaryFont = QFont(option.font)
-            summaryFont.setBold(False)
-            summaryFont.setPixelSize(app_theme.font_size - 2)
-            painter.setFont(summaryFont)
+        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
+            summary_font = QFont(option.font)
+            summary_font.setBold(False)
+            summary_font.setPixelSize(app_theme.font_size - 2)
+            painter.setFont(summary_font)
 
-            summaryRect = QRect(content_rect)
-            summaryRect.setTop(titleRect.bottom())
-            summaryRect.setBottom(content_rect.bottom())
+            summary_rect = QRect(content_rect)
+            summary_rect.setTop(title_rect.bottom())
+            summary_rect.setBottom(content_rect.bottom())
 
-            painter.drawText(summaryRect, Qt.TextFlag.TextWordWrap, data.summary)
+            painter.drawText(summary_rect, Qt.TextFlag.TextWordWrap, data.summary)
 
         painter.restore()
 
@@ -238,18 +243,16 @@ class TableModel(QAbstractTableModel):
     slider_values: dict[str, int] = {}
     tags: list[str] = []
 
-
-
     def __init__(self, data: list[Mp3Entry]):
         super(TableModel, self).__init__()
         self._data = data
 
     def get_category(self, index: QModelIndex):
-        return list(MUSIC_CATEGORIES.keys())[index.column() - CAT_COL]
+        return CATEGORIES[index.column() - CAT_COL]
 
-    def setSliderValues(self, slider_values: dict[str, int], values: list[str]):
+    def set_slider_values(self, _slider_values: dict[str, int], values: list[str]):
         self.beginResetModel()
-        self.slider_values = slider_values
+        self.slider_values = _slider_values
         self.tags = values
         self.endResetModel()
 
@@ -274,7 +277,7 @@ class TableModel(QAbstractTableModel):
                     else:
                         new_value = int(value)
                 except ValueError:
-                    logger.error(f"Invalid value for category {category}: {value}")
+                    logger.error("Invalid value for category {0}: {1}", category, value)
                     return False
 
                 # Update file_data_list
@@ -297,7 +300,7 @@ class TableModel(QAbstractTableModel):
                         mp3.update_mp3_category(data.path, category, new_value)
                 except Exception as e:
                     traceback.print_exc()
-                    logger.error(f"Failed to update tags: {e}")
+                    logger.error("Failed to update tags: {0}",e)
                     QMessageBox.warning(self, _("Update Error"), _("Failed to update tags: {0}").format(e))
 
                 return has_changes
@@ -311,8 +314,7 @@ class TableModel(QAbstractTableModel):
             del self._data[row]
             self.endRemoveRows()
             return True
-        else:
-            return False
+        return False
 
     def data(self, index: QModelIndex | QPersistentModelIndex, role: int = ...):
 
@@ -344,8 +346,8 @@ class TableModel(QAbstractTableModel):
             if index.column() == FAV_COL:
                 return data.favorite
             elif index.column() == FILE_COL:
-                name = data.title if settings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False,
-                                                    type=bool) else data.name
+                name = data.title if AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False,
+                                                       type=bool) else data.name
 
                 if data.summary:
                     return name + " " + data.summary
@@ -368,12 +370,13 @@ class TableModel(QAbstractTableModel):
 
         elif role == Qt.ItemDataRole.UserRole:
             return self._data[index.row()]
+        return None
 
     def rowCount(self, /, parent: QModelIndex | QPersistentModelIndex = ...) -> int:
         return len(self._data)
 
     def columnCount(self, /, parent: QModelIndex | QPersistentModelIndex = ...) -> int:
-        return CAT_COL + len(MUSIC_CATEGORIES)
+        return CAT_COL + len(CATEGORIES)
 
     def headerData(self, section: int, orientation: Qt.Orientation, /, role: int = ...):
         if role == Qt.ItemDataRole.DisplayRole:
@@ -401,24 +404,24 @@ class TableModel(QAbstractTableModel):
             return Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable
 
 
-def _calculate_score(slider_values, data: Mp3Entry, tags: list[str]):
+def _calculate_score(_slider_values, data: Mp3Entry, tags: list[str]):
     score = None
-    for cat, desiredValue in slider_values.items():
-        if desiredValue is not None and desiredValue != 0:
+    for cat, desired_value in _slider_values.items():
+        if desired_value is not None and desired_value != 0:
             if score is None:
                 score = 0
-            currentValue = data.categories.get(cat)
-            if isinstance(currentValue, int):
-                score += (currentValue - desiredValue) ** 2
+            current_value = data.categories.get(cat)
+            if isinstance(current_value, int):
+                score += (current_value - desired_value) ** 2
             else:
                 score += 10 ** 2
 
-    for desiredTag in tags:
+    for desired_tag in tags:
         if score is None:
             score = 0
 
         if data.tags is not None:
-            if desiredTag not in data.allTags():
+            if desired_tag not in data.allTags():
                 score += 100
         else:
             score += 100
@@ -520,7 +523,7 @@ class DirectoryTree(QTreeView):
         self.addAction(self.clear_action)
 
         # Restore expanded state
-        expanded_dirs = settings.value(SettingKeys.EXPANDED_DIRS, [], type=list)
+        expanded_dirs = AppSettings.value(SettingKeys.EXPANDED_DIRS, [], type=list)
         for path in expanded_dirs:
             index = self.directory_model.index(path)
             if index is not None and index.isValid():
@@ -530,8 +533,8 @@ class DirectoryTree(QTreeView):
         self.collapsed.connect(self.on_tree_collapsed)
         self.doubleClicked.connect(self.double_clicked_action)
 
-        if settings.value(SettingKeys.ROOT_DIRECTORY) is not None:
-            index = self.directory_model.index(settings.value(SettingKeys.ROOT_DIRECTORY))
+        if AppSettings.value(SettingKeys.ROOT_DIRECTORY) is not None:
+            index = self.directory_model.index(AppSettings.value(SettingKeys.ROOT_DIRECTORY))
             self.setRootIndex(index)
             self.clear_action.setVisible(True)
 
@@ -540,50 +543,50 @@ class DirectoryTree(QTreeView):
         self.open.emit(index)
 
     def double_clicked_action(self, index):
-        fileInfo = self.directory_model.fileInfo(index)
-        if fileInfo.isFile():
+        file_info = self.directory_model.fileInfo(index)
+        if file_info.isFile():
             self.open.emit(index)
 
     def go_home_action(self):
         index = self.selectedIndexes()[0]
-        fileInfo = self.directory_model.fileInfo(index)
+        file_info = self.directory_model.fileInfo(index)
 
-        if fileInfo.isDir():
-            rootIndex = index
-            filePath = fileInfo.filePath()
+        if file_info.isDir():
+            root_index = index
+            file_path = file_info.filePath()
         else:
-            rootIndex = index.parent()
-            filePath = fileInfo.path()
+            root_index = index.parent()
+            file_path = file_info.path()
 
-        settings.setValue(SettingKeys.ROOT_DIRECTORY, filePath)
-        self.setRootIndex(rootIndex)
+        AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, file_path)
+        self.setRootIndex(root_index)
         self.clear_action.setVisible(True)
 
     def clear_home_action(self):
-        settings.setValue(SettingKeys.ROOT_DIRECTORY, None)
+        AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, None)
         self.setRootIndex(QModelIndex())
         self.clear_action.setVisible(False)
 
     def on_tree_expanded(self, index: QModelIndex):
         path = self.directory_model.filePath(index)
-        expanded_dirs = settings.value(SettingKeys.EXPANDED_DIRS, [], type=list)
+        expanded_dirs = AppSettings.value(SettingKeys.EXPANDED_DIRS, [], type=list)
         if path not in expanded_dirs:
             expanded_dirs.append(path)
-            settings.setValue(SettingKeys.EXPANDED_DIRS, expanded_dirs)
+            AppSettings.setValue(SettingKeys.EXPANDED_DIRS, expanded_dirs)
 
     def on_tree_collapsed(self, index: QModelIndex):
         path = self.directory_model.filePath(index)
-        expanded_dirs = settings.value(SettingKeys.EXPANDED_DIRS, [], type=list)
+        expanded_dirs = AppSettings.value(SettingKeys.EXPANDED_DIRS, [], type=list)
         if path in expanded_dirs:
             expanded_dirs.remove(path)
-            settings.setValue(SettingKeys.EXPANDED_DIRS, expanded_dirs)
+            AppSettings.setValue(SettingKeys.EXPANDED_DIRS, expanded_dirs)
 
 
 class SongTable(QTableView):
     play_track = Signal(int, Mp3Entry)
 
-    tableModel : TableModel
-    proxyModel : QSortFilterProxyModel
+    table_model : TableModel
+    proxy_model : QSortFilterProxyModel
 
     def __init__(self, _analyzer: Analyzer, /):
         super().__init__()
@@ -597,7 +600,7 @@ class SongTable(QTableView):
 
         self.verticalHeader().setVisible(False)
 
-        if settings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
+        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
             self.verticalHeader().setDefaultSectionSize(56)
         else:
             self.verticalHeader().setDefaultSectionSize(28)
@@ -620,7 +623,7 @@ class SongTable(QTableView):
         # Faviroite
         fav_action = QAction(_("Favorite"), self)
         fav_action.setCheckable(True)
-        fav_action.setChecked(settings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
+        fav_action.setChecked(AppSettings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
         fav_action.triggered.connect(
             lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_FAVORITE_VISIBLE, checked))
         menu.addAction(fav_action)
@@ -628,7 +631,7 @@ class SongTable(QTableView):
         # Title
         title_action = QAction(_("Title"), self)
         title_action.setCheckable(True)
-        title_action.setChecked(settings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
+        title_action.setChecked(AppSettings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
         title_action.triggered.connect(
             lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_TITLE_VISIBLE, checked))
         menu.addAction(title_action)
@@ -636,7 +639,7 @@ class SongTable(QTableView):
         # Artist
         artist_action = QAction(_("Artist"), self)
         artist_action.setCheckable(True)
-        artist_action.setChecked(settings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
+        artist_action.setChecked(AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
         artist_action.triggered.connect(
             lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_ARTIST_VISIBLE, checked))
         menu.addAction(artist_action)
@@ -644,7 +647,7 @@ class SongTable(QTableView):
         # Album
         album_action = QAction(_("Album"), self)
         album_action.setCheckable(True)
-        album_action.setChecked(settings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
+        album_action.setChecked(AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
         album_action.triggered.connect(
             lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_ALBUM_VISIBLE, checked))
         menu.addAction(album_action)
@@ -654,7 +657,7 @@ class SongTable(QTableView):
         # Summary
         summary_action = QAction(_("Summary"), self)
         summary_action.setCheckable(True)
-        summary_action.setChecked(settings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool))
+        summary_action.setChecked(AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool))
         summary_action.triggered.connect(
             lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_SUMMARY_VISIBLE, checked))
         menu.addAction(summary_action)
@@ -664,7 +667,7 @@ class SongTable(QTableView):
         # Dynamic Columns
         dynamic_action = QAction(_("Dynamic Columns"), self)
         dynamic_action.setCheckable(True)
-        dynamic_action.setChecked(settings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
+        dynamic_action.setChecked(AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
         dynamic_action.triggered.connect(
             lambda checked: self.toggle_column_setting(SettingKeys.DYNAMIC_TABLE_COLUMNS, checked))
         menu.addAction(dynamic_action)
@@ -672,7 +675,7 @@ class SongTable(QTableView):
         menu.exec(self.horizontalHeader().mapToGlobal(point))
 
     def toggle_column_setting(self, key, checked):
-        settings.setValue(key, checked)
+        AppSettings.setValue(key, checked)
         self.update_category_column_visibility()
         if key == SettingKeys.COLUMN_SUMMARY_VISIBLE:
             self.viewport().update()
@@ -688,11 +691,10 @@ class SongTable(QTableView):
             data = self.mp3_data(index.row())
             self.play_track.emit(index.row(), data)
         elif index.column() == FAV_COL:
-            # self.setSortingEnabled(False)
             data = self.mp3_data(index.row())
             data.favorite = not data.favorite
+            mp3.update_mp3_favorite(data.path, data.favorite)
             self.repaint()
-            # self.setSortingEnabled(True)
 
     def refresh_item(self, file_path: str | os.PathLike[str]):
         data = mp3.parse_mp3(Path(file_path))
@@ -701,25 +703,18 @@ class SongTable(QTableView):
             self.model().setData(self.model().index(index, FILE_COL), data, Qt.ItemDataRole.UserRole)
 
     def filter(self, filter_query: str = None):
-        self.proxyModel.setFilterWildcard(filter_query)
-        self.proxyModel.setFilterRole(Qt.ItemDataRole.DisplayRole)
-        self.proxyModel.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.proxyModel.setFilterKeyColumn(FILE_COL)
-
-        # for row in range(self.rowCount()):
-        #     data = self.mp3_data(row)
-        #     if filter_query is None or (data.name is not None and data.name.lower().__contains__(filter_query.lower())) or (data.summary is not None and data.summary.lower().__contains__(filter_query.lower())):
-        #         self.showRow(row)
-        #     else:
-        #         self.hideRow(row)
+        self.proxy_model.setFilterWildcard(filter_query)
+        self.proxy_model.setFilterRole(Qt.ItemDataRole.DisplayRole)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.proxy_model.setFilterKeyColumn(FILE_COL)
 
     def populate_table(self, table_data: list[Mp3Entry]):
-        self.tableModel = TableModel(table_data)
-        self.proxyModel = QSortFilterProxyModel(self)
-        self.proxyModel.setDynamicSortFilter(True)
-        self.proxyModel.setSourceModel(self.tableModel)
+        self.table_model = TableModel(table_data)
+        self.proxy_model = QSortFilterProxyModel(self)
+        self.proxy_model.setDynamicSortFilter(True)
+        self.proxy_model.setSourceModel(self.table_model)
 
-        self.setModel(self.proxyModel)
+        self.setModel(self.proxy_model)
         self.setColumnWidth(FAV_COL, 48)
         self.setColumnWidth(FILE_COL, 400)
         self.setColumnWidth(SCORE_COL, 80)
@@ -738,19 +733,19 @@ class SongTable(QTableView):
         self.setSortingEnabled(True)
 
     def is_column_visible(self, category: str):
-        return not settings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False,
-                                  type=bool) or self.tableModel.slider_values.get(category, 0) > 0
+        return not AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False,
+                                     type=bool) or self.table_model.slider_values.get(category, 0) > 0
 
     def update_category_column_visibility(self):
-        self.setColumnHidden(FAV_COL, not settings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
-        self.setColumnHidden(TITLE_COL, not settings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
-        self.setColumnHidden(ARTIST_COL, not settings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
-        self.setColumnHidden(ALBUM_COL, not settings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
+        self.setColumnHidden(FAV_COL, not AppSettings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
+        self.setColumnHidden(TITLE_COL, not AppSettings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
+        self.setColumnHidden(ARTIST_COL, not AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
+        self.setColumnHidden(ALBUM_COL, not AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
 
         for col, cat in enumerate(all_categories):
             self.setColumnHidden(CAT_COL + col, not self.is_column_visible(cat))
 
-        if settings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
+        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
             self.verticalHeader().setDefaultSectionSize(56)
         else:
             self.verticalHeader().setDefaultSectionSize(28)
@@ -794,7 +789,7 @@ class SongTable(QTableView):
                     data.summary = new_summary
                     has_changes = True
                 except Exception as e:
-                    logger.error(f"Failed to update summary: {e}")
+                    logger.error("Failed to update summary: {0}",e)
                     QMessageBox.warning(self, _("Update Error"), _("Failed to update summary: {0}").format(e))
 
             if new_title != data.title:
@@ -803,7 +798,7 @@ class SongTable(QTableView):
                     data.title = new_title
                     has_changes = True
                 except Exception as e:
-                    logger.error(f"Failed to update title: {e}")
+                    logger.error("Failed to update title: {0}",e)
                     QMessageBox.warning(self, _("Update Error"), _("Failed to update title: {0}").format(e))
 
             if new_favorite != data.favorite:
@@ -812,7 +807,7 @@ class SongTable(QTableView):
                     data.favorite = new_favorite
                     has_changes = True
                 except Exception as e:
-                    logger.error(f"Failed to update favorite file: {e}")
+                    logger.error("Failed to update favorite file: {0}",e)
                     QMessageBox.warning(self, _("Update Error"), _("Failed to update favorite: {0}").format(e))
 
             if new_tags != data.tags:
@@ -824,13 +819,13 @@ class SongTable(QTableView):
                         available_tags.append(tag)
 
                     mp3.update_mp3_tags(data.path, new_tags)
-                    data.setTags(new_tags)
+                    data.set_tags(new_tags)
                     has_changes = True
 
 
 
                 except Exception as e:
-                    logger.error(f"Failed to update tags in file: {e}")
+                    logger.error("Failed to update tags in file: {0}",e)
                     QMessageBox.warning(self, _("Update Error"), _("Failed to update tags: {0}").format(e))
 
             # Update Name (Filename)
@@ -849,7 +844,7 @@ class SongTable(QTableView):
                     has_changes = True
 
                 except Exception as e:
-                    logger.error(f"Failed to rename file: {e}")
+                    logger.error("Failed to rename file: {0}",e)
                     QMessageBox.warning(self, _("Update Error"), _("Failed to rename file: {0}").format(e))
 
             if has_changes:
@@ -886,9 +881,9 @@ class Player(QWidget):
     icon_next: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipForward)
     icon_open: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen)
 
-    volumeChanged = Signal(int)
+    volume_changed = Signal(int)
     trackChanged = Signal(int, Mp3Entry)
-    repeatModeChanged = Signal(RepeatMode)
+    repeat_mode_changed = Signal(RepeatMode)
     openClicked = Signal()
 
     track_count = 0
@@ -918,7 +913,7 @@ class Player(QWidget):
         progress_layout = QHBoxLayout()
         progress_layout.setSpacing(8)
         self.time_label = QLabel("00:00")
-        self.progress_slider = QJumpSlider(Qt.Orientation.Horizontal)
+        self.progress_slider = JumpSlider(Qt.Orientation.Horizontal)
         self.progress_slider.setRange(0, 1000)
         self.duration_label = QLabel("00:00")
         self.progress_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
@@ -948,19 +943,19 @@ class Player(QWidget):
             btn.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
             btn.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
 
-        self.btn_repeat = RepeatButton(settings.value(SettingKeys.REPEAT_MODE, 0, type=int))
+        self.btn_repeat = RepeatButton(AppSettings.value(SettingKeys.REPEAT_MODE, 0, type=int))
         self.btn_repeat.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
         self.btn_repeat.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
-        self.btn_repeat.valueChanged.connect(self.repeat_mode_changed)
+        self.btn_repeat.value_changed.connect(self.on_repeat_mode_changed)
 
-        self.repeatModeChanged = self.btn_repeat.valueChanged
+        self.repeat_mode_changed = self.btn_repeat.value_changed
 
-        self.slider_vol = VolumeSlider(settings.value(SettingKeys.VOLUME, 70, type=int))
-        self.slider_vol.setButtonSize(QSize(app_theme.button_size, app_theme.button_size))
-        self.slider_vol.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
+        self.slider_vol = VolumeSlider(AppSettings.value(SettingKeys.VOLUME, 70, type=int))
+        self.slider_vol.set_button_size(QSize(app_theme.button_size, app_theme.button_size))
+        self.slider_vol.set_icon_size(QSize(app_theme.icon_size, app_theme.icon_size))
 
-        self.slider_vol.volumeChanged.connect(self.adjust_volume)
-        self.volumeChanged = self.slider_vol.volumeChanged
+        self.slider_vol.volume_changed.connect(self.adjust_volume)
+        self.volume_changed = self.slider_vol.volume_changed
 
         self.controls_layout.addWidget(self.btn_prev)
         self.controls_layout.addWidget(self.btn_play)
@@ -1009,11 +1004,11 @@ class Player(QWidget):
             icon.setFallbackThemeName(app_theme.theme())
 
 
-    def repeat_mode_changed(self, mode):
-        settings.setValue(SettingKeys.REPEAT_MODE, self.btn_repeat.REPEAT_MODES.index(mode))
+    def on_repeat_mode_changed(self, mode):
+        AppSettings.setValue(SettingKeys.REPEAT_MODE, self.btn_repeat.REPEAT_MODES.index(mode))
 
-    def repeatMode(self):
-        return self.btn_repeat.repeatMode()
+    def repeat_mode(self):
+        return self.btn_repeat.repeat_mode()
 
     def fire_open_clicked(self):
         self.openClicked.emit()
@@ -1022,7 +1017,7 @@ class Player(QWidget):
 
         self.engine.set_user_volume(value)
         self.visualizer.set_state(self.engine.player.is_playing(), value)
-        settings.setValue(SettingKeys.VOLUME, value)
+        AppSettings.setValue(SettingKeys.VOLUME, value)
 
     def seek_position(self, pos: int = None):
         if pos is None:
@@ -1055,7 +1050,7 @@ class Player(QWidget):
         self.visualizer.set_state(is_playing, self.slider_vol.volume())
 
     def on_track_finished(self):
-        repeatMode = self.btn_repeat.repeatMode()
+        repeatMode = self.btn_repeat.repeat_mode()
 
         if repeatMode == RepeatMode.REPEAT_SINGLE:
             self.engine.stop()
@@ -1069,20 +1064,22 @@ class Player(QWidget):
             self.engine.stop()
 
     def toggle_play(self):
-        if self.track_count == 0: return
-
         if self.engine.player.is_playing():
             self.engine.pause_toggle()
             self.btn_play.setIcon(self.icon_play)
         else:
             if self.engine.player.get_media() is None:
-                self.trackChanged.emit(0, None)
+                if self.track_count >= 0:
+                    self.trackChanged.emit(0, None)
+                else:
+                    return
             else:
                 self.engine.pause_toggle()
             self.btn_play.setIcon(self.icon_pause)
 
     def next_track(self):
-        if self.track_count == 0: return
+        if self.track_count == 0:
+            return
         current_index = (self.current_index + 1) % self.track_count
         self.engine.stop()
         self.trackChanged.emit(current_index, None)
@@ -1125,7 +1122,45 @@ class Player(QWidget):
 
             except Exception as e:
                 self.track_label.setText(_("Error loading file"))
-                logger.error(f"File error: {e}")
+                logger.error("File error: {0}",e)
+
+
+class AboutDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(_("About"))
+
+        layout = QVBoxLayout(self)
+
+        # Logo/Splash
+        logo_label = QLabel()
+        splash_path = get_path("docs/splash.png")
+        if os.path.exists(splash_path):
+            pixmap = QPixmap(splash_path)
+            if not pixmap.isNull():
+                # Scale to reasonable size, e.g. width 400
+                scaled_pixmap = pixmap.scaledToWidth(400, Qt.TransformationMode.SmoothTransformation)
+                logo_label.setPixmap(scaled_pixmap)
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(logo_label)
+
+        # Text Info
+        # Using HTML for formatting and link
+        info_text = f"""
+        <h3 align="center">DungeonTuber {QApplication.applicationVersion()}</h3>
+        <p align="center">{_('Author')}: Gandulf Kohlweiss</p>
+        <p align="center"><a href="https://github.com/gandulf/DungeonTuber">https://github.com/gandulf/DungeonTuber</a></p>
+        """
+
+        info_label = QLabel(info_text)
+        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info_label.setOpenExternalLinks(True)
+        layout.addWidget(info_label)
+
+        # Button
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        button_box.accepted.connect(self.accept)
+        layout.addWidget(button_box)
 
 
 class MusicPlayer(QMainWindow):
@@ -1141,29 +1176,28 @@ class MusicPlayer(QMainWindow):
         self.setWindowTitle(application.applicationName() + " " + application.applicationVersion())
         self.resize(1200, 700)
 
-        global all_categories, MUSIC_CATEGORIES, MUSIC_TAGS, PRESETS
+        global all_categories
         # Load custom categories and tags
         try:
-            custom_categories = settings.value(SettingKeys.CATEGORIES)
+            custom_categories = AppSettings.value(SettingKeys.CATEGORIES)
             if custom_categories:
-                MUSIC_CATEGORIES = jsonpickle.decode(custom_categories)
+                set_music_categories(jsonpickle.decode(custom_categories))
 
-            all_categories = [cat.name for cat in MUSIC_CATEGORIES.values()]
-
-            custom_tags = settings.value(SettingKeys.TAGS)
+            custom_tags = AppSettings.value(SettingKeys.TAGS)
             if custom_tags:
-                MUSIC_TAGS = json.loads(custom_tags)
+                set_music_tags(jsonpickle.decode(custom_tags))
 
-            custom_presets = settings.value(SettingKeys.PRESETS)
+            custom_presets = AppSettings.value(SettingKeys.PRESETS)
             if custom_presets:
-                PRESETS = jsonpickle.decode(custom_presets)
+                set_presets(jsonpickle.decode(custom_presets))
 
         except Exception as e:
-            logger.error(f"Failed to load custom settings: {e}")
+            AppSettings.clear()
+            logger.error("Failed to load custom settings: {0}",e)
 
         # Initialize Analyzer with settings
-        api_key: str = settings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY, type=str)
-        mock_mode: bool = settings.value(SettingKeys.MOCK_MODE, True, type=bool)
+        api_key: str = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY, type=str)
+        mock_mode: bool = AppSettings.value(SettingKeys.MOCK_MODE, True, type=bool)
         self.analyzer = Analyzer(api_key=api_key, mock_mode=mock_mode)
 
         self.current_index = -1
@@ -1173,7 +1207,7 @@ class MusicPlayer(QMainWindow):
         self.load_initial_directory()
 
     def slider_values(self):
-        return {cat: slider.value() for cat, slider in self.sliders.items()}
+        return {cat.name: slider.value() for cat, slider in self.sliders.items()}
 
     def exit(self):
         sys.exit(0)
@@ -1218,13 +1252,13 @@ class MusicPlayer(QMainWindow):
         view_menu = menu_bar.addMenu(_("View"))
         filter_action = QAction(_("Toggle Filter"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.SystemSearch))
         filter_action.setCheckable(True)
-        filter_action.setChecked(settings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
+        filter_action.setChecked(AppSettings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
         filter_action.triggered.connect(self.toggle_filter)
         view_menu.addAction(filter_action)
 
         self.dir_tree_action = QAction(_("Directory Tree"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
         self.dir_tree_action.setCheckable(True)
-        self.dir_tree_action.setChecked(settings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
+        self.dir_tree_action.setChecked(AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
         self.dir_tree_action.triggered.connect(self.toggle_directory_tree)
         view_menu.addAction(self.dir_tree_action)
 
@@ -1279,7 +1313,7 @@ class MusicPlayer(QMainWindow):
         visualizer_group.addAction(vis_fake_action)
         visualizer_group.addAction(vis_none_action)
 
-        vis = settings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
+        vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
         if vis == "FAKE":
             vis_fake_action.setChecked(True)
         elif vis == "VLC":
@@ -1302,7 +1336,7 @@ class MusicPlayer(QMainWindow):
         self.dark_theme_action = QAction(_("Dark"), self)
         self.dark_theme_action.triggered.connect(self.set_dark_theme)
         self.dark_theme_action.setCheckable(True)
-        if (app_theme.theme() == "LIGHT"):
+        if app_theme.theme() == "LIGHT":
             self.light_theme_action.setChecked(True)
         else:
             self.dark_theme_action.setChecked(True)
@@ -1311,6 +1345,16 @@ class MusicPlayer(QMainWindow):
         theme_menu.addAction(self.dark_theme_action)
 
         view_menu.addMenu(theme_menu)
+
+        # Help Menu
+        help_menu = menu_bar.addMenu(_("Help"))
+        about_action = QAction(_("About"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.HelpAbout))
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
+
+    def show_about_dialog(self):
+        dialog = AboutDialog(self)
+        dialog.exec()
 
     def set_light_theme(self):
         self.light_theme_action.setChecked(True)
@@ -1325,28 +1369,28 @@ class MusicPlayer(QMainWindow):
         app_theme.set_theme("DARK")
 
     def set_visualizer_vlc(self):
-        settings.setValue(SettingKeys.VISUALIZER, "VLC")
+        AppSettings.setValue(SettingKeys.VISUALIZER, "VLC")
         self.player.refresh_visualizer()
 
     def set_visualizer_fake(self):
-        settings.setValue(SettingKeys.VISUALIZER, "FAKE")
+        AppSettings.setValue(SettingKeys.VISUALIZER, "FAKE")
         self.player.refresh_visualizer()
 
     def set_visualizer_none(self):
-        settings.setValue(SettingKeys.VISUALIZER, "NONE")
+        AppSettings.setValue(SettingKeys.VISUALIZER, "NONE")
         self.player.refresh_visualizer()
 
     def toggle_directory_tree(self, visible: bool = None):
 
         if visible is None:
-            visible = not settings.value(SettingKeys.DIRECTORY_TREE, True, type=bool)
+            visible = not AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool)
 
-        if (visible):
+        if visible:
             self.central_layout.setSizes([200, 600])
-            settings.setValue(SettingKeys.DIRECTORY_TREE, True)
+            AppSettings.setValue(SettingKeys.DIRECTORY_TREE, True)
         else:
             self.central_layout.setSizes([0, 800])
-            settings.setValue(SettingKeys.DIRECTORY_TREE, False)
+            AppSettings.setValue(SettingKeys.DIRECTORY_TREE, False)
 
     def toggle_filter(self):
         if self.filter_widget.isVisible():
@@ -1354,15 +1398,15 @@ class MusicPlayer(QMainWindow):
         else:
             self.filter_widget.show()
 
-        settings.setValue(SettingKeys.FILTER_VISIBLE, self.filter_widget.isVisible())
+        AppSettings.setValue(SettingKeys.FILTER_VISIBLE, self.filter_widget.isVisible())
 
     def open_settings(self):
 
         dialog = SettingsDialog(self)
         if dialog.exec():
             # Update analyzer with new settings
-            api_key = settings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
-            mock_mode = settings.value(SettingKeys.MOCK_MODE, DEFAULT_MOCK_MODE, type=bool)
+            api_key = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
+            mock_mode = AppSettings.value(SettingKeys.MOCK_MODE, DEFAULT_MOCK_MODE, type=bool)
             self.analyzer.api_key = api_key
             self.analyzer.mock_mode = mock_mode
             self.update_sliders()
@@ -1372,7 +1416,7 @@ class MusicPlayer(QMainWindow):
 
     def init_sliders_tags(self, main_layout):
         self.filter_widget = QWidget()
-        self.filter_widget.setVisible(settings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
+        self.filter_widget.setVisible(AppSettings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
         self.filter_layout = QVBoxLayout(self.filter_widget)
         self.filter_layout.setContentsMargins(0, 0, 0, 0)
         self.filter_layout.setSpacing(0)
@@ -1421,21 +1465,17 @@ class MusicPlayer(QMainWindow):
         layout.addWidget(button_box)
 
         if save_preset_dialog.exec():
-            preset = Preset(name_edit.text(), slider_values)
-            PRESETS.append(preset)
-            self.store_presets()
+            preset = Preset(name_edit.text(), self.slider_values())
+            add_preset(preset)
             self.update_tags_and_presets()
 
-    def store_presets(self):
-        settings.setValue(SettingKeys.PRESETS, jsonpickle.encode(PRESETS))
-
     def tree_load_file(self, index: QModelIndex):
-        data = self.dirTree.model().itemData(index)
-        fileInfo: QFileInfo = data[QFileSystemModel.Roles.FileInfoRole]
-        if fileInfo.isDir():
-            self.load_directory(fileInfo.filePath())
+        data = self.directory_tree.model().itemData(index)
+        file_info: QFileInfo = data[QFileSystemModel.Roles.FileInfoRole]
+        if file_info.isDir():
+            self.load_directory(file_info.filePath())
         else:
-            entry = mp3.parse_mp3(Path(fileInfo.filePath()))
+            entry = mp3.parse_mp3(Path(file_info.filePath()))
             self.play_track(-1, entry)
 
     def init_directory_tree(self):
@@ -1443,8 +1483,8 @@ class MusicPlayer(QMainWindow):
         tree.open.connect(self.tree_load_file)
         return tree
 
-    def layout_splitter_moved(self, posx, posy):
-        if posx == 0:
+    def layout_splitter_moved(self, pos_x, pos_y):
+        if pos_x == 0:
             self.dir_tree_action.setChecked(False)
         else:
             self.dir_tree_action.setChecked(True)
@@ -1454,9 +1494,9 @@ class MusicPlayer(QMainWindow):
         self.central_layout.splitterMoved.connect(self.layout_splitter_moved)
         self.setCentralWidget(self.central_layout)
 
-        self.dirTree = self.init_directory_tree()
+        self.directory_tree = self.init_directory_tree()
 
-        self.central_layout.addWidget(self.dirTree)
+        self.central_layout.addWidget(self.directory_tree)
 
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
@@ -1476,7 +1516,7 @@ class MusicPlayer(QMainWindow):
 
         main_layout.addWidget(self.player, 0)
 
-        self.toggle_directory_tree(settings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
+        self.toggle_directory_tree(AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
         # -------------------------------------
 
         # Table Widget for Playlist
@@ -1496,22 +1536,22 @@ class MusicPlayer(QMainWindow):
 
         main_layout.addWidget(self.table_tabs, 2)
 
-        self.statusBar = QStatusBar()
-        self.statusLabel = QLabel("")
-        self.statusLabel.setContentsMargins(8, 0, 8, 0)
-        self.statusBar.addWidget(self.statusLabel, 1)
+        self.status_bar = QStatusBar()
+        self.status_label = IconLabel(None, "")
+        self.status_label.setContentsMargins(8, 0, 8, 0)
+        self.status_bar.addWidget(self.status_label, 1)
 
-        self.statusProgress = QProgressBar()
-        self.statusProgress.setContentsMargins(0, 0, 0, 0)
-        self.statusProgress.setRange(0, 0)
-        self.statusBar.addWidget(self.statusProgress)
+        self.status_progress = QProgressBar()
+        self.status_progress.setContentsMargins(0, 0, 0, 0)
+        self.status_progress.setRange(0, 0)
+        self.status_bar.addWidget(self.status_progress)
 
-        main_layout.addWidget(self.statusBar, 0)
+        main_layout.addWidget(self.status_bar, 0)
 
-        self.statusBar.setVisible(False)
+        self.status_bar.setVisible(False)
 
         self.analyzer.progress.connect(self.update_status_label)
-        self.analyzer.error.connect(self.update_status_label)
+        self.analyzer.error.connect(self.update_status_label_error)
         self.analyzer.error.connect(self.result_status_label)
         self.analyzer.result.connect(self.result_status_label)
 
@@ -1522,12 +1562,20 @@ class MusicPlayer(QMainWindow):
 
     def hide_status_label(self):
         if self.analyzer.active_worker() == 0:
-            self.statusBar.setVisible(False)
+            self.status_bar.setVisible(False)
 
-    def update_status_label(self, msg: str):
+    def update_status_label_error(self, msg: str):
+        self.update_status_label(msg,True)
+
+    def update_status_label(self, msg: str, error:bool = False):
         if msg is not None:
-            self.statusBar.setVisible(True)
-            self.statusLabel.setText(str(msg))
+            self.status_bar.setVisible(True)
+            self.status_label.set_text(str(msg))
+
+            if error:
+                self.status_label.set_icon(QIcon.fromTheme(QIcon.ThemeIcon.DialogError))
+            else:
+                self.status_label.set_icon(QIcon.fromTheme(QIcon.ThemeIcon.DialogInformation))
 
     def add_table_tab(self, name: str, icon: QIcon) -> SongTable:
         table = SongTable(self.analyzer)
@@ -1537,12 +1585,12 @@ class MusicPlayer(QMainWindow):
         self.table_tabs.setCurrentIndex(index)
         return table
 
-    def table_tab_changed(self, index):
+    def table_tab_changed(self, index: int):
         table = self.current_table()
         table.update_category_column_visibility()
         self.update_available_tags(table.mp3_datas())
 
-    def table_tab_close(self, index):
+    def table_tab_close(self, index: int):
         self.table_tabs.removeTab(index)
         self.table_tabs.tabBar().setVisible(self.table_tabs.count() > 1)
 
@@ -1553,7 +1601,7 @@ class MusicPlayer(QMainWindow):
 
         table.filter(self.searchbar.text())
 
-    def build_sliders(self, categories: list[str]):
+    def build_sliders(self, categories: list[MusicCategory]):
         sliders_widget = QWidget()
         sliders_layout = QVBoxLayout(sliders_widget)
         sliders_layout.setContentsMargins(8, 8, 8, 8)
@@ -1594,20 +1642,20 @@ class MusicPlayer(QMainWindow):
 
         self.sort_table_data()
 
-    def clearLayout(self, layout):
+    def clear_layout(self, layout):
         while layout.count():
             child = layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
     def update_tags_and_presets(self):
-        self.clearLayout(self.tags_layout)
+        self.clear_layout(self.tags_layout)
         for tag in available_tags:
-            toggle = QToggle(checkedText=tag, uncheckedText=tag)
+            toggle = ToggleSlider(checked_text=tag, unchecked_text=tag)
             toggle.setProperty("tag", tag)
 
-            if tag in MUSIC_TAGS:
-                toggle.setToolTip(MUSIC_TAGS[tag])
+            if tag in get_music_tags():
+                toggle.setToolTip(get_music_tags()[tag])
             toggle.stateChanged.connect(self.toggle_tag)
             self.tags_layout.addWidget(toggle)
         self.tags_layout.addStretch()
@@ -1616,16 +1664,16 @@ class MusicPlayer(QMainWindow):
 
     def update_sliders(self):
         self.slider_tabs.clear()
-        self.sliders = {}
+        self.sliders: dict[MusicCategory, CategorySlider] = {}
 
         general_categories = all_categories.copy()
 
         categories_group = {}
-        for key, cat in MUSIC_CATEGORIES.items():
+        for cat in get_music_categories():
             category_group = cat.group
             if category_group not in categories_group:
                 categories_group[category_group] = []
-            categories_group[category_group].append(cat.name)
+            categories_group[category_group].append(cat)
 
         for (group, categories) in categories_group.items():
             self.slider_tabs.addTab(self.build_sliders(categories),
@@ -1635,7 +1683,7 @@ class MusicPlayer(QMainWindow):
         # self.slider_tabs.addTab(self.build_sliders(general_categories), "General")
 
     def update_presets(self):
-        for preset in PRESETS:
+        for preset in get_presets():
             button = QPushButton(preset.name, self)
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
@@ -1661,36 +1709,35 @@ class MusicPlayer(QMainWindow):
 
     def clear_sliders(self):
         for slider in self.sliders.values():
-            slider.setValue(0, False)
+            slider.set_value(0, False)
 
         self.sort_table_data()
 
     def reset_preset_action(self):
-        settings.reset_presets()
-        self.store_presets()
+        reset_presets()
         self.update_tags_and_presets()
 
     def remove_preset_action(self, checked: bool = False, data=None):
-        if (data is None):
+        if data is None:
             data = self.sender().data()
-        PRESETS.remove(data)
-        self.store_presets()
+        remove_preset(data)
         self.update_tags_and_presets()
 
     def select_preset(self, preset):
 
         for slider in self.sliders.values():
-            slider.setValue(0, False)
+            slider.set_value(0, False)
 
         for cat, scale in preset.categories.items():
-            self.sliders[cat].setValue(scale, False)
+            category = get_music_category(cat)
+            self.sliders[category].set_value(scale, False)
 
         self.sort_table_data()
 
     def pick_analyze_file(self):
         file_path, ignore = QFileDialog.getOpenFileName(self, _("Select File to Analyze"),
-                                                   dir=settings.value(SettingKeys.LAST_DIRECTORY),
-                                                   filter=_("Mp3 (*.mp3 *.MP3);;All (*)"))
+                                                        dir=AppSettings.value(SettingKeys.LAST_DIRECTORY),
+                                                        filter=_("Mp3 (*.mp3 *.MP3);;All (*)"))
         if file_path:
             try:
                 self.analyzer.process(file_path)
@@ -1701,31 +1748,33 @@ class MusicPlayer(QMainWindow):
 
     def pick_load_playlist(self):
         file_path, ignore = QFileDialog.getOpenFileName(self, _("Select Playlist to Load"),
-                                                   dir=settings.value(SettingKeys.LAST_DIRECTORY),
-                                                   filter=_("Playlist (*.m3u *.M3U);;All (*)"))
+                                                        dir=AppSettings.value(SettingKeys.LAST_DIRECTORY),
+                                                        filter=_("Playlist (*.m3u *.M3U);;All (*)"))
         if file_path:
             self.load_playlist(file_path)
 
     def pick_save_playlist(self):
         file_path, ignore = QFileDialog.getSaveFileName(self, _("Select Playlist to Save"),
-                                                   dir=settings.value(SettingKeys.LAST_DIRECTORY),
-                                                   filter=_("Playlist (*.m3u *M3U);;All (*)"))
+                                                        dir=AppSettings.value(SettingKeys.LAST_DIRECTORY),
+                                                        filter=_("Playlist (*.m3u *M3U);;All (*)"))
         if file_path:
             try:
-                self.save_playlist(file_path)
-                QMessageBox.information(self, _("Save Complete"), _("File {0} processed.").format(Path(file_path).name))
+                if self.save_playlist(file_path):
+                    QMessageBox.information(self, _("Save Complete"), _("File {0} processed.").format(Path(file_path).name))
+                else:
+                    QMessageBox.critical(self, _("Save Error"), _("No favorites found."))
             except Exception as e:
                 traceback.print_exc()
                 QMessageBox.critical(self, _("Save Error"), _("Failed to save file: {0}").format(e))
 
     def pick_analyze_directory(self):
         dir_path = QFileDialog.getExistingDirectory(self, _("Select Directory to Analyze"),
-                                                    dir=settings.value(SettingKeys.LAST_DIRECTORY))
+                                                    dir=AppSettings.value(SettingKeys.LAST_DIRECTORY))
         if dir_path:
             try:
                 self.analyzer.process(dir_path)
                 # Refresh table if the analyzed directory is the current one
-                if settings.value(SettingKeys.LAST_DIRECTORY) == dir_path:
+                if AppSettings.value(SettingKeys.LAST_DIRECTORY) == dir_path:
                     self.load_directory(dir_path)
             except Exception as e:
                 traceback.print_exc()
@@ -1733,7 +1782,7 @@ class MusicPlayer(QMainWindow):
 
     def pick_load_directory(self):
         directory = QFileDialog.getExistingDirectory(self, _("Select Music Directory"),
-                                                     dir=settings.value(SettingKeys.LAST_DIRECTORY))
+                                                     dir=AppSettings.value(SettingKeys.LAST_DIRECTORY))
         if directory:
             self.load_directory(directory)
 
@@ -1748,7 +1797,7 @@ class MusicPlayer(QMainWindow):
             traceback.print_exc()
             QMessageBox.critical(self, _("Open Error"), _("Failed to load playlist: {0}").format(e))
 
-    def save_playlist(self, playlist_path):
+    def save_playlist(self, playlist_path) -> bool:
         table = self.current_table()
         if table is None:
             return
@@ -1756,13 +1805,13 @@ class MusicPlayer(QMainWindow):
         favorites = [x for x in table.mp3_datas() if x.favorite]
         if len(favorites) > 0:
             mp3.create_m3u(favorites, playlist_path)
-
-    def is_favorite(entry: Mp3Entry):
-        return entry.favorite
+            return True
+        else:
+            return False
 
     def load_directory(self, directory: str | os.PathLike[str]):
         try:
-            settings.setValue(SettingKeys.LAST_DIRECTORY, directory)
+            AppSettings.setValue(SettingKeys.LAST_DIRECTORY, directory)
             base_path = Path(directory)
             mp3_files = list(base_path.rglob("*.mp3"))
 
@@ -1774,7 +1823,7 @@ class MusicPlayer(QMainWindow):
 
     def update_available_tags(self, entries: list[Mp3Entry]):
         global available_tags
-        tags_set = set(MUSIC_TAGS.keys())
+        tags_set = set(get_music_tags().keys())
         for entry in entries:
             tags_set.update(entry.tags)
 
@@ -1806,10 +1855,7 @@ class MusicPlayer(QMainWindow):
 
         data = table.mp3_data(self.player.current_index)
 
-        global slider_values
-        slider_values = self.slider_values()
-
-        table.tableModel.setSliderValues(slider_values, selected_tags)
+        table.table_model.set_slider_values(self.slider_values(), selected_tags)
         table.update_category_column_visibility()
 
         current_track_path = None
@@ -1824,7 +1870,7 @@ class MusicPlayer(QMainWindow):
             self.player.current_index = table.index_of(data)
 
     def load_initial_directory(self):
-        last_dir = settings.value(SettingKeys.LAST_DIRECTORY)
+        last_dir = AppSettings.value(SettingKeys.LAST_DIRECTORY)
         if last_dir and os.path.isdir(last_dir):
             self.load_directory(last_dir)
 
@@ -1860,9 +1906,6 @@ dark_palette: QPalette
 def main():
     global app, window
 
-    #logging.basicConfig(level=logging.WARNING, filename="error.log", filemode="w")
-    logging.basicConfig(level=logging.WARNING)
-
     if "DEBUG" in os.environ:
         logger.setLevel(logging.DEBUG)
 
@@ -1870,7 +1913,7 @@ def main():
 
     # Set up Gettext
 
-    language = settings.value(SettingKeys.Locale, type=str)
+    language = AppSettings.value(SettingKeys.LOCALE, type=str)
     if language is None or language =="":
         loc, encoding = locale.getlocale()
         language = loc
@@ -1924,4 +1967,4 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         traceback.print_exc()
-        logger.exception("Main crashed. Error: %s", e)
+        logger.exception("Main crashed. Error: {0}", e)

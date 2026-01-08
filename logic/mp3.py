@@ -4,31 +4,31 @@ import sys
 import glob
 import json
 import logging
-from io import TextIOWrapper
-
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TXXX, COMM, TIT2
 from pathlib import Path
 from os import PathLike
 
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3, TXXX, COMM, TIT2
+
 logger = logging.getLogger("main")
 
-class Mp3Entry:
+class Mp3Entry(object):
+    __slots__ = ["name", "path", "title", "artist", "album", "summary", "length", "favorite", "categories", "tags","all_tags"]
 
-    name: str = None
-    path: Path = None
-    title: str = None
-    artist: str = None
-    album: str = None
-    summary: str = None
-    length: int = 0
-    favorite: bool = False
+    name: str
+    path: Path
+    title: str
+    artist: str
+    album: str
+    summary: str
+    length: int
+    favorite: bool
 
     categories : dict[str,int]
     tags: list[str]
-    all_tags: None | set[str] = None
+    all_tags: None | set[str]
 
-    def __init__(self, name: str = None, path :str | Path = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None):
+    def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None):
         self.name = name
         self.title = title
         self.path = path if isinstance(path,Path) else Path(path)
@@ -44,7 +44,7 @@ class Mp3Entry:
         else:
             self.tags = []
 
-    def setTags(self, tags: list[str]):
+    def set_tags(self, tags: list[str]):
         self.tags = tags
         self.all_tags = None
 
@@ -68,11 +68,11 @@ class Mp3Entry:
         return self.all_tags
 
 
-def parse_mp3(f : Path) -> Mp3Entry | None:
+def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
 
     try:
-        entry = Mp3Entry(name=f.name, path=str(f))
-        audio = MP3(f, ID3=ID3)
+        entry = Mp3Entry(name=Path(file_path).name, path=file_path)
+        audio = MP3(file_path, ID3=ID3)
 
         entry.length = int(audio.info.length)
 
@@ -122,11 +122,11 @@ def parse_mp3(f : Path) -> Mp3Entry | None:
 
         return entry
     except Exception as e:
-        logger.error(f"Error reading tags for {f}: {e}")
+        logger.error("Error reading tags for {0}: {1}", file_path, e)
     return None
 
 
-def update_mp3_favorite(path : str | Path, favorite: bool):
+def update_mp3_favorite(path : str | PathLike[str], favorite: bool):
     audio = MP3(path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
@@ -134,23 +134,23 @@ def update_mp3_favorite(path : str | Path, favorite: bool):
     audio.tags.add(TXXX(encoding=3, desc='ai_favorite', text=[favorite]))
     audio.save()
 
-def update_mp3_summary(path : str| Path, new_summary :str):
+def update_mp3_summary(path : str| PathLike[str], new_summary :str):
     audio = MP3(path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
     audio.tags.add(COMM(encoding=3, text=[new_summary]))
     audio.save()
-    logger.debug(f"Updated summary to {new_summary} for {path}")
+    logger.debug("Updated summary to {0} for {1}", new_summary,path)
 
-def update_mp3_title(path : str| Path, new_title :str):
+def update_mp3_title(path : str| PathLike[str], new_title :str):
     audio = MP3(path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
     audio.tags.add(TIT2(encoding=3, text=[new_title]))
     audio.save()
-    logger.debug(f"Updated title to {new_title} for {path}")
+    logger.debug("Updated title to {0} for {1}", new_title,path)
 
-def update_mp3_categories(path: str | Path, categories: dict[str, int]):
+def update_mp3_categories(path: str | PathLike[str], categories: dict[str, int]):
     audio = MP3(path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
@@ -162,7 +162,7 @@ def update_mp3_categories(path: str | Path, categories: dict[str, int]):
     audio.tags.add(COMM(encoding=3, text=["processed by Voxalyzer 1.0"]))
 
     audio.save()
-def update_mp3_category(path: str| Path, category : str, new_value : int | None):
+def update_mp3_category(path: str| PathLike[str], category : str, new_value : int | None):
     audio = MP3(path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
@@ -172,7 +172,7 @@ def update_mp3_category(path: str| Path, category : str, new_value : int | None)
     if txxx_cats:
         try:
             cats = json.loads(txxx_cats.text[0])
-        except:
+        except Exception:
             pass
 
     if new_value is None:
@@ -183,9 +183,9 @@ def update_mp3_category(path: str| Path, category : str, new_value : int | None)
 
     audio.tags.add(TXXX(encoding=3, desc='ai_categories', text=[json.dumps(cats)]))
     audio.save()
-    logger.debug(f"Updated {category} to {new_value} for {path}")
+    logger.debug("Updated {} to {1} for {2}", category, new_value,path)
 
-def update_mp3_tags(path: str| Path, tags : list[str]):
+def update_mp3_tags(path: str| PathLike[str], tags : list[str]):
     audio = MP3(path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
@@ -199,7 +199,7 @@ def update_mp3_tags(path: str| Path, tags : list[str]):
             )
         )
     audio.save()
-    logger.debug(f"Updated tags to {tags} for {path}")
+    logger.debug("Updated tags to {0} for {1}", tags,path)
 
 def list_mp3s(path : str | PathLike[str]):
     return glob.glob("**/*.mp3", root_dir=path, recursive=True)
@@ -247,90 +247,78 @@ def add_tags_to_mp3(file_path : str | PathLike[str], summary : str, categories: 
         )
 
     audio.save()
-    logger.debug(f"Tags added to {file_path}")
+    logger.debug("Tags added to {0}", file_path)
 
 def print_mp3_tags(file_path: str | PathLike[str]):
     """Prints all ID3 tags from an MP3 file."""
     try:
         audio = MP3(file_path, ID3=ID3)
         if audio.tags:
-            logger.debug(f"\n--- Tags for {file_path} ---")
+            logger.debug("\n--- Tags for {0} ---", file_path)
             for key, value in audio.tags.items():
                 if not key.startswith("APIC"):
-                    logger.debug(f"{key}: {value}")
+                    logger.debug("{0}: {1}", key,value)
             logger.debug("---------------------------------\n")
         else:
-            logger.warning(f"No tags found in {file_path}")
+            logger.warning("No tags found in {}", file_path)
     except Exception as e:
-        logger.error(f"An error occurred while reading tags: {e}")
+        logger.error("An error occurred while reading tags: {0}",e)
 
 
 def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
 
     try:
-        logger.debug("Processing directory '%s'..." % dir)
-
         if len(entries) > 0:
-            logger.debug("Writing playlist '%s'..." % playlist)
+            logger.debug("Writing playlist '{0}'...", playlist)
 
             # write the playlist
-            of = open(playlist, 'w')
-            of.write("#EXTM3U\n")
+            with open(playlist, 'w') as of:
+                of.write("#EXTM3U\n")
 
-            # sorted by track number
-            for mp3 in entries:
+                # sorted by track number
+                for mp3 in entries:
 
-                relpath = os.path.relpath(mp3.path, str(Path(playlist).parent)).replace("\\", "/")
-                of.write("#EXTINF:%s,%s\n" % (mp3.length, mp3.name))
-                of.write(relpath + "\n")
-
-            of.close()
+                    relpath = os.path.relpath(mp3.path, str(Path(playlist).parent)).replace("\\", "/")
+                    of.write(f"#EXTINF:{mp3.length},{mp3.name}\n")
+                    of.write(relpath + "\n")
         else:
-            logger.warning("No mp3 files found in '%s'." % dir)
+            logger.warning("No mp3 files found.")
 
-    except:
-        logger.error("ERROR occured when processing directory '%s'. Ignoring." % dir)
-        logger.error("Text: ", sys.exc_info()[0])
+    except Exception:
+        logger.error("ERROR occured when processing entries.")
+        logger.error("Text: {0}", sys.exc_info()[0])
 
-def parse_m3u(infile : TextIOWrapper | str | PathLike[str]) -> list[Path] | None:
-    try:
-        assert(type(infile) == '_io.TextIOWrapper')
-    except AssertionError:
-        infile = open(infile,'r')
+def parse_m3u(file_path : str | PathLike[str]) -> list[Path] | None:
+    with open(file_path,'r') as infile:
 
-    """
-        All M3U files start with #EXTM3U.
-        If the first line doesn't start with this, we're either
-        not working with an M3U or the file we got is corrupted.
-    """
+        # All M3U files start with #EXTM3U.
+        # If the first line doesn't start with this, we're either
+        # not working with an M3U or the file we got is corrupted.
 
-    line = infile.readline()
-    if not line.startswith('#EXTM3U'):
-       return
+        line = infile.readline()
+        if not line.startswith('#EXTM3U'):
+            return None
 
-    # initialize playlist variables before reading file
-    playlist=[]
-    #song=track(None,None,None)
+        # initialize playlist variables before reading file
+        playlist=[]
+        #song=track(None,None,None)
 
-    baseDir = Path(Path(infile.name)).parent
+        base_dir = Path(Path(infile.name)).parent
 
-    for line in infile:
-        line=line.strip()
-        if line.startswith('#EXTINF:'):
-            continue
-            #pull length and title from #EXTINF line
-            #length,title=line.split('#EXTINF:')[1].split(',',1)
-            #song=track(length,title,None)
-        elif len(line) != 0:
-            # pull song path from all other, non-blank lines
-            #song.path=line
-            if Path(line).is_absolute():
-                playlist.append(Path(line))
-            else:
-                playlist.append(Path(baseDir, line))
-            # reset the song variable so it doesn't use the same EXTINF more than once
-
-
-    infile.close()
+        for line in infile:
+            line=line.strip()
+            if line.startswith('#EXTINF:'):
+                continue
+                # pull length and title from #EXTINF line
+                # length,title=line.split('#EXTINF:')[1].split(',',1)
+                # song=track(length,title,None)
+            elif len(line) != 0:
+                # pull song path from all other, non-blank lines
+                # song.path=line
+                if Path(line).is_absolute():
+                    playlist.append(Path(line))
+                else:
+                    playlist.append(Path(base_dir, line))
+                # reset the song variable so it doesn't use the same EXTINF more than once
 
     return playlist
