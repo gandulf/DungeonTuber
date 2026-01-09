@@ -5,7 +5,7 @@ a = Analysis(
     ['DungeonTuber.py'],
     pathex=[],
     binaries=[],
-    datas=[('docs/icon.ico', 'docs'), ('docs/splash.png', 'docs'), ('version.txt','.')],
+    datas=[('docs/icon.ico', 'docs'), ('docs/splash.png', 'docs'), ('version.txt','.'), ('locales','locales')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

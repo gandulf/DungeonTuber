@@ -1,8 +1,8 @@
 import math
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
-from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect
-from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette
+from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect, Signal
+from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent
 
 PAINTING_SCALE_FACTOR = 20
 
@@ -55,6 +55,12 @@ class IconLabel(QWidget):
     icon_size = QSize(16, 16)
     horizontal_spacing = 2
 
+    clicked = Signal()
+
+    def mousePressEvent(self, ev: QMouseEvent):
+        if (ev.button() == Qt.MouseButton.LeftButton):
+            self.clicked.emit()
+
     def __init__(self, icon: QIcon, text, final_stretch=True):
         super(IconLabel, self).__init__()
 
@@ -73,6 +79,7 @@ class IconLabel(QWidget):
         layout.addSpacing(self.horizontal_spacing)
 
         self.text_label = QLabel(text)
+        self.text_label.setOpenExternalLinks(True)
         layout.addWidget(self.text_label)
 
         if final_stretch:

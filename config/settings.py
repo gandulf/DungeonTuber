@@ -7,11 +7,11 @@ import jsonpickle
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLayout, QTabWidget, QWidget, \
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
-    QGroupBox, QComboBox, QStyledItemDelegate
+    QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox
 from google import genai
 from google.genai.types import ListModelsConfig
 
-from config.utils import get_path
+from config.utils import get_path, get_available_locales, restart_application
 
 logger = logging.getLogger("main")
 
@@ -324,15 +324,14 @@ class SettingsDialog(QDialog):
         self.locale_combo = QComboBox(editable=False)
         self.locale_combo.setToolTip(_("Requires restart"))
         self.locale_combo.addItem(_("System Default"), "")
-        self.locale_combo.addItem(_("English"), "en")
-        self.locale_combo.addItem(_("German"), "de", )
-        language = AppSettings.value(SettingKeys.LOCALE, type=str)
-        if language is None or language == "":
-            self.locale_combo.setCurrentIndex(0)
-        elif language == "en":
-            self.locale_combo.setCurrentIndex(1)
-        elif language == "de":
-            self.locale_combo.setCurrentIndex(2)
+        self.locale_combo.setCurrentIndex(0)
+        current_language = AppSettings.value(SettingKeys.LOCALE, type=str)
+
+        for i, locale in enumerate(get_available_locales()):
+            logger.warning("Fround language "+locale +" as "+ _(locale) )
+            self.locale_combo.addItem(_(locale), locale)
+            if current_language == locale:
+                self.locale_combo.setCurrentIndex(i+1)
 
         analyzer_layout.addRow(_("Language") + " *", self.locale_combo)
 
@@ -499,7 +498,6 @@ class SettingsDialog(QDialog):
         AppSettings.setValue(SettingKeys.COLUMN_ARTIST_VISIBLE, self.artist_column.isChecked())
         AppSettings.setValue(SettingKeys.COLUMN_ALBUM_VISIBLE, self.album_column.isChecked())
         AppSettings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())
-        AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
 
         _categories= []
         for row in range(self.categories_table.rowCount()):
@@ -527,5 +525,16 @@ class SettingsDialog(QDialog):
                     _tags[tag] = desc
 
         set_music_tags(_tags)
+
+        current_locale = AppSettings.value(SettingKeys.LOCALE, type=str)
+        if current_locale != self.locale_combo.currentData():
+            AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
+
+            reply = QMessageBox.question(self, _("Restart Required"),
+                                         _("Changing the language requires a restart. Do you want to restart now?"),
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+            if reply == QMessageBox.StandardButton.Yes:
+                restart_application()
 
         super().accept()

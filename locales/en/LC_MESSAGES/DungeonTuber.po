@@ -6,6 +6,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "en"
+msgstr "English"
+
+msgid "de"
+msgstr "German"
+
+msgid "es"
+msgstr "Spanish"
+
 msgid "File"
 msgstr "File"
 
@@ -297,12 +306,6 @@ msgstr "Language"
 msgid "System Default"
 msgstr "System Default"
 
-msgid "English"
-msgstr "English"
-
-msgid "German"
-msgstr "German"
-
 msgid "Analyzing {0}..."
 msgstr "Analyzing {0}..."
 
@@ -463,3 +466,12 @@ msgstr "Nordic music, Vikings, Russia (Tempo<6, Tension<4, Heroism<4, Mysticism<
 
 msgid "Grim"
 msgstr "Grim"
+
+msgid "Newer version available {0}"
+msgstr "Newer version available {0}"
+
+msgid "Restart Required"
+msgstr "Restart Required"
+
+msgid "Changing the language requires a restart. Do you want to restart now?"
+msgstr "Changing the language requires a restart. Do you want to restart now?"

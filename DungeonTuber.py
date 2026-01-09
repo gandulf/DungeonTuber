@@ -24,7 +24,7 @@ import traceback
 import logging
 
 from config import log
-from config.utils import get_path
+from config.utils import get_path, get_latest_version, is_latest_version
 
 log.setup_logging()
 
@@ -71,6 +71,8 @@ ARTIST_COL = 3
 ALBUM_COL = 4
 SCORE_COL = 5
 CAT_COL = 6
+
+DOWNLOAD_LINK ="https://github.com/gandulf/DungeonTuber/releases/download/latest/DungeonTuber.zip"
 
 all_categories: list[str] = []
 available_tags: list[str] = []
@@ -1141,10 +1143,16 @@ class AboutDialog(QDialog):
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(logo_label)
 
+
+        if not is_latest_version():
+            version_text = _("Newer version available {0}").format(f"<a href=\"{DOWNLOAD_LINK}\">{get_latest_version()}</a>")
+        else:
+            version_text= ""
         # Text Info
         # Using HTML for formatting and link
         info_text = f"""
         <h3 align="center">DungeonTuber {QApplication.applicationVersion()}</h3>
+        <p align="center"><strong>{version_text}</strong></p>
         <p align="center">{_('Author')}: Gandulf Kohlweiss</p>
         <p align="center"><a href="https://github.com/gandulf/DungeonTuber">https://github.com/gandulf/DungeonTuber</a></p>
         """
@@ -1200,6 +1208,10 @@ class MusicPlayer(QMainWindow):
 
         self.init_ui()
         self.load_initial_directory()
+
+        if not is_latest_version():
+            version_text = _("Newer version available {0}").format(f"<a href=\"{DOWNLOAD_LINK}\">{get_latest_version()}</a>")
+            self.update_status_label(version_text, False, False)
 
     def slider_values(self):
         return {cat.name: slider.value() for cat, slider in self.sliders.items()}
@@ -1533,6 +1545,7 @@ class MusicPlayer(QMainWindow):
         self.status_bar = QStatusBar()
         self.status_label = IconLabel(None, "")
         self.status_label.setContentsMargins(8, 0, 8, 0)
+        self.status_label.clicked.connect(lambda: self.status_bar.setVisible(False))
         self.status_bar.addWidget(self.status_label, 1)
 
         self.status_progress = QProgressBar()
@@ -1561,9 +1574,10 @@ class MusicPlayer(QMainWindow):
     def update_status_label_error(self, msg: str):
         self.update_status_label(msg,True)
 
-    def update_status_label(self, msg: str, error:bool = False):
+    def update_status_label(self, msg: str, error:bool = False, progress:bool = True):
         if msg is not None:
             self.status_bar.setVisible(True)
+            self.status_progress.setVisible(progress)
             self.status_label.set_text(str(msg))
 
             if error:
@@ -1919,7 +1933,7 @@ def main():
         loc, encoding = locale.getlocale()
         language = loc
 
-    en_i18n = gettext.translation("DungeonTuber", "./locales", fallback=True, languages=[language])
+    en_i18n = gettext.translation("DungeonTuber", get_path("locales"), fallback=True, languages=[language])
 
     # Create the "magic" function
     en_i18n.install()

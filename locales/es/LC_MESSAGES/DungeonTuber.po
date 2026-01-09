@@ -1,0 +1,478 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "en"
+msgstr "Inglés"
+
+msgid "de"
+msgstr "Alemán"
+
+msgid "es"
+msgstr "Español"
+
+msgid "File"
+msgstr "Archivo"
+
+msgid "Open"
+msgstr "Abrir"
+
+msgid "Open Directory"
+msgstr "Abrir directorio"
+
+msgid "Open Playlist"
+msgstr "Abrir lista de reproducción"
+
+msgid "Save Favorites"
+msgstr "Guardar favoritos"
+
+msgid "Analyze File"
+msgstr "Analizar archivo"
+
+msgid "Analyze Directory"
+msgstr "Analizar directorio"
+
+msgid "Settings"
+msgstr "Ajustes"
+
+msgid "Exit"
+msgstr "Salir"
+
+msgid "View"
+msgstr "Ver"
+
+msgid "Toggle Filter"
+msgstr "Alternar filtro"
+
+msgid "Directory Tree"
+msgstr "Árbol de directorios"
+
+msgid "Font Size"
+msgstr "Tamaño de fuente"
+
+msgid "Small"
+msgstr "Pequeño"
+
+msgid "Medium"
+msgstr "Mediano"
+
+msgid "Large"
+msgstr "Grande"
+
+msgid "Visualizer"
+msgstr "Visualizador"
+
+msgid "VLC Spectrum"
+msgstr "Espectro VLC"
+
+msgid "Fake"
+msgstr "Falso"
+
+msgid "None"
+msgstr "Ninguno"
+
+msgid "Theme"
+msgstr "Tema"
+
+msgid "Light"
+msgstr "Claro"
+
+msgid "Dark"
+msgstr "Oscuro"
+
+msgid "Save As Preset"
+msgstr "Guardar como ajuste predefinido"
+
+msgid "Filter songs..."
+msgstr "Filtrar canciones..."
+
+msgid "General"
+msgstr "General"
+
+msgid "Remove"
+msgstr "Eliminar"
+
+msgid "Reset Presets"
+msgstr "Restablecer ajustes"
+
+msgid "Select File to Analyze"
+msgstr "Seleccionar archivo para analizar"
+
+msgid "Mp3 (*.mp3 *.MP3);;All (*)"
+msgstr "Mp3 (*.mp3 *.MP3);;Todos (*)"
+
+msgid "Analysis Error"
+msgstr "Error de análisis"
+
+msgid "Failed to analyze file: {0}"
+msgstr "Error al analizar el archivo: {0}"
+
+msgid "Failed to analyze directory: {0}"
+msgstr "Error al analizar el directorio: {0}"
+
+msgid "Failed to scan directory: {0}"
+msgstr "Error al escanear el directorio: {0}"
+
+msgid "Select Playlist to Load"
+msgstr "Seleccionar lista para cargar"
+
+msgid "Playlist (*.m3u *.M3U);;All (*)"
+msgstr "Lista de reproducción (*.m3u *.M3U);;Todos (*)"
+
+msgid "Select Playlist to Save"
+msgstr "Seleccionar lista para guardar"
+
+msgid "Playlist (*.m3u *M3U);;All (*)"
+msgstr "Lista de reproducción (*.m3u *M3U);;Todos (*)"
+
+msgid "Save Complete"
+msgstr "Guardado completado"
+
+msgid "Save Error"
+msgstr "Error al guardar"
+
+msgid "File {0} processed."
+msgstr "Archivo {0} procesado."
+
+msgid "Failed to save file: {0}"
+msgstr "Error al guardar el archivo: {0}"
+
+msgid "Select Directory to Analyze"
+msgstr "Seleccionar directorio para analizar"
+
+msgid "Select Music Directory"
+msgstr "Seleccionar directorio de música"
+
+msgid "Open Error"
+msgstr "Error al abrir"
+
+msgid "Failed to load playlist: {0}"
+msgstr "Error al cargar la lista: {0}"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "Scan"
+msgstr "Escanear"
+
+msgid "No MP3 files found."
+msgstr "No se encontraron archivos MP3."
+
+msgid "Python-VLC module not found."
+msgstr "Módulo Python-VLC no encontrado."
+
+msgid "Categories"
+msgstr "Categorías"
+
+msgid "Tags"
+msgstr "Etiquetas"
+
+msgid "Analyzer"
+msgstr "Analizador"
+
+msgid "Gemini API Key"
+msgstr "Clave API de Gemini"
+
+msgid "Enable Mock Mode"
+msgstr "Activar modo simulado (Mock)"
+
+msgid "Skip Analyzed Music"
+msgstr "Omitir música ya analizada"
+
+msgid "Song Table"
+msgstr "Tabla de canciones"
+
+msgid "Use mp3 title instead of file name"
+msgstr "Usar título del MP3 en lugar del nombre de archivo"
+
+msgid "Dynamic Category Columns"
+msgstr "Columnas de categoría dinámicas"
+
+msgid "Favorite Column Visible"
+msgstr "Columna Favoritos visible"
+
+msgid "Title Column Visible"
+msgstr "Columna Título visible"
+
+msgid "Artist Column Visible"
+msgstr "Columna Artista visible"
+
+msgid "Album Column Visible"
+msgstr "Columna Álbum visible"
+
+msgid "Summary Visible"
+msgstr "Resumen visible"
+
+msgid "Category"
+msgstr "Categoría"
+
+msgid "Group"
+msgstr "Grupo"
+
+msgid "Description"
+msgstr "Descripción"
+
+msgid "Levels (json)"
+msgstr "Niveles (json)"
+
+msgid "Add"
+msgstr "Añadir"
+
+msgid "Reset All"
+msgstr "Restablecer todo"
+
+msgid "Tag"
+msgstr "Etiqueta"
+
+msgid "New Category"
+msgstr "Nueva categoría"
+
+msgid "New Tag"
+msgstr "Nueva etiqueta"
+
+msgid "Set As Home"
+msgstr "Establecer como inicio"
+
+msgid "Clear Home"
+msgstr "Borrar inicio"
+
+msgid "Favorite"
+msgstr "Favorito"
+
+msgid "Title"
+msgstr "Título"
+
+msgid "Artist"
+msgstr "Artista"
+
+msgid "Album"
+msgstr "Álbum"
+
+msgid "Summary"
+msgstr "Resumen"
+
+msgid "Dynamic Columns"
+msgstr "Columnas dinámicas"
+
+msgid "Update Error"
+msgstr "Error de actualización"
+
+msgid "Failed to update summary: {0}"
+msgstr "Error al actualizar el resumen: {0}"
+
+msgid "Failed to update title: {0}"
+msgstr "Error al actualizar el título: {0}"
+
+msgid "Failed to update favorite: {0}"
+msgstr "Error al actualizar favorito: {0}"
+
+msgid "Failed to update tags: {0}"
+msgstr "Error al actualizar etiquetas: {0}"
+
+msgid "Failed to rename file: {0}"
+msgstr "Error al renombrar el archivo: {0}"
+
+msgid "Analyze"
+msgstr "Analizar"
+
+msgid "Edit Description"
+msgstr "Editar descripción"
+
+msgid "No Track Selected"
+msgstr "Ninguna pista seleccionada"
+
+msgid "Error loading file"
+msgstr "Error al cargar el archivo"
+
+msgid "Score"
+msgstr "Puntuación"
+
+msgid "Edit Song"
+msgstr "Editar canción"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Requires restart"
+msgstr "Requiere reiniciar"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "System Default"
+msgstr "Predeterminado del sistema"
+
+msgid "Analyzing {0}..."
+msgstr "Analizando {0}..."
+
+msgid "API Key is missing"
+msgstr "Falta la clave API de Gemini"
+
+msgid "No favorites found."
+msgstr "No se encontraron favoritos."
+
+msgid "About"
+msgstr "Acerca de"
+
+msgid "Help"
+msgstr "Ayuda"
+
+msgid "GeminiUserPrompt"
+msgstr "Tarea:"
+"Categoriza la siguiente pieza musical para su uso en un juego de rol como \"The Dark Eye\" o \"Dungeons and Dragons\"."
+"Califica la pieza basándote en las categorías siguientes con un valor del {0} al {1} cada una."
+"\n"
+"Aquí está la lista de categorías para calificar la pieza musical, junto con sus descripciones:\n"
+"{2}"
+"\n"
+"Luego, asigna algunas etiquetas de la siguiente lista que mejor encajen. No es necesaria una escala aquí:\n"
+"{3}"
+
+msgid "GeminiSystemPrompt"
+msgstr "Eres un oyente experimentado de música de fantasía, cine y juegos de rol."
+"Evalúas la música tal como la percibe un oyente promedio,"
+"no de forma técnica o analítica, sino emocional y escénica."
+"\n"
+"Tus calificaciones deben ser consistentes a través de cientos de pistas.\n"
+"Un 3 siempre significa lo mismo, independientemente de qué pista se haya calificado antes.\n"
+"Los valores deben estar distribuidos significativamente entre sí (no todo {0} o {1}).\n"
+"Utiliza la escala completa del {0} al {1} cuando sea apropiado.\n"
+"Adhiérete estrictamente a las categorías especificadas y sus descripciones.\n"
+"Adhiérete estrictamente a las etiquetas especificadas y sus descripciones, no utilices etiquetas nuevas.\n"
+"Devuelve solo JSON, sin explicaciones adicionales."
+
+msgid "GeminiSummaryDescription"
+msgstr "Un breve resumen de la pieza musical respecto al estado de ánimo (aprox. 20 palabras)."
+
+msgid "GeminiCategoriesDescription"
+msgstr "Enumera todas las categorías y califícalas en una escala del {0} al {1}"
+
+msgid "GeminiTagsDescription"
+msgstr "Una lista de etiquetas que mejor se apliquen a la pieza musical."
+
+# Tempo
+msgid "Tempo"
+msgstr "Tempo"
+
+msgid "Tempo Description"
+msgstr "Tempo / Movimiento e Intensidad"
+
+msgid "Tempo Low"
+msgstr "Calma, sutil y muy lenta (solemne)"
+
+msgid "Tempo Medium"
+msgstr "Moderada (fluida, neutral)"
+
+msgid "Tempo High"
+msgstr "Enérgica, rápida y abrumadora (épica, frenética, pulsante)"
+
+# Darkness
+msgid "Darkness"
+msgstr "Oscuridad"
+
+msgid "Darkness Description"
+msgstr "Amenaza y Luz"
+
+msgid "Darkness Low"
+msgstr "Brillante, amistosa y acogedora"
+
+msgid "Darkness Medium"
+msgstr "Neutral (imparcial, observadora)"
+
+msgid "Darkness High"
+msgstr "Siniestra, amenazante y pesadillesca (demoníaca, intriga)"
+
+# Emotional
+msgid "Emotional"
+msgstr "Emotividad"
+
+msgid "Emotional Description"
+msgstr "Calidez Emocional y Distancia"
+
+msgid "Emotional Low"
+msgstr "Fría, distante y objetiva"
+
+msgid "Emotional Medium"
+msgstr "Equilibrada (narrativa tranquila)"
+
+msgid "Emotional High"
+msgstr "Profundamente emotiva, desgarradora e íntima (tragedia, despedidas)"
+
+# Mysticism
+msgid "Mysticism"
+msgstr "Misticismo"
+
+msgid "Mysticism Description"
+msgstr "Lo Sobrenatural vs. lo Mundano"
+
+msgid "Mysticism Low"
+msgstr "Mundana, terrenal y sencilla; para tabernas, folclórica y acústica"
+
+msgid "Mysticism Medium"
+msgstr "Matices mágicos ocasionales, civilizada (clásica-orquestal, ordenada)"
+
+msgid "Mysticism High"
+msgstr "Fuertemente mágica, trascendente, abstracta, esféricamente alienada y de otro mundo"
+
+# Tension
+msgid "Tension"
+msgstr "Tensión"
+
+msgid "Tension Description"
+msgstr "Anticipación y Relajación"
+
+msgid "Tension Low"
+msgstr "Relajante, resuelta y segura"
+
+msgid "Tension Medium"
+msgstr "Casual (fondo, tranquila)"
+
+msgid "Tension High"
+msgstr "Alta tensión, nerviosa y acechante (justo antes del combate)"
+
+# Heroism
+msgid "Heroism"
+msgstr "Heroísmo"
+
+msgid "Heroism Description"
+msgstr "Grandeza y Simplicidad"
+
+msgid "Heroism Low"
+msgstr "Simple, personal, íntima y a pequeña escala (taberna, vida cotidiana)"
+
+msgid "Heroism Medium"
+msgstr "Solidaria (firme, valiente)"
+
+msgid "Heroism High"
+msgstr "Heroica, legendaria, fatídica y divina (batallas, victorias)"
+
+#TAG Fight
+msgid "Tag Fight"
+msgstr "Combate"
+
+msgid "Tag Fight Description"
+msgstr "Música frenética, emocionante y enérgica (Tempo>6, Tensión>6, Heroísmo>5)"
+
+#TAG Travel
+msgid "Tag Travel"
+msgstr "Viaje"
+
+msgid "Tag Travel Description"
+msgstr "Música nórdica, vikingos, Rusia (Tempo<6, Tensión<4, Heroísmo<4, Misticismo<5)"
+
+msgid "Grim"
+msgstr "Sombrío"
+
+msgid "Newer version available {0}"
+msgstr "Nueva versión disponible {0}"
+
+msgid "Restart Required"
+msgstr "Reinicio requerido"
+
+msgid "Changing the language requires a restart. Do you want to restart now?"
+msgstr "Cambiar el idioma requiere reiniciar la aplicación. ¿Deseas reiniciar ahora?"
+
