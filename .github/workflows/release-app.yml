@@ -60,13 +60,34 @@ jobs:
       with:
         path: DungeonTuber.iss
         options: /O+
+
+    - name: Prepare Certificate for Signing
+      shell: pwsh
+      run: |
+        # Decode the Base64 secret into a physical .pfx file
+        $certBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_BASE64 }}")
+        [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)
+
+    - name: Sign Executable
+      shell: pwsh
+      run: |
+        # 1. Find signtool.exe dynamically
+        $signtool = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.Windows10SDK -find "**/x64/signtool.exe" | Select-Object -First 1
         
-    - name: Sign binary
-      uses: lando/code-sign-action@v3
-      with:
-        file: DungeonTuber-${{ steps.vars.outputs.app_version }}.exe
-        certificate-data: ${{ secrets.PFX_BASE64 }}
-        certificate-password: ${{ secrets.PFX_PASSWORD }}
+        # 2. Sign the file        
+        & $signtool sign /f "$env:TEMP\cert.pfx" `
+                         /p "${{ secrets.PFX_PASSWORD }}" `
+                         /fd sha256 `
+                         /tr http://timestamp.digicert.com `
+                         /td sha256 `
+                         "DungeonTuber-${{ steps.vars.outputs.app_version }}.exe"
+
+    - name: Cleanup Certificate
+      if: always()
+      shell: pwsh
+      run: |
+        # Securely remove the certificate from the runner's temp folder
+        if (Test-Path "$env:TEMP\cert.pfx") { Remove-Item "$env:TEMP\cert.pfx" }        
         
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2

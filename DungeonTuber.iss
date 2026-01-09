@@ -31,4 +31,5 @@ Name: "{group}\DungeonTuber"; Filename: "{app}\DungeonTuber.exe"; WorkingDir: "{
 Name: "{commondesktop}\DungeonTuber"; Filename: "{app}\DungeonTuber.exe"; WorkingDir: "{app}"
 Name: "{group}\Uninstall DungeonTuber"; Filename: "{uninstallexe}"
 
-
+[Run]
+Filename: "{app}\DungeonTuber.exe"; Description: "{cm:LaunchProgram,{#StringChange("Dungeon Tuber", '&', '&&')}}"; Flags: nowait postinstall skipifsilent
