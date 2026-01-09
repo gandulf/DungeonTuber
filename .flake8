@@ -1,0 +1,18 @@
+[flake8]
+extend-ignore = E203
+exclude = .github,.venv,.git,__pycache__,build,dist
+
+# Count the number of occurrences of each error
+count = True
+
+# Only check for these specific error classes (syntax, undefined names, etc.)
+select = E9,F63,F7,F82
+
+# Define "_" as a builtin (useful for internationalization/gettext)
+builtins = _
+
+# Show the source code line where the error occurred
+show-source = True
+
+# Print total count of each error at the end
+statistics = True

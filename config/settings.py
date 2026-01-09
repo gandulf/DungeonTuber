@@ -82,14 +82,10 @@ def get_presets() -> list[Preset]:
     return _PRESETS
 
 def remove_preset(preset: Preset):
-    global _PRESETS
-
     _PRESETS.remove(preset)
     AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(_PRESETS))
 
 def add_preset(preset: Preset):
-    global _PRESETS
-
     _PRESETS.append(preset)
     AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(_PRESETS))
 
