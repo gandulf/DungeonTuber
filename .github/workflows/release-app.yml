@@ -68,19 +68,23 @@ jobs:
         $certBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_BASE64 }}")
         [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)
 
+    - name: Prepare Signtool
+      uses: KamaranL/add-signtool-action@v1
+      id: signtool
+
+    - run: Write-Output "$env:SIGNTOOL_DIR"
+      # prints out the absolute path to the located signtool executable
+      shell: pwsh
+      env:
+        SIGNTOOL_DIR: ${{ steps.signtool.outputs.signtool-x64 }}
+
     - name: Sign Executable
       shell: pwsh
       run: |
-        # 1. Find signtool.exe dynamically
-        $signtool = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.Windows10SDK -find "**/x64/signtool.exe" | Select-Object -First 1
-        
-        # 2. Sign the file        
-        & $signtool sign /f "$env:TEMP\cert.pfx" `
-                         /p "${{ secrets.PFX_PASSWORD }}" `
-                         /fd sha256 `
-                         /tr http://timestamp.digicert.com `
-                         /td sha256 `
-                         "DungeonTuber-${{ steps.vars.outputs.app_version }}.exe"
+        signtool sign /f "$env:TEMP\cert.pfx" /p "${{ secrets.PFX_PASSWORD }}" `
+           /fd sha256 /td sha256 `
+           /tr http://timestamp.digicert.com `
+           "DungeonTuber-${{ steps.vars.outputs.app_version }}.exe"
 
     - name: Cleanup Certificate
       if: always()
