@@ -72,7 +72,7 @@ ALBUM_COL = 4
 SCORE_COL = 5
 CAT_COL = 6
 
-DOWNLOAD_LINK ="https://github.com/gandulf/DungeonTuber/releases/download/latest/DungeonTuber.zip"
+DOWNLOAD_LINK ="https://github.com/gandulf/DungeonTuber/releases/latest"
 
 available_tags: list[str] = []
 selected_tags: list[str] = []
