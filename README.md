@@ -2,6 +2,7 @@
 
 [![en](https://img.shields.io/badge/lang-en-green.svg)](https://github.com/gandulf/DungeonTuber/blob/master/README.md)
 [![de](https://img.shields.io/badge/lang-de-green.svg)](https://github.com/gandulf/DungeonTuber/blob/master/README.de.md)
+![es](https://img.shields.io/badge/lang-es-green.svg)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/gandulf/DungeonTuber)
 
 **DungeonTuber** is a specialized music player designed for Role-Playing Game Masters, streamers, and storytellers who need the perfect atmosphere at their fingertips. Unlike standard players, DungeonTuber allows you to categorize and filter your music based on emotional weight, intensity, and genre-specific metadata.
