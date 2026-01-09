@@ -15,6 +15,7 @@
 # nuitka-project: --output-dir=dist
 
 import functools
+import importlib
 import locale
 import sys
 import os
@@ -33,7 +34,7 @@ from pathlib import Path
 
 import jsonpickle
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtCore
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel,
@@ -1908,6 +1909,19 @@ window: QMainWindow
 light_palette: QPalette
 dark_palette: QPalette
 
+def hide_splash(window: QMainWindow):
+    if '_PYI_SPLASH_IPC' in os.environ and importlib.util.find_spec("pyi_splash"):
+        import pyi_splash
+        pyi_splash.close()
+
+        # bring window to top and act like a "normal" window!
+        window.setWindowFlags(window.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)  # set always on top flag, makes window disappear
+        window.show()  # makes window reappear, but it's ALWAYS on top
+        window.setWindowFlags(window.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.WindowCloseButtonHint)  # clear always on top flag, makes window disappear
+        window.show()  # makes window reappear, acts like normal window now (on top now but can be underneath if you raise another window)
+    else:
+        window.show()
+
 def main():
     global app, window
 
@@ -1943,7 +1957,8 @@ def main():
         return
 
     window = MusicPlayer(app)
-    window.show()
+
+    hide_splash(window)
 
     icon_path = get_path("docs/icon.ico")
     if icon_path is not None and os.path.exists(icon_path):

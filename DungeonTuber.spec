@@ -14,11 +14,18 @@ a = Analysis(
     noarchive=False,
     optimize=1,
 )
+
+splash = Splash('docs/splash.png',
+                binaries=a.binaries,
+                datas=a.datas)
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
     a.scripts,
+    splash,
+    splash.binaries,
     [],
     exclude_binaries=True,
     name='DungeonTuber',
