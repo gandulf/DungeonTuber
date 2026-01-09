@@ -60,7 +60,14 @@ jobs:
       with:
         path: DungeonTuber.iss
         options: /O+
-
+        
+    - name: Sign binary
+      uses: lando/code-sign-action@v3
+      with:
+        file: DungeonTuber-${{ steps.vars.outputs.app_version }}.exe
+        certificate-data: ${{ secrets.PFX_BASE64 }}
+        certificate-password: ${{ secrets.PFX_PASSWORD }}
+        
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
@@ -71,7 +78,7 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+    
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
