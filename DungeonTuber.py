@@ -74,7 +74,6 @@ CAT_COL = 6
 
 DOWNLOAD_LINK ="https://github.com/gandulf/DungeonTuber/releases/download/latest/DungeonTuber.zip"
 
-all_categories: list[str] = []
 available_tags: list[str] = []
 selected_tags: list[str] = []
 
@@ -725,7 +724,7 @@ class SongTable(QTableView):
 
         self.horizontalHeader().setSectionResizeMode(FAV_COL, QHeaderView.ResizeMode.ResizeToContents)
         self.horizontalHeader().setSectionResizeMode(SCORE_COL, QHeaderView.ResizeMode.ResizeToContents)
-        for col in range(len(all_categories)):
+        for col in range(len(CATEGORIES)):
             self.horizontalHeader().setSectionResizeMode(CAT_COL + col, QHeaderView.ResizeMode.ResizeToContents)
 
         self.update_category_column_visibility()
@@ -741,7 +740,7 @@ class SongTable(QTableView):
         self.setColumnHidden(ARTIST_COL, not AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
         self.setColumnHidden(ALBUM_COL, not AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
 
-        for col, cat in enumerate(all_categories):
+        for col, cat in enumerate(CATEGORIES):
             self.setColumnHidden(CAT_COL + col, not self.is_column_visible(cat))
 
         if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
@@ -1181,7 +1180,6 @@ class MusicPlayer(QMainWindow):
         self.setWindowTitle(application.applicationName() + " " + application.applicationVersion())
         self.resize(1200, 700)
 
-        global all_categories
         # Load custom categories and tags
         try:
             custom_categories = AppSettings.value(SettingKeys.CATEGORIES)
@@ -1674,7 +1672,7 @@ class MusicPlayer(QMainWindow):
         self.slider_tabs.clear()
         self.sliders: dict[MusicCategory, CategorySlider] = {}
 
-        general_categories = all_categories.copy()
+        general_categories = CATEGORIES.copy()
 
         categories_group = {}
         for cat in get_music_categories():
