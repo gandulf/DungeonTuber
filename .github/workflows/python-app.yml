@@ -20,7 +20,7 @@ jobs:
       run: |        
         $version = $env:GITHUB_REF_NAME.TrimStart("v")
         $version | Set-Content -Encoding ASCII version.txt
-        (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '"+$version+"'") | Out-File -encoding UTF8noBom version.rc
+        (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '" + $version + "'") | Out-File -encoding UTF8noBom version.rc
         (Get-Content pyproject.toml) -replace 'version = "(.*?)"', ('version = "' + $version + '"') | Out-File -encoding UTF8noBom pyproject.toml
         echo "app_version=$version" >> $env:GITHUB_OUTPUT
 
