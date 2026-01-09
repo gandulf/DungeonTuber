@@ -324,7 +324,6 @@ class SettingsDialog(QDialog):
         current_language = AppSettings.value(SettingKeys.LOCALE, type=str)
 
         for i, locale in enumerate(get_available_locales()):
-            logger.warning("Fround language "+locale +" as "+ _(locale) )
             self.locale_combo.addItem(_(locale), locale)
             if current_language == locale:
                 self.locale_combo.setCurrentIndex(i+1)

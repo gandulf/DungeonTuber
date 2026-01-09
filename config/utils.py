@@ -23,6 +23,12 @@ def get_path(path:str):
         icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), path)
     return icon_path
 
+def get_current_version() -> str | None:
+    try:
+        return str(open(get_path("version.txt"), "r").readline())
+    except FileNotFoundError:
+        return "v0.1.0"
+
 def is_latest_version():
     latest_version = get_latest_version()
     current_version = QApplication.instance().applicationVersion()

@@ -24,7 +24,7 @@ import traceback
 import logging
 
 from config import log
-from config.utils import get_path, get_latest_version, is_latest_version
+from config.utils import get_path, get_latest_version, is_latest_version, get_current_version
 
 log.setup_logging()
 
@@ -1142,7 +1142,6 @@ class AboutDialog(QDialog):
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(logo_label)
 
-
         if not is_latest_version():
             version_text = _("Newer version available {0}").format(f"<a href=\"{DOWNLOAD_LINK}\">{get_latest_version()}</a>")
         else:
@@ -1150,7 +1149,7 @@ class AboutDialog(QDialog):
         # Text Info
         # Using HTML for formatting and link
         info_text = f"""
-        <h3 align="center">DungeonTuber {QApplication.applicationVersion()}</h3>
+        <h3 align="center">Dungeon Tuber {QApplication.applicationVersion()}</h3>
         <p align="center"><strong>{version_text}</strong></p>
         <p align="center">{_('Author')}: Gandulf Kohlweiss</p>
         <p align="center"><a href="https://github.com/gandulf/DungeonTuber">https://github.com/gandulf/DungeonTuber</a></p>
@@ -1909,13 +1908,6 @@ window: QMainWindow
 light_palette: QPalette
 dark_palette: QPalette
 
-
-def version() -> str | None:
-    try:
-        return str(open(get_path("version.txt"), "r").readline())
-    except FileNotFoundError:
-        return "v0.1.0"
-
 def main():
     global app, window
 
@@ -1937,8 +1929,8 @@ def main():
     en_i18n.install()
 
     app.setOrganizationName("Gandulf")
-    app.setApplicationName("DungeonTuber")
-    app.setApplicationVersion(version())
+    app.setApplicationName("Dungeon Tuber")
+    app.setApplicationVersion(get_current_version())
 
     app_theme.application = app
     app_theme.apply_stylesheet()  # Initial load
