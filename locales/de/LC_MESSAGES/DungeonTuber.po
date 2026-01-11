@@ -87,6 +87,10 @@ msgstr "Dunkel"
 msgid "Save As Preset"
 msgstr "Als Preset speichern"
 
+
+msgid "Clear Values"
+msgstr "Filter zurücksetzen"
+
 msgid "Filter songs..."
 msgstr "Songs filtern..."
 
@@ -176,6 +180,9 @@ msgstr "Analyzer"
 
 msgid "Gemini API Key"
 msgstr "Gemini API-Schlüssel"
+
+msgid "OpenAI API Key"
+msgstr "OpenAI API-Schlüssel"
 
 msgid "Enable Mock Mode"
 msgstr "Mock-Modus aktivieren"
@@ -310,7 +317,7 @@ msgid "Analyzing {0}..."
 msgstr "{0} wird analysiert..."
 
 msgid "API Key is missing"
-msgstr "Gemini API Schlüssel fehlt"
+msgstr "AI API Schlüssel fehlt"
 
 msgid "No favorites found."
 msgstr "Keine Favoriten gefunden."
@@ -321,7 +328,7 @@ msgstr "Über"
 msgid "Help"
 msgstr "Hilfe"
 
-msgid "GeminiUserPrompt"
+msgid "AI UserPrompt"
 msgstr "Aufgabe:"
  "Ordne das folgende Musikstück für die Nutzung in einem Rollenspiel wie z.B. „Das Schwarze Auge“  oder „Dungeons and Dragons“ ein."
  "Bewerte das Stück anhand der untenstehenden Kategorien jeweils mit einem Wert von {0} bis {1}."
@@ -332,7 +339,7 @@ msgstr "Aufgabe:"
  "Danach vergib noch ein paar Tags aus folgender Liste, die am besten passen. Hier ist keine Skala notwendig:\n"
  "{3}"
 
-msgid "GeminiSystemPrompt"
+msgid "AI SystemPrompt"
 msgstr "Du bist ein erfahrener Hörer von Fantasy-, Film- und Rollenspielmusik."
  "Du bewertest Musik so, wie sie von einem durchschnittlichen Hörer wahrgenommen wird,"
  "nicht technisch und nicht analytisch, sondern emotional und szenisch."
@@ -345,17 +352,50 @@ msgstr "Du bist ein erfahrener Hörer von Fantasy-, Film- und Rollenspielmusik."
  "Du hältst dich strikt an die vorgegebenen Tags deren Beschreibungen und vergibst keine anderen Tags.\n"
  "Du gibst ausschließlich JSON zurück, ohne zusätzliche Erklärungen."
 
-msgid "GeminiSummaryDescription"
+msgid "AI SummaryDescription"
 msgstr "Eine kurze Zusammenfassung des Musikstückes bezüglich Stimmung (ca. 20 Wörter)."
 
-msgid "GeminiCategoriesDescription"
+msgid "AI CategoriesDescription"
 msgstr "Liste alle Kategorien auf und bewerte sie auf eine Skala von {0} bis {1}"
 
-msgid "GeminiTagsDescription"
+msgid "AI TagsDescription"
 msgstr "Eine Auswahl von Tags die auf das Musikstück am besten zutreffen."
 
 msgid "Processed {0}."
 msgstr "{0} bearbeitet."
+
+# Valence
+msgid "Valence"
+msgstr "Valenz"
+
+msgid "Valence Description"
+msgstr "Die Wertigkeit bzw. die Ausprägung von angenehmen (positiven) oder unangenehmen (negativen) Empfindungen."
+
+msgid "Valence Low"
+msgstr "Negativ (z. B. traurig, wütend)"
+
+msgid "Valence Medium"
+msgstr "Neutral"
+
+msgid "Valence High"
+msgstr "Positiv (z. B. glücklich, freudig)"
+
+
+# Arousal
+msgid "Arousal"
+msgstr "Erregung"
+
+msgid "Arousal Description"
+msgstr "Der Grad der psychischen und physischen Aktivierung, von schläfrig bis hin zu hochgradig aufgeregt."
+
+msgid "Arousal Low"
+msgstr "Niedrig (z. B. entspannt, schläfrig)"
+
+msgid "Arousal Medium"
+msgstr "Mittel"
+
+msgid "Arousal High"
+msgstr "Hoch (z. B. aufgeregt, intensiv)"
 
 # Tempo
 msgid "Tempo"

@@ -1,3 +1,4 @@
+import gettext
 import os
 
 import sys
@@ -9,6 +10,9 @@ from os import PathLike
 
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2
+
+from config.settings import get_categories, _DEFAULT_CATEGORIES
+from config.utils import get_path, get_available_locales
 
 logger = logging.getLogger("main")
 
@@ -30,10 +34,12 @@ class Mp3Entry(object):
 
     def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None):
         self.name = name
+        self.path = path if isinstance(path, Path) else Path(path)
         self.title = title
-        self.path = path if isinstance(path,Path) else Path(path)
         self.artist = artist
         self.album = album
+        self.summary =""
+        self.length =-1
         self.favorite = False
         if categories:
             self.categories = categories
@@ -109,7 +115,7 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
                 try:
                     cats_map = json.loads(txxx_cats.text[0])
                     if isinstance(cats_map, dict):
-                        entry.categories = cats_map
+                        entry.categories = _normalize_categories(cats_map)
 
                 except json.JSONDecodeError:
                     pass
@@ -129,44 +135,118 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
     return None
 
 
-def update_mp3_favorite(path : str | PathLike[str], favorite: bool):
+
+_categories = None
+
+def _normalize_categories(cat : dict[str,int]) :
+    global _categories
+
+    if _categories is None:
+        translations = [gettext.translation("DungeonTuber", get_path("locales"), fallback=False, languages=[lang]) for lang in get_available_locales()]
+        _categories = {}
+        for val in _DEFAULT_CATEGORIES:
+            _categories[val] = [translation.gettext(val).lower() for translation in translations]
+
+    norm =  {_normalize_category(key): value for key,value in cat.items()}
+
+    return norm
+
+
+def _normalize_category(cat: str):
+    if cat in get_categories():
+        return cat
+
+    lower_cat = cat.lower()
+    for key, values in _categories.items():
+        if lower_cat in values:
+            return _(key)
+
+    return cat
+
+
+def update_mp3(path : str | PathLike[str], title: str, summary: str, favorite: bool, categories: dict[str,int], tags: list[str]):
     audio = MP3(path, ID3=ID3)
+    if audio.tags is None:
+        audio.add_tags()
+
+    update_mp3_title(audio, title, False)
+    update_mp3_summary(audio,summary,False)
+    update_mp3_favorite(audio,favorite,False)
+    update_mp3_categories(audio,categories,False)
+    update_mp3_tags(audio,tags,tags,False)
+
+    audio.save
+
+def update_mp3_favorite(path : str | PathLike[str] | MP3, favorite: bool, save: bool = True):
+    if isinstance(path, MP3):
+        audio = path
+    else:
+        audio = MP3(path, ID3=ID3)
+
     if audio.tags is None:
         audio.add_tags()
 
     audio.tags.add(TXXX(encoding=3, desc='ai_favorite', text=[favorite]))
-    audio.save()
 
-def update_mp3_summary(path : str| PathLike[str], new_summary :str):
-    audio = MP3(path, ID3=ID3)
+    if save:
+        audio.save()
+        logger.debug("Updated favorite to {0} for {1}", favorite, path)
+
+def update_mp3_summary(path : str| PathLike[str] | MP3, new_summary :str, save : bool = True):
+    if isinstance(path, MP3):
+        audio = path
+    else:
+        audio = MP3(path, ID3=ID3)
+
     if audio.tags is None:
         audio.add_tags()
-    audio.tags.add(COMM(encoding=3, text=[new_summary]))
-    audio.save()
-    logger.debug("Updated summary to {0} for {1}", new_summary,path)
 
-def update_mp3_title(path : str| PathLike[str], new_title :str):
-    audio = MP3(path, ID3=ID3)
+    if new_summary:
+        audio.tags.add(COMM(encoding=3, text=[new_summary]))
+
+    if (save):
+        audio.save()
+        logger.debug("Updated summary to {0} for {1}", new_summary,path)
+
+def update_mp3_title(path : str| PathLike[str]| MP3, new_title :str, save : bool = True):
+    if isinstance(path, MP3):
+        audio = path
+    else:
+        audio = MP3(path, ID3=ID3)
+
     if audio.tags is None:
         audio.add_tags()
     audio.tags.add(TIT2(encoding=3, text=[new_title]))
-    audio.save()
-    logger.debug("Updated title to {0} for {1}", new_title,path)
+    if save:
+        audio.save()
+        logger.debug("Updated title to {0} for {1}", new_title,path)
 
-def update_mp3_categories(path: str | PathLike[str], categories: dict[str, int]):
-    audio = MP3(path, ID3=ID3)
+def update_mp3_categories(path: str | PathLike[str] | MP3, categories: dict[str, int], save: bool = True):
+    if isinstance(path, MP3):
+        audio = path
+    else:
+        audio = MP3(path, ID3=ID3)
+
     if audio.tags is None:
         audio.add_tags()
 
-    audio.tags.add(TXXX(encoding=3, desc='ai_categories', text=[json.dumps(categories)]))
+    if categories:
+        if isinstance(categories, list):
+            categories = {item['category']: item['scale'] for item in categories}
 
+        audio.tags.add(TXXX(encoding=3, desc='ai_categories', text=[json.dumps(categories, ensure_ascii=False)]))
+    else:
+        audio.tags.add(TXXX(encoding=3, desc='ai_categories', text=""))
     #audio.tags.add(TXXX(encoding=3, desc='ai_tags', text=calculate_tags_from_categories(categories)))
 
-    audio.tags.add(COMM(encoding=3, text=["processed by Voxalyzer 1.0"]))
+    if save:
+        audio.save()
+def update_mp3_category(path: str| PathLike[str] | MP3, category : str, new_value : int | None, save : bool = True):
+    if isinstance(path, MP3):
+        audio = path
+    else:
+        audio = MP3(path, ID3=ID3)
 
-    audio.save()
-def update_mp3_category(path: str| PathLike[str], category : str, new_value : int | None):
-    audio = MP3(path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
 
@@ -185,11 +265,16 @@ def update_mp3_category(path: str| PathLike[str], category : str, new_value : in
         cats[category] = new_value
 
     audio.tags.add(TXXX(encoding=3, desc='ai_categories', text=[json.dumps(cats)]))
-    audio.save()
-    logger.debug("Updated {} to {1} for {2}", category, new_value,path)
+    if save:
+        audio.save()
+        logger.debug("Updated {} to {1} for {2}", category, new_value,path)
 
-def update_mp3_tags(path: str| PathLike[str], tags : list[str]):
-    audio = MP3(path, ID3=ID3)
+def update_mp3_tags(path: str| PathLike[str] | MP3, tags : list[str], save : bool = True):
+    if isinstance(path, MP3):
+        audio = path
+    else:
+        audio = MP3(path, ID3=ID3)
+
     if audio.tags is None:
         audio.add_tags()
 
@@ -201,56 +286,31 @@ def update_mp3_tags(path: str| PathLike[str], tags : list[str]):
                 text=tags
             )
         )
-    audio.save()
-    logger.debug("Updated tags to {0} for {1}", tags,path)
+
+    if save:
+        audio.save()
+        logger.debug("Updated tags to {0} for {1}", tags,path)
 
 def list_mp3s(path : str | PathLike[str]):
     return glob.glob("**/*.mp3", root_dir=path, recursive=True)
 
-def add_tags_to_mp3(file_path : str | PathLike[str], summary : str, categories: dict[str,int] = None, tags: list[str] = None):
+def update_categories_and_tags(path : str | PathLike[str] | MP3, summary : str, categories: dict[str,int] = None, tags: list[str] = None):
     """Adds categories and summary as MP3 tags to the file."""
-    audio = MP3(file_path, ID3=ID3)
-
-    # Add a comment tag for the summary
-    audio.tags.add(
-        COMM(
-            encoding=3,
-            text=[summary]
-        )
-    )
-
-    # Create a map of category names to scales and store it in a single tag
-    if  categories:
-        categories_map = {item['category']: item['scale'] for item in categories}
-        all_categories_str = json.dumps(categories_map, ensure_ascii=False)
-        audio.tags.add(
-            TXXX(
-                encoding=3,
-                desc='ai_categories',
-                text=[all_categories_str]
-            )
-        )
+    if isinstance(path, MP3):
+        audio = path
     else:
-        audio.tags.add(
-            TXXX(
-                encoding=3,
-                desc='ai_categories',
-                text=""
-            )
-        )
+        audio = MP3(path, ID3=ID3)
 
+    if audio.tags is None:
+        audio.add_tags()
 
-    if tags:
-        audio.tags.add(
-            TXXX(
-                encoding=3,
-                desc='ai_tags',
-                text=tags
-            )
-        )
+    update_mp3_summary(audio, summary, False)
+    update_mp3_categories(audio, categories, False)
+
+    update_mp3_tags(audio, tags, False)
 
     audio.save()
-    logger.debug("Tags added to {0}", file_path)
+    logger.debug("Tags added to {0}", path)
 
 def print_mp3_tags(file_path: str | PathLike[str]):
     """Prints all ID3 tags from an MP3 file."""

@@ -87,6 +87,9 @@ msgstr "Oscuro"
 msgid "Save As Preset"
 msgstr "Guardar como ajuste predefinido"
 
+msgid "Clear Values"
+msgstr "Borrar valores"
+
 msgid "Filter songs..."
 msgstr "Filtrar canciones..."
 
@@ -176,6 +179,9 @@ msgstr "Analizador"
 
 msgid "Gemini API Key"
 msgstr "Clave API de Gemini"
+
+msgid "OpenAI API Key"
+msgstr "Clave API de OpenAI"
 
 msgid "Enable Mock Mode"
 msgstr "Activar modo simulado (Mock)"
@@ -310,7 +316,7 @@ msgid "Analyzing {0}..."
 msgstr "Analizando {0}..."
 
 msgid "API Key is missing"
-msgstr "Falta la clave API de Gemini"
+msgstr "Falta la clave API de AI"
 
 msgid "No favorites found."
 msgstr "No se encontraron favoritos."
@@ -321,7 +327,7 @@ msgstr "Acerca de"
 msgid "Help"
 msgstr "Ayuda"
 
-msgid "GeminiUserPrompt"
+msgid "AI UserPrompt"
 msgstr "Tarea:"
 "Categoriza la siguiente pieza musical para su uso en un juego de rol como \"The Dark Eye\" o \"Dungeons and Dragons\"."
 "Califica la pieza basándote en las categorías siguientes con un valor del {0} al {1} cada una."
@@ -332,7 +338,7 @@ msgstr "Tarea:"
 "Luego, asigna algunas etiquetas de la siguiente lista que mejor encajen. No es necesaria una escala aquí:\n"
 "{3}"
 
-msgid "GeminiSystemPrompt"
+msgid "AI SystemPrompt"
 msgstr "Eres un oyente experimentado de música de fantasía, cine y juegos de rol."
 "Evalúas la música tal como la percibe un oyente promedio,"
 "no de forma técnica o analítica, sino emocional y escénica."
@@ -345,14 +351,47 @@ msgstr "Eres un oyente experimentado de música de fantasía, cine y juegos de r
 "Adhiérete estrictamente a las etiquetas especificadas y sus descripciones, no utilices etiquetas nuevas.\n"
 "Devuelve solo JSON, sin explicaciones adicionales."
 
-msgid "GeminiSummaryDescription"
+msgid "AI SummaryDescription"
 msgstr "Un breve resumen de la pieza musical respecto al estado de ánimo (aprox. 20 palabras)."
 
-msgid "GeminiCategoriesDescription"
+msgid "AI CategoriesDescription"
 msgstr "Enumera todas las categorías y califícalas en una escala del {0} al {1}"
 
-msgid "GeminiTagsDescription"
+msgid "AI TagsDescription"
 msgstr "Una lista de etiquetas que mejor se apliquen a la pieza musical."
+
+# Valence
+msgid "Valence"
+msgstr "Valencia"
+
+msgid "Valence Description"
+msgstr "La cualidad intrínseca de una emoción, clasificada como agradable (positiva) o desagradable (negativa)."
+
+msgid "Valence Low"
+msgstr "Baja / Negativa (ej. triste, enfadado)"
+
+msgid "Valence Medium"
+msgstr "Neutral"
+
+msgid "Valence High"
+msgstr "Alta / Positiva (ej. alegre, emocionado)"
+
+
+# Arousal
+msgid "Arousal"
+msgstr "Activación"
+
+msgid "Arousal Description"
+msgstr "El estado de alerta o intensidad fisiológica y psicológica, que varía desde la calma profunda hasta la excitación máxima."
+
+msgid "Arousal Low"
+msgstr "Baja (ej. relajado, somnoliento)"
+
+msgid "Arousal Medium"
+msgstr "Media"
+
+msgid "Arousal High"
+msgstr "Alta (ej. intenso, eufórico)"
 
 # Tempo
 msgid "Tempo"

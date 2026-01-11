@@ -1,7 +1,9 @@
+import base64
 import logging
 import os
 import subprocess
 import sys
+from os import PathLike
 
 import requests
 from PySide6.QtWidgets import QApplication
@@ -95,3 +97,17 @@ def restart_application():
         sys.exit()
     except Exception as e:
         logger.exception("Failed to restart. {0}",e)
+
+def file_to_base64(file_path: str | PathLike[str]):
+    try:
+        with open(file_path, "rb") as file:
+            # Read the file data
+            file_data = file.read()
+            # Encode to base64 bytes
+            base64_bytes = base64.b64encode(file_data)
+            # Convert bytes to string
+            base64_string = base64_bytes.decode("utf-8")
+            return base64_string
+    except Exception as e:
+        logger.exception("Error: {0}",e)
+        return None

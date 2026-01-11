@@ -1,18 +1,19 @@
 from enum import StrEnum
 
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint
-from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter, QIcon, QLinearGradient, QPolygon
-from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QPushButton, QHBoxLayout, QProxyStyle
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer
+from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter, QIcon, QLinearGradient, QPolygon, QFontMetrics, QPaintEvent
+from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QPushButton, QHBoxLayout, QProxyStyle, QWidget, \
+    QGraphicsOpacityEffect
 
 from config.settings import MusicCategory
 from config.theme import app_theme
 
-
 class JumpSlider(QSlider):
+    mouse_pressed = Signal(QMouseEvent)
+    mouse_released = Signal(QMouseEvent)
 
     def __init__(self, parent=None):
         super(JumpSlider, self).__init__(parent)
-
         # Animation
         self.setMouseTracking(True)
         self._glow_size = 0
@@ -51,7 +52,8 @@ class JumpSlider(QSlider):
     def _roundStep(self, a, step_size):
         return round(float(a) / step_size) * step_size
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event: QMouseEvent):
+        self.mouse_pressed.emit(event)
         if event.button() == Qt.MouseButton.LeftButton:
             # Jump to click position
             self.setSliderDown(True)
@@ -63,10 +65,10 @@ class JumpSlider(QSlider):
                                                        self.invertedAppearance())
 
             value = self._roundStep(value, self.singleStep())
-
             self.setValue(value)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
+        self.mouse_released.emit(event)
         if event.button() == Qt.MouseButton.LeftButton:
             # handle glow size
             if not self.underMouse():
@@ -95,17 +97,186 @@ class JumpSlider(QSlider):
                 value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().x(),
                                                        self.width(), self.invertedAppearance())
 
-            value = self._roundStep(value, self.singleStep())
-            self.setValue(value)
+            self.setValue(self._roundStep(value, self.singleStep()))
 
 
-class CategorySlider(QVBoxLayout):
+class CategoryTooltip(QWidget):
+
+    __parent: QWidget
+
+    def __init__(self, parent: QWidget):
+        super(CategoryTooltip, self).__init__(None)
+
+        self.__parent = parent
+        self.setWindowFlags(
+            Qt.WindowType.ToolTip |
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowTransparentForInput
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setPalette(parent.palette())
+        self.setStyle(parent.style())
+        self.setContentsMargins(8,8,8,8)
+        self.setHidden(True)
+        self.__opacity_effect = QGraphicsOpacityEffect()
+        self.setGraphicsEffect(self.__opacity_effect)
+
+        self.__current_opacity = 0.0
+
+        self._auto_hidden=False
+
+        self.__show_delay = 100
+        self.__hide_delay = 100
+        self.__fade_in_duration = 150
+        self.__fade_out_duration = 150
+        self.__fade_in_easing_curve = QEasingCurve.Type.Linear
+        self.__fade_out_easing_curve = QEasingCurve.Type.Linear
+
+        self.__text_widget = QLabel(self)
+        self.__text_widget.setText("")
+
+        self.__text_widget.setStyleSheet(f"font-size: {app_theme.font_size*0.8}px")
+        self.__text_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.__fade_in_animation = QPropertyAnimation(self.__opacity_effect, b'opacity')
+        self.__fade_in_animation.setDuration(self.__fade_in_duration)
+        self.__fade_in_animation.setEasingCurve(self.__fade_in_easing_curve)
+        self.__fade_in_animation.valueChanged.connect(self.__update_current_opacity)
+        #self.__fade_in_animation.finished.connect(self.__start_duration_timer)
+
+        self.__fade_out_animation = QPropertyAnimation(self.__opacity_effect, b'opacity')
+        self.__fade_out_animation.setDuration(self.__fade_out_duration)
+        self.__fade_out_animation.setEasingCurve(self.__fade_out_easing_curve)
+        self.__fade_out_animation.valueChanged.connect(self.__update_current_opacity)
+        self.__fade_out_animation.finished.connect(self.__hide)
+
+        self.__show_delay_timer = QTimer(self)
+        self.__show_delay_timer.setInterval(self.__show_delay)
+        self.__show_delay_timer.setSingleShot(True)
+        self.__show_delay_timer.timeout.connect(self.__start_fade_in)
+
+        self.__hide_delay_timer = QTimer(self)
+        self.__hide_delay_timer.setInterval(self.__hide_delay)
+        self.__hide_delay_timer.setSingleShot(True)
+        self.__hide_delay_timer.timeout.connect(self.__start_fade_out)
+
+    def __hide(self):
+        """Hide the tooltip"""
+
+        super().hide()
+
+    def __update_current_opacity(self, value: float):
+        """Update the current_opacity attribute with the new value of the animation
+
+        :param value: value received by the valueChanged event
+        """
+
+        self.__current_opacity = value
+
+    def __start_show_delay(self):
+        """Start a delay that will start the fade in animation when finished"""
+
+        self.__hide_delay_timer.stop()
+        self.__show_delay_timer.start()
+
+    def __start_hide_delay(self):
+        """Start a delay that will start the fade out animation when finished"""
+
+        self.__show_delay_timer.stop()
+        self.__hide_delay_timer.start()
+
+    def __start_fade_out(self):
+        """Start the fade out animation"""
+
+        self.__fade_out_animation.setStartValue(self.__current_opacity)
+        self.__fade_out_animation.setEndValue(0)
+        self.__fade_out_animation.start()
+
+    def __start_fade_in(self):
+        # Start fade in animation and show
+        self.__fade_in_animation.setStartValue(self.__current_opacity)
+        self.__fade_in_animation.setEndValue(1)
+        self.__fade_in_animation.start()
+        super().show()
+
+    def paintEvent(self, event: QPaintEvent):
+        super(CategoryTooltip, self).paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        painter.setBrush(QBrush(QColor(self.palette().color(QPalette.ColorRole.Base))))
+        painter.drawRoundedRect(self.rect(),4.0,4.0)
+
+    def setText(self, text: str):
+        self.__text_widget.setStyleSheet(f"font-size: {app_theme.font_size * 0.8}px")
+
+        if self.isVisible() and text == "":
+            self._auto_hidden = True
+            self.hide()
+        else:
+            self.__text_widget.setText(text)
+            self._update_ui()
+            if not self.isVisible() and self._auto_hidden == True and text != "":
+                self.show()
+                self._auto_hidden = False
+        return
+
+    def _update_ui(self, text:str = None):
+        pos = self.__parent.mapToGlobal(self.__parent.rect().topLeft())
+
+        if text is None:
+            text = self.__text_widget.text()
+
+        fm = QFontMetrics(self.__text_widget.font())
+        rect = fm.boundingRect(text)
+        rect = rect.marginsAdded(self.__text_widget.contentsMargins())
+        rect = rect.marginsAdded(self.contentsMargins())
+        self.__text_widget.resize(rect.size())
+        self.resize(rect.size())
+        pos.setX(pos.x() - self.width() / 2 + self.__parent.width() /2)
+        pos.setY(pos.y() + self.height() + self.__parent.height() -8)
+        self.move(pos)
+
+
+    def show(self, delay: bool = False):
+        """Start the process of showing the tooltip
+
+        :param delay: whether the tooltip should be shown with the delay (default: False)
+        """
+        self._update_ui()
+
+        if delay:
+            self.__start_show_delay()
+        else:
+            self.__start_fade_in()
+
+    def hide(self, delay: bool = False):
+        """Start the process of hiding the tooltip
+
+        :param delay: whether the tooltip should be hidden with the delay (default: False)
+        """
+        self.__show_delay_timer.stop()
+        self.__fade_in_animation.stop()
+
+        if delay:
+            self.__start_hide_delay()
+        else:
+            self.__start_fade_out()
+
+
+
+
+
+class CategoryWidget(QVBoxLayout):
     valueChanged = Signal(int)
     _block_signals = False
+    _orig_value: int
 
-    def __init__(self, category: MusicCategory =None, parent=None, minValue=0, maxValue=10):
-        super(CategorySlider, self).__init__(parent)
+    def __init__(self, category: MusicCategory = None, parent=None, minValue=0, maxValue=10):
+        super(CategoryWidget, self).__init__(parent)
 
+        self.category = category
         self.label = QLabel(category.name)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.setToolTip(category.get_detailed_description())
@@ -116,30 +287,66 @@ class CategorySlider(QVBoxLayout):
         self.slider.setTickInterval(1)
         self.slider.setPageStep(1)
         self.slider.setInvertedAppearance(False)
+        self.slider.valueChanged.connect(self._forward_value_changed)
+        self.slider.mouse_pressed.connect(self.mouse_down)
+        self.slider.mouse_released.connect(self.mouse_up)
+
+        # Add tooltip to button
+        self.tooltip = CategoryTooltip(self.slider)
 
         self.val_label = QLabel("")
         self.val_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.val_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-        self.slider.valueChanged.connect(self._forward_value_changed)
-
         self.addWidget(self.label)
         self.addWidget(self.slider, 0, Qt.AlignmentFlag.AlignHCenter)
         self.addWidget(self.val_label)
 
+    def mouse_down(self, event: QMouseEvent):
+        self.refreshTooltip(True)
+
+        self.blockSignals()
+        self._orig_value = self.value()
+
+
+    def mouse_up(self, event: QMouseEvent):
+        self.unblockSignals()
+        self.tooltip.hide()
+
+        if self._orig_value and self.value() != self._orig_value:
+            self.valueChanged.emit(self.value())
+
     def _forward_value_changed(self, value: int):
-        self.update_value_label()
+        self.update_value_label(value)
+
         if not self._block_signals:
             self.valueChanged.emit(value)
 
     def blockSignals(self, block: bool = True):
         self._block_signals = block
 
-    def update_value_label(self):
-        if self.value():
-            self.val_label.setText(str(self.slider.value()))
+    def unblockSignals(self):
+        self._block_signals = False
+
+    def refreshTooltip(self, show: bool = True):
+        nearest_level = min(self.category.levels.keys(), key=lambda x: abs(x - self.value()))
+        text = self.category.levels.get(nearest_level, "")
+        self.tooltip.setText(text)
+
+        if text != "" and show and self.tooltip.isHidden():
+            self.tooltip.show(True)
+
+
+    def update_value_label(self, value: int = None):
+        if value is None:
+            value = self.slider.value()
+
+        if value:
+            self.val_label.setText(str(value))
+            self.refreshTooltip(False)
         else:
             self.val_label.setText("")
+            self.tooltip.setText("")
 
     def set_value(self, value, signal: bool = True):
         _original_block_signals = False
@@ -151,14 +358,13 @@ class CategorySlider(QVBoxLayout):
 
         if not signal:
             self._block_signals = _original_block_signals
-            self.update_value_label()
+            self.update_value_label(value)
 
     def value(self):
         return self.slider.value()
 
 
 class ToggleSlider(QCheckBox):
-
     _ANIMATION_DURATION = 200  # Time in ms.
     _HANDLE_REL_SIZE = 0.82
     _PREFERRED_HEIGHT = 28
@@ -332,8 +538,6 @@ class ToggleSlider(QCheckBox):
             return QBrush(self.palette().button().lighter(170))
 
 
-
-
 class VolumeSliderStyle(QProxyStyle):
     def drawComplexControl(self, control, option, painter: QPainter, widget: JumpSlider = None):
         if control == QStyle.ComplexControl.CC_Slider:
@@ -361,7 +565,6 @@ class VolumeSliderStyle(QProxyStyle):
 
             border = QColor(option.palette.text().color())
             border.setAlpha(50)
-
 
             painter.save()
 

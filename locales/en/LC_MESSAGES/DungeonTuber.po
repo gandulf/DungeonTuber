@@ -96,6 +96,9 @@ msgstr "General"
 msgid "Remove"
 msgstr "Remove"
 
+msgid "Clear Values"
+msgstr "Clear Values"
+
 msgid "Reset Presets"
 msgstr "Reset Presets"
 
@@ -176,6 +179,9 @@ msgstr "Analyzer"
 
 msgid "Gemini API Key"
 msgstr "Gemini API Key"
+
+msgid "OpenAI API Key"
+msgstr "OpenAI API Key"
 
 msgid "Enable Mock Mode"
 msgstr "Enable Mock Mode"
@@ -310,7 +316,7 @@ msgid "Analyzing {0}..."
 msgstr "Analyzing {0}..."
 
 msgid "API Key is missing"
-msgstr "Gemini API Key is missing"
+msgstr "AI API Key is missing"
 
 msgid "No favorites found."
 msgstr "No favorites found."
@@ -321,7 +327,7 @@ msgstr "About"
 msgid "Help"
 msgstr "Help"
 
-msgid "GeminiUserPrompt"
+msgid "AI UserPrompt"
 msgstr "Task:"
 "Categorize the following piece of music for use in a role-playing game like \"The Dark Eye\" or \"Dungeons and Dragons\"."
 "Rate the piece based on the categories below with a value from {0} to {1} each."
@@ -332,7 +338,7 @@ msgstr "Task:"
 "Then, assign a few tags from the following list that fit best. No scale is necessary here:\n"
 "{3}"
 
-msgid "GeminiSystemPrompt"
+msgid "AI SystemPrompt"
 msgstr "You are an experienced listener of fantasy, film, and role-playing music."
 "You evaluate music as perceived by an average listener,"
 "not technically or analytically, but emotionally and scenically."
@@ -345,14 +351,46 @@ msgstr "You are an experienced listener of fantasy, film, and role-playing music
 "Strictly adhere to the specified tags, and their descriptions, do not use any other new tags.\n"
 "Return only JSON, without additional explanations."
 
-msgid "GeminiSummaryDescription"
+msgid "AI SummaryDescription"
 msgstr "A brief summary of the musical piece regarding mood (approx. 20 words)."
 
-msgid "GeminiCategoriesDescription"
+msgid "AI CategoriesDescription"
 msgstr "List all categories and rate them on a scale from {0} to {1}"
 
-msgid "GeminiTagsDescription"
+msgid "AI TagsDescription"
 msgstr "A list of tags that best apply to the musical piece."
+
+# Valence
+msgid "Valence"
+msgstr "Valence"
+
+msgid "Valence Description"
+msgstr "The intrinsic attractiveness (positive) or averseness (negative) of an event, object, or situation."
+
+msgid "Valence Low"
+msgstr "Negative (e.g., sad, angry, stressed)"
+
+msgid "Valence Medium"
+msgstr "Neutral"
+
+msgid "Valence High"
+msgstr "Positive (e.g., happy, calm, excited)"
+
+# Arousal
+msgid "Arousal"
+msgstr "Arousal"
+
+msgid "Arousal Description"
+msgstr "The physiological and psychological state of being awake or reactive to stimuli, ranging from sleep to excitement."
+
+msgid "Arousal Low"
+msgstr "Low Energy (e.g., dull, sleepy, relaxed)"
+
+msgid "Arousal Medium"
+msgstr "Moderate Energy"
+
+msgid "Arousal High"
+msgstr "High Energy (e.g., intense, frantic, alert)"
 
 # Tempo
 msgid "Tempo"

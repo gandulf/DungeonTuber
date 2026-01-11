@@ -48,17 +48,18 @@ from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QK
     QActionGroup, QPixmap
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, Preset, \
-    CATEGORY_MAX, CATEGORY_MIN, MusicCategory, CATEGORIES, set_music_categories, \
-    get_music_categories, set_music_tags, get_music_tags, set_presets, add_preset, get_presets, remove_preset, reset_presets, get_music_category
+    CATEGORY_MAX, CATEGORY_MIN, MusicCategory, set_music_categories, \
+    get_music_categories, set_music_tags, get_music_tags, set_presets, add_preset, get_presets, remove_preset, reset_presets, get_music_category, get_categories
 from config.theme import app_theme
 
-from components.sliders import CategorySlider, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider
+from components.sliders import CategoryWidget, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider
 from components.widgets import StarRating, IconLabel
 from components.visualizer import Visualizer
+from components.layouts import FlowLayout
 
-from logic import analyzer, mp3
-from logic.analyzer import Analyzer
-from logic.mp3 import Mp3Entry
+from logic.analyzer import Analyzer, is_analyzed, is_voxalyzed
+from logic.mp3 import Mp3Entry, update_mp3_favorite, parse_mp3, update_mp3_summary, update_mp3_title, update_mp3_tags, update_mp3_category, parse_m3u, \
+    create_m3u
 from logic.audioengine import AudioEngine
 
 # --- Constants ---
@@ -125,9 +126,9 @@ class StarDelegate(QStyledItemDelegate):
         if index.column() == FAV_COL:
             data = index.data(Qt.ItemDataRole.UserRole)
 
-            if analyzer.is_analyzed(data):
+            if is_analyzed(data):
                 fav_icon_color = QBrush(app_theme.get_green())
-            elif analyzer.is_voxalyzed(data):
+            elif is_voxalyzed(data):
                 fav_icon_color = QBrush(app_theme.get_orange())
             else:
                 fav_icon_color = QBrush(app_theme.get_red())
@@ -170,13 +171,18 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
         tag_left = content_rect.right()
         tag_top = content_rect.top() + 2
 
-        for tag in data.allTags():
 
-            bouding_rect = fm.boundingRect(tag)
+
+        green_tags = [x for x in data.allTags() if x in selected_tags]
+        red_tags = [x for x in data.allTags() if x not in selected_tags]
+
+        for tag in green_tags + red_tags:
+
+            bounding_rect = fm.boundingRect(tag)
 
             tag_padding = 3
 
-            tags_rect = QRect(tag_left - bouding_rect.width(), tag_top, bouding_rect.width(), bouding_rect.height())
+            tags_rect = QRect(tag_left - bounding_rect.width(), tag_top, bounding_rect.width(), bounding_rect.height())
             tags_rect.adjust(-tag_padding * 2, -tag_padding, tag_padding * 2, tag_padding)
 
             if tag in selected_tags:
@@ -195,6 +201,9 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
             painter.drawText(tags_rect, Qt.AlignmentFlag.AlignRight, tag)
 
             tag_left = tags_rect.left() - 12
+
+            if tag_left < 200:
+                break
 
         # draw rest
 
@@ -223,7 +232,7 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
                                                 type=bool) else data.name.removesuffix(".mp3").removesuffix(".MP3")
         painter.drawText(title_rect, title)
 
-        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
+        if data.summary and AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
             summary_font = QFont(option.font)
             summary_font.setBold(False)
             summary_font.setPixelSize(app_theme.font_size - 2)
@@ -247,7 +256,7 @@ class TableModel(QAbstractTableModel):
         self._data = data
 
     def get_category(self, index: QModelIndex):
-        return CATEGORIES[index.column() - CAT_COL]
+        return get_music_categories()[index.column() - CAT_COL].name
 
     def set_slider_values(self, _slider_values: dict[str, int], values: list[str]):
         self.beginResetModel()
@@ -262,7 +271,7 @@ class TableModel(QAbstractTableModel):
             if index.column() == FAV_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
                 data.favorite = value
-                mp3.update_mp3_favorite(data.path, bool(value))
+                update_mp3_favorite(data.path, bool(value))
                 return True
             elif index.column() >= CAT_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
@@ -296,7 +305,7 @@ class TableModel(QAbstractTableModel):
 
                 try:
                     if has_changes:
-                        mp3.update_mp3_category(data.path, category, new_value)
+                        update_mp3_category(data.path, category, new_value)
                 except Exception as e:
                     traceback.print_exc()
                     logger.error("Failed to update tags: {0}",e)
@@ -340,7 +349,7 @@ class TableModel(QAbstractTableModel):
             if index.column() == SCORE_COL:
                 score = index.data(Qt.ItemDataRole.DisplayRole)
                 return _get_score_foreground_brush(score)
-        elif role == Qt.ItemDataRole.DisplayRole:
+        elif role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             data = index.data(Qt.ItemDataRole.UserRole)
             if index.column() == FAV_COL:
                 return data.favorite
@@ -375,7 +384,7 @@ class TableModel(QAbstractTableModel):
         return len(self._data)
 
     def columnCount(self, /, parent: QModelIndex | QPersistentModelIndex = ...) -> int:
-        return CAT_COL + len(CATEGORIES)
+        return CAT_COL + len(get_music_categories())
 
     def headerData(self, section: int, orientation: Qt.Orientation, /, role: int = ...):
         if role == Qt.ItemDataRole.DisplayRole:
@@ -692,11 +701,11 @@ class SongTable(QTableView):
         elif index.column() == FAV_COL:
             data = self.mp3_data(index.row())
             data.favorite = not data.favorite
-            mp3.update_mp3_favorite(data.path, data.favorite)
+            update_mp3_favorite(data.path, data.favorite)
             self.repaint()
 
     def refresh_item(self, file_path: str | os.PathLike[str]):
-        data = mp3.parse_mp3(Path(file_path))
+        data = parse_mp3(Path(file_path))
         index = self.index_of(data)
         if index >= 0:
             self.model().setData(self.model().index(index, FILE_COL), data, Qt.ItemDataRole.UserRole)
@@ -725,7 +734,7 @@ class SongTable(QTableView):
 
         self.horizontalHeader().setSectionResizeMode(FAV_COL, QHeaderView.ResizeMode.ResizeToContents)
         self.horizontalHeader().setSectionResizeMode(SCORE_COL, QHeaderView.ResizeMode.ResizeToContents)
-        for col in range(len(CATEGORIES)):
+        for col in range(len(get_music_categories())):
             self.horizontalHeader().setSectionResizeMode(CAT_COL + col, QHeaderView.ResizeMode.ResizeToContents)
 
         self.update_category_column_visibility()
@@ -741,8 +750,8 @@ class SongTable(QTableView):
         self.setColumnHidden(ARTIST_COL, not AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
         self.setColumnHidden(ALBUM_COL, not AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
 
-        for col, cat in enumerate(CATEGORIES):
-            self.setColumnHidden(CAT_COL + col, not self.is_column_visible(cat))
+        for col, category in enumerate(get_music_categories()):
+            self.setColumnHidden(CAT_COL + col, not self.is_column_visible(category.name))
 
         if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
             self.verticalHeader().setDefaultSectionSize(56)
@@ -784,7 +793,7 @@ class SongTable(QTableView):
             # Update Summary
             if new_summary != data.summary:
                 try:
-                    mp3.update_mp3_summary(data.path, new_summary)
+                    update_mp3_summary(data.path, new_summary)
                     data.summary = new_summary
                     has_changes = True
                 except Exception as e:
@@ -793,7 +802,7 @@ class SongTable(QTableView):
 
             if new_title != data.title:
                 try:
-                    mp3.update_mp3_title(data.path, new_title)
+                    update_mp3_title(data.path, new_title)
                     data.title = new_title
                     has_changes = True
                 except Exception as e:
@@ -802,7 +811,7 @@ class SongTable(QTableView):
 
             if new_favorite != data.favorite:
                 try:
-                    mp3.update_mp3_favorite(data.path, new_favorite)
+                    update_mp3_favorite(data.path, new_favorite)
                     data.favorite = new_favorite
                     has_changes = True
                 except Exception as e:
@@ -817,7 +826,7 @@ class SongTable(QTableView):
                     for tag in new_tags:
                         available_tags.append(tag)
 
-                    mp3.update_mp3_tags(data.path, new_tags)
+                    update_mp3_tags(data.path, new_tags)
                     data.set_tags(new_tags)
                     has_changes = True
 
@@ -1315,6 +1324,7 @@ class MusicPlayer(QMainWindow):
         vis_none_action.triggered.connect(self.set_visualizer_none)
 
         visualizer_group.addAction(vis_vlc_action)
+
         visualizer_group.addAction(vis_fake_action)
         visualizer_group.addAction(vis_none_action)
 
@@ -1380,6 +1390,9 @@ class MusicPlayer(QMainWindow):
     def set_visualizer_fake(self):
         AppSettings.setValue(SettingKeys.VISUALIZER, "FAKE")
         self.player.refresh_visualizer()
+    def set_visualizer_real(self):
+        AppSettings.setValue(SettingKeys.VISUALIZER, "REAL")
+        self.player.refresh_visualizer()
 
     def set_visualizer_none(self):
         AppSettings.setValue(SettingKeys.VISUALIZER, "NONE")
@@ -1420,6 +1433,21 @@ class MusicPlayer(QMainWindow):
 
     def init_sliders_tags(self, main_layout):
         self.filter_widget = QWidget()
+
+        self.filter_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
+
+        save_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs), _("Save as Preset"), self)
+        save_preset_action.triggered.connect(self.save_preset_action)
+        self.filter_widget.addAction(save_preset_action)
+
+        clear_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditClear), _("Clear Values"), self)
+        clear_preset_action.triggered.connect(self.clear_sliders)
+        self.filter_widget.addAction(clear_preset_action)
+
+        reset_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRestore), _("Reset Presets"), self)
+        reset_preset_action.triggered.connect(self.reset_preset_action)
+        self.filter_widget.addAction(reset_preset_action)
+
         self.filter_widget.setVisible(AppSettings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
         self.filter_layout = QVBoxLayout(self.filter_widget)
         self.filter_layout.setContentsMargins(0, 0, 0, 0)
@@ -1434,20 +1462,25 @@ class MusicPlayer(QMainWindow):
         self.sliders_layout.setContentsMargins(8, 8, 8, 8)
 
         # sliders_container.addWidget(self.sliders_widget, 1)
+        self.presets_layout = QHBoxLayout()
+        self.presets_layout.addStretch()
 
+        self.filter_layout.addLayout(self.presets_layout,0)
         self.filter_layout.addWidget(self.slider_tabs, 1)
         # --------------------------------------
 
+
         self.tags_widget = QWidget()
         self.tags_widget.setBackgroundRole(QPalette.ColorRole.Mid)
-
         self.tags_widget.setAutoFillBackground(True)
-        self.tags_layout = QHBoxLayout(self.tags_widget)
+        self.tags_widget.setContentsMargins(4,4,4,4)
 
+        self.tags_layout = FlowLayout(self.tags_widget)
         self.filter_layout.addWidget(self.tags_widget)
 
         self.update_sliders()
-        self.update_tags_and_presets()
+        self.update_tags()
+        self.update_presets()
 
         main_layout.addWidget(self.filter_widget)
 
@@ -1469,9 +1502,9 @@ class MusicPlayer(QMainWindow):
         layout.addWidget(button_box)
 
         if save_preset_dialog.exec():
-            preset = Preset(name_edit.text(), self.slider_values())
+            preset = Preset(name_edit.text(), self.slider_values(), selected_tags)
             add_preset(preset)
-            self.update_tags_and_presets()
+            self.update_presets()
 
     def tree_load_file(self, index: QModelIndex):
         data = self.directory_tree.model().itemData(index)
@@ -1479,7 +1512,7 @@ class MusicPlayer(QMainWindow):
         if file_info.isDir():
             self.load_directory(file_info.filePath())
         else:
-            entry = mp3.parse_mp3(Path(file_info.filePath()))
+            entry = parse_mp3(Path(file_info.filePath()))
             self.play_track(-1, entry)
 
     def init_directory_tree(self):
@@ -1626,7 +1659,7 @@ class MusicPlayer(QMainWindow):
 
         for i, cat in enumerate(categories):
 
-            cat_slider = CategorySlider(category=cat, minValue=CATEGORY_MIN - 1 if CATEGORY_MIN == 1 else CATEGORY_MIN,
+            cat_slider = CategoryWidget(category=cat, minValue=CATEGORY_MIN - 1 if CATEGORY_MIN == 1 else CATEGORY_MIN,
                                         maxValue=CATEGORY_MAX)
             cat_slider.valueChanged.connect(self.sort_table_data)
 
@@ -1654,7 +1687,7 @@ class MusicPlayer(QMainWindow):
             if child.widget():
                 child.widget().deleteLater()
 
-    def update_tags_and_presets(self):
+    def update_tags(self):
         self.clear_layout(self.tags_layout)
         for tag in available_tags:
             toggle = ToggleSlider(checked_text=tag, unchecked_text=tag)
@@ -1663,16 +1696,18 @@ class MusicPlayer(QMainWindow):
             if tag in get_music_tags():
                 toggle.setToolTip(get_music_tags()[tag])
             toggle.stateChanged.connect(self.toggle_tag)
+            toggle.setChecked(tag in selected_tags)
             self.tags_layout.addWidget(toggle)
-        self.tags_layout.addStretch()
 
+    def update_tags_and_presets(self):
+        self.update_tags()
         self.update_presets()
 
     def update_sliders(self):
         self.slider_tabs.clear()
-        self.sliders: dict[MusicCategory, CategorySlider] = {}
+        self.sliders: dict[MusicCategory, CategoryWidget] = {}
 
-        general_categories = CATEGORIES.copy()
+        general_categories = get_categories().copy()
 
         categories_group = {}
         for cat in get_music_categories():
@@ -1689,6 +1724,8 @@ class MusicPlayer(QMainWindow):
         # self.slider_tabs.addTab(self.build_sliders(general_categories), "General")
 
     def update_presets(self):
+        self.clear_layout(self.presets_layout)
+        self.presets_layout.addStretch()
         for preset in get_presets():
             button = QPushButton(preset.name, self)
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
@@ -1703,34 +1740,39 @@ class MusicPlayer(QMainWindow):
             button.addAction(reset_preset)
 
             button.clicked.connect(functools.partial(self.select_preset, preset))
-            self.tags_layout.addWidget(button)
+            self.presets_layout.addWidget(button)
 
         save_preset = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs), "")
         save_preset.clicked.connect(self.save_preset_action)
-        self.tags_layout.addWidget(save_preset)
+        self.presets_layout.addWidget(save_preset)
 
         clear_preset = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.EditClear), "")
         clear_preset.clicked.connect(self.clear_sliders)
-        self.tags_layout.addWidget(clear_preset)
+        self.presets_layout.addWidget(clear_preset)
 
     def clear_sliders(self):
+        global selected_tags
         for slider in self.sliders.values():
             slider.set_value(0, False)
+
+
+        selected_tags.clear()
+        self.update_tags()
 
         self.sort_table_data()
 
     def reset_preset_action(self):
         reset_presets()
-        self.update_tags_and_presets()
+        self.update_presets()
 
     def remove_preset_action(self, checked: bool = False, data=None):
         if data is None:
             data = self.sender().data()
         remove_preset(data)
-        self.update_tags_and_presets()
+        self.update_presets()
 
-    def select_preset(self, preset):
-
+    def select_preset(self, preset: Preset):
+        global selected_tags
         for slider in self.sliders.values():
             slider.set_value(0, False)
 
@@ -1738,6 +1780,8 @@ class MusicPlayer(QMainWindow):
             category = get_music_category(cat)
             self.sliders[category].set_value(scale, False)
 
+        selected_tags = preset.tags.copy()
+        self.update_tags()
         self.sort_table_data()
 
     def pick_analyze_file(self):
@@ -1794,7 +1838,7 @@ class MusicPlayer(QMainWindow):
 
     def load_playlist(self, playlist_path):
         try:
-            mp3_files = mp3.parse_m3u(playlist_path)
+            mp3_files = parse_m3u(playlist_path)
 
             name = Path(playlist_path).name.removesuffix(".m3u").removesuffix(".M3U")
             table = self.add_table_tab(name, QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
@@ -1810,7 +1854,7 @@ class MusicPlayer(QMainWindow):
 
         favorites = [x for x in table.mp3_datas() if x.favorite]
         if len(favorites) > 0:
-            mp3.create_m3u(favorites, playlist_path)
+            create_m3u(favorites, playlist_path)
             return True
         else:
             return False
@@ -1841,7 +1885,7 @@ class MusicPlayer(QMainWindow):
             QMessageBox.information(self, _("Scan"), _("No MP3 files found."))
             return
 
-        table_data_list = [mp3.parse_mp3(f) for f in mp3_files]
+        table_data_list = [parse_mp3(f) for f in mp3_files]
 
         table.populate_table(table_data_list)
         self.player.track_count = len(table_data_list)

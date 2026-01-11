@@ -3,7 +3,7 @@ import logging
 from os import PathLike
 
 from PySide6.QtCore import Signal, QSize, QTimer
-from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent
+from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent, QBrush
 from PySide6.QtWidgets import QWidget, QFrame
 
 from config.settings import AppSettings, SettingKeys
@@ -11,7 +11,7 @@ from config.settings import AppSettings, SettingKeys
 logger = logging.getLogger("main")
 
 class Visualizer:
-    fake_visualizer = None
+    visualizer_widget = None
     video_frame = None
     visualizer = None
 
@@ -27,20 +27,20 @@ class Visualizer:
         # vis = settings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
         result = self.setup()
 
-        if self.fake_visualizer is not None:
+        if self.visualizer_widget is not None:
             if self.last_playing is not None:
-                self.fake_visualizer.set_state(self.last_playing, self.last_value)
+                self.visualizer_widget.set_state(self.last_playing, self.last_value)
             if self.last_position is not None:
-                self.fake_visualizer.set_position(self.last_position)
+                self.visualizer_widget.set_position(self.last_position)
             if self.last_track is not None:
-                self.fake_visualizer.load_mp3(self.last_track)
+                self.visualizer_widget.load_mp3(self.last_track)
 
         return result
 
     def setup(self):
         vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
 
-        self.fake_visualizer = None
+        self.visualizer_widget = None
         self.video_frame = None
         self.visualizer = None
 
@@ -49,8 +49,8 @@ class Visualizer:
             self.engine.attach_video_frame(self.video_frame)
             return self.video_frame
         elif vis == "FAKE":
-            self.fake_visualizer = VisualizerWidget()
-            return self.fake_visualizer
+            self.visualizer_widget = FakeVisualizerWidget()
+            return self.visualizer_widget
         else:
             self.visualizer = QWidget()
             return self.visualizer
@@ -58,18 +58,18 @@ class Visualizer:
     def set_state(self, playing, value):
         self.last_playing = playing
         self.last_value = value
-        if self.fake_visualizer is not None:
-            self.fake_visualizer.set_state(playing, value)
+        if self.visualizer_widget is not None:
+            self.visualizer_widget.set_state(playing, value)
 
     def set_position(self, pos: int):
         self.last_position = pos
-        if self.fake_visualizer is not None:
-            self.fake_visualizer.set_position(pos)
+        if self.visualizer_widget is not None:
+            self.visualizer_widget.set_position(pos)
 
     def load_mp3(self, track_path: str | PathLike[str]):
         self.last_track = track_path
-        if self.fake_visualizer is not None:
-            self.fake_visualizer.load_mp3(track_path)
+        if self.visualizer_widget is not None:
+            self.visualizer_widget.load_mp3(track_path)
 
 
 class VisualizerFrame(QFrame):
@@ -89,7 +89,7 @@ _yellow = QColor("#ECE852")
 _orange = QColor("#FFC145")
 _red = QColor("#FB4141")
 
-class VisualizerWidget(QWidget):
+class FakeVisualizerWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)

@@ -1,6 +1,5 @@
 import json
 import logging
-from collections import namedtuple
 from enum import StrEnum
 
 import jsonpickle
@@ -18,6 +17,9 @@ logger = logging.getLogger("main")
 # --- Configuration ---
 CATEGORY_MIN = 1
 CATEGORY_MAX = 10
+
+CAT_VALENCE = "Valence"
+CAT_AROUSAL = "Arousal"
 
 CAT_TEMPO = "Tempo"
 CAT_DARKNESS = "Darkness"
@@ -59,24 +61,32 @@ class MusicCategory():
 
         return tooltip.removesuffix("\n")
 
+class Preset:
 
-Preset = namedtuple("Preset", ["name", "categories"], defaults=[None, None])
-_PRESETS = None
+    name: str
+    categories: dict[str,int] | None = None
+    tags: list[str]
+
+    def __init__(self, name: str, levels: dict[str, int],tags: list[str]= None):
+        self.name = name
+        self.categories = levels
+        self.tags = tags
+
+_PRESETS: list[Preset] |None = None
 
 _TAGS =["Travel","Fight"]
 _MUSIC_TAGS = None
 
-_DEFAULT_CATEGORIES =[CAT_TEMPO, CAT_DARKNESS, CAT_EMOTIONAL, CAT_MYSTICISM, CAT_TENSION, CAT_HEROISM]
-CATEGORIES = _DEFAULT_CATEGORIES.copy()
+_DEFAULT_CATEGORIES =[CAT_VALENCE, CAT_AROUSAL, CAT_TEMPO, CAT_EMOTIONAL, CAT_MYSTICISM, CAT_HEROISM]
 _MUSIC_CATEGORIES = None
-
+_CATEGORIES = None
 
 def get_presets() -> list[Preset]:
     global _PRESETS
     if _PRESETS is None:
         _PRESETS =[
             Preset(_("Grim"),
-                   {_(CAT_DARKNESS): 8, _(CAT_HEROISM): 4, _(CAT_EMOTIONAL): 3, _(CAT_MYSTICISM): 4, _(CAT_TENSION): 8}),
+                   {_(CAT_VALENCE): 1, _(CAT_AROUSAL):5, _(CAT_TEMPO): 0, _(CAT_HEROISM): 4, _(CAT_EMOTIONAL): 3, _(CAT_MYSTICISM): 4}),
         ]
 
     return _PRESETS
@@ -95,6 +105,7 @@ def set_presets(presets: list[Preset]):
         _PRESETS = None
         AppSettings.remove(SettingKeys.PRESETS)
     else:
+        presets = [preset for preset in presets if preset.name is not None]
         _PRESETS = presets
         AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(presets))
 
@@ -118,25 +129,33 @@ def set_music_tags(tags :dict[str,str] | None):
 def get_music_category(key: str) -> MusicCategory:
     return next(cat for cat in get_music_categories() if cat.name == key)
 
+def get_categories() -> list[str]:
+    global _CATEGORIES
+
+    if _CATEGORIES is None:
+        _CATEGORIES = [cat.name for cat in get_music_categories()]
+
+    return _CATEGORIES
+
 def get_music_categories() -> list[MusicCategory]:
     global _MUSIC_CATEGORIES
     if _MUSIC_CATEGORIES is None:
-        _MUSIC_CATEGORIES = [MusicCategory.from_key(key) for key in CATEGORIES]
+        _MUSIC_CATEGORIES = [MusicCategory.from_key(key) for key in _DEFAULT_CATEGORIES]
     return _MUSIC_CATEGORIES
 
 def set_music_categories(categories: list[MusicCategory] | None):
-    global _MUSIC_CATEGORIES, CATEGORIES
+    global _MUSIC_CATEGORIES
     if categories is None:
         AppSettings.remove(SettingKeys.CATEGORIES)
-        CATEGORIES = _DEFAULT_CATEGORIES.copy()
+        _CATEGORIES = None
     else:
         AppSettings.setValue(SettingKeys.CATEGORIES, jsonpickle.encode(categories))
-        CATEGORIES = [cat.name for cat in categories]
+        _CATEGORIES = [cat.name for cat in categories]
 
     _MUSIC_CATEGORIES = categories
 
-AppSettings: QSettings = QSettings("Gandulf", "DungeonTuber")
 
+AppSettings: QSettings = QSettings("Gandulf", "DungeonTuber")
 
 def default_gemini_api_key() -> str | None:
     try:
@@ -146,6 +165,8 @@ def default_gemini_api_key() -> str | None:
 
 
 DEFAULT_GEMINI_API_KEY = default_gemini_api_key()
+DEFAULT_OPEN_AI_API_KEY = ""
+DEFAULT_OPEN_AI_MODEL = "gpt-4o-audio-preview"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 def reset_presets():
@@ -154,23 +175,28 @@ def reset_presets():
     AppSettings.remove(SettingKeys.PRESETS)
 
 
-_GEMINI_MODLES = None
-_DEFAUL_GEMINI_MODLES = [
+_AI_MODLES = None
+_DEFAUL_AI_MODLES = [
                 "gemini-2.0-flash",
                 "gemini-2.5-flash",
                 "gemini-3.0-flash",
                 "gemini-2.5-pro",
-                "gemini-3.0-pro",
+                "gemini-3.0-pro"
+            ]
+
+_FIXED_AI_MODLES = [
+                "gpt-4o-audio-preview",
+                "gpt-4o-mini-audio-preview",
                 "mock"
             ]
 
 def get_gemini_models():
-    global _GEMINI_MODLES
-    if _GEMINI_MODLES is None:
+    global _AI_MODLES
+    if _AI_MODLES is None:
         try:
             audio_capable_families = ['gemini-4', 'gemini-3.5', 'gemini-3', 'gemini-2.5', 'gemini-1.5']
             client = genai.Client(api_key=AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
-            _GEMINI_MODLES = []
+            _AI_MODLES = []
             for model in client.models.list(config=ListModelsConfig(page_size=100, query_base=True)):
                 # Filter for models that support multimodal input (Audio/Video/Images)
                 if any(family in model.name for family in audio_capable_families):
@@ -178,22 +204,21 @@ def get_gemini_models():
                     capabilities = "Audio/Multimodal" if "flash" in model.name or "pro" in model.name else "Text Only"
 
                     if capabilities == "Audio/Multimodal":
-                        _GEMINI_MODLES.append(model.name.removeprefix("models/"))
+                        _AI_MODLES.append(model.name.removeprefix("models/"))
 
         except Exception as e:
             logger.exception("Failed to list models: {0}",e)
 
-        if _GEMINI_MODLES is None or len(_GEMINI_MODLES) ==0:
-            _GEMINI_MODLES = _DEFAUL_GEMINI_MODLES
-        else:
-            _GEMINI_MODLES.append("mock")
+        if _AI_MODLES is None or len(_AI_MODLES) ==0:
+            _AI_MODLES = _DEFAUL_AI_MODLES
 
-    return _GEMINI_MODLES
+    return _AI_MODLES + _FIXED_AI_MODLES
 
 class SettingKeys(StrEnum):
     GEMINI_API_KEY = "geminiApiKey"
-    GEMINI_MODEL = "geminiModel"
-    MOCK_MODE = "mockMode"
+    OPENAI_API_KEY = "openAiApiKey"
+    AI_MODEL = "aiModel"
+
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
     LAST_DIRECTORY = "lastDirectory"
@@ -292,30 +317,50 @@ class SettingsDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+    def ai_model_changed(self, text: str):
+        if "gemini" in text:
+            self.analyzer_layout.setRowVisible(self.gemini_api_key_input,True)
+            self.analyzer_layout.setRowVisible(self.openai_api_key_input, False)
+        elif "gpt" in text:
+            self.analyzer_layout.setRowVisible(self.gemini_api_key_input, False)
+            self.analyzer_layout.setRowVisible(self.openai_api_key_input, True)
+        elif "mock" == text:
+            self.analyzer_layout.setRowVisible(self.gemini_api_key_input, False)
+            self.analyzer_layout.setRowVisible(self.openai_api_key_input, False)
+        else:
+            self.analyzer_layout.setRowVisible(self.gemini_api_key_input, True)
+            self.analyzer_layout.setRowVisible(self.openai_api_key_input, True)
 
 
     def init_general_tab(self):
         layout = QVBoxLayout(self.general_tab)
 
-        analyzer_layout = QFormLayout()
+        self.analyzer_layout = QFormLayout()
         analyzer_group = QGroupBox(_("Analyzer"))
-        analyzer_group.setLayout(analyzer_layout)
+        analyzer_group.setLayout(self.analyzer_layout)
 
         layout.addWidget(analyzer_group, 0)
 
-        self.api_key_input = QLineEdit()
-        self.api_key_input.setText(AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
-        analyzer_layout.addRow(_("Gemini API Key") + ":", self.api_key_input)
+        self.gemini_api_key_input = QLineEdit()
+        self.gemini_api_key_input.setText(AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
+        self.analyzer_layout.addRow(_("Gemini API Key") + ":", self.gemini_api_key_input)
+
+        self.openai_api_key_input = QLineEdit()
+        self.openai_api_key_input.setText(AppSettings.value(SettingKeys.OPENAI_API_KEY, DEFAULT_OPEN_AI_API_KEY))
+        self.analyzer_layout.addRow(_("OpenAI API Key") + ":", self.openai_api_key_input)
 
         self.model_combo = QComboBox()
         self.model_combo.setEditable(False)
         self.model_combo.addItems(get_gemini_models())
-        self.model_combo.setCurrentText(AppSettings.value(SettingKeys.GEMINI_MODEL, DEFAULT_GEMINI_MODEL))
-        analyzer_layout.addRow(_("Gemini Model") + ":", self.model_combo)
+        self.model_combo.setCurrentText(AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL))
+        self.model_combo.currentTextChanged.connect(self.ai_model_changed)
+        self.analyzer_layout.addRow(_("AI Model") + ":", self.model_combo)
+
+        self.ai_model_changed(self.model_combo.currentText())
 
         self.skip_analyzed_mp3 = QCheckBox(_("Skip Analyzed Music"))
         self.skip_analyzed_mp3.setChecked(AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
-        analyzer_layout.addRow("", self.skip_analyzed_mp3)
+        self.analyzer_layout.addRow("", self.skip_analyzed_mp3)
 
         self.locale_combo = QComboBox(editable=False)
         self.locale_combo.setToolTip(_("Requires restart"))
@@ -328,10 +373,10 @@ class SettingsDialog(QDialog):
             if current_language == locale:
                 self.locale_combo.setCurrentIndex(i+1)
 
-        analyzer_layout.addRow(_("Language") + " *", self.locale_combo)
+        self.analyzer_layout.addRow(_("Language") + " *", self.locale_combo)
 
         self.skip_analyzed_mp3.setChecked(AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
-        analyzer_layout.addRow("", self.skip_analyzed_mp3)
+        self.analyzer_layout.addRow("", self.skip_analyzed_mp3)
         #
 
         table_layout = QFormLayout()
@@ -402,7 +447,7 @@ class SettingsDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def fill_categories(self):
-        self.categories_table.setRowCount(len(CATEGORIES))
+        self.categories_table.setRowCount(len(get_music_categories()))
         for row, cat in enumerate(get_music_categories()):
             self.categories_table.setItem(row, 0, QTableWidgetItem(cat.name))
             self.categories_table.setItem(row, 1, QTableWidgetItem(cat.group))
@@ -483,8 +528,9 @@ class SettingsDialog(QDialog):
             self.tags_table.removeRow(row)
 
     def accept(self):
-        AppSettings.setValue(SettingKeys.GEMINI_API_KEY, self.api_key_input.text())
-        AppSettings.setValue(SettingKeys.GEMINI_MODEL, self.model_combo.currentText())
+        AppSettings.setValue(SettingKeys.GEMINI_API_KEY, self.gemini_api_key_input.text())
+        AppSettings.setValue(SettingKeys.OPENAI_API_KEY, self.openai_api_key_input.text())
+        AppSettings.setValue(SettingKeys.AI_MODEL, self.model_combo.currentText())
         AppSettings.setValue(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
         AppSettings.setValue(SettingKeys.SKIP_ANALYZED_MUSIC, self.skip_analyzed_mp3.isChecked())

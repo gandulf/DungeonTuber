@@ -4,8 +4,9 @@ import random
 import sys
 import traceback
 import logging
+
 from queue import Queue
-from typing import Any
+from typing import Any, List
 from os import PathLike
 from pathlib import Path
 
@@ -14,12 +15,14 @@ from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
 from google import genai
 from google.genai.errors import ClientError
 from google.genai.types import UploadFileConfig, Content, Part, GenerateContentConfig, Schema, Type, ThinkingConfig
+from openai import OpenAI
+from pydantic import BaseModel
 
-from logic import mp3
-from logic.mp3 import Mp3Entry
+from config.utils import file_to_base64
+from logic.mp3 import Mp3Entry, parse_mp3, update_categories_and_tags, print_mp3_tags, list_mp3s
 
-from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, CATEGORIES, get_music_categories, get_music_tags, \
-    DEFAULT_GEMINI_MODEL, default_gemini_api_key, DEFAULT_GEMINI_API_KEY
+from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_music_categories, get_music_tags, \
+    DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_API_KEY, DEFAULT_OPEN_AI_API_KEY, DEFAULT_OPEN_AI_MODEL, get_categories
 
 logger = logging.getLogger("main")
 
@@ -29,75 +32,42 @@ def is_analyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     else:
         entry = mp3.parse_mp3(file_path)
 
-    return (set(CATEGORIES) == set(entry.categories.keys()) and entry.summary is not None
+    return (set(get_categories()) == set(entry.categories.keys()) and entry.summary is not None
             and entry.summary != "This is a mock summary." and not "Voxalyzer" in entry.summary)
 
 def is_voxalyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
         entry= file_path
     else:
-        entry = mp3.parse_mp3(file_path)
+        entry = parse_mp3(file_path)
 
     return entry.summary is not None and "Voxalyzer" in entry.summary
 
-class Analyzer(QObject):
-    error = Signal(object)
-    result = Signal(Path)
-    progress = Signal(str)
+def categories_to_string(categories: list[MusicCategory]):
+    lines = []
+    # Iteriere über die Einträge und zähle mit, um Absätze zu setzen
+    for cat in categories:
+        lines.append(f"{cat.name}: {cat.description}\n {cat.levels}")
 
-    workerQueue = Queue()
+    return "\n\n".join(lines)
 
-    def __init__(self):
-        super().__init__()
+def tags_to_string(data: dict[str, str]):
+    lines = []
+    # Iteriere über die Einträge und zähle mit, um Absätze zu setzen
+    for cat in data.items():
+        lines.append(f"{cat[0]}: {cat[1]}")
 
-        self.threadpool = QThreadPool(maxThreadCount=8)
+    return "\n".join(lines)
 
-        self.result.connect(self._try_next_worker)
-        self.error.connect(self._try_next_worker)
+class ModelAnalyzer:
+    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+        return
 
-    def active_worker(self) -> int:
-        return self.threadpool.activeThreadCount()
-
-    def categories_to_string(self, categories: list[MusicCategory]):
-        lines = []
-        # Iteriere über die Einträge und zähle mit, um Absätze zu setzen
-        for cat in categories:
-            lines.append(f"{cat.name}: {cat.description}\n {cat.levels}")
-
-        return "\n\n".join(lines)
-
-    def tags_to_string(self, data: dict[str, str]):
-        lines = []
-        # Iteriere über die Einträge und zähle mit, um Absätze zu setzen
-        for cat in data.items():
-            lines.append(f"{cat[0]}: {cat[1]}")
-
-        return "\n".join(lines)
-
-    def analyze_mp3_mock(self, file_path: str | PathLike[str]) -> Any:
-        """Generates a mock response simulating a call to the Gemini API."""
-        logger.debug("--- MOCK MODE: Simulating analysis for {0} ---", file_path)
-
-        selected_tags = random.sample(sorted(get_music_tags().keys()), random.randint(0, len(get_music_tags())))
-
-        mock_categories = []
-        for category in CATEGORIES:
-            mock_categories.append({
-                "category": category,
-                "scale": random.randint(CATEGORY_MIN, CATEGORY_MAX)
-            })
-
-        mock_response = {
-            "summary": "This is a mock summary.",
-            "categories": mock_categories,
-            "tags": selected_tags
-        }
-
-        return mock_response
+class GeminiAnalyzer(ModelAnalyzer):
 
     def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
         api_key: str = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
-        model = AppSettings.value(SettingKeys.GEMINI_MODEL, DEFAULT_GEMINI_MODEL)
+        model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL)
 
         if "mock" == model:
             return self.analyze_mp3_mock(file_path)
@@ -113,7 +83,7 @@ class Analyzer(QObject):
             with open(file_path, "rb") as file_content:
                 myfile = client.files.upload(file=file_content, config=UploadFileConfig(mime_type="audio/mpeg"))
 
-            prompt =_("GeminiUserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, self.categories_to_string(get_music_categories()), self.tags_to_string(get_music_tags()))
+            prompt =_("AI UserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, categories_to_string(get_music_categories()), tags_to_string(get_music_tags()))
 
 
             response = client.models.generate_content(
@@ -129,17 +99,17 @@ class Analyzer(QObject):
                 config=GenerateContentConfig(
                     thinking_config=ThinkingConfig(thinking_budget=0),  # Disables thinking
                     response_mime_type="application/json",
-                    system_instruction=_("GeminiSystemPrompt").format(CATEGORY_MIN,CATEGORY_MAX),
+                    system_instruction=_("AI SystemPrompt").format(CATEGORY_MIN,CATEGORY_MAX),
                     response_schema=Schema(
                         type=Type.OBJECT,
                         properties={
                             "summary": Schema(
                                 type=Type.STRING,
-                                description=_("GeminiSummaryDescription"),
+                                description=_("AI SummaryDescription"),
                             ),
                             "categories": Schema(
                                 type=Type.ARRAY,
-                                description=_("GeminiCategoriesDescription").format(CATEGORY_MIN,CATEGORY_MAX),
+                                description=_("AI CategoriesDescription").format(CATEGORY_MIN,CATEGORY_MAX),
                                 items=Schema(
                                     type=Type.OBJECT,
                                     properties={
@@ -151,7 +121,7 @@ class Analyzer(QObject):
                             ),
                             "tags": Schema(
                                 type=Type.ARRAY,
-                                description=_("GeminiTagsDescription"),
+                                description=_("AI TagsDescription"),
                                 items=Schema(
                                     type=Type.STRING
                                 )
@@ -178,6 +148,128 @@ class Analyzer(QObject):
             logger.error("Failed to analyze file: {0}",e.message)
         return None
 
+class MockAnalyzer(ModelAnalyzer):
+
+    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+        logger.debug("--- MOCK MODE: Simulating analysis for {0} ---", file_path)
+
+        selected_tags = random.sample(sorted(get_music_tags().keys()), random.randint(0, len(get_music_tags())))
+
+        mock_categories = []
+        for category in get_categories():
+            mock_categories.append({
+                "category": category,
+                "scale": random.randint(CATEGORY_MIN, CATEGORY_MAX)
+            })
+
+        mock_response = {
+            "summary": "This is a mock summary.",
+            "categories": mock_categories,
+            "tags": selected_tags
+        }
+
+        return mock_response
+
+# 1. Define the Schema using Pydantic (OpenAI's preferred way for Structured Outputs)
+class CategoryItem(BaseModel):
+    category: str
+    scale: int
+
+class AnalysisResponse(BaseModel):
+    summary: str
+    categories: List[CategoryItem]
+    tags: List[str]
+
+class OpenAiAnalyzer(ModelAnalyzer):
+
+    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+
+        api_key: str = AppSettings.value(SettingKeys.OPENAI_API_KEY, DEFAULT_OPEN_AI_API_KEY)
+        model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_OPEN_AI_MODEL)  # Must support structured outputs
+
+        prompt = _("AI UserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, categories_to_string(get_music_categories()),
+                                              tags_to_string(get_music_tags()))
+
+        encoded_string = file_to_base64(file_path)
+
+        system_prompt = _("AI SystemPrompt").format(CATEGORY_MIN, CATEGORY_MAX)
+
+        client = OpenAI(
+            api_key=api_key,
+        )
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": encoded_string,
+                            "format": "mp3"
+                        }
+                    }
+                    ]
+                }
+            ],
+            #response_format=AnalysisResponse,
+        )
+
+        #result = response.choices[0].message.parsed
+        result = response.choices[0].message.content
+        categories: dict[str,str] = json.loads(result.lstrip("```json").rstrip("```"))
+        tags = categories.pop("Tags",None)
+
+        norm_categories = []
+        for key,scale in categories.items():
+            norm_categories.append({"category": key, "scale": scale})
+
+        response = {
+            "summary": "Analyzed with OpenAI",
+            "categories": norm_categories,
+            "tags": tags
+        }
+
+        return response
+
+
+class Analyzer(QObject):
+    error = Signal(object)
+    result = Signal(Path)
+    progress = Signal(str)
+
+    workerQueue = Queue()
+
+    def __init__(self):
+        super().__init__()
+
+        self.threadpool = QThreadPool(maxThreadCount=8)
+
+        self.result.connect(self._try_next_worker)
+        self.error.connect(self._try_next_worker)
+
+    def active_worker(self) -> int:
+        return self.threadpool.activeThreadCount()
+
+
+
+    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+        return self.get_analyzer().analyze_mp3(file_path)
+
+    def get_analyzer(self) -> ModelAnalyzer | None:
+        model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL)
+
+        if model == "mock" or model is None:
+            return MockAnalyzer()
+        elif "gemini" in model:
+            return GeminiAnalyzer()
+        elif "gpt" in model:
+            return OpenAiAnalyzer()
+        else:
+            return None
+
     def process(self, file_path: str | PathLike[str]) -> bool:
         try:
 
@@ -191,6 +283,7 @@ class Analyzer(QObject):
             traceback.print_exc()
             logger.error("An error occurred while analyzing: {0}",e)
             return False
+
     def _process_file(self,file_path: PathLike[str]) -> bool:
         worker = Worker(file_path, self)
         worker.setAutoDelete(True)
@@ -219,7 +312,7 @@ class Analyzer(QObject):
 
     def process_directory(self, directory_path: str | PathLike[str]) -> bool:
         logger.debug("Processing {0}...",directory_path)
-        files = mp3.list_mp3s(directory_path)
+        files = list_mp3s(directory_path)
 
         result = False
         # Parses all MP3 files in a given directory.
@@ -235,6 +328,7 @@ class Worker(QRunnable):
         super(Worker, self).__init__()
         self.file_path = file_path
         self.analyzer = analyzer
+
         logger.debug("Worker initialized")
 
     def run(self):
@@ -269,11 +363,11 @@ class Worker(QRunnable):
             categories = response_data.get("categories")
             tags = response_data.get("tags")
 
-            if summary and categories:
-                mp3.add_tags_to_mp3(file_path, summary, categories, tags)
-                mp3.print_mp3_tags(file_path)  # Print tags after adding them
+            if categories:
+                update_categories_and_tags(file_path, summary, categories, tags)
+                print_mp3_tags(file_path)  # Print tags after adding them
             else:
-                logger.warning("Could not find summary or categories for {0}.", file_path)
+                logger.warning("Could not find categories for {0}.", file_path)
 
             self.analyzer.progress.emit(_("Processed {0}.").format(Path(file_path).name))
         except Exception as e:

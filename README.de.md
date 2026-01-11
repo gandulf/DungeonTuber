@@ -2,7 +2,9 @@
 
 [![en](https://img.shields.io/badge/lang-en-green.svg)](https://github.com/gandulf/DungeonTuber/blob/master/README.md)
 [![de](https://img.shields.io/badge/lang-de-green.svg)](https://github.com/gandulf/DungeonTuber/blob/master/README.de.md)
+![es](https://img.shields.io/badge/lang-es-green.svg)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/gandulf/DungeonTuber)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **DungeonTuber** ist ein spezialisierter Musikplayer für Game Master (Spielleiter), Streamer und Storyteller, die per Knopfdruck die perfekte Atmosphäre schaffen wollen. Im Gegensatz zu Standard-Playern ermöglicht DungeonTuber das Kategorisieren und Filtern deiner Musik basierend auf emotionalem Gewicht, Intensität und genre-spezifischen Metadaten.
 
