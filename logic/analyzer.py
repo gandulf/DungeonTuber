@@ -30,7 +30,7 @@ def is_analyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
         entry= file_path
     else:
-        entry = mp3.parse_mp3(file_path)
+        entry = parse_mp3(file_path)
 
     return (set(get_categories()) == set(entry.categories.keys()) and entry.summary is not None
             and entry.summary != "This is a mock summary." and not "Voxalyzer" in entry.summary)

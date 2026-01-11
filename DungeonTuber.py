@@ -1751,10 +1751,8 @@ class MusicPlayer(QMainWindow):
         self.presets_layout.addWidget(clear_preset)
 
     def clear_sliders(self):
-        global selected_tags
         for slider in self.sliders.values():
             slider.set_value(0, False)
-
 
         selected_tags.clear()
         self.update_tags()
