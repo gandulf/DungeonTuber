@@ -87,7 +87,6 @@ msgstr "Dunkel"
 msgid "Save As Preset"
 msgstr "Als Preset speichern"
 
-
 msgid "Clear Values"
 msgstr "Filter zurücksetzen"
 
@@ -520,3 +519,15 @@ msgstr "Neustart erforderlich"
 
 msgid "Changing the language requires a restart. Do you want to restart now?"
 msgstr "Ein Ändern der Sprache erfordert einen Neustart der Applikation. Willst du dies nun machen?"
+
+msgid "unpleasant"
+msgstr "unangenehm"
+
+msgid "pleasant"
+msgstr "angenehm"
+
+msgid "calm"
+msgstr "ruhig"
+
+msgid "excited"
+msgstr "aufgeregt"

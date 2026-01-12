@@ -513,3 +513,15 @@ msgstr "Restart Required"
 
 msgid "Changing the language requires a restart. Do you want to restart now?"
 msgstr "Changing the language requires a restart. Do you want to restart now?"
+
+msgid "unpleasant"
+msgstr "unpleasant"
+
+msgid "pleasant"
+msgstr "pleasant"
+
+msgid "calm"
+msgstr "calm"
+
+msgid "excited"
+msgstr "excited"

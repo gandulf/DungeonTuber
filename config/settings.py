@@ -29,12 +29,17 @@ CAT_TENSION = "Tension"
 CAT_HEROISM = "Heroism"
 
 class MusicCategory():
+    key: str
     name: str
     description: str
     levels: dict[int, str]
     group: str = None
 
-    def __init__(self, name: str, description: str, levels: dict[int, str], group: str = None):
+    def __init__(self, name: str, description: str, levels: dict[int, str], group: str = None, key :str = None):
+        if key is None:
+            self.key = name
+        else:
+            self.key = key
         self.name = name
         self.description = description
         self.levels = levels
@@ -49,9 +54,10 @@ class MusicCategory():
                        10: _(key + " High")
                        }
 
-        return MusicCategory(name, description, levels)
+        return MusicCategory(name, description, levels, key = key)
 
-
+    def equals(self, name_or_key:str ):
+        return self.name == name_or_key or self.key == name_or_key or self.name == _(name_or_key)
 
     def get_detailed_description(self):
         tooltip = self.description + "\n"
@@ -127,7 +133,7 @@ def set_music_tags(tags :dict[str,str] | None):
 
 
 def get_music_category(key: str) -> MusicCategory:
-    return next(cat for cat in get_music_categories() if cat.name == key)
+    return next(cat for cat in get_music_categories() if cat.name == key or cat.key == key)
 
 def get_categories() -> list[str]:
     global _CATEGORIES
@@ -227,6 +233,7 @@ class SettingKeys(StrEnum):
     EXPANDED_DIRS = "expandedDirs"
     ROOT_DIRECTORY = "rootDirectory"
     DIRECTORY_TREE = "directoryTree"
+    RUSSEL_WIDGET ="russelWidget"
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"
     THEME = "theme"

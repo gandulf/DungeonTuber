@@ -515,3 +515,14 @@ msgstr "Reinicio requerido"
 msgid "Changing the language requires a restart. Do you want to restart now?"
 msgstr "Cambiar el idioma requiere reiniciar la aplicación. ¿Deseas reiniciar ahora?"
 
+msgid "unpleasant"
+msgstr "desagradable"
+
+msgid "pleasant"
+msgstr "agradable"
+
+msgid "calm"
+msgstr "tranquilo"
+
+msgid "excited"
+msgstr "excitado"

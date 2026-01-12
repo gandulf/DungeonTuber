@@ -313,7 +313,7 @@ class CategoryWidget(QVBoxLayout):
         self.unblockSignals()
         self.tooltip.hide()
 
-        if self._orig_value and self.value() != self._orig_value:
+        if self._orig_value is None or self.value() != self._orig_value:
             self.valueChanged.emit(self.value())
 
     def _forward_value_changed(self, value: int):
@@ -329,7 +329,7 @@ class CategoryWidget(QVBoxLayout):
         self._block_signals = False
 
     def refreshTooltip(self, show: bool = True):
-        nearest_level = min(self.category.levels.keys(), key=lambda x: abs(x - self.value()))
+        nearest_level = min(self.category.levels.keys(), key=lambda x: abs(int(x) - self.value()))
         text = self.category.levels.get(nearest_level, "")
         self.tooltip.setText(text)
 

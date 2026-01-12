@@ -17,6 +17,7 @@
 import functools
 import importlib
 import locale
+import numbers
 import sys
 import os
 
@@ -24,8 +25,10 @@ import threading
 import traceback
 import logging
 
+
 from config import log
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version
+from config.settings import CAT_VALENCE, CAT_AROUSAL
 
 log.setup_logging()
 
@@ -56,6 +59,7 @@ from components.sliders import CategoryWidget, VolumeSlider, ToggleSlider, Repea
 from components.widgets import StarRating, IconLabel
 from components.visualizer import Visualizer
 from components.layouts import FlowLayout
+from components.charts import RussellEmotionWidget
 
 from logic.analyzer import Analyzer, is_analyzed, is_voxalyzed
 from logic.mp3 import Mp3Entry, update_mp3_favorite, parse_mp3, update_mp3_summary, update_mp3_title, update_mp3_tags, update_mp3_category, parse_m3u, \
@@ -78,6 +82,8 @@ DOWNLOAD_LINK ="https://github.com/gandulf/DungeonTuber/releases/latest"
 
 available_tags: list[str] = []
 selected_tags: list[str] = []
+
+categories: dict[str,int] = {}
 
 class EditSongDialog(QDialog):
     def __init__(self, data: Mp3Entry, parent=None):
@@ -251,7 +257,7 @@ class TableModel(QAbstractTableModel):
     slider_values: dict[str, int] = {}
     tags: list[str] = []
 
-    def __init__(self, data: list[Mp3Entry]):
+    def __init__(self, data: list[Mp3Entry] = []):
         super(TableModel, self).__init__()
         self._data = data
 
@@ -283,7 +289,10 @@ class TableModel(QAbstractTableModel):
                     if value == "":
                         new_value = None
                     else:
-                        new_value = int(value)
+                        if category == _(CAT_VALENCE) or category == _(CAT_AROUSAL):
+                            new_value = float(value)
+                        else:
+                            new_value = int(value)
                 except ValueError:
                     logger.error("Invalid value for category {0}: {1}", category, value)
                     return False
@@ -412,14 +421,14 @@ class TableModel(QAbstractTableModel):
             return Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable
 
 
-def _calculate_score(_slider_values, data: Mp3Entry, tags: list[str]):
+def _calculate_score(_slider_values: dict[str,int], data: Mp3Entry, tags: list[str]):
     score = None
     for cat, desired_value in _slider_values.items():
         if desired_value is not None and desired_value != 0:
             if score is None:
                 score = 0
             current_value = data.categories.get(cat)
-            if isinstance(current_value, int):
+            if isinstance(current_value, numbers.Number):
                 score += (current_value - desired_value) ** 2
             else:
                 score += 10 ** 2
@@ -434,7 +443,7 @@ def _calculate_score(_slider_values, data: Mp3Entry, tags: list[str]):
         else:
             score += 100
 
-    return score
+    return round(score) if score is not None else None
 
 
 _black = QColor(Qt.GlobalColor.black)
@@ -599,6 +608,7 @@ class SongTable(QTableView):
     def __init__(self, _analyzer: Analyzer, /):
         super().__init__()
 
+        self.table_model = TableModel()
         self.analyzer = _analyzer
         self.analyzer.result.connect(self.refresh_item)
 
@@ -741,8 +751,16 @@ class SongTable(QTableView):
         self.setSortingEnabled(True)
 
     def is_column_visible(self, category: str):
-        return not AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False,
-                                     type=bool) or self.table_model.slider_values.get(category, 0) > 0
+
+        if AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool):
+            value = self.table_model.slider_values.get(category, 0)
+            if AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type = bool) and (category == _(CAT_VALENCE) or category == _(CAT_AROUSAL)):
+                return value is not None and value > 0 and value !=5
+            else:
+                return value is not None and value > 0
+        else:
+            return True
+
 
     def update_category_column_visibility(self):
         self.setColumnHidden(FAV_COL, not AppSettings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
@@ -1220,8 +1238,7 @@ class MusicPlayer(QMainWindow):
             version_text = _("Newer version available {0}").format(f"<a href=\"{DOWNLOAD_LINK}\">{get_latest_version()}</a>")
             self.update_status_label(version_text, False, False)
 
-    def slider_values(self):
-        return {cat.name: slider.value() for cat, slider in self.sliders.items()}
+
 
     def exit(self):
         sys.exit(0)
@@ -1275,6 +1292,12 @@ class MusicPlayer(QMainWindow):
         self.dir_tree_action.setChecked(AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
         self.dir_tree_action.triggered.connect(self.toggle_directory_tree)
         view_menu.addAction(self.dir_tree_action)
+
+        self.russel_action = QAction(_("Circumplex model of emotion"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
+        self.russel_action.setCheckable(True)
+        self.russel_action.setChecked(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
+        self.russel_action.triggered.connect(self.toggle_russel_widget)
+        view_menu.addAction(self.russel_action)
 
         font_size_small_action = QAction(_("Small"), self)
         font_size_small_action.setCheckable(True)
@@ -1398,6 +1421,13 @@ class MusicPlayer(QMainWindow):
         AppSettings.setValue(SettingKeys.VISUALIZER, "NONE")
         self.player.refresh_visualizer()
 
+    def toggle_russel_widget(self):
+        AppSettings.setValue(SettingKeys.RUSSEL_WIDGET, not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type= bool))
+
+        self.russel_widget.setVisible(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type= bool))
+
+        self.update_sliders()
+
     def toggle_directory_tree(self, visible: bool = None):
 
         if visible is None:
@@ -1432,6 +1462,13 @@ class MusicPlayer(QMainWindow):
                 self.current_table().update_category_column_visibility()
 
     def init_sliders_tags(self, main_layout):
+        self.russel_widget = RussellEmotionWidget()
+        self.russel_widget.setMaximumSize(QSize(350,350))
+        self.russel_widget.setMinimumSize(QSize(300,300))
+        self.russel_widget.valueChanged.connect(self.on_russel_changed)
+        self.russel_widget.mouseReleased.connect(self.on_russel_released)
+        self.russel_widget.setVisible(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type= bool))
+
         self.filter_widget = QWidget()
 
         self.filter_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
@@ -1460,6 +1497,7 @@ class MusicPlayer(QMainWindow):
         self.sliders_widget = QWidget()
         self.sliders_layout = QVBoxLayout(self.sliders_widget)
         self.sliders_layout.setContentsMargins(8, 8, 8, 8)
+
 
         # sliders_container.addWidget(self.sliders_widget, 1)
         self.presets_layout = QHBoxLayout()
@@ -1502,7 +1540,7 @@ class MusicPlayer(QMainWindow):
         layout.addWidget(button_box)
 
         if save_preset_dialog.exec():
-            preset = Preset(name_edit.text(), self.slider_values(), selected_tags)
+            preset = Preset(name_edit.text(), categories, selected_tags)
             add_preset(preset)
             self.update_presets()
 
@@ -1627,7 +1665,15 @@ class MusicPlayer(QMainWindow):
     def table_tab_changed(self, index: int):
         table = self.current_table()
         table.update_category_column_visibility()
-        self.update_available_tags(table.mp3_datas())
+
+        table_data = table.mp3_datas()
+        self.update_available_tags(table_data)
+        self.update_russel_heatmap(table_data)
+
+    def update_russel_heatmap(self, table_data: list[Mp3Entry]):
+        valences = [file.categories[_(CAT_VALENCE)] for file in table_data]
+        arousal = [file.categories[_(CAT_AROUSAL)] for file in table_data]
+        self.russel_widget.add_reference_points(valences, arousal)
 
     def table_tab_close(self, index: int):
         self.table_tabs.removeTab(index)
@@ -1640,28 +1686,63 @@ class MusicPlayer(QMainWindow):
 
         table.filter(self.searchbar.text())
 
+    def on_russel_changed(self,valence : float,arousal: float):
+        cat_valence = get_music_category(_(CAT_VALENCE))
+        if cat_valence in self.sliders:
+            self.sliders[cat_valence].set_value(round(valence), False)
+
+        cat_arousal = get_music_category(_(CAT_AROUSAL))
+        if cat_arousal in self.sliders:
+            self.sliders[cat_arousal].set_value(round(arousal), False)
+
+    def on_russel_released(self):
+        valence, arousal = self.russel_widget.get_value()
+
+        cat_valence = get_music_category(_(CAT_VALENCE))
+        if cat_valence in self.sliders:
+            self.sliders[cat_valence].set_value(round(valence), False)
+
+        cat_arousal = get_music_category(_(CAT_AROUSAL))
+        if cat_arousal in self.sliders:
+            self.sliders[cat_arousal].set_value(round(arousal), False)
+
+        self.update_category_values()
+
+
+
     def build_sliders(self, categories: list[MusicCategory]):
         sliders_widget = QWidget()
+
+        russle_layout = QHBoxLayout(sliders_widget)
+
         sliders_layout = QVBoxLayout(sliders_widget)
         sliders_layout.setContentsMargins(8, 8, 8, 8)
 
+        russle_layout.addWidget(self.russel_widget, 0)
+        russle_layout.addLayout(sliders_layout,1)
         # self.clear_layout(sliders_layout)
         two_rows = len(categories) > 15
 
         row1 = QHBoxLayout()
+
         row2 = None
         sliders_layout.addLayout(row1, 1)
         if two_rows:
             row2 = QHBoxLayout()
             sliders_layout.addLayout(row2, 1)
 
-        mid = (len(categories) + 1) // 2
+        if AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type = bool):
+            visible_categories = [cat for cat in categories if not cat.equals(CAT_VALENCE) and not cat.equals(CAT_AROUSAL)]
+        else:
+            visible_categories = categories
 
-        for i, cat in enumerate(categories):
+        mid = (len(visible_categories) + 1) // 2
+
+        for i, cat in enumerate(visible_categories):
 
             cat_slider = CategoryWidget(category=cat, minValue=CATEGORY_MIN - 1 if CATEGORY_MIN == 1 else CATEGORY_MIN,
                                         maxValue=CATEGORY_MAX)
-            cat_slider.valueChanged.connect(self.sort_table_data)
+            cat_slider.valueChanged.connect(self.update_category_values)
 
             self.sliders[cat] = cat_slider
             if not two_rows or i < mid:
@@ -1670,6 +1751,18 @@ class MusicPlayer(QMainWindow):
                 row2.addLayout(cat_slider, 1)
 
         return sliders_widget
+
+    def update_category_values(self):
+        for category, slider in self.sliders.items():
+            categories[category.name] = slider.value() if slider.value() != 0 else None
+
+        if self.russel_widget.isVisible():
+            valence, arousal = self.russel_widget.get_value()
+            categories[_(CAT_VALENCE)] = valence
+            categories[_(CAT_AROUSAL)] = arousal
+
+        self.sort_table_data()
+
 
     def toggle_tag(self, state):
         toggle = self.sender()
@@ -1721,6 +1814,8 @@ class MusicPlayer(QMainWindow):
                                     _("General") if group is None or group == "" else group)
             general_categories = [category for category in general_categories if category not in categories]
 
+
+
         # self.slider_tabs.addTab(self.build_sliders(general_categories), "General")
 
     def update_presets(self):
@@ -1754,10 +1849,12 @@ class MusicPlayer(QMainWindow):
         for slider in self.sliders.values():
             slider.set_value(0, False)
 
+        self.russel_widget.set_value(5,5)
+
         selected_tags.clear()
         self.update_tags()
 
-        self.sort_table_data()
+        self.update_category_values()
 
     def reset_preset_action(self):
         reset_presets()
@@ -1778,8 +1875,14 @@ class MusicPlayer(QMainWindow):
             category = get_music_category(cat)
             self.sliders[category].set_value(scale, False)
 
-        selected_tags = preset.tags.copy()
+        if preset.tags :
+            selected_tags = preset.tags.copy()
+        else:
+            selected_tags=[]
         self.update_tags()
+
+        self.russel_widget.set_value(preset.categories[CAT_VALENCE], preset.categories[CAT_AROUSAL])
+
         self.sort_table_data()
 
     def pick_analyze_file(self):
@@ -1888,6 +1991,7 @@ class MusicPlayer(QMainWindow):
         table.populate_table(table_data_list)
         self.player.track_count = len(table_data_list)
         self.update_available_tags(table_data_list)
+        self.update_russel_heatmap(table_data_list)
 
     def current_table(self) -> SongTable | None:
         return self.table_tabs.currentWidget()
@@ -1903,7 +2007,7 @@ class MusicPlayer(QMainWindow):
 
         data = table.mp3_data(self.player.current_index)
 
-        table.table_model.set_slider_values(self.slider_values(), selected_tags)
+        table.table_model.set_slider_values(categories, selected_tags)
         table.update_category_column_visibility()
 
         current_track_path = None

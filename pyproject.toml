@@ -7,7 +7,7 @@ packages = ["logic", "config", "components"]
 
 [project]
 name = "DungeonTuber"
-version = "0.1.3"
+version = "0.1.4"
 description = "RPG music player wit advanced categorization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,7 +28,8 @@ dependencies = [
 dev = [
     "Nuitka>=2.8.9",
     "pyinstaller>=6.17.0",
-    "pylint>=4.0.4"
+    "pylint>=4.0.4",
+    "flake8>=7.3.0"
 ]
 
 [project.scripts]
