@@ -58,10 +58,17 @@ class Mp3Entry(object):
         self.all_tags = None
 
     def _le(self, category, value) -> bool:
-        return category in self.categories and self.categories.get(category, None) <= value
+        return category in self.categories and self.get_category_value(category) <= value
 
     def _ge(self, category, value) -> bool:
-        return category in self.categories and self.categories.get(category, None) >= value
+        return category in self.categories and self.get_category_value(category) >= value
+
+    def get_category_value(self,category: str):
+        category = _normalize_category(category)
+        if self.categories is not None and category in self.categories:
+            return self.categories.get(category, None)
+        else:
+            return None
 
     def allTags(self):
         if self.all_tags is None:

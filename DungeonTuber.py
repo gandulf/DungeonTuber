@@ -121,6 +121,16 @@ class EditSongDialog(QDialog):
         return self.name_edit.text(), self.title_edit.text(), self.summary_edit.toPlainText(), self.favorite_edit.isChecked(), self.tags_edit.text().split(
             ", ") if self.tags_edit.text() != "" else []
 
+class CategoryDelegate(QStyledItemDelegate):
+    def setModelData(self, editor, model, index):
+        # Grab the text directly from the editor
+        text = editor.text()
+        if not text:
+            # Explicitly set None/Null in the model if the field is empty
+            model.setData(index, None, Qt.ItemDataRole.EditRole)
+        else:
+            # Otherwise, use the standard behavior
+            super().setModelData(editor, model, index)
 
 class StarDelegate(QStyledItemDelegate):
     star_rating = StarRating()
@@ -284,9 +294,9 @@ class TableModel(QAbstractTableModel):
 
                 category = self.get_category(index)
 
-                new_value: int | None
+                new_value: int| float | None
                 try:
-                    if value == "":
+                    if value == "" or value is None:
                         new_value = None
                     else:
                         if category == _(CAT_VALENCE) or category == _(CAT_AROUSAL):
@@ -301,10 +311,10 @@ class TableModel(QAbstractTableModel):
                 has_changes = False
 
                 if new_value is None:
-                    if data.categories is not None and data.categories.__contains__(category):
-                        data.categories.pop(category)
+                    if data.categories is not None and category in data.categories:
+                        data.categories[category] = None
                         has_changes = True
-                elif new_value != data.categories.get(category):
+                elif new_value != data.get_category_value(category):
                     data.categories[category] = new_value
                     has_changes = True
                 else:
@@ -381,7 +391,7 @@ class TableModel(QAbstractTableModel):
                 return _calculate_score(self.slider_values, data, self.tags)
             elif index.column() >= CAT_COL:
                 category = self.get_category(index)
-                return data.categories.get(category, None)
+                return data.get_category_value(category)
             else:
                 return None
 
@@ -427,7 +437,7 @@ def _calculate_score(_slider_values: dict[str,int], data: Mp3Entry, tags: list[s
         if desired_value is not None and desired_value != 0:
             if score is None:
                 score = 0
-            current_value = data.categories.get(cat)
+            current_value = data.get_category_value(cat)
             if isinstance(current_value, numbers.Number):
                 score += (current_value - desired_value) ** 2
             else:
@@ -744,8 +754,12 @@ class SongTable(QTableView):
 
         self.horizontalHeader().setSectionResizeMode(FAV_COL, QHeaderView.ResizeMode.ResizeToContents)
         self.horizontalHeader().setSectionResizeMode(SCORE_COL, QHeaderView.ResizeMode.ResizeToContents)
+
+        category_delegate = CategoryDelegate()
         for col in range(len(get_music_categories())):
             self.horizontalHeader().setSectionResizeMode(CAT_COL + col, QHeaderView.ResizeMode.ResizeToContents)
+
+            self.setItemDelegateForColumn(CAT_COL + col, category_delegate)
 
         self.update_category_column_visibility()
         self.setSortingEnabled(True)
@@ -1671,8 +1685,8 @@ class MusicPlayer(QMainWindow):
         self.update_russel_heatmap(table_data)
 
     def update_russel_heatmap(self, table_data: list[Mp3Entry]):
-        valences = [file.categories[_(CAT_VALENCE)] for file in table_data]
-        arousal = [file.categories[_(CAT_AROUSAL)] for file in table_data]
+        valences = [file.get_category_value(CAT_VALENCE) for file in table_data]
+        arousal = [file.get_category_value(CAT_AROUSAL) for file in table_data]
         self.russel_widget.add_reference_points(valences, arousal)
 
     def table_tab_close(self, index: int):

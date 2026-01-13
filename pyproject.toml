@@ -21,7 +21,8 @@ dependencies = [
     "mutagen>=1.47.0",
     "PySide6_Essentials>=6.10.1",
     "shiboken6>=6.10.1",
-    "python-vlc>=3.0.21203"
+    "python-vlc>=3.0.21203",
+    "matplotlib>=3.10.8"
 ]
 
 [project.optional-dependencies]
