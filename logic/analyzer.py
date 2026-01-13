@@ -4,6 +4,7 @@ import random
 import sys
 import traceback
 import logging
+from abc import abstractmethod
 
 from queue import Queue
 from typing import Any, List
@@ -59,18 +60,99 @@ def tags_to_string(data: dict[str, str]):
 
     return "\n".join(lines)
 
-class ModelAnalyzer:
-    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
-        return
 
-class GeminiAnalyzer(ModelAnalyzer):
+class Analyzer(QObject):
+    error = Signal(object)
+    result = Signal(Path)
+    progress = Signal(str)
+
+    workerQueue = Queue()
+
+    @classmethod
+    def get_analyzer(cls):
+        model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL)
+
+        if model == "mock" or model is None:
+            return MockAnalyzer()
+        elif "gemini" in model:
+            return GeminiAnalyzer()
+        elif "gpt" in model:
+            return OpenAiAnalyzer()
+        else:
+            return None
+
+    def __init__(self):
+        super().__init__()
+
+        self.threadpool = QThreadPool(maxThreadCount=8)
+
+        self.result.connect(self._try_next_worker)
+        self.error.connect(self._try_next_worker)
+
+    def active_worker(self) -> int:
+        return self.threadpool.activeThreadCount()
+
+    @abstractmethod
+    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+        pass
+
+    def process(self, file_path: str | PathLike[str]) -> bool:
+        try:
+
+            logger.debug("Analyzing {0}", file_path)
+
+            if Path(file_path).is_dir():
+                return self.process_directory(file_path)
+            else:
+                return self._process_file(file_path)
+        except Exception as e:
+            traceback.print_exc()
+            logger.error("An error occurred while analyzing: {0}", e)
+            return False
+
+    def _process_file(self, file_path: PathLike[str]) -> bool:
+        worker = Worker(file_path, self)
+        worker.setAutoDelete(True)
+        return self._try_worker(worker)
+
+    def _try_worker(self, worker):
+        success = self.threadpool.tryStart(worker)
+        if success:
+            logger.debug("Success: {0}", success)
+            return True
+        else:
+            logger.info("Queue full waiting")
+            self.workerQueue.put(worker)
+            return False
+
+    def _try_next_worker(self):
+        try:
+            if not self.workerQueue.empty():
+                logger.info("Trying next worker")
+                worker = self.workerQueue.get_nowait()
+                return self._try_worker(worker)
+        except Exception as e:
+            traceback.print_exc()
+            logger.error("An error occurred while fetching next worker: {0}", e)
+            return False
+
+    def process_directory(self, directory_path: str | PathLike[str]) -> bool:
+        logger.debug("Processing {0}...", directory_path)
+        files = list_mp3s(directory_path)
+
+        result = False
+        # Parses all MP3 files in a given directory.
+        for filename in files:
+            file_path = Path(os.path.join(directory_path, filename))
+            result = self._process_file(file_path) or result
+        return result
+
+
+class GeminiAnalyzer(Analyzer):
 
     def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
         api_key: str = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
         model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL)
-
-        if "mock" == model:
-            return self.analyze_mp3_mock(file_path)
 
         if not api_key:
             logger.warning(_("API Key is missing"))
@@ -148,7 +230,7 @@ class GeminiAnalyzer(ModelAnalyzer):
             logger.error("Failed to analyze file: {0}",e.message)
         return None
 
-class MockAnalyzer(ModelAnalyzer):
+class MockAnalyzer(Analyzer):
 
     def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
         logger.debug("--- MOCK MODE: Simulating analysis for {0} ---", file_path)
@@ -180,7 +262,7 @@ class AnalysisResponse(BaseModel):
     categories: List[CategoryItem]
     tags: List[str]
 
-class OpenAiAnalyzer(ModelAnalyzer):
+class OpenAiAnalyzer(Analyzer):
 
     def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
 
@@ -233,93 +315,6 @@ class OpenAiAnalyzer(ModelAnalyzer):
         }
 
         return response
-
-
-class Analyzer(QObject):
-    error = Signal(object)
-    result = Signal(Path)
-    progress = Signal(str)
-
-    workerQueue = Queue()
-
-    def __init__(self):
-        super().__init__()
-
-        self.threadpool = QThreadPool(maxThreadCount=8)
-
-        self.result.connect(self._try_next_worker)
-        self.error.connect(self._try_next_worker)
-
-    def active_worker(self) -> int:
-        return self.threadpool.activeThreadCount()
-
-
-
-    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
-        return self.get_analyzer().analyze_mp3(file_path)
-
-    def get_analyzer(self) -> ModelAnalyzer | None:
-        model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL)
-
-        if model == "mock" or model is None:
-            return MockAnalyzer()
-        elif "gemini" in model:
-            return GeminiAnalyzer()
-        elif "gpt" in model:
-            return OpenAiAnalyzer()
-        else:
-            return None
-
-    def process(self, file_path: str | PathLike[str]) -> bool:
-        try:
-
-            logger.debug("Analyzing {0}", file_path)
-
-            if Path(file_path).is_dir():
-                return self.process_directory(file_path)
-            else:
-                return self._process_file(file_path)
-        except Exception as e:
-            traceback.print_exc()
-            logger.error("An error occurred while analyzing: {0}",e)
-            return False
-
-    def _process_file(self,file_path: PathLike[str]) -> bool:
-        worker = Worker(file_path, self)
-        worker.setAutoDelete(True)
-        return self._try_worker(worker)
-
-    def _try_worker(self, worker):
-        success = self.threadpool.tryStart(worker)
-        if success:
-            logger.debug("Success: {0}", success)
-            return True
-        else:
-            logger.info("Queue full waiting")
-            self.workerQueue.put(worker)
-            return False
-
-    def _try_next_worker(self):
-        try:
-            if not self.workerQueue.empty():
-                logger.info("Trying next worker")
-                worker = self.workerQueue.get_nowait()
-                return self._try_worker(worker)
-        except Exception as e:
-            traceback.print_exc()
-            logger.error("An error occurred while fetching next worker: {0}",e)
-            return False
-
-    def process_directory(self, directory_path: str | PathLike[str]) -> bool:
-        logger.debug("Processing {0}...",directory_path)
-        files = list_mp3s(directory_path)
-
-        result = False
-        # Parses all MP3 files in a given directory.
-        for filename in files:
-            file_path =Path(os.path.join(directory_path, filename))
-            result = self._process_file(file_path) or result
-        return result
 
 class Worker(QRunnable):
     analyzer: Analyzer

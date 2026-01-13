@@ -201,16 +201,18 @@ def get_gemini_models():
     if _AI_MODLES is None:
         try:
             audio_capable_families = ['gemini-4', 'gemini-3.5', 'gemini-3', 'gemini-2.5', 'gemini-1.5']
-            client = genai.Client(api_key=AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
-            _AI_MODLES = []
-            for model in client.models.list(config=ListModelsConfig(page_size=100, query_base=True)):
-                # Filter for models that support multimodal input (Audio/Video/Images)
-                if any(family in model.name for family in audio_capable_families):
-                    # We look for 'multimodal' or specific audio support in the description
-                    capabilities = "Audio/Multimodal" if "flash" in model.name or "pro" in model.name else "Text Only"
+            api_key = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
+            if api_key is not None and api_key != "":
+                client = genai.Client(api_key=AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
+                _AI_MODLES = []
+                for model in client.models.list(config=ListModelsConfig(page_size=100, query_base=True)):
+                    # Filter for models that support multimodal input (Audio/Video/Images)
+                    if any(family in model.name for family in audio_capable_families):
+                        # We look for 'multimodal' or specific audio support in the description
+                        capabilities = "Audio/Multimodal" if "flash" in model.name or "pro" in model.name else "Text Only"
 
-                    if capabilities == "Audio/Multimodal":
-                        _AI_MODLES.append(model.name.removeprefix("models/"))
+                        if capabilities == "Audio/Multimodal":
+                            _AI_MODLES.append(model.name.removeprefix("models/"))
 
         except Exception as e:
             logger.exception("Failed to list models: {0}",e)

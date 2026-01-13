@@ -1240,7 +1240,7 @@ class MusicPlayer(QMainWindow):
             logger.error("Failed to load custom settings: {0}",e)
 
         # Initialize Analyzer with settings
-        self.analyzer = Analyzer()
+        self.analyzer = Analyzer.get_analyzer()
 
         self.current_index = -1
         self.engine = AudioEngine()
@@ -1469,7 +1469,7 @@ class MusicPlayer(QMainWindow):
             # Update analyzer with new settings
             api_key = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
 
-            self.analyzer.api_key = api_key
+            self.analyzer = Analyzer.get_analyzer()
             self.update_sliders()
             self.update_tags_and_presets()
             if self.current_table() is not None:
@@ -1625,20 +1625,20 @@ class MusicPlayer(QMainWindow):
 
         main_layout.addWidget(self.table_tabs, 2)
 
-        self.status_bar = QStatusBar()
+        self.setStatusBar(QStatusBar())
         self.status_label = IconLabel(None, "")
         self.status_label.setContentsMargins(8, 0, 8, 0)
-        self.status_label.clicked.connect(lambda: self.status_bar.setVisible(False))
-        self.status_bar.addWidget(self.status_label, 1)
+        self.status_label.clicked.connect(lambda: self.statusBar().setVisible(False))
+        self.statusBar().addWidget(self.status_label, 1)
 
         self.status_progress = QProgressBar()
         self.status_progress.setContentsMargins(0, 0, 0, 0)
         self.status_progress.setRange(0, 0)
-        self.status_bar.addWidget(self.status_progress)
+        self.statusBar().addWidget(self.status_progress)
 
-        main_layout.addWidget(self.status_bar, 0)
+        #main_layout.addWidget(self.status_bar, 0)
 
-        self.status_bar.setVisible(False)
+        self.statusBar().setVisible(False)
 
         self.analyzer.progress.connect(self.update_status_label)
         self.analyzer.error.connect(self.update_status_label_error)
@@ -1652,14 +1652,14 @@ class MusicPlayer(QMainWindow):
 
     def hide_status_label(self):
         if self.analyzer.active_worker() == 0:
-            self.status_bar.setVisible(False)
+            self.statusBar().setVisible(False)
 
     def update_status_label_error(self, msg: str):
         self.update_status_label(msg,True)
 
     def update_status_label(self, msg: str, error:bool = False, progress:bool = True):
         if msg is not None:
-            self.status_bar.setVisible(True)
+            self.statusBar().setVisible(True)
             self.status_progress.setVisible(progress)
             self.status_label.set_text(str(msg))
 
