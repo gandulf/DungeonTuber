@@ -8,6 +8,9 @@
 
 **DungeonTuber** is a specialized music player designed for Role-Playing Game Masters, streamers, and storytellers who need the perfect atmosphere at their fingertips. Unlike standard players, DungeonTuber allows you to categorize and filter your music based on emotional weight, intensity, and genre-specific metadata.
 
+> [!Tip]
+>If you want to analyze a huge library of mp3s locally have a look at a side project [Voxalyzer](https://github.com/gandulf/Voxalyzer) where I'm playing around with a local ai model.
+> 
 ![Screenshot of application](docs/screen1.png)
 
 ---
