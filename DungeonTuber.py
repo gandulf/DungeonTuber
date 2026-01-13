@@ -112,6 +112,11 @@ class EditSongDialog(QDialog):
 
         layout.addRow("", self.favorite_edit)
 
+        file_name = QLabel(os.path.abspath(data.path))
+        file_name.setWordWrap(True)
+        file_name.setStyleSheet(f"font-size:{app_theme.font_size*0.8}px;")
+        layout.addRow(_("File")+":", file_name)
+
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
