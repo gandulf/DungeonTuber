@@ -3,6 +3,7 @@ import platform
 import vlc
 
 from PySide6.QtCore import QTimer, Signal, QObject, QSize
+from vlc import MediaListPlayer
 
 from components.visualizer import VisualizerFrame
 from config.settings import AppSettings, SettingKeys
@@ -22,20 +23,14 @@ class AudioEngine(QObject):
 
     video_frame : VisualizerFrame
 
-    def __init__(self):
+    list_player: vlc.MediaListPlayer = None
+    player: vlc.Media = None
+
+    def __init__(self, visualizer : bool = True):
         super().__init__()
 
-        vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
-        if vis == "VLC":
-            self.instance = vlc.Instance('--audio-visual=visual', '--effect-list=spectrum')  # Audio only
-        else:
-            self.instance = vlc.Instance('--no-video')  # Audio only
-
-        self.player = self.instance.media_player_new()
-
         self.current_volume = DEFAULT_VOLUME
-        self.player.audio_set_volume(self.current_volume)
-
+        self.init_vlc(visualizer)
         # Monitor VLC state
         self.monitor_timer = QTimer()
         self.monitor_timer.timeout.connect(self._check_status)
@@ -44,35 +39,49 @@ class AudioEngine(QObject):
         # Internal flags
         self._manual_stop = False
 
+    def init_vlc(self, visualizer : bool = True):
+        vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
+        if vis == "VLC" and visualizer:
+            self.instance = vlc.Instance('--aout=directsound', '--audio-visual=visual', '--effect-list=spectrum')  # Audio only
+        else:
+            self.instance = vlc.Instance('--aout=directsound','--no-video')  # Audio only
+        self.list_player = self.instance.media_list_player_new()
+        self.player = self.list_player.get_media_player()
+        self.player.audio_set_volume(self.current_volume)
+
     def load_media(self, file_path):
         media = self.instance.media_new(file_path)
         self.player.set_media(media)
 
+    def loop_media(self, file_path):
+        # 2. Create a Media List and add your song
+        media_list = self.instance.media_list_new()
+        media = self.instance.media_new(file_path)
+        media_list.add_media(media)
 
-    def attach_video_frame(self, video_frame: VisualizerFrame):
-        self.video_frame = video_frame
-        self.video_frame.resized.connect(self.resize_visualizer)
-        self.resize_visualizer(self.video_frame.size())
+        # 3. Create a Media List Player and associate the list
+        if self.list_player is None:
+            self.list_player = self.instance.media_list_player_new()
+        else:
+            self.list_player.stop()
+        self.list_player.set_media_list(media_list)
 
-        # The media player has to be 'connected' to the QFrame (otherwise the
-        # video would be displayed in it's own window). This is platform
-        # specific, so we must give the ID of the QFrame (or similar object) to
-        # vlc. Different platforms have different functions for this
-        if platform.system() == "Linux":  # for Linux using the X Server
-            self.player.set_xwindow(int(self.video_frame.winId()))
-        elif platform.system() == "Windows":  # for Windows
-            self.player.set_hwnd(int(self.video_frame.winId()))
-        elif platform.system() == "Darwin":  # for MacOS
-            self.player.set_nsobject(int(self.video_frame.winId()))
+        # 4. Set the playback mode to Loop (Repeat)
+        self.list_player.set_playback_mode(vlc.PlaybackMode.loop)
+        self.list_player.get_media_player().audio_set_volume(75)
+        # Start playing
+        self.list_player.play()
 
-    def resize_visualizer(self, size: QSize):
-        self.player.video_set_aspect_ratio(f"{size.width()}:{size.height()}")
+    def is_playing(self)->bool:
+        return self.player.is_playing()
 
-    def pause_toggle(self):
+    def pause_toggle(self)-> bool:
         if self.player.is_playing():
             self.pause()
+            return False
         else:
             self.play()
+            return True
 
     def pause(self):
         self.player.pause()

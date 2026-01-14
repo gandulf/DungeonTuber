@@ -1,3 +1,4 @@
+import platform
 import random
 import logging
 from os import PathLike
@@ -75,6 +76,24 @@ class VisualizerFrame(QFrame, Visualizer):
     def resizeEvent(self, event: QResizeEvent):
         self.resized.emit(event.size())
         super().resizeEvent(event)
+
+    def attach_video_frame(self):
+        self.resized.connect(self.resize_visualizer)
+        self.resize_visualizer(self.video_frame.size())
+
+        # The media player has to be 'connected' to the QFrame (otherwise the
+        # video would be displayed in it's own window). This is platform
+        # specific, so we must give the ID of the QFrame (or similar object) to
+        # vlc. Different platforms have different functions for this
+        if platform.system() == "Linux":  # for Linux using the X Server
+            self.engine.player.set_xwindow(int(self.video_frame.winId()))
+        elif platform.system() == "Windows":  # for Windows
+            self.engine.player.set_hwnd(int(self.video_frame.winId()))
+        elif platform.system() == "Darwin":  # for MacOS
+            self.engine.player.set_nsobject(int(self.video_frame.winId()))
+
+    def resize_visualizer(self, size: QSize):
+        self.engine.player.video_set_aspect_ratio(f"{size.width()}:{size.height()}")
 
 
 class EmptyVisualizerWidget(QWidget, Visualizer):

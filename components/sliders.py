@@ -650,17 +650,17 @@ class VolumeSlider(QHBoxLayout):
     def __init__(self, value: int = 70):
         super(VolumeSlider, self).__init__()
         self.btn_volume = QPushButton()
-        self.btn_volume.setFixedSize(QSize(48, 48))
-        self.btn_volume.setIconSize(QSize(20, 20))
+        self.btn_volume.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
+        self.btn_volume.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
         self.btn_volume.clicked.connect(self.toggle_mute)
         self._update_volume_icon(value)
-        self.addWidget(self.btn_volume)
+        self.addWidget(self.btn_volume,0)
 
         self.slider_vol = JumpSlider(Qt.Orientation.Horizontal)
         self.slider_vol.setRange(0, 100)
         self.slider_vol.setValue(value)
-        self.slider_vol.setFixedWidth(280)
-        self.slider_vol.setFixedHeight(48)
+        self.slider_vol.setMinimumWidth(280)
+        self.slider_vol.setFixedHeight(app_theme.button_size)
         self.slider_vol.max_glow_size = 2
         self.slider_vol.valueChanged.connect(self._on_value_changed)
         self.slider_vol.setStyle(VolumeSliderStyle())

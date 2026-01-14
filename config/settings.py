@@ -229,6 +229,7 @@ class SettingKeys(StrEnum):
 
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
+    EFFECTS_DIRECTORY ="effectsDirectory"
     LAST_DIRECTORY = "lastDirectory"
     FILTER_VISIBLE = "filterVisible"
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"

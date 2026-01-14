@@ -531,3 +531,6 @@ msgstr "ruhig"
 
 msgid "excited"
 msgstr "aufgeregt"
+
+msgid "Go to parent"
+msgstr "Aufwärts"

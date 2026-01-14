@@ -47,6 +47,14 @@ class AppTheme(QObject):
         return self._button_size
 
     @Property(int)
+    def icon_size_small(self):
+        return self._icon_size * 0.7
+
+    @Property(int)
+    def button_size_small(self):
+        return self._button_size *0.7
+
+    @Property(int)
     def font_size(self):
         return self._font_size
 

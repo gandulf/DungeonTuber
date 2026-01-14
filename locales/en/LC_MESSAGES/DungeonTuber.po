@@ -525,3 +525,6 @@ msgstr "calm"
 
 msgid "excited"
 msgstr "excited"
+
+msgid "Go to parent"
+msgstr "Go up"

@@ -526,3 +526,6 @@ msgstr "tranquilo"
 
 msgid "excited"
 msgstr "excitado"
+
+msgid "Go to parent"
+msgstr "Subir de nivel"
