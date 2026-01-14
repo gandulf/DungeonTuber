@@ -11,7 +11,6 @@ from packaging import version
 
 logger = logging.getLogger("main")
 
-
 def clear_layout(layout):
     while layout.count():
         child = layout.takeAt(0)
@@ -50,7 +49,7 @@ _latest_version : str | None = None
 
 def get_latest_version():
     global _latest_version
-    if _latest_version is None:
+    if _latest_version is None and is_frozen():
         url = f"https://api.github.com/repos/gandulf/DungeonTuber/releases/latest"
         try:
             response = requests.get(url)
@@ -118,3 +117,7 @@ def file_to_base64(file_path: str | PathLike[str]):
     except Exception as e:
         logger.exception("Error: {0}",e)
         return None
+
+def is_frozen():
+    # Returns True if running as a PyInstaller bundle
+    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')

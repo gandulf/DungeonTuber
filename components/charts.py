@@ -14,6 +14,7 @@ class RussellEmotionWidget(FigureCanvas):
     mousePressed = Signal()
     mouseReleased = Signal()
 
+    point = None
     def __init__(self):
         self.scatter = None
 
@@ -29,8 +30,7 @@ class RussellEmotionWidget(FigureCanvas):
         self.figure = Figure(figsize=(3, 3), constrained_layout=True)
         self.figure.get_layout_engine().set(w_pad=0, h_pad=0, hspace=0, wspace=0)
         self.ax = self.figure.add_subplot(1, 1, 1)
-        self.figure.set_facecolor("#2b2b2b")
-        self.ax.set_facecolor("#2b2b2b")
+
 
         super().__init__(self.figure)
 
@@ -48,39 +48,74 @@ class RussellEmotionWidget(FigureCanvas):
 
     def update_plot_theme(self, is_dark=True):
         # 1. Choose the base style
-        theme = 'dark_background' if is_dark else 'default'
 
+        if is_dark:
+            theme = 'dark_background'
+        else:
+            theme = 'default'
+
+        plt.style.use(theme)
         # 2. Apply the style parameters to the existing figure
-        with plt.style.context(theme):
-            # Update the figure and axes colors
+
+        # Update the figure and axes colors
+        if is_dark:
+            self.figure.set_facecolor("#2b2b2b")
+
+            plt.rcParams['lines.markerfacecolor'] = '#00FF00'  # Neon Green fill
+            plt.rcParams['lines.markeredgecolor'] = '#FFFFFF'  # White border
+            plt.rcParams['lines.markeredgewidth'] = 1.5  # Visible border
+
+            plt.rcParams['lines.color'] ="#555555"
+
+        else:
             self.figure.set_facecolor(plt.rcParams['figure.facecolor'])
 
-            for ax in self.figure.axes:
-                ax.set_facecolor(plt.rcParams['axes.facecolor'])
-                # Refresh tick and label colors
-                ax.tick_params(colors=plt.rcParams['xtick.color'])
-                ax.xaxis.label.set_color(plt.rcParams['xtick.color'])
-                ax.yaxis.label.set_color(plt.rcParams['ytick.color'])
-                for spine in ax.spines.values():
-                    spine.set_color(plt.rcParams['axes.edgecolor'])
+            plt.rcParams['lines.markerfacecolor'] = '#0000FF'  # Neon Green fill
+            plt.rcParams['lines.markeredgecolor'] = '#2b2b2b'  # black border
+            plt.rcParams['lines.markeredgewidth'] = 1.5  # Visible border
 
-                for text_obj in ax.texts:
-                    text_obj.set_color(plt.rcParams['xtick.color'])
+            plt.rcParams['lines.color'] = "#555555"
+
+        if self.point is not None:
+            self.point.set_markerfacecolor(plt.rcParams['lines.markerfacecolor'])
+            self.point.set_markeredgecolor(plt.rcParams['lines.markeredgecolor'])
+            self.point.set_markeredgewidth(plt.rcParams['lines.markeredgewidth'])
+        for ax in self.figure.axes:
+            if is_dark:
+                ax.set_facecolor("#2b2b2b")
+            else:
+                ax.set_facecolor(plt.rcParams['axes.facecolor'])
+            # Refresh tick and label colors
+            ax.tick_params(colors=plt.rcParams['xtick.color'])
+            ax.xaxis.label.set_color(plt.rcParams['xtick.color'])
+            ax.yaxis.label.set_color(plt.rcParams['ytick.color'])
+            for spine in ax.spines.values():
+                spine.set_color(plt.rcParams['axes.edgecolor'])
+
+            for lines in ax.get_xgridlines():
+                lines.set_color(plt.rcParams['lines.color'])
+            for lines in ax.get_ygridlines():
+                lines.set_color(plt.rcParams['lines.color'])
+            for lines in ax.lines:
+                lines.set_color(plt.rcParams['lines.color'])
+            for text_obj in ax.texts:
+                text_obj.set_color(plt.rcParams['xtick.color'])
+
+        # 2. Update existing scatter collection
+        # self.paths is the object returned by self.axes.scatter()
+        if hasattr(self, 'scatter') and self.scatter is not None:
+            self.scatter.set_facecolor(plt.rcParams['lines.markerfacecolor'])
+            self.scatter.set_edgecolor(plt.rcParams['lines.markeredgecolor'])
 
         # 3. CRITICAL: Redraw the canvas
-        self.draw()
+        self.draw_idle()
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.PaletteChange and self.ax and self.figure:
             if AppSettings.value(SettingKeys.THEME, "LIGHT", type=str) == "DARK":
                 self.update_plot_theme(True)
-                #self.figure.set_facecolor("#2b2b2b")
-                #self.ax.set_facecolor("#2b2b2b")
             else:
                 self.update_plot_theme(False)
-                #self.figure.set_facecolor("#FFFFFF")
-                #self.ax.set_facecolor("#FFFFFF")
-
 
     def clear_scatter(self):
         if self.scatter is not None:
@@ -95,8 +130,8 @@ class RussellEmotionWidget(FigureCanvas):
             arousal,
             s=20,
             alpha=0.2,
-            c="blue",
-            edgecolors="none",
+            c=plt.rcParams['lines.markerfacecolor'],
+            edgecolors=plt.rcParams['lines.markeredgecolor'],
             zorder=2,
         )
 
@@ -108,8 +143,8 @@ class RussellEmotionWidget(FigureCanvas):
         self.ax.set_ylim(0, 10)
 
         # Axes lines at center
-        self.ax.axhline(5, color="gray", linewidth=1, alpha=0.5)
-        self.ax.axvline(5, color="gray", linewidth=1, alpha=0.5)
+        self.ax.axhline(5, color=plt.rcParams['lines.color'], linewidth=1, alpha=0.5)
+        self.ax.axvline(5, color=plt.rcParams['lines.color'], linewidth=1, alpha=0.5)
 
         self.ax.set_xlabel(_("unpleasant")+" → "+_("pleasant"))
         self.ax.set_ylabel(_("calm")+" → "+_("excited"))
@@ -193,5 +228,3 @@ class RussellEmotionWidget(FigureCanvas):
         if notify:
             self.valueChanged.emit(self.valence, self.arousal)
         self.draw_idle()
-
-
