@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from os import PathLike
 
+from PySide6.QtCore import Property
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2
 
@@ -17,7 +18,7 @@ from config.utils import get_path, get_available_locales
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["name", "path", "title", "artist", "album", "summary", "length", "favorite", "categories", "tags","all_tags"]
+    __slots__ = ["name", "path", "title", "artist", "album", "summary", "length", "favorite", "categories", "tags","_all_tags"]
 
     name: str
     path: Path
@@ -30,7 +31,7 @@ class Mp3Entry(object):
 
     categories : dict[str,int]
     tags: list[str]
-    all_tags: None | set[str]
+    _all_tags: None | set[str]
 
     def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None):
         self.name = name
@@ -51,11 +52,11 @@ class Mp3Entry(object):
         else:
             self.tags = []
 
-        self.all_tags = None
+        self._all_tags = None
 
     def set_tags(self, tags: list[str]):
         self.tags = tags
-        self.all_tags = None
+        self._all_tags = None
 
     def _le(self, category, value) -> bool:
         return category in self.categories and self.get_category_value(category) <= value
@@ -70,18 +71,19 @@ class Mp3Entry(object):
         else:
             return None
 
-    def allTags(self):
-        if self.all_tags is None:
-            self.all_tags = set(self.tags)
+
+    def all_tags(self):
+        if self._all_tags is None:
+            self._all_tags = set(self.tags)
             if self._ge("Tempo",7) and self._ge("Spannung",7) and self._ge("Heroik",6):
-                self.all_tags.add("Kampf")
+                self._all_tags.add("Kampf")
 
             if self._le("Tempo",5) and self._le("Spannung",3) and self._le("Heroik",3) and self._le("Mystik",4):
-                self.all_tags.add("Reise")
+                self._all_tags.add("Reise")
 
-            self.all_tags = sorted(self.all_tags)
+            self._all_tags = sorted(self._all_tags)
 
-        return self.all_tags
+        return self._all_tags
 
 
 def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:

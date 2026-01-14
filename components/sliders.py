@@ -273,7 +273,7 @@ class CategoryWidget(QVBoxLayout):
     _block_signals = False
     _orig_value: int
 
-    def __init__(self, category: MusicCategory = None, parent=None, minValue=0, maxValue=10):
+    def __init__(self, category: MusicCategory = None, parent=None, min_value=0, max_value=10):
         super(CategoryWidget, self).__init__(parent)
 
         self.category = category
@@ -282,7 +282,7 @@ class CategoryWidget(QVBoxLayout):
         self.label.setToolTip(category.get_detailed_description())
 
         self.slider = JumpSlider(Qt.Orientation.Vertical)
-        self.slider.setRange(minValue, maxValue)
+        self.slider.setRange(min_value, max_value)
         self.slider.setTickPosition(QSlider.TickPosition.TicksBothSides)
         self.slider.setTickInterval(1)
         self.slider.setPageStep(1)
@@ -303,7 +303,7 @@ class CategoryWidget(QVBoxLayout):
         self.addWidget(self.val_label)
 
     def mouse_down(self, event: QMouseEvent):
-        self.refreshTooltip(True)
+        self.refresh_tooltip(True)
 
         self.blockSignals()
         self._orig_value = self.value()
@@ -328,7 +328,7 @@ class CategoryWidget(QVBoxLayout):
     def unblockSignals(self):
         self._block_signals = False
 
-    def refreshTooltip(self, show: bool = True):
+    def refresh_tooltip(self, show: bool = True):
         nearest_level = min(self.category.levels.keys(), key=lambda x: abs(int(x) - self.value()))
         text = self.category.levels.get(nearest_level, "")
         self.tooltip.setText(text)
@@ -343,7 +343,7 @@ class CategoryWidget(QVBoxLayout):
 
         if value:
             self.val_label.setText(str(value))
-            self.refreshTooltip(False)
+            self.refresh_tooltip(False)
         else:
             self.val_label.setText("")
             self.tooltip.setText("")
@@ -651,7 +651,7 @@ class VolumeSlider(QHBoxLayout):
         self.btn_volume.setFixedSize(QSize(48, 48))
         self.btn_volume.setIconSize(QSize(20, 20))
         self.btn_volume.clicked.connect(self.toggle_mute)
-        self.update_volume_icon(value)
+        self._update_volume_icon(value)
         self.addWidget(self.btn_volume)
 
         self.slider_vol = JumpSlider(Qt.Orientation.Horizontal)
@@ -660,16 +660,22 @@ class VolumeSlider(QHBoxLayout):
         self.slider_vol.setFixedWidth(280)
         self.slider_vol.setFixedHeight(48)
         self.slider_vol.max_glow_size = 2
-        self.slider_vol.valueChanged.connect(self.adjust_volume)
+        self.slider_vol.valueChanged.connect(self._on_value_changed)
         self.slider_vol.setStyle(VolumeSliderStyle())
         self.slider_vol.setSingleStep(5)
         self.addWidget(self.slider_vol, 1)
 
+    @Property(int, notify=volume_changed)
     def volume(self):
         return self.slider_vol.value()
 
-    def adjust_volume(self, value):
-        self.update_volume_icon(value)
+    @volume.setter
+    def volume(self, value):
+        self.slider_vol.setValue(value)
+        self._update_volume_icon(value)
+
+    def _on_value_changed(self, value):
+        self._update_volume_icon(value)
         self.volume_changed.emit(value)
 
     def set_button_size(self, button_size):
@@ -677,10 +683,6 @@ class VolumeSlider(QHBoxLayout):
 
     def set_icon_size(self, icon_size):
         self.btn_volume.setIconSize(icon_size)
-
-    def set_value(self, value):
-        self.slider_vol.setValue(value)
-        self.update_volume_icon(value)
 
     def toggle_mute(self):
         if self.slider_vol.value() > 0:
@@ -691,7 +693,7 @@ class VolumeSlider(QHBoxLayout):
 
         self.volume_changed.emit(self.slider_vol.value())
 
-    def update_volume_icon(self, volume):
+    def _update_volume_icon(self, volume):
         if volume == 0:
             self.btn_volume.setIcon(self.icon_volume_off)
         elif volume < 50:

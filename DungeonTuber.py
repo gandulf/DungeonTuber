@@ -189,8 +189,8 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
 
 
 
-        green_tags = [x for x in data.allTags() if x in selected_tags]
-        red_tags = [x for x in data.allTags() if x not in selected_tags]
+        green_tags = [x for x in data.all_tags() if x in selected_tags]
+        red_tags = [x for x in data.all_tags() if x not in selected_tags]
 
         for tag in green_tags + red_tags:
 
@@ -448,7 +448,7 @@ def _calculate_score(_slider_values: dict[str,int], data: Mp3Entry, tags: list[s
             score = 0
 
         if data.tags is not None:
-            if desired_tag not in data.allTags():
+            if desired_tag not in data.all_tags():
                 score += 100
         else:
             score += 100
@@ -1002,9 +1002,8 @@ class Player(QWidget):
         self.controls_layout.addWidget(self.btn_next)
         self.controls_layout.addSpacing(12)
 
-        self.visualizer = Visualizer(self.engine)
-        self.visualizer_widget = self.visualizer.setup()
-        self.controls_layout.addWidget(self.visualizer_widget, 1)
+        self.visualizer = Visualizer.get_visualizer(self.engine)
+        self.controls_layout.addWidget(self.visualizer, 1)
 
         # controls_layout.addWidget(self.visualizer, 1)
         self.controls_layout.addSpacing(12)
@@ -1015,13 +1014,13 @@ class Player(QWidget):
 
         player_layout.addWidget(controls_widget)
 
-        self.adjust_volume(self.slider_vol.volume())
+        self.adjust_volume(self.slider_vol.volume)
 
     def refresh_visualizer(self):
-        index = self.controls_layout.indexOf(self.visualizer_widget)
+        index = self.controls_layout.indexOf(self.visualizer)
         self.controls_layout.takeAt(index).widget().setParent(None)
-        self.visualizer_widget = self.visualizer.refresh()
-        self.controls_layout.insertWidget(index, self.visualizer_widget)
+        self.visualizer = Visualizer.get_visualizer(self.engine, self.visualizer)
+        self.controls_layout.insertWidget(index, self.visualizer)
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.ApplicationFontChange:
@@ -1087,7 +1086,7 @@ class Player(QWidget):
                 self._update_progress_ticks = False
 
     def on_playback_state_changed(self, is_playing):
-        self.visualizer.set_state(is_playing, self.slider_vol.volume())
+        self.visualizer.set_state(is_playing, self.slider_vol.volume)
 
     def on_track_finished(self):
         repeatMode = self.btn_repeat.repeat_mode()
@@ -1152,7 +1151,7 @@ class Player(QWidget):
             try:
                 self.engine.load_media(track_path)
                 self.visualizer.load_mp3(track_path)
-                self.visualizer.set_state(True, self.slider_vol.volume())
+                self.visualizer.set_state(True, self.slider_vol.volume)
                 self.track_label.setText(Path(track_path).name)
 
                 # Reset progress on new track
@@ -1754,8 +1753,8 @@ class MusicPlayer(QMainWindow):
 
         for i, cat in enumerate(visible_categories):
 
-            cat_slider = CategoryWidget(category=cat, minValue=CATEGORY_MIN - 1 if CATEGORY_MIN == 1 else CATEGORY_MIN,
-                                        maxValue=CATEGORY_MAX)
+            cat_slider = CategoryWidget(category=cat, min_value=CATEGORY_MIN - 1 if CATEGORY_MIN == 1 else CATEGORY_MIN,
+                                        max_value=CATEGORY_MAX)
             cat_slider.valueChanged.connect(self.update_category_values)
 
             self.sliders[cat] = cat_slider
