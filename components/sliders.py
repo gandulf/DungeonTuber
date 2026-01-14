@@ -354,6 +354,8 @@ class CategoryWidget(QVBoxLayout):
             _original_block_signals: bool = self._block_signals
             self._block_signals = True
 
+        value = value if value is not None else 0
+
         self.slider.setValue(value)
 
         if not signal:

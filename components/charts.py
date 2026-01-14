@@ -1,52 +1,92 @@
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal, Qt, QEvent
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
+
+from config.settings import AppSettings, SettingKeys
 
 
-class RussellEmotionWidget(QWidget):
+class RussellEmotionWidget(FigureCanvas):
+
     valueChanged = Signal(float, float)  # valence, arousal
     mousePressed = Signal()
     mouseReleased = Signal()
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setContentsMargins(0,0,0,0)
+    def __init__(self):
         self.scatter = None
 
         self.valence = 5.0
         self.arousal = 5.0
         self.mouse_down = False
 
+        # Apply globally
+        if AppSettings.value(SettingKeys.THEME,"LIGHT", type=str) == "DARK":
+            plt.style.use('dark_background')
+
         # Matplotlib figure
         self.figure = Figure(figsize=(3, 3), constrained_layout=True)
-        self.figure.get_layout_engine().set(w_pad=0, h_pad=0, hspace=0,
-                                    wspace=0)
-        self.canvas = FigureCanvas(self.figure)
-        self.ax = self.figure.add_subplot(1,1,1)
+        self.figure.get_layout_engine().set(w_pad=0, h_pad=0, hspace=0, wspace=0)
+        self.ax = self.figure.add_subplot(1, 1, 1)
+        self.figure.set_facecolor("#2b2b2b")
+        self.ax.set_facecolor("#2b2b2b")
+
+        super().__init__(self.figure)
+
         self._draw_base()
 
         # Red point
         self.point, = self.ax.plot([self.valence], [self.arousal], "ro", markersize=8)
 
         # Mouse events
-        self.canvas.mpl_connect("button_press_event", self._on_press)
-        self.canvas.mpl_connect("motion_notify_event", self._on_motion)
-        self.canvas.mpl_connect("button_release_event", self._on_release)
-
-        # Layout
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.canvas)
-
+        self.mpl_connect("button_press_event", self._on_press)
+        self.mpl_connect("motion_notify_event", self._on_motion)
+        self.mpl_connect("button_release_event", self._on_release)
 
     # ---------------- Drawing ---------------- #
+
+    def update_plot_theme(self, is_dark=True):
+        # 1. Choose the base style
+        theme = 'dark_background' if is_dark else 'default'
+
+        # 2. Apply the style parameters to the existing figure
+        with plt.style.context(theme):
+            # Update the figure and axes colors
+            self.figure.set_facecolor(plt.rcParams['figure.facecolor'])
+
+            for ax in self.figure.axes:
+                ax.set_facecolor(plt.rcParams['axes.facecolor'])
+                # Refresh tick and label colors
+                ax.tick_params(colors=plt.rcParams['xtick.color'])
+                ax.xaxis.label.set_color(plt.rcParams['xtick.color'])
+                ax.yaxis.label.set_color(plt.rcParams['ytick.color'])
+                for spine in ax.spines.values():
+                    spine.set_color(plt.rcParams['axes.edgecolor'])
+
+                for text_obj in ax.texts:
+                    text_obj.set_color(plt.rcParams['xtick.color'])
+
+        # 3. CRITICAL: Redraw the canvas
+        self.draw()
+
+    def changeEvent(self, event, /):
+        if event.type() == QEvent.Type.PaletteChange and self.ax and self.figure:
+            if AppSettings.value(SettingKeys.THEME, "LIGHT", type=str) == "DARK":
+                self.update_plot_theme(True)
+                #self.figure.set_facecolor("#2b2b2b")
+                #self.ax.set_facecolor("#2b2b2b")
+            else:
+                self.update_plot_theme(False)
+                #self.figure.set_facecolor("#FFFFFF")
+                #self.ax.set_facecolor("#FFFFFF")
+
 
     def clear_scatter(self):
         if self.scatter is not None:
             self.scatter.remove()
             self.scatter = None
-        self.canvas.draw_idle()
+        self.draw_idle()
 
     def add_reference_points(self, valences: list, arousal: list):
         self.clear_scatter()
@@ -60,7 +100,7 @@ class RussellEmotionWidget(QWidget):
             zorder=2,
         )
 
-        self.canvas.draw_idle()
+        self.draw_idle()
 
     def _draw_base(self):
         self.ax.clear()
@@ -139,18 +179,19 @@ class RussellEmotionWidget(QWidget):
         self.point.set_data([self.valence], [self.arousal])
 
         self.valueChanged.emit(self.valence, self.arousal)
-        self.canvas.draw_idle()
+        self.draw_idle()
 
     def get_value(self):
         return self.valence, self.arousal
 
-    def set_value(self, valence: float, arousal: float):
+    def set_value(self, valence: float, arousal: float, notify:bool=True):
         self.valence = valence
         self.arousal = arousal
 
         self.point.set_data([self.valence], [self.arousal])
 
-        self.valueChanged.emit(self.valence, self.arousal)
-        self.canvas.draw_idle()
+        if notify:
+            self.valueChanged.emit(self.valence, self.arousal)
+        self.draw_idle()
 
 

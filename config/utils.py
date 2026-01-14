@@ -11,6 +11,13 @@ from packaging import version
 
 logger = logging.getLogger("main")
 
+
+def clear_layout(layout):
+    while layout.count():
+        child = layout.takeAt(0)
+        if child.widget():
+            child.widget().deleteLater()
+
 def get_path(path:str):
     if getattr(sys, 'frozen', False):
         # Running as compiled executable

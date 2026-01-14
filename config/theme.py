@@ -1,3 +1,5 @@
+import string
+
 from PySide6.QtCore import QObject, Property, Qt
 from PySide6.QtGui import QColor, QPalette, QBrush, QGradient
 from PySide6.QtWidgets import QApplication
@@ -23,6 +25,9 @@ class AppTheme(QObject):
     _red = QColor("#FB4141")
 
     application: QApplication
+
+    _color_cache : dict[string,QColor] = {}
+    _brush_cache : dict[string,QBrush] = {}
 
     def __init__(self):
         super().__init__()
@@ -70,17 +75,26 @@ class AppTheme(QObject):
     def is_light(self):
         return self.theme() == "LIGHT"
 
+    def get_green_brush(self, alpha: int = None):
+        return self._brush_cache.setdefault(f"green{alpha}", self.get_green(alpha))
+    def get_red_brush(self, alpha: int = None):
+        return self._brush_cache.setdefault(f"red{alpha}", self.get_red(alpha))
+    def get_yellow_brush(self, alpha: int = None):
+        return self._brush_cache.setdefault(f"yellow{alpha}", self.get_yellow(alpha))
+    def get_orange_brush(self, alpha: int = None):
+        return self._brush_cache.setdefault(f"orange{alpha}", self.get_orange(alpha))
+
     def get_green(self, alpha: int = None):
-        return _alpha(self._green if self.is_light() else self._green.darker(170), alpha)
+        return self._color_cache.setdefault(f"green{alpha}", _alpha(self._green if self.is_light() else self._green.darker(170), alpha))
 
     def get_red(self, alpha: int = None):
-        return _alpha(self._red if self.is_light() else self._red.darker(170), alpha)
+        return self._color_cache.setdefault(f"red{alpha}", _alpha(self._red if self.is_light() else self._red.darker(170), alpha))
 
     def get_orange(self, alpha: int = None):
-        return _alpha(self._orange if self.is_light() else self._orange.darker(170), alpha)
+        return self._color_cache.setdefault(f"orange{alpha}", _alpha(self._orange if self.is_light() else self._orange.darker(170), alpha))
 
     def get_yellow(self, alpha: int = None):
-        return _alpha(self._yellow if self.is_light() else self._yellow.darker(170), alpha)
+        return self._color_cache.setdefault(f"yellow{alpha}", _alpha(self._yellow if self.is_light() else self._yellow.darker(170), alpha))
 
     def get_dark_mode_palette(self) -> QPalette:
         if self.dark_palette is None:
@@ -149,6 +163,8 @@ class AppTheme(QObject):
 
     def set_theme(self, theme: str):
         AppSettings.setValue(SettingKeys.THEME, theme)
+        self._color_cache.clear()
+        self._brush_cache.clear()
         self.apply_stylesheet()
 
     def theme(self):
