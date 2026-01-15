@@ -1,6 +1,6 @@
 import math
 
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem
 from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect, Signal
 from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent
 
@@ -64,9 +64,9 @@ class IconLabel(QWidget):
     def __init__(self, icon: QIcon, text, final_stretch=True):
         super(IconLabel, self).__init__()
 
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(layout)
+        self.layout = QHBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.layout)
 
         self.icon_label = QLabel()
         if icon is not None:
@@ -75,15 +75,27 @@ class IconLabel(QWidget):
         else:
             self.icon_label.setVisible(False)
 
-        layout.addWidget(self.icon_label)
-        layout.addSpacing(self.horizontal_spacing)
+        self.layout.addWidget(self.icon_label)
+        self.layout.addSpacing(self.horizontal_spacing)
 
         self.text_label = QLabel(text)
         self.text_label.setOpenExternalLinks(True)
-        layout.addWidget(self.text_label)
+        self.layout.addWidget(self.text_label)
 
         if final_stretch:
-            layout.addStretch()
+            self.layout.addStretch()
+
+    def set_alignment(self, alignment: Qt.AlignmentFlag):
+        self.text_label.setAlignment(alignment)
+
+        if alignment == Qt.AlignmentFlag.AlignCenter:
+            if not isinstance(self.layout.itemAt(0), QSpacerItem):
+                self.layout.insertStretch(0)
+        elif isinstance(self.layout.itemAt(0), QSpacerItem):
+            spacer = self.layout.takeAt(0)
+
+    def set_style_sheet(self, str):
+        self.text_label.setStyleSheet(str)
 
     def set_text(self, text:str):
         self.text_label.setText(text)

@@ -230,6 +230,7 @@ class SettingKeys(StrEnum):
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
     EFFECTS_DIRECTORY ="effectsDirectory"
+    EFFECTS_TREE = "effectsTree"
     LAST_DIRECTORY = "lastDirectory"
     FILTER_VISIBLE = "filterVisible"
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
@@ -244,6 +245,7 @@ class SettingKeys(StrEnum):
 
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
     COLUMN_FAVORITE_VISIBLE = "columnFavoriteVisible"
+    COLUMN_SCORE_VISIBLE = "columnScoreVisible"
     COLUMN_TITLE_VISIBLE = "columnTitleVisible"
     COLUMN_ALBUM_VISIBLE = "columnAlbumVisible"
     COLUMN_ARTIST_VISIBLE = "columnArtistVisible"

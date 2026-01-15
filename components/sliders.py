@@ -659,7 +659,7 @@ class VolumeSlider(QHBoxLayout):
         self.slider_vol = JumpSlider(Qt.Orientation.Horizontal)
         self.slider_vol.setRange(0, 100)
         self.slider_vol.setValue(value)
-        self.slider_vol.setMinimumWidth(280)
+        self.slider_vol.setMinimumWidth(100)
         self.slider_vol.setFixedHeight(app_theme.button_size)
         self.slider_vol.max_glow_size = 2
         self.slider_vol.valueChanged.connect(self._on_value_changed)
@@ -680,10 +680,10 @@ class VolumeSlider(QHBoxLayout):
         self._update_volume_icon(value)
         self.volume_changed.emit(value)
 
-    def set_button_size(self, button_size):
+    def set_button_size(self, button_size: QSize):
         self.btn_volume.setFixedSize(button_size)
 
-    def set_icon_size(self, icon_size):
+    def set_icon_size(self, icon_size: QSize):
         self.btn_volume.setIconSize(icon_size)
 
     def toggle_mute(self):

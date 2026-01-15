@@ -527,5 +527,11 @@ msgstr "tranquilo"
 msgid "excited"
 msgstr "excitado"
 
+msgid "Effects"
+msgstr "Efectos"
+
 msgid "Go to parent"
 msgstr "Subir de nivel"
+
+msgid "Refresh"
+msgstr "Refrescar"

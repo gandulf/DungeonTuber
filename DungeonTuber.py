@@ -44,7 +44,8 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel,
     QFileDialog, QMessageBox, QAbstractItemView, QMenu, QDialog, QFormLayout, QLineEdit, QCheckBox,
     QDialogButtonBox, QTextEdit, QStatusBar, QProgressBar, QHeaderView, QTableView, QStyleOptionViewItem,
-    QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QStyle, QSlider, QListWidget, QListWidgetItem
+    QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QStyle, QSlider, QListWidget, QListWidgetItem,
+    QListView, QStyleOption
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
     QPersistentModelIndex, QFileInfo, QEvent, QRect
@@ -309,8 +310,7 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
 
         painter.setFont(title_font)
 
-        title = data.title if AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False,
-                                                type=bool) else data.name.removesuffix(".mp3").removesuffix(".MP3")
+        title = data.title if AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False, type=bool) else data.name
         painter.drawText(title_rect, title)
 
         if data.summary and AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
@@ -507,42 +507,124 @@ class TableModel(QAbstractTableModel):
 class EffectList(QWidget):
     open_item: QPushButton = None
 
-    def __init__(self):
+    last_item: QListWidgetItem = None
+
+    icon_size = QSize(16, 16)
+
+    class GridDelegate(QStyledItemDelegate):
+
+        top_padding = 8
+
+        view_mode: QListView.ViewMode
+
+
+        def __init__(self, view_mode: QListView = QListView.ViewMode.ListMode, parent: QWidget = None):
+            super().__init__(parent)
+
+            self.view_mode = view_mode
+
+        def initStyleOption(self, option, index):
+            super().initStyleOption(option, index)
+            # Remove the 'HasCheckIndicator' feature so Qt doesn't draw the box
+            option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+
+        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+
+            # 1. Retrieve the check state from the model/item
+            # Qt.CheckStateRole returns 0 (Unchecked), 1 (Partially), or 2 (Checked)
+            check_state = index.data(Qt.ItemDataRole.CheckStateRole)
+
+            # Shift the entire drawing rectangle down by 'top_padding'
+            # This creates a margin at the top of the item
+
+            if check_state == Qt.CheckState.Checked:
+                # Change background for checked items
+                painter.save()
+                painter.setBrush(app_theme.get_green_brush(50))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawRect(option.rect.adjusted(1,1,-1,-1))
+                painter.restore()
+
+                # Make text bold for checked items
+                option.font.setBold(True)
+
+            if self.view_mode == QListView.ViewMode.IconMode:
+                option.rect.setTop(option.rect.top() + self.top_padding)
+
+            super().paint(painter, option, index)
+
+        def sizeHint(self, option, index):
+            # IMPORTANT: You must increase the size hint,
+            # otherwise the bottom of your text will be cut off!
+            size = super().sizeHint(option, index)
+            size.setHeight(size.height() + self.top_padding)
+            return size
+
+    def __init__(self, listMode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__()
 
+        effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
+
+        self._icon_pause = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause).pixmap(QSize(16, 16))
+        self._icon_play = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart).pixmap(QSize(16, 16))
+
         self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0,0,0,0)
 
         self.engine = AudioEngine(False)
 
         self.list_widget = QListWidget()
+        self.list_widget.setItemDelegate(EffectList.GridDelegate())
+
+        self.list_widget.setViewMode(listMode)
+
+        if self.list_widget.viewMode() == QListView.ViewMode.IconMode:
+            # 2. Set the flow to LeftToRight (items fill the row first)
+            self.list_widget.setFlow(QListView.Flow.LeftToRight)
+            # 3. Prevent items from being moved around by the user
+            self.list_widget.setMovement(QListView.Movement.Static)
+            # 4. Make items wrap to the next line
+            self.list_widget.setResizeMode(QListView.ResizeMode.Adjust)
 
         player_layout = QHBoxLayout()
         player_layout.setContentsMargins(0,0,0,0)
+        player_layout.setSpacing(0)
 
         self.btn_play = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart), "")
         self.btn_play.clicked.connect(self.toogle_play)
-        self.btn_play.setFixedSize(QSize(app_theme.button_size_small, app_theme.button_size_small))
-        self.btn_play.setIconSize(QSize(app_theme.icon_size_small, app_theme.icon_size_small))
+        self.btn_play.setFixedSize(app_theme.button_size_small)
+        self.btn_play.setIconSize(app_theme.icon_size_small)
 
         self.volume_slider = VolumeSlider()
-        self.volume_slider.volume_changed.connect(self.on_volumne_changed)
-        self.volume_slider.set_button_size(QSize(app_theme.button_size_small, app_theme.button_size_small))
-        self.volume_slider.set_icon_size(QSize(app_theme.icon_size_small, app_theme.icon_size_small))
-        self.volume_slider.slider_vol.setFixedHeight(app_theme.button_size_small)
+        self.volume_slider.volume_changed.connect(self.on_volume_changed)
+        self.volume_slider.set_button_size(app_theme.button_size_small)
+        self.volume_slider.set_icon_size(app_theme.icon_size_small)
+        self.volume_slider.slider_vol.setFixedHeight(app_theme.button_height_small)
         player_layout.addWidget(self.btn_play, 0)
         player_layout.addLayout(self.volume_slider,1)
 
-        open_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), text="Open Effects Directory", parent=self)
+        open_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), text=_("Open Directory"), parent=self)
         open_dir.triggered.connect(self.pick_effects_directory)
         self.addAction(open_dir)
+
+        self.refresh_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), text=_("Refresh"), parent=self)
+        self.refresh_dir.triggered.connect(self.refresh_directory)
+        self.refresh_dir.setVisible(effects_dir is not None)
+        self.addAction(self.refresh_dir)
+
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
 
-        self.layout.addWidget(QLabel("Effects"))
-        effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
+        headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical), "Effects")
+        headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
+        headerLabel.setStyleSheet(f"font-size: {app_theme.font_size}px; font-weight: bold;")
+        headerLabel.setFixedHeight(app_theme.button_height_small)
+        self.layout.addWidget(headerLabel, 0)
+
+
         if effects_dir is None or effects_dir == '':
-            self.open_item = QPushButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentOpen), text="Open Directory")
+            self.open_item = QPushButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentOpen), text=_("Open Directory"))
             self.open_item.clicked.connect(self.pick_effects_directory)
             self.layout.addWidget(self.open_item, 0)
         else:
@@ -551,41 +633,67 @@ class EffectList(QWidget):
         self.layout.addLayout(player_layout, 0)
         self.layout.addWidget(self.list_widget, 1)
 
+        self.calculate_grid_size()
+
+    def calculate_grid_size(self):
+        if self.list_widget.viewMode() == QListView.ViewMode.IconMode:
+            if self.list_widget.width() < 250:
+                new_width = self.list_widget.width() - 10
+            else:
+                new_width = (self.list_widget.width() // 2) - 10
+            self.list_widget.setGridSize(QSize(new_width, 50))
+            self.list_widget.setIconSize(QSize(new_width-30, 50))  # Large covers
+            self.list_widget.setSpacing(10)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Calculate width for 2 columns (minus scrollbar width)
+        self.calculate_grid_size()
+
     def toogle_play(self):
         if self.engine.pause_toggle():
             self.btn_play.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause))
         else:
             self.btn_play.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
 
-    def on_volumne_changed(self, volume: int = 70):
+    def on_volume_changed(self, volume: int = 70):
         self.engine.set_user_volume(volume)
 
     def on_item_double_clicked(self, widget: QListWidgetItem):
         if isinstance(widget.data(Qt.ItemDataRole.UserRole), Mp3Entry):
             self.play_effect(widget.data(Qt.ItemDataRole.UserRole))
 
-    def play_effect(self, effect: Mp3Entry):
-        print("playing" + effect.name)
+            if self.last_item is not None:
+                self.last_item.setData(Qt.ItemDataRole.CheckStateRole, Qt.CheckState.Unchecked)
+            widget.setData(Qt.ItemDataRole.CheckStateRole, Qt.CheckState.Checked)
+            self.last_item = widget
 
+    def play_effect(self, effect: Mp3Entry):
         self.engine.loop_media(effect.path)
         self.btn_play.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause))
+
+    def refresh_directory(self):
+        effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
+        self.load_directory(effects_dir)
 
     def load_directory(self, dir_path):
         if self.open_item is not None:
             self.layout.removeWidget(self.open_item)
+            self.open_item.setParent(None)
 
         effects = list_mp3s(dir_path)
 
         self.list_widget.clear()
         for effect in effects:
             effect_path = os.path.join(dir_path, effect)
-            effect_mp3 = parse_mp3(effect_path)
+            effect_mp3 = parse_mp3(effect_path, load_cover=self.list_widget.viewMode() == QListView.ViewMode.IconMode)
 
             effect_item = QListWidgetItem()
+            effect_item.setFlags(effect_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             effect_item.setText(effect_mp3.name)
-            effect_item.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
             effect_item.setData(Qt.ItemDataRole.UserRole, effect_mp3)
-            effect_item.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MultimediaPlayer))
+            if effect_mp3.cover is not None:
+                effect_item.setIcon(effect_mp3.cover)
 
             self.list_widget.addItem(effect_item)
 
@@ -594,6 +702,7 @@ class EffectList(QWidget):
                                                      dir=AppSettings.value(SettingKeys.EFFECTS_DIRECTORY))
         if directory:
             AppSettings.setValue(SettingKeys.EFFECTS_DIRECTORY, directory)
+            self.refresh_dir.setVisible(True)
             self.load_directory(directory)
 
 
@@ -603,6 +712,7 @@ class DirectoryTree(QTreeView):
     def __init__(self, player):
         super().__init__()
         self.player = player
+        self.setMinimumWidth(150)
         self.directory_model = QFileSystemModel()
         self.directory_model.setReadOnly(True)
         self.directory_model.setIconProvider(QtWidgets.QFileIconProvider())
@@ -749,6 +859,7 @@ class SongTable(QTableView):
 
         self.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self.show_header_context_menu)
+        self.horizontalHeader().setStretchLastSection(True)
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
@@ -777,6 +888,13 @@ class SongTable(QTableView):
         title_action.triggered.connect(
             lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_TITLE_VISIBLE, checked))
         menu.addAction(title_action)
+
+        score_action = QAction(_("Score"), self)
+        score_action.setCheckable(True)
+        score_action.setChecked(AppSettings.value(SettingKeys.COLUMN_SCORE_VISIBLE, True, type=bool))
+        score_action.triggered.connect(
+            lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_SCORE_VISIBLE, checked))
+        menu.addAction(score_action)
 
         # Artist
         artist_action = QAction(_("Artist"), self)
@@ -892,8 +1010,11 @@ class SongTable(QTableView):
     def update_category_column_visibility(self):
         self.setColumnHidden(TableModel.FAV_COL, not AppSettings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
         self.setColumnHidden(TableModel.TITLE_COL, not AppSettings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
+        self.setColumnHidden(TableModel.SCORE_COL, not AppSettings.value(SettingKeys.COLUMN_SCORE_VISIBLE, True, type=bool))
         self.setColumnHidden(TableModel.ARTIST_COL, not AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
         self.setColumnHidden(TableModel.ALBUM_COL, not AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
+
+
 
         for col, category in enumerate(get_music_categories()):
             self.setColumnHidden(TableModel.CAT_COL + col, not self.is_column_visible(category.name))
@@ -921,6 +1042,9 @@ class SongTable(QTableView):
 
     def rowCount(self) -> int:
         return 0 if self.model() is None else self.model().rowCount()
+
+    def columnCount(self) -> int:
+        return 0 if self.model() is None else self.model().columnCount()
 
     def analyze_files(self):
         for model_index in self.selectionModel().selectedRows():
@@ -1106,6 +1230,7 @@ class Player(QWidget):
         self.slider_vol = VolumeSlider(AppSettings.value(SettingKeys.VOLUME, 70, type=int))
         self.slider_vol.set_button_size(QSize(app_theme.button_size, app_theme.button_size))
         self.slider_vol.set_icon_size(QSize(app_theme.icon_size, app_theme.icon_size))
+        self.slider_vol.slider_vol.setMinimumWidth(200)
 
         self.slider_vol.volume_changed.connect(self.adjust_volume)
         self.volume_changed = self.slider_vol.volume_changed
@@ -1116,16 +1241,16 @@ class Player(QWidget):
         self.controls_layout.addSpacing(12)
 
         self.visualizer = Visualizer.get_visualizer(self.engine)
-        self.controls_layout.addWidget(self.visualizer, 1)
+        self.controls_layout.addWidget(self.visualizer, 2)
 
         # controls_layout.addWidget(self.visualizer, 1)
         self.controls_layout.addSpacing(12)
-        self.controls_layout.addLayout(self.slider_vol)
+        self.controls_layout.addLayout(self.slider_vol,1)
         self.controls_layout.addWidget(self.btn_repeat)
         self.setBackgroundRole(QPalette.ColorRole.Midlight)
         self.setAutoFillBackground(True)
 
-        player_layout.addWidget(controls_widget)
+        player_layout.addWidget(controls_widget,1)
 
         self.adjust_volume(self.slider_vol.volume)
 
@@ -1492,6 +1617,8 @@ class FilterWidget(QWidget):
         self.presets_layout.addStretch()
         for preset in get_presets():
             button = QPushButton(preset.name, self)
+            button.setFixedHeight(app_theme.button_height_small)
+            button.setIconSize(app_theme.icon_size_small)
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
             remove_preset = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Remove"), self)
@@ -1508,10 +1635,14 @@ class FilterWidget(QWidget):
 
         save_preset = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs), "")
         save_preset.clicked.connect(self.save_preset_action)
+        save_preset.setFixedSize(app_theme.button_size_small)
+        save_preset.setIconSize(app_theme.icon_size_small)
         self.presets_layout.addWidget(save_preset)
 
         clear_preset = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.EditClear), "")
         clear_preset.clicked.connect(self.clear_sliders)
+        clear_preset.setFixedSize(app_theme.button_size_small)
+        clear_preset.setIconSize(app_theme.icon_size_small)
         self.presets_layout.addWidget(clear_preset)
 
     def clear_sliders(self):
@@ -1720,6 +1851,12 @@ class MusicPlayer(QMainWindow):
         self.dir_tree_action.triggered.connect(self.toggle_directory_tree)
         view_menu.addAction(self.dir_tree_action)
 
+        self.effects_tree_action = QAction(_("Effects Tree"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.MultimediaPlayer))
+        self.effects_tree_action.setCheckable(True)
+        self.effects_tree_action.setChecked(AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool))
+        self.effects_tree_action.triggered.connect(self.toggle_effects_tree)
+        view_menu.addAction(self.effects_tree_action)
+
         self.russel_action = QAction(_("Circumplex model of emotion"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
         self.russel_action.setCheckable(True)
         self.russel_action.setChecked(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
@@ -1857,11 +1994,36 @@ class MusicPlayer(QMainWindow):
             visible = not AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool)
 
         if visible:
+            sizes = self.central_layout.sizes()
+            sizes[1] = sizes[1] - 200
+            sizes[0] = 200
             self.central_layout.setSizes([200, 600])
             AppSettings.setValue(SettingKeys.DIRECTORY_TREE, True)
         else:
-            self.central_layout.setSizes([0, 800])
+            sizes = self.central_layout.sizes()
+            sizes[1] = sizes[1] + sizes[0]
+            sizes[0] = 0
+            self.central_layout.setSizes(sizes)
             AppSettings.setValue(SettingKeys.DIRECTORY_TREE, False)
+
+    def toggle_effects_tree(self, visible: bool = None):
+
+        if visible is None:
+            visible = not AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool)
+
+        if visible:
+            sizes = self.central_layout.sizes()
+            sizes[1] = sizes[1] - 200
+            sizes[2]=200
+            self.central_layout.setSizes(sizes)
+            AppSettings.setValue(SettingKeys.EFFECTS_TREE, True)
+        else:
+            sizes = self.central_layout.sizes()
+            sizes[1] = sizes[1] + sizes[2]
+            sizes[2] = 0
+            self.central_layout.setSizes(sizes)
+            AppSettings.setValue(SettingKeys.EFFECTS_TREE, False)
+
 
     def open_settings(self):
 
@@ -1913,6 +2075,7 @@ class MusicPlayer(QMainWindow):
         main_layout.addWidget(self.player, 0)
 
         self.toggle_directory_tree(AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
+        self.toggle_effects_tree(AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool))
         # -------------------------------------
 
         # Table Widget for Playlist

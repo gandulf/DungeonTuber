@@ -1,6 +1,6 @@
 import string
 
-from PySide6.QtCore import QObject, Property, Qt
+from PySide6.QtCore import QObject, Property, Qt, QSize
 from PySide6.QtGui import QColor, QPalette, QBrush, QGradient
 from PySide6.QtWidgets import QApplication
 
@@ -43,16 +43,28 @@ class AppTheme(QObject):
         return self._icon_size
 
     @Property(int)
+    def icon_height(self):
+        return self._icon_size
+
+    @Property(int)
+    def icon_width(self):
+        return self._icon_size
+
+    @Property(int)
     def button_size(self):
         return self._button_size
 
     @Property(int)
-    def icon_size_small(self):
-        return self._icon_size * 0.7
+    def icon_size_small(self) -> QSize:
+        return QSize(self._icon_size * 0.7, self._icon_size * 0.7)
 
     @Property(int)
-    def button_size_small(self):
+    def button_height_small(self) -> int:
         return self._button_size *0.7
+
+    @Property(int)
+    def button_size_small(self) -> QSize:
+        return QSize(self._button_size *0.7, self._button_size *0.7)
 
     @Property(int)
     def font_size(self):

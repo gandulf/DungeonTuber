@@ -8,7 +8,8 @@ import logging
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtCore import Property
+from PySide6.QtCore import Property, Qt
+from PySide6.QtGui import QPixmap
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2
 
@@ -18,7 +19,7 @@ from config.utils import get_path, get_available_locales
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["name", "path", "title", "artist", "album", "summary", "length", "favorite", "categories", "tags","_all_tags"]
+    __slots__ = ["name", "path", "title", "artist", "album", "summary", "length", "favorite", "categories", "tags","_all_tags", "cover"]
 
     name: str
     path: Path
@@ -28,13 +29,18 @@ class Mp3Entry(object):
     summary: str
     length: int
     favorite: bool
+    cover: QPixmap | None
 
     categories : dict[str,int]
     tags: list[str]
     _all_tags: None | set[str]
 
     def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None):
-        self.name = name
+        if name is not None:
+            self.name = name.removesuffix(".mp3").removesuffix(".MP3")
+        else:
+            self.name = None
+        self.path = path
         self.path = path if isinstance(path, Path) else Path(path)
         self.title = title
         self.artist = artist
@@ -53,6 +59,7 @@ class Mp3Entry(object):
             self.tags = []
 
         self._all_tags = None
+        self.cover = None
 
     def set_tags(self, tags: list[str]):
         self.tags = tags
@@ -86,7 +93,7 @@ class Mp3Entry(object):
         return self._all_tags
 
 
-def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
+def parse_mp3(file_path : str | PathLike[str], load_cover:bool = False) -> Mp3Entry | None:
 
     try:
         entry = Mp3Entry(name=Path(file_path).name, path=file_path)
@@ -138,6 +145,15 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
             if txxx_fav and txxx_fav.text:
                 entry.favorite = bool(txxx_fav.text)
 
+            if load_cover:
+                # APIC tags often have suffixes like APIC:Cover
+                for key in audio.tags.keys():
+                    if key.startswith("APIC"):
+                        data = audio.tags[key].data
+                        pixmap = QPixmap()
+                        pixmap.loadFromData(data)
+                        icon_pixmap = pixmap.scaled(64, 64, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                        entry.cover = icon_pixmap
         return entry
     except Exception as e:
         logger.error("Error reading tags for {0}: {1}", file_path, e)
