@@ -19,7 +19,7 @@ from config.utils import get_path, get_available_locales
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["name", "path", "title", "artist", "album", "summary", "length", "favorite", "categories", "tags","_all_tags", "cover"]
+    __slots__ = ["name", "path", "title", "artist", "album", "summary", "length", "favorite", "categories", "tags","_all_tags", "cover", "has_cover"]
 
     name: str
     path: Path
@@ -30,6 +30,7 @@ class Mp3Entry(object):
     length: int
     favorite: bool
     cover: QPixmap | None
+    has_cover: bool
 
     categories : dict[str,int]
     tags: list[str]
@@ -60,6 +61,7 @@ class Mp3Entry(object):
 
         self._all_tags = None
         self.cover = None
+        self.has_cover = None
 
     def set_tags(self, tags: list[str]):
         self.tags = tags
@@ -77,6 +79,25 @@ class Mp3Entry(object):
             return self.categories.get(category, None)
         else:
             return None
+
+    def get_cover(self):
+        self.load_cover()
+        return self.cover
+
+    def load_cover(self, audio: MP3 = None):
+        if self.has_cover is None and self.cover is None:
+            if audio is None:
+                audio = MP3(self.path, ID3=ID3)
+            self.has_cover = False
+            for key in audio.tags.keys():
+                # APIC tags often have suffixes like APIC:Cover
+                if key.startswith("APIC"):
+                    data = audio.tags[key].data
+                    pixmap = QPixmap()
+                    pixmap.loadFromData(data)
+                    icon_pixmap = pixmap.scaled(128, 128, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                    self.cover = icon_pixmap
+                    self.has_cover = True
 
 
     def all_tags(self):
@@ -146,14 +167,8 @@ def parse_mp3(file_path : str | PathLike[str], load_cover:bool = False) -> Mp3En
                 entry.favorite = bool(txxx_fav.text)
 
             if load_cover:
-                # APIC tags often have suffixes like APIC:Cover
-                for key in audio.tags.keys():
-                    if key.startswith("APIC"):
-                        data = audio.tags[key].data
-                        pixmap = QPixmap()
-                        pixmap.loadFromData(data)
-                        icon_pixmap = pixmap.scaled(64, 64, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-                        entry.cover = icon_pixmap
+                entry.load_cover(audio)
+
         return entry
     except Exception as e:
         logger.error("Error reading tags for {0}: {1}", file_path, e)

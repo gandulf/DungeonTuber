@@ -28,8 +28,6 @@ import logging
 import vlc
 
 from config import log
-from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, clear_layout
-from config.settings import CAT_VALENCE, CAT_AROUSAL
 
 log.setup_logging()
 
@@ -50,12 +48,13 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
     QPersistentModelIndex, QFileInfo, QEvent, QRect
 from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QKeyEvent, QFont, QFontMetrics, \
-    QActionGroup, QPixmap
+    QActionGroup, QPixmap, QPen
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, DEFAULT_GEMINI_API_KEY, Preset, \
-    CATEGORY_MAX, CATEGORY_MIN, MusicCategory, set_music_categories, \
+    CATEGORY_MAX, CATEGORY_MIN, CAT_VALENCE, CAT_AROUSAL, MusicCategory, set_music_categories, \
     get_music_categories, set_music_tags, get_music_tags, set_presets, add_preset, get_presets, remove_preset, reset_presets, get_music_category, get_categories
 from config.theme import app_theme
+from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, clear_layout
 
 from components.sliders import CategoryWidget, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider
 from components.widgets import StarRating, IconLabel
@@ -512,25 +511,33 @@ class EffectList(QWidget):
 
     icon_size = QSize(16, 16)
 
+    grid_threshold = 200
+
     class GridDelegate(QStyledItemDelegate):
 
-        top_padding = 8
+        top_padding = 4
 
         view_mode: QListView.ViewMode
 
-
-        def __init__(self, view_mode: QListView = QListView.ViewMode.ListMode, parent: QWidget = None):
+        def __init__(self, parent: QWidget = None):
             super().__init__(parent)
-
-            self.view_mode = view_mode
 
         def initStyleOption(self, option, index):
             super().initStyleOption(option, index)
             # Remove the 'HasCheckIndicator' feature so Qt doesn't draw the box
             option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
 
-        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+        def is_list_mode(self):
+            return self.parent().viewMode() == QListView.ViewMode.ListMode
 
+        def is_grid_mode(self):
+            return self.parent().viewMode() == QListView.ViewMode.IconMode
+
+        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+            # 1. Initialize the style option
+            self.initStyleOption(option, index)
+
+            effect_mp3 = index.data(Qt.ItemDataRole.UserRole)
             # 1. Retrieve the check state from the model/item
             # Qt.CheckStateRole returns 0 (Unchecked), 1 (Partially), or 2 (Checked)
             check_state = index.data(Qt.ItemDataRole.CheckStateRole)
@@ -549,16 +556,79 @@ class EffectList(QWidget):
                 # Make text bold for checked items
                 option.font.setBold(True)
 
-            if self.view_mode == QListView.ViewMode.IconMode:
+            if self.is_grid_mode() and effect_mp3.get_cover() is not None:
                 option.rect.setTop(option.rect.top() + self.top_padding)
 
-            super().paint(painter, option, index)
+                # 2. Draw the selection highlight/background
+                # option.widget.style().drawControl(
+                #     option.widget.style().ControlElement.CE_ItemViewItem,
+                #     option, painter, option.widget
+                # )
 
-        def sizeHint(self, option, index):
+                # 3. Define the drawing area (the icon rectangle)
+                # We use option.rect to get the full space for this item
+                rect = option.rect
+
+                if check_state == Qt.CheckState.Checked:
+                    painter.setBrush(option.palette.color(QPalette.ColorRole.Highlight))
+                    painter.drawRoundedRect(rect, 4.0,4.0)
+
+                # 4. Draw the Icon
+                icon = index.data(Qt.ItemDataRole.DecorationRole)
+                if icon:
+                    # Scale icon to fit the rect
+                    icon_size = self.parent().iconSize()
+                    icon_rect = QRect(
+                        rect.left() + (rect.width() - icon_size.width()) // 2,
+                        rect.top() + (rect.height() - icon_size.height()) // 2,
+                        icon_size.width(),
+                        icon_size.height()
+                    )
+                    icon.paint(painter, icon_rect, Qt.AlignmentFlag.AlignCenter)
+
+                    rect = icon_rect
+
+
+                # 5. Draw the Text on top
+                text = index.data(Qt.ItemDataRole.DisplayRole)
+                if text:
+
+                    # Optional: Add a subtle shadow or background for readability
+                    # painter.fillRect(rect, QColor(0, 0, 0, 100))
+
+                    label_height =  painter.fontMetrics().height() +8
+                    label_rect =  QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height)
+
+                    painter.setBrush(QColor(0,0,0,100))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.drawRect(label_rect)
+
+                    painter.setPen(Qt.GlobalColor.white)  # Contrast color
+                    painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
+
+                painter.restore()
+            else:
+                super().paint(painter, option, index)
+
+
+        def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex):
             # IMPORTANT: You must increase the size hint,
             # otherwise the bottom of your text will be cut off!
             size = super().sizeHint(option, index)
-            size.setHeight(size.height() + self.top_padding)
+
+            if self.is_grid_mode():
+                effect_mp3 = index.data(Qt.ItemDataRole.UserRole)
+
+                if option.rect.width() < EffectList.grid_threshold:
+                    new_width = option.rect.width()
+                else:
+                    new_width = (option.rect.width() // 2)
+                size.setWidth(new_width)
+
+                if effect_mp3.get_cover() is not None:
+                    size.setHeight(size.height() + self.top_padding)
+                else:
+                    size.setHeight(48)
             return size
 
     def __init__(self, listMode: QListView.ViewMode = QListView.ViewMode.ListMode):
@@ -575,17 +645,13 @@ class EffectList(QWidget):
         self.engine = AudioEngine(False)
 
         self.list_widget = QListWidget()
-        self.list_widget.setItemDelegate(EffectList.GridDelegate())
+        self.list_widget.setItemDelegate(EffectList.GridDelegate(parent = self.list_widget))
+        #self.list_widget.setUniformItemSizes(True)
 
-        self.list_widget.setViewMode(listMode)
-
-        if self.list_widget.viewMode() == QListView.ViewMode.IconMode:
-            # 2. Set the flow to LeftToRight (items fill the row first)
-            self.list_widget.setFlow(QListView.Flow.LeftToRight)
-            # 3. Prevent items from being moved around by the user
-            self.list_widget.setMovement(QListView.Movement.Static)
-            # 4. Make items wrap to the next line
-            self.list_widget.setResizeMode(QListView.ResizeMode.Adjust)
+        if listMode == QListView.ViewMode.ListMode:
+            self.set_list_view()
+        else:
+            self.set_grid_view()
 
         player_layout = QHBoxLayout()
         player_layout.setContentsMargins(0,0,0,0)
@@ -621,6 +687,16 @@ class EffectList(QWidget):
         headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         headerLabel.setStyleSheet(f"font-size: {app_theme.font_size}px; font-weight: bold;")
         headerLabel.setFixedHeight(app_theme.button_height_small)
+
+        list_view = QPushButton(icon = QIcon(get_path("assets/list.svg")))
+        list_view.clicked.connect(self.set_list_view)
+
+        grid_view = QPushButton(icon = QIcon(get_path("assets/grid.svg")))
+        grid_view.clicked.connect(self.set_grid_view)
+
+        headerLabel.add_widget(list_view)
+        headerLabel.add_widget(grid_view)
+
         self.layout.addWidget(headerLabel, 0)
 
 
@@ -638,18 +714,55 @@ class EffectList(QWidget):
 
     def calculate_grid_size(self):
         if self.list_widget.viewMode() == QListView.ViewMode.IconMode:
-            if self.list_widget.width() < 250:
-                new_width = self.list_widget.width() - 10
-            else:
+            if self.list_widget.width() < EffectList.grid_threshold:
+                new_width = self.list_widget.width()
+            elif self.list_widget.width() < EffectList.grid_threshold*2:
                 new_width = (self.list_widget.width() // 2) - 10
-            self.list_widget.setGridSize(QSize(new_width, 50))
-            self.list_widget.setIconSize(QSize(new_width-30, 50))  # Large covers
-            self.list_widget.setSpacing(10)
+            else:
+                new_width = (self.list_widget.width() // 3) - 10
+
+            new_width = min(128 + 30, new_width)
+            new_height = new_width * (3.0/4.0)
+            self.list_widget.setGridSize(QSize(new_width, new_height))
+            self.list_widget.setIconSize(QSize(new_width-10, new_height))  # Large covers
+            self.list_widget.setSpacing(0)
+        else:
+            self.list_widget.setGridSize(QSize())
+            self.list_widget.setIconSize(QSize())  # Large covers
+            self.list_widget.setSpacing(0)
+
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         # Calculate width for 2 columns (minus scrollbar width)
         self.calculate_grid_size()
+
+    def set_list_view(self ):
+        self.list_widget.setViewMode(QListView.ViewMode.ListMode)
+        self.list_widget.setFlow(QListView.Flow.TopToBottom)
+        # 3. Prevent items from being moved around by the user
+        self.list_widget.setMovement(QListView.Movement.Static)
+        # 4. Make items wrap to the next line
+        self.list_widget.setResizeMode(QListView.ResizeMode.Fixed)
+
+        self.calculate_grid_size()
+
+    def set_grid_view(self):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            effect_mp3 = item.data(Qt.ItemDataRole.UserRole)
+            effect_mp3.load_cover()
+
+        self.list_widget.setViewMode(QListView.ViewMode.IconMode)
+        self.list_widget.setFlow(QListView.Flow.LeftToRight)
+        # 3. Prevent items from being moved around by the user
+        self.list_widget.setMovement(QListView.Movement.Static)
+        # 4. Make items wrap to the next line
+        self.list_widget.setResizeMode(QListView.ResizeMode.Adjust)
+
+        self.calculate_grid_size()
+
+        self.list_widget.update()
 
     def toogle_play(self):
         if self.engine.pause_toggle():
@@ -693,8 +806,8 @@ class EffectList(QWidget):
             effect_item.setFlags(effect_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             effect_item.setText(effect_mp3.name)
             effect_item.setData(Qt.ItemDataRole.UserRole, effect_mp3)
-            if effect_mp3.cover is not None:
-                effect_item.setIcon(effect_mp3.cover)
+            if effect_mp3.get_cover() is not None:
+                effect_item.setIcon(effect_mp3.get_cover())
 
             self.list_widget.addItem(effect_item)
 
@@ -1650,7 +1763,8 @@ class FilterWidget(QWidget):
         for slider in self.sliders.values():
             slider.set_value(0, False)
 
-        self.russel_widget.set_value(5, 5)
+        if self.russel_widget.isVisible():
+            self.russel_widget.set_value(5, 5)
 
         selected_tags.clear()
         self.update_tags()
@@ -1808,7 +1922,7 @@ class MusicPlayer(QMainWindow):
         file_menu = menu_bar.addMenu(_("File"))
         file_menu.setContentsMargins(0, 0, 0, 0)
 
-        open_dir_action = QAction(_("Open Directory"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentOpen))
+        open_dir_action = QAction(_("Open Directory"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
         open_dir_action.triggered.connect(self.pick_load_directory)
         file_menu.addAction(open_dir_action)
 
@@ -1840,7 +1954,7 @@ class MusicPlayer(QMainWindow):
         file_menu.addAction(exit_action)
 
         view_menu = menu_bar.addMenu(_("View"))
-        filter_action = QAction(_("Toggle Filter"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.SystemSearch))
+        filter_action = QAction(_("Toggle Filter"), self, icon=QIcon(get_path("assets/filter.svg")))
         filter_action.setCheckable(True)
         filter_action.setChecked(AppSettings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
         filter_action.triggered.connect(self.filter_widget.toggle)
@@ -1858,7 +1972,7 @@ class MusicPlayer(QMainWindow):
         self.effects_tree_action.triggered.connect(self.toggle_effects_tree)
         view_menu.addAction(self.effects_tree_action)
 
-        self.russel_action = QAction(_("Circumplex model of emotion"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
+        self.russel_action = QAction(_("Circumplex model of emotion"), self, icon=QIcon(get_path("assets/russel.svg")))
         self.russel_action.setCheckable(True)
         self.russel_action.setChecked(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
         self.russel_action.triggered.connect(self.filter_widget.toggle_russel_widget)
@@ -1895,7 +2009,7 @@ class MusicPlayer(QMainWindow):
         font_size_menu.addAction(font_size_large_action)
         view_menu.addMenu(font_size_menu)
 
-        visualizer_menu = QMenu(_("Visualizer"), self)
+        visualizer_menu = QMenu(_("Visualizer"), self, icon= QIcon(get_path("assets/spectrum.svg")))
 
         visualizer_group = QActionGroup(self, exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
 
@@ -1930,7 +2044,7 @@ class MusicPlayer(QMainWindow):
 
         view_menu.addMenu(visualizer_menu)
 
-        theme_menu = QMenu(_("Theme"), self)
+        theme_menu = QMenu(_("Theme"), self, icon=QIcon(get_path("assets/theme.svg")))
 
         theme_group = QActionGroup(self, exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
 

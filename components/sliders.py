@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle,
 
 from config.settings import MusicCategory
 from config.theme import app_theme
+from config.utils import get_path
 
 class JumpSlider(QSlider):
     mouse_pressed = Signal(QMouseEvent)
@@ -711,9 +712,9 @@ class RepeatMode(StrEnum):
 
 
 class RepeatButton(QPushButton):
-    icon_no_repeat: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaylistShuffle)
-    icon_repeat_1: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaylistRepeat)
-    icon_repeat_all: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaylistRepeat)
+    icon_no_repeat: QIcon = QIcon(get_path("assets/no-repeat.svg"))
+    icon_repeat_1: QIcon = QIcon(get_path("assets/repeat.svg"))
+    icon_repeat_all: QIcon = QIcon(get_path("assets/all-repeat.svg"))
 
     # icon_no_repeat = MaterialIcon('repeat', size=materialIconSize)
     # icon_repeat_1 = MaterialIcon('repeat_one', size=materialIconSize)

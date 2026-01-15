@@ -66,12 +66,14 @@ class IconLabel(QWidget):
 
         self.layout = QHBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
         self.setLayout(self.layout)
 
         self.icon_label = QLabel()
         if icon is not None:
             self.icon_label.setPixmap(icon.pixmap(self.icon_size))
             self.icon_label.setVisible(True)
+            self.icon_label.setContentsMargins(0,0,4,0)
         else:
             self.icon_label.setVisible(False)
 
@@ -84,6 +86,9 @@ class IconLabel(QWidget):
 
         if final_stretch:
             self.layout.addStretch()
+
+    def add_widget(self, widget:QWidget):
+        self.layout.addWidget(widget,0)
 
     def set_alignment(self, alignment: Qt.AlignmentFlag):
         self.text_label.setAlignment(alignment)
