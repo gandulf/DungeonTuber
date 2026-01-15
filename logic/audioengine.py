@@ -41,10 +41,24 @@ class AudioEngine(QObject):
 
     def init_vlc(self, visualizer : bool = True):
         vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
-        if vis == "VLC" and visualizer:
-            self.instance = vlc.Instance('--aout=directsound', '--audio-visual=visual', '--effect-list=spectrum')  # Audio only
+
+        # Define the audio output module based on the OS
+        if platform.system() == "Windows":
+            aout = "directsound"  # or "wasapi" for modern Windows
+        elif platform.system() == "Linux":
+            aout = "pulseaudio"
+        elif platform.system() == "Darwin":  # macOS
+            aout = "auhal"
         else:
-            self.instance = vlc.Instance('--aout=directsound','--no-video')  # Audio only
+            aout = None
+
+        # Create the VLC instance with the correct flag
+        audio_out_parameter = f"--aout={aout}" if aout else ""
+
+        if vis == "VLC" and visualizer:
+            self.instance = vlc.Instance(audio_out_parameter, '--audio-visual=visual', '--effect-list=spectrum')  # With Spectrum video
+        else:
+            self.instance = vlc.Instance(audio_out_parameter,'--no-video')  # Audio only
         self.list_player = self.instance.media_list_player_new()
         self.player = self.list_player.get_media_player()
         self.player.audio_set_volume(self.current_volume)

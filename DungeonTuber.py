@@ -297,7 +297,8 @@ class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
         painter.setPen(pen)
 
         title_font = QFont(option.font)
-        title_font.setBold(True)
+        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
+            title_font.setBold(True)
         title_font.setPixelSize(app_theme.font_size)
 
         fm = QFontMetrics(title_font)
@@ -616,7 +617,7 @@ class EffectList(QWidget):
 
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
 
-        headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical), "Effects")
+        headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.AudioCard), "Effects")
         headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         headerLabel.setStyleSheet(f"font-size: {app_theme.font_size}px; font-weight: bold;")
         headerLabel.setFixedHeight(app_theme.button_height_small)
@@ -1851,7 +1852,7 @@ class MusicPlayer(QMainWindow):
         self.dir_tree_action.triggered.connect(self.toggle_directory_tree)
         view_menu.addAction(self.dir_tree_action)
 
-        self.effects_tree_action = QAction(_("Effects Tree"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.MultimediaPlayer))
+        self.effects_tree_action = QAction(_("Effects Tree"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.AudioCard))
         self.effects_tree_action.setCheckable(True)
         self.effects_tree_action.setChecked(AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool))
         self.effects_tree_action.triggered.connect(self.toggle_effects_tree)
