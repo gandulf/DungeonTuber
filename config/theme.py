@@ -1,10 +1,11 @@
 import string
 
 from PySide6.QtCore import QObject, Property, Qt, QSize
-from PySide6.QtGui import QColor, QPalette, QBrush, QGradient
+from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon
 from PySide6.QtWidgets import QApplication
 
 from config.settings import AppSettings, SettingKeys
+from config.utils import get_path
 
 def _alpha(color: QColor, alpha: int = None):
     if alpha is None:
@@ -14,6 +15,8 @@ def _alpha(color: QColor, alpha: int = None):
     new_color.setAlpha(alpha)
     return new_color
 
+
+QIcon.setThemeSearchPaths([get_path("assets/icons")] + QIcon.themeSearchPaths())
 
 class AppTheme(QObject):
     light_palette: QPalette = None
@@ -202,11 +205,15 @@ class AppTheme(QObject):
                     }}
                 """
 
+        QIcon.setThemeName(theme)
+
         if theme == "LIGHT":
+
             self.application.setPalette(self.get_light_mode_palette())
         else:
             self.application.setPalette(self.get_dark_mode_palette())
             style += """
+                
         QLineEdit[text=""] {
             color:white;
         }

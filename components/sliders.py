@@ -3,11 +3,76 @@ from enum import StrEnum
 from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer
 from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter, QIcon, QLinearGradient, QPolygon, QFontMetrics, QPaintEvent
 from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QPushButton, QHBoxLayout, QProxyStyle, QWidget, \
-    QGraphicsOpacityEffect
+    QGraphicsOpacityEffect, QDial
 
 from config.settings import MusicCategory
 from config.theme import app_theme
 from config.utils import get_path
+
+class BPMSlider(QWidget):
+
+    value_changed = Signal(int)
+
+    _last_changed_bpm = None
+
+    def __init__(self, parent: QWidget=None):
+        super().__init__(parent)
+
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+
+        self.bpm_widget = QDial()
+        self.bpm_widget.setMinimum(0)
+        self.bpm_widget.setMaximum(200)
+        self.bpm_widget.setSingleStep(20)
+        self.bpm_widget.setPageStep(20)
+        self.bpm_widget.setNotchesVisible(True)
+        self.bpm_widget.setNotchTarget(20.0)
+        self.bpm_widget.valueChanged.connect(self._snap_and_update_label)
+
+        self.bpm_label = QLabel("")
+        self.bpm_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        bpm_title = QLabel(_("Beats per Minute"))
+        bpm_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.layout.addWidget(bpm_title, 0)
+        self.layout.addWidget(self.bpm_widget,1)
+        self.layout.addWidget(self.bpm_label, 0)
+
+    def value(self):
+        return self.bpm_widget.value() if self.bpm_widget.value() > 0 else None
+
+    def set_value(self, value):
+        self.bpm_widget.setValue(value)
+
+    def _snap_and_update_label(self, value):
+        """Rounds the dial value to the closest multiple of 20 and updates the label."""
+
+        # Logic to round to the closest multiple of 20
+        # Formula: ((x + half_of_step) // step) * step
+        snapped_value = ((value + 10) // 20) * 20
+
+        # Ensure the snapped value is within the defined range (40 to 200)
+        snapped_value = max(0, min(200, snapped_value))
+
+        # 1. Update the Dial's position (essential for 'snapping' effect)
+        # Block signals temporarily to prevent a recursion loop
+        if snapped_value != self.bpm_widget.value():
+            self.bpm_widget.blockSignals(True)
+            self.bpm_widget.setValue(snapped_value)
+            self.bpm_widget.blockSignals(False)
+
+        if self._last_changed_bpm is None or self._last_changed_bpm != snapped_value:
+            self.value_changed.emit(snapped_value)
+            self._last_changed_bpm = snapped_value
+
+        # 2. Update the Label
+        if snapped_value>0:
+            self.bpm_label.setText(f"{snapped_value} BPM")
+        else:
+            self.bpm_label.setText("")
 
 class JumpSlider(QSlider):
     mouse_pressed = Signal(QMouseEvent)
@@ -276,6 +341,9 @@ class CategoryWidget(QVBoxLayout):
 
     def __init__(self, category: MusicCategory = None, parent=None, min_value=0, max_value=10):
         super(CategoryWidget, self).__init__(parent)
+
+        self.setContentsMargins(0,0,0,0)
+        self.setSpacing(0)
 
         self.category = category
         self.label = QLabel(category.name)
@@ -712,9 +780,9 @@ class RepeatMode(StrEnum):
 
 
 class RepeatButton(QPushButton):
-    icon_no_repeat: QIcon = QIcon(get_path("assets/no-repeat.svg"))
-    icon_repeat_1: QIcon = QIcon(get_path("assets/repeat.svg"))
-    icon_repeat_all: QIcon = QIcon(get_path("assets/all-repeat.svg"))
+    icon_no_repeat: QIcon = QIcon.fromTheme("no-repeat")
+    icon_repeat_1: QIcon = QIcon.fromTheme("repeat")
+    icon_repeat_all: QIcon = QIcon.fromTheme("all-repeat")
 
     # icon_no_repeat = MaterialIcon('repeat', size=materialIconSize)
     # icon_repeat_1 = MaterialIcon('repeat_one', size=materialIconSize)

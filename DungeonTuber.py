@@ -56,7 +56,7 @@ from config.settings import AppSettings, SettingKeys, SettingsDialog, DEFAULT_GE
 from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, clear_layout
 
-from components.sliders import CategoryWidget, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider
+from components.sliders import CategoryWidget, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider, BPMSlider
 from components.widgets import StarRating, IconLabel
 from components.visualizer import Visualizer
 from components.layouts import FlowLayout
@@ -64,7 +64,7 @@ from components.charts import RussellEmotionWidget
 
 from logic.analyzer import Analyzer, is_analyzed, is_voxalyzed
 from logic.mp3 import Mp3Entry, update_mp3_favorite, parse_mp3, update_mp3_summary, update_mp3_title, update_mp3_tags, update_mp3_category, parse_m3u, \
-    create_m3u, list_mp3s
+    create_m3u, list_mp3s, normalize_category
 from logic.audioengine import AudioEngine
 
 # --- Constants ---
@@ -78,10 +78,39 @@ selected_tags: list[str] = []
 
 categories: dict[str, int] = {}
 
+class FilterConfig:
+    categories : dict[str,int]
+    tags : list[str]
+    bpm: int | None
+    genres: list[str]
 
-def _calculate_score(_slider_values: dict[str, int], data: Mp3Entry, tags: list[str]):
+    def __init__(self, categories = {}, tags=[], bpm = None, genres = []):
+        self.categories = categories
+        self.tags = tags
+        self.bpm = bpm
+        self.genres = genres
+
+    def get_category(self, category:str, default: int = None):
+        category = normalize_category(category)
+        return self.categories.get(category, default)
+
+    def empty(self)->bool:
+        empty = True
+        for value in self.categories.values():
+            if value is not None:
+                empty = False
+                break
+
+        empty = empty and (self.tags is None or len(self.tags) == 0) and self.bpm is None and (self.genres is None or len(self.genres) == 0)
+
+        return empty
+
+
+
+
+def _calculate_score(_filter_config: FilterConfig, data: Mp3Entry):
     score = None
-    for cat, desired_value in _slider_values.items():
+    for cat, desired_value in _filter_config.categories.items():
         if desired_value is not None and desired_value != 0:
             if score is None:
                 score = 0
@@ -91,7 +120,7 @@ def _calculate_score(_slider_values: dict[str, int], data: Mp3Entry, tags: list[
             else:
                 score += 10 ** 2
 
-    for desired_tag in tags:
+    for desired_tag in _filter_config.tags:
         if score is None:
             score = 0
 
@@ -101,6 +130,15 @@ def _calculate_score(_slider_values: dict[str, int], data: Mp3Entry, tags: list[
         else:
             score += 100
 
+    if _filter_config.bpm is not None:
+        if score is None:
+            score = 0
+
+        if data.bpm is None:
+            score += 100
+        else:
+            score += abs(_filter_config.bpm - data.bpm)
+
     return round(score) if score is not None else None
 
 
@@ -108,7 +146,7 @@ _black = QColor(Qt.GlobalColor.black)
 _transparent = QBrush(Qt.GlobalColor.transparent)
 
 
-def _get_category_background_brush(desired_value: int, value: int) -> QBrush | None:
+def _get_category_background_brush(desired_value: int | None, value: int) -> QBrush | None:
     if value is None or desired_value is None or desired_value == 0:
         return _transparent
 
@@ -121,6 +159,18 @@ def _get_category_background_brush(desired_value: int, value: int) -> QBrush | N
     else:
         return app_theme.get_red(51)
 
+def _get_bpm_background_brush(desired_value: int | None, value: int) -> QBrush | None:
+    if value is None or desired_value is None or desired_value == 0:
+        return _transparent
+
+    value_diff = abs(desired_value - value)
+
+    if value_diff <= 40:
+        return app_theme.get_green(51)
+    elif value_diff <= 80:
+        return app_theme.get_orange(51)
+    else:
+        return app_theme.get_red(51)
 
 def _get_score_foreground_brush(score: int | None) -> QColor | None:
     if score is not None:
@@ -148,6 +198,7 @@ def _get_score_background_brush(score: int | None) -> QBrush | None:
             return app_theme.get_red(170)
     else:
         return None
+
 
 
 class EditSongDialog(QDialog):
@@ -225,7 +276,6 @@ class StarDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         return self.star_rating.size_hint()
-
 
 class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
     _size = QSize(300, 40)
@@ -334,11 +384,12 @@ class TableModel(QAbstractTableModel):
     TITLE_COL = 2
     ARTIST_COL = 3
     ALBUM_COL = 4
-    SCORE_COL = 5
-    CAT_COL = 6
+    GENRE_COL = 5
+    BPM_COL = 6
+    SCORE_COL = 7
+    CAT_COL = 8
 
-    slider_values: dict[str, int] = {}
-    tags: list[str] = []
+    filter_config: FilterConfig = FilterConfig()
 
     def __init__(self, data: list[Mp3Entry] = []):
         super(TableModel, self).__init__()
@@ -347,10 +398,9 @@ class TableModel(QAbstractTableModel):
     def get_category(self, index: QModelIndex):
         return get_music_categories()[index.column() - TableModel.CAT_COL].name
 
-    def set_slider_values(self, _slider_values: dict[str, int], values: list[str]):
+    def set_filter_values(self, _config: FilterConfig):
         self.beginResetModel()
-        self.slider_values = _slider_values
-        self.tags = values
+        self.filter_config = _config
         self.endResetModel()
 
     def setData(self, index: QModelIndex | QPersistentModelIndex, value, /, role: int = ...) -> bool:
@@ -427,7 +477,7 @@ class TableModel(QAbstractTableModel):
                 return QSize(40, 40)
 
         elif role == Qt.ItemDataRole.TextAlignmentRole:
-            if index.column() >= TableModel.SCORE_COL:
+            if index.column() >= TableModel.SCORE_COL or index.column() == TableModel.BPM_COL:
                 return Qt.AlignmentFlag.AlignCenter
         elif role == Qt.ItemDataRole.BackgroundRole:
             if index.column() == TableModel.SCORE_COL:
@@ -436,11 +486,10 @@ class TableModel(QAbstractTableModel):
             elif index.column() >= TableModel.CAT_COL:
                 value = index.data(Qt.ItemDataRole.DisplayRole)
                 category = self.get_category(index)
-                return _get_category_background_brush(self.slider_values.get(category, 0), value)
-        elif role == Qt.ItemDataRole.ForegroundRole:
-            if index.column() == TableModel.SCORE_COL:
-                score = index.data(Qt.ItemDataRole.DisplayRole)
-                return _get_score_foreground_brush(score)
+                return _get_category_background_brush(self.filter_config.get_category(category, None), value)
+            elif index.column() >= TableModel.BPM_COL:
+                value = index.data(Qt.ItemDataRole.DisplayRole)
+                return _get_bpm_background_brush(self.filter_config.bpm, value)
         elif role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             data = index.data(Qt.ItemDataRole.UserRole)
             if index.column() == TableModel.FAV_COL:
@@ -459,9 +508,13 @@ class TableModel(QAbstractTableModel):
                 return data.artist
             elif index.column() == TableModel.ALBUM_COL:
                 return data.album
+            elif index.column() == TableModel.GENRE_COL:
+                return data.genre
+            elif index.column() == TableModel.BPM_COL:
+                return data.bpm
             elif index.column() == TableModel.SCORE_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
-                return _calculate_score(self.slider_values, data, self.tags)
+                return _calculate_score(self.filter_config, data)
             elif index.column() >= TableModel.CAT_COL:
                 category = self.get_category(index)
                 return data.get_category_value(category)
@@ -490,6 +543,10 @@ class TableModel(QAbstractTableModel):
                 return _("Artist")
             elif section == TableModel.ALBUM_COL:
                 return _("Album")
+            elif section == TableModel.GENRE_COL:
+                return _("Genre")
+            elif section == TableModel.BPM_COL:
+                return _("BPM")
             elif section == TableModel.SCORE_COL:
                 return _("Score")
             else:
@@ -683,21 +740,21 @@ class EffectList(QWidget):
 
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
 
-        headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.AudioCard), "Effects")
-        headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
-        headerLabel.setStyleSheet(f"font-size: {app_theme.font_size}px; font-weight: bold;")
-        headerLabel.setFixedHeight(app_theme.button_height_small)
+        self.headerLabel = IconLabel(QIcon.fromTheme("effects"), "Effects")
+        self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
+        self.headerLabel.setStyleSheet(f"font-size: {app_theme.font_size}px; font-weight: bold;")
+        self.headerLabel.setFixedHeight(app_theme.button_height_small)
 
-        list_view = QPushButton(icon = QIcon(get_path("assets/list.svg")))
+        list_view = QPushButton(icon = QIcon.fromTheme("list"))
         list_view.clicked.connect(self.set_list_view)
 
-        grid_view = QPushButton(icon = QIcon(get_path("assets/grid.svg")))
+        grid_view = QPushButton(icon = QIcon.fromTheme("grid"))
         grid_view.clicked.connect(self.set_grid_view)
 
-        headerLabel.add_widget(list_view)
-        headerLabel.add_widget(grid_view)
+        self.headerLabel.add_widget(list_view)
+        self.headerLabel.add_widget(grid_view)
 
-        self.layout.addWidget(headerLabel, 0)
+        self.layout.addWidget(self.headerLabel, 0)
 
 
         if effects_dir is None or effects_dir == '':
@@ -711,6 +768,11 @@ class EffectList(QWidget):
         self.layout.addWidget(self.list_widget, 1)
 
         self.calculate_grid_size()
+
+    def changeEvent(self, event, /):
+        if event.type() == QEvent.Type.PaletteChange:
+            self.headerLabel.set_icon(QIcon.fromTheme("effects"))
+            # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
 
     def calculate_grid_size(self):
         if self.list_widget.viewMode() == QListView.ViewMode.IconMode:
@@ -1026,6 +1088,21 @@ class SongTable(QTableView):
             lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_ALBUM_VISIBLE, checked))
         menu.addAction(album_action)
 
+        # Genre
+        genre_action = QAction(_("Genre"), self)
+        genre_action.setCheckable(True)
+        genre_action.setChecked(AppSettings.value(SettingKeys.COLUMN_GENRE_VISIBLE, False, type=bool))
+        genre_action.triggered.connect(
+            lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_GENRE_VISIBLE, checked))
+        menu.addAction(genre_action)
+
+        bpm_action = QAction(_("BPM (Beats per Minute)"), self)
+        bpm_action.setCheckable(True)
+        bpm_action.setChecked(AppSettings.value(SettingKeys.COLUMN_BPM_VISIBLE, False, type=bool))
+        bpm_action.triggered.connect(
+            lambda checked: self.toggle_column_setting(SettingKeys.COLUMN_BPM_VISIBLE, checked))
+        menu.addAction(bpm_action)
+
         menu.addSeparator()
 
         # Summary
@@ -1094,6 +1171,8 @@ class SongTable(QTableView):
         self.setColumnWidth(TableModel.SCORE_COL, 80)
         self.resizeColumnToContents(TableModel.TITLE_COL)
         self.resizeColumnToContents(TableModel.ALBUM_COL)
+        self.resizeColumnToContents(TableModel.GENRE_COL)
+        self.setColumnWidth(TableModel.BPM_COL, 64)
         self.resizeColumnToContents(TableModel.ARTIST_COL)
 
         self.setSortingEnabled(False)
@@ -1111,9 +1190,8 @@ class SongTable(QTableView):
         self.setSortingEnabled(True)
 
     def is_column_visible(self, category: str):
-
         if AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool):
-            value = self.table_model.slider_values.get(category, 0)
+            value = self.table_model.filter_config.get_category(category, None)
             if AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool) and (category == _(CAT_VALENCE) or category == _(CAT_AROUSAL)):
                 return value is not None and value > 0 and value != 5
             else:
@@ -1127,11 +1205,15 @@ class SongTable(QTableView):
         self.setColumnHidden(TableModel.SCORE_COL, not AppSettings.value(SettingKeys.COLUMN_SCORE_VISIBLE, True, type=bool))
         self.setColumnHidden(TableModel.ARTIST_COL, not AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
         self.setColumnHidden(TableModel.ALBUM_COL, not AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
+        self.setColumnHidden(TableModel.GENRE_COL, not AppSettings.value(SettingKeys.COLUMN_GENRE_VISIBLE, False, type=bool))
+        self.setColumnHidden(TableModel.BPM_COL, not AppSettings.value(SettingKeys.COLUMN_BPM_VISIBLE, False, type=bool))
 
-
+        if self.table_model.filter_config is None or self.table_model.filter_config.empty():
+            self.setColumnHidden(TableModel.SCORE_COL, True)
 
         for col, category in enumerate(get_music_categories()):
             self.setColumnHidden(TableModel.CAT_COL + col, not self.is_column_visible(category.name))
+
 
         if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
             self.verticalHeader().setDefaultSectionSize(56)
@@ -1557,6 +1639,8 @@ class AboutDialog(QDialog):
         layout.addWidget(button_box)
 
 
+
+
 class FilterWidget(QWidget):
     values_changed = Signal()
 
@@ -1572,6 +1656,10 @@ class FilterWidget(QWidget):
         self.russel_widget.valueChanged.connect(self.on_russel_changed)
         self.russel_widget.mouseReleased.connect(self.on_russel_released)
         self.russel_widget.setVisible(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
+
+        self.bpm_widget = BPMSlider()
+        self.bpm_widget.value_changed.connect(self.on_bpm_changed)
+        self.bpm_widget.setVisible(AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
@@ -1620,25 +1708,34 @@ class FilterWidget(QWidget):
         self.update_tags()
         self.update_presets()
 
-    def build_sliders(self, categories: list[MusicCategory]):
+    def build_sliders(self, categories: list[MusicCategory], group: str = None):
         sliders_widget = QWidget()
-
         russle_layout = QHBoxLayout(sliders_widget)
 
-        sliders_layout = QVBoxLayout(sliders_widget)
-        sliders_layout.setContentsMargins(8, 8, 8, 8)
+        sliders_layout = QVBoxLayout()
+        sliders_layout.setContentsMargins(4, 0, 4, 0)
 
-        russle_layout.addWidget(self.russel_widget, 0)
+        if group is None or group == '':
+            russle_layout.addWidget(self.russel_widget, 0)
+
         russle_layout.addLayout(sliders_layout, 1)
+
+        if group is None or group == '':
+            russle_layout.addWidget(self.bpm_widget, 0)
+
         # self.clear_layout(sliders_layout)
         two_rows = len(categories) > 15
 
         row1 = QHBoxLayout()
+        row1.setContentsMargins(0,0,0,0)
+        row1.setSpacing(0)
 
         row2 = None
         sliders_layout.addLayout(row1, 1)
         if two_rows:
             row2 = QHBoxLayout()
+            row2.setContentsMargins(0, 0, 0, 0)
+            row2.setSpacing(0)
             sliders_layout.addLayout(row2, 1)
 
         if AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool):
@@ -1675,10 +1772,15 @@ class FilterWidget(QWidget):
 
     def toggle_russel_widget(self):
         AppSettings.setValue(SettingKeys.RUSSEL_WIDGET, not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
-
         self.russel_widget.setVisible(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
 
         self.update_sliders()
+
+    def toggle_bpm_widget(self):
+        AppSettings.setValue(SettingKeys.BPM_WIDGET, not AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
+        self.bpm_widget.setVisible(AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
+        self.bpm_widget.set_value(0)
+        #self.update_sliders()
 
     def toggle_tag(self, state):
         toggle = self.sender()
@@ -1707,6 +1809,9 @@ class FilterWidget(QWidget):
         self.update_presets()
 
     def update_sliders(self):
+        self.russel_widget.setParent(None)
+        self.bpm_widget.setParent(None)
+        
         self.slider_tabs.clear()
         self.sliders = {}
 
@@ -1719,9 +1824,10 @@ class FilterWidget(QWidget):
                 categories_group[category_group] = []
             categories_group[category_group].append(cat)
 
-        for (group, categories) in categories_group.items():
-            self.slider_tabs.addTab(self.build_sliders(categories),
+        for (group, categories) in sorted(categories_group.items()):
+            self.slider_tabs.addTab(self.build_sliders(categories, group),
                                     _("General") if group is None or group == "" else group)
+
             general_categories = [category for category in general_categories if category not in categories]
 
         # self.slider_tabs.addTab(self.build_sliders(general_categories), "General")
@@ -1732,7 +1838,7 @@ class FilterWidget(QWidget):
         for preset in get_presets():
             button = QPushButton(preset.name, self)
             button.setFixedHeight(app_theme.button_height_small)
-            button.setIconSize(app_theme.icon_size_small)
+            #button.setIconSize(app_theme.icon_size_small)
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
             remove_preset = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Remove"), self)
@@ -1750,13 +1856,13 @@ class FilterWidget(QWidget):
         save_preset = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs), "")
         save_preset.clicked.connect(self.save_preset_action)
         save_preset.setFixedSize(app_theme.button_size_small)
-        save_preset.setIconSize(app_theme.icon_size_small)
+        #save_preset.setIconSize(app_theme.icon_size_small)
         self.presets_layout.addWidget(save_preset)
 
         clear_preset = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.EditClear), "")
         clear_preset.clicked.connect(self.clear_sliders)
         clear_preset.setFixedSize(app_theme.button_size_small)
-        clear_preset.setIconSize(app_theme.icon_size_small)
+        #clear_preset.setIconSize(app_theme.icon_size_small)
         self.presets_layout.addWidget(clear_preset)
 
     def clear_sliders(self):
@@ -1844,6 +1950,10 @@ class FilterWidget(QWidget):
         if notify:
             self.values_changed.emit()
 
+    def config(self):
+        config = FilterConfig(categories=self.categories(),tags= selected_tags, bpm=self.bpm_widget.value(), genres=[])
+        return config
+
     def categories(self):
         _categories = {}
         for category, slider in self.sliders.items():
@@ -1868,6 +1978,9 @@ class FilterWidget(QWidget):
         self.set_category_value(cat_valence, valence, False)
         self.set_category_value(cat_arousal, arousal, True)
 
+    def on_bpm_changed(self, value:int):
+
+        self.values_changed.emit()
 
 class MusicPlayer(QMainWindow):
     trackChanged = Signal(int)
@@ -1954,7 +2067,7 @@ class MusicPlayer(QMainWindow):
         file_menu.addAction(exit_action)
 
         view_menu = menu_bar.addMenu(_("View"))
-        filter_action = QAction(_("Toggle Filter"), self, icon=QIcon(get_path("assets/filter.svg")))
+        filter_action = QAction(_("Toggle Filter"), self, icon=QIcon.fromTheme("filter"))
         filter_action.setCheckable(True)
         filter_action.setChecked(AppSettings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
         filter_action.triggered.connect(self.filter_widget.toggle)
@@ -1972,11 +2085,17 @@ class MusicPlayer(QMainWindow):
         self.effects_tree_action.triggered.connect(self.toggle_effects_tree)
         view_menu.addAction(self.effects_tree_action)
 
-        self.russel_action = QAction(_("Circumplex model of emotion"), self, icon=QIcon(get_path("assets/russel.svg")))
+        self.russel_action = QAction(_("Circumplex model of emotion"), self, icon=QIcon.fromTheme("russel"))
         self.russel_action.setCheckable(True)
         self.russel_action.setChecked(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
         self.russel_action.triggered.connect(self.filter_widget.toggle_russel_widget)
         view_menu.addAction(self.russel_action)
+
+        self.bpm_action = QAction(_("Beats per Minute"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
+        self.bpm_action.setCheckable(True)
+        self.bpm_action.setChecked(AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
+        self.bpm_action.triggered.connect(self.filter_widget.toggle_bpm_widget)
+        view_menu.addAction(self.bpm_action)
 
         font_size_small_action = QAction(_("Small"), self)
         font_size_small_action.setCheckable(True)
@@ -2009,7 +2128,7 @@ class MusicPlayer(QMainWindow):
         font_size_menu.addAction(font_size_large_action)
         view_menu.addMenu(font_size_menu)
 
-        visualizer_menu = QMenu(_("Visualizer"), self, icon= QIcon(get_path("assets/spectrum.svg")))
+        visualizer_menu = QMenu(_("Visualizer"), self, icon= QIcon.fromTheme("spectrum"))
 
         visualizer_group = QActionGroup(self, exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
 
@@ -2044,7 +2163,7 @@ class MusicPlayer(QMainWindow):
 
         view_menu.addMenu(visualizer_menu)
 
-        theme_menu = QMenu(_("Theme"), self, icon=QIcon(get_path("assets/theme.svg")))
+        theme_menu = QMenu(_("Theme"), self, icon=QIcon.fromTheme("theme"))
 
         theme_group = QActionGroup(self, exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
 
@@ -2284,7 +2403,7 @@ class MusicPlayer(QMainWindow):
 
     def update_category_values(self):
         global categories
-        categories = self.filter_widget.categories()
+        categories = self.filter_widget.config().categories
         self.sort_table_data()
 
     def pick_analyze_file(self):
@@ -2409,7 +2528,7 @@ class MusicPlayer(QMainWindow):
 
         data = table.mp3_data(self.player.current_index)
 
-        table.table_model.set_slider_values(categories, selected_tags)
+        table.table_model.set_filter_values(self.filter_widget.config())
         table.update_category_column_visibility()
 
         current_track_path = None

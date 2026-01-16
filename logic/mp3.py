@@ -11,7 +11,7 @@ from os import PathLike
 from PySide6.QtCore import Property, Qt
 from PySide6.QtGui import QPixmap
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TXXX, COMM, TIT2
+from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON
 
 from config.settings import get_categories, _DEFAULT_CATEGORIES
 from config.utils import get_path, get_available_locales
@@ -19,7 +19,7 @@ from config.utils import get_path, get_available_locales
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["name", "path", "title", "artist", "album", "summary", "length", "favorite", "categories", "tags","_all_tags", "cover", "has_cover"]
+    __slots__ = ["name", "path", "title", "artist", "album", "summary","genre", "length", "favorite", "categories", "tags","_all_tags", "cover", "has_cover", "bpm"]
 
     name: str
     path: Path
@@ -27,16 +27,18 @@ class Mp3Entry(object):
     artist: str
     album: str
     summary: str
+    genre: str
     length: int
     favorite: bool
     cover: QPixmap | None
     has_cover: bool
+    bpm: int
 
     categories : dict[str,int]
     tags: list[str]
     _all_tags: None | set[str]
 
-    def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None):
+    def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None, genre:str = None, bpm: int = None):
         if name is not None:
             self.name = name.removesuffix(".mp3").removesuffix(".MP3")
         else:
@@ -46,6 +48,7 @@ class Mp3Entry(object):
         self.title = title
         self.artist = artist
         self.album = album
+        self.genre = genre
         self.summary =""
         self.length =-1
         self.favorite = False
@@ -62,6 +65,7 @@ class Mp3Entry(object):
         self._all_tags = None
         self.cover = None
         self.has_cover = None
+        self.bpm = bpm
 
     def set_tags(self, tags: list[str]):
         self.tags = tags
@@ -74,7 +78,7 @@ class Mp3Entry(object):
         return category in self.categories and self.get_category_value(category) >= value
 
     def get_category_value(self,category: str):
-        category = _normalize_category(category)
+        category = normalize_category(category)
         if self.categories is not None and category in self.categories:
             return self.categories.get(category, None)
         else:
@@ -133,6 +137,12 @@ def parse_mp3(file_path : str | PathLike[str], load_cover:bool = False) -> Mp3En
             if "TALB" in audio.tags:
                 entry.album = audio.tags.get("TALB").text[0]
 
+            if 'TCON' in audio:
+                entry.genre = audio.tags.get('TCON').text[0]
+
+            if 'TBPM' in audio:
+                entry.bpm = int(audio.tags.get('TBPM').text[0])
+
             # Get Summary (COMM)
             if "COMM::XXX" in audio.tags:
                 comm_frame = audio.tags.get("COMM::XXX")
@@ -187,12 +197,12 @@ def _normalize_categories(cat : dict[str,int]) :
         for val in _DEFAULT_CATEGORIES:
             _categories[val] = [translation.gettext(val).lower() for translation in translations]
 
-    norm =  {_normalize_category(key): value for key,value in cat.items()}
+    norm =  {normalize_category(key): value for key,value in cat.items()}
 
     return norm
 
 
-def _normalize_category(cat: str):
+def normalize_category(cat: str):
     if cat in get_categories():
         return cat
 
@@ -204,12 +214,13 @@ def _normalize_category(cat: str):
     return cat
 
 
-def update_mp3(path : str | PathLike[str], title: str, summary: str, favorite: bool, categories: dict[str,int], tags: list[str]):
+def update_mp3(path : str | PathLike[str], title: str, summary: str, favorite: bool, categories: dict[str,int], tags: list[str], genre:str = None):
     audio = MP3(path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
 
     update_mp3_title(audio, title, False)
+    update_mp3_genre(audio, genre, False)
     update_mp3_summary(audio,summary,False)
     update_mp3_favorite(audio,favorite,False)
     update_mp3_categories(audio,categories,False)
@@ -260,6 +271,20 @@ def update_mp3_title(path : str| PathLike[str]| MP3, new_title :str, save : bool
     if save:
         audio.save()
         logger.debug("Updated title to {0} for {1}", new_title,path)
+
+def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre :str, save : bool = True):
+    if isinstance(path, MP3):
+        audio = path
+    else:
+        audio = MP3(path, ID3=ID3)
+
+    if audio.tags is None:
+        audio.add_tags()
+    audio.tags.add(TCON(encoding=3, text=[new_genre]))
+    if save:
+        audio.save()
+        logger.debug("Updated genre to {0} for {1}", new_genre, path)
+
 
 def update_mp3_categories(path: str | PathLike[str] | MP3, categories: dict[str, int], save: bool = True):
     if isinstance(path, MP3):

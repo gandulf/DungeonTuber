@@ -238,6 +238,7 @@ class SettingKeys(StrEnum):
     ROOT_DIRECTORY = "rootDirectory"
     DIRECTORY_TREE = "directoryTree"
     RUSSEL_WIDGET ="russelWidget"
+    BPM_WIDGET = "bpmWidget"
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"
     THEME = "theme"
@@ -248,7 +249,9 @@ class SettingKeys(StrEnum):
     COLUMN_SCORE_VISIBLE = "columnScoreVisible"
     COLUMN_TITLE_VISIBLE = "columnTitleVisible"
     COLUMN_ALBUM_VISIBLE = "columnAlbumVisible"
+    COLUMN_GENRE_VISIBLE = "columnGenreVisible"
     COLUMN_ARTIST_VISIBLE = "columnArtistVisible"
+    COLUMN_BPM_VISIBLE = "columnBPMVisible"
     COLUMN_SUMMARY_VISIBLE = "columnSummaryVisible"
 
     TITLE_INSTEAD_OF_FILE_NAME = "titleInsteadOfFilename"
