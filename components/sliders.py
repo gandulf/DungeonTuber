@@ -1,13 +1,14 @@
 from enum import StrEnum
 
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer
-from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter, QIcon, QLinearGradient, QPolygon, QFontMetrics, QPaintEvent
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer, QKeyCombination
+from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter, QIcon, QLinearGradient, QPolygon, QFontMetrics, QPaintEvent, QAction, \
+    QKeySequence, QShortcut
 from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QPushButton, QHBoxLayout, QProxyStyle, QWidget, \
-    QGraphicsOpacityEffect, QDial
+    QGraphicsOpacityEffect, QDial, QToolButton
 
+from audioengine import DEFAULT_VOLUME
 from config.settings import MusicCategory
 from config.theme import app_theme
-from config.utils import get_path
 
 class BPMSlider(QWidget):
 
@@ -713,15 +714,22 @@ class VolumeSlider(QHBoxLayout):
     # icon_volume_off = MaterialIcon('volume_off', size=materialIconSize)
     # icon_volume_down = MaterialIcon('volume_down', size=materialIconSize)
     # icon_volume_up = MaterialIcon('volume_down', size=materialIconSize)
-    last_volume: int
+    last_volume: int = None
     volume_changed = Signal(int)
 
-    def __init__(self, value: int = 70):
+    def __init__(self, value: int = 70, shortcut: QKeySequence | QKeyCombination | QKeySequence.StandardKey | str | int = None):
         super(VolumeSlider, self).__init__()
-        self.btn_volume = QPushButton()
+
+        toggle_mute_action = QAction(_("Mute"), self)
+        if shortcut is not None:
+            toggle_mute_action.setShortcut(shortcut)
+        toggle_mute_action.triggered.connect(self.toggle_mute)
+
+        self.btn_volume = QToolButton()
         self.btn_volume.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
         self.btn_volume.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
-        self.btn_volume.clicked.connect(self.toggle_mute)
+        self.btn_volume.setDefaultAction(toggle_mute_action)
+        self.btn_volume.setShortcutEnabled(True)
         self._update_volume_icon(value)
         self.addWidget(self.btn_volume,0)
 
@@ -734,6 +742,18 @@ class VolumeSlider(QHBoxLayout):
         self.slider_vol.valueChanged.connect(self._on_value_changed)
         self.slider_vol.setStyle(VolumeSliderStyle())
         self.slider_vol.setSingleStep(5)
+
+        # Shortcut to increase slider
+        if shortcut is not None:
+            inc_shortcut = QShortcut(QKeySequence("Ctrl+Up"), self)
+            inc_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+            inc_shortcut.activated.connect(self.increase_volume)
+
+            # Shortcut to decrease slider
+            dec_shortcut = QShortcut(QKeySequence("Ctrl+Down"), self)
+            dec_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+            dec_shortcut.activated.connect(self.decrease_volume)
+
         self.addWidget(self.slider_vol, 1)
 
     @Property(int, notify=volume_changed)
@@ -743,7 +763,13 @@ class VolumeSlider(QHBoxLayout):
     @volume.setter
     def volume(self, value):
         self.slider_vol.setValue(value)
-        self._update_volume_icon(value)
+        self._update_volume_icon(self.slider_vol.value())
+
+    def increase_volume(self ):
+        self.volume = self.volume + self.slider_vol.pageStep()
+
+    def decrease_volume(self, ):
+        self.volume = self.volume - self.slider_vol.pageStep()
 
     def _on_value_changed(self, value):
         self._update_volume_icon(value)
@@ -755,12 +781,14 @@ class VolumeSlider(QHBoxLayout):
     def set_icon_size(self, icon_size: QSize):
         self.btn_volume.setIconSize(icon_size)
 
-    def toggle_mute(self):
+    def toggle_mute(self ):
         if self.slider_vol.value() > 0:
             self.last_volume = self.slider_vol.value()
             self.slider_vol.setValue(0)
-        else:
+        elif self.last_volume is not None:
             self.slider_vol.setValue(self.last_volume)
+        else:
+            self.slider_vol.setValue(DEFAULT_VOLUME)
 
         self.volume_changed.emit(self.slider_vol.value())
 
@@ -779,7 +807,7 @@ class RepeatMode(StrEnum):
     REPEAT_ALL = "Repeat All"
 
 
-class RepeatButton(QPushButton):
+class RepeatButton(QToolButton):
     icon_no_repeat: QIcon = QIcon.fromTheme("no-repeat")
     icon_repeat_1: QIcon = QIcon.fromTheme("repeat")
     icon_repeat_all: QIcon = QIcon.fromTheme("all-repeat")
@@ -800,7 +828,11 @@ class RepeatButton(QPushButton):
         else:
             self._repeat_mode = self.REPEAT_MODES[int(value)]
 
-        self.clicked.connect(self.cycle_repeat_mode)
+        cycle_action = QAction("Cycle", self)
+        cycle_action.setShortcut("Ctrl+R")
+
+        cycle_action.triggered.connect(self.cycle_repeat_mode)
+        self.setDefaultAction(cycle_action)
         self.update_repeat_button()
 
     def cycle_repeat_mode(self):

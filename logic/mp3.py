@@ -27,7 +27,7 @@ class Mp3Entry(object):
     artist: str
     album: str
     summary: str
-    genre: str
+    genre: list[str]
     length: int
     favorite: bool
     cover: QPixmap | None
@@ -38,7 +38,7 @@ class Mp3Entry(object):
     tags: list[str]
     _all_tags: None | set[str]
 
-    def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None, genre:str = None, bpm: int = None):
+    def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None, genre:list[str] | str = None, bpm: int = None):
         if name is not None:
             self.name = name.removesuffix(".mp3").removesuffix(".MP3")
         else:
@@ -48,7 +48,10 @@ class Mp3Entry(object):
         self.title = title
         self.artist = artist
         self.album = album
-        self.genre = genre
+        if isinstance(genre, str):
+            self.genre = [genre]
+        else:
+            self.genre = genre
         self.summary =""
         self.length =-1
         self.favorite = False
@@ -138,7 +141,7 @@ def parse_mp3(file_path : str | PathLike[str], load_cover:bool = False) -> Mp3En
                 entry.album = audio.tags.get("TALB").text[0]
 
             if 'TCON' in audio:
-                entry.genre = audio.tags.get('TCON').text[0]
+                entry.genre = audio.tags.get('TCON').text
 
             if 'TBPM' in audio:
                 entry.bpm = int(audio.tags.get('TBPM').text[0])
@@ -272,7 +275,7 @@ def update_mp3_title(path : str| PathLike[str]| MP3, new_title :str, save : bool
         audio.save()
         logger.debug("Updated title to {0} for {1}", new_title,path)
 
-def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre :str, save : bool = True):
+def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre : list[str] | str, save : bool = True):
     if isinstance(path, MP3):
         audio = path
     else:
@@ -280,7 +283,12 @@ def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre :str, save : bool
 
     if audio.tags is None:
         audio.add_tags()
-    audio.tags.add(TCON(encoding=3, text=[new_genre]))
+
+    if isinstance(new_genre, str):
+        audio.tags.add(TCON(encoding=3, text=[new_genre]))
+    else:
+        audio.tags.add(TCON(encoding=3, text=new_genre))
+
     if save:
         audio.save()
         logger.debug("Updated genre to {0} for {1}", new_genre, path)

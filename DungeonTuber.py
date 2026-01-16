@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QAbstractItemView, QMenu, QDialog, QFormLayout, QLineEdit, QCheckBox,
     QDialogButtonBox, QTextEdit, QStatusBar, QProgressBar, QHeaderView, QTableView, QStyleOptionViewItem,
     QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QStyle, QSlider, QListWidget, QListWidgetItem,
-    QListView, QStyleOption
+    QListView, QStyleOption, QToolButton
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
     QPersistentModelIndex, QFileInfo, QEvent, QRect
@@ -125,7 +125,7 @@ def _calculate_score(_filter_config: FilterConfig, data: Mp3Entry):
             score = 0
 
         if data.tags is not None:
-            if desired_tag not in data.all_tags():
+            if desired_tag not in data.all_tags() and desired_tag not in data.genre:
                 score += 100
         else:
             score += 100
@@ -509,7 +509,7 @@ class TableModel(QAbstractTableModel):
             elif index.column() == TableModel.ALBUM_COL:
                 return data.album
             elif index.column() == TableModel.GENRE_COL:
-                return data.genre
+                return ", ".join(data.genre) if data.genre else ""
             elif index.column() == TableModel.BPM_COL:
                 return data.bpm
             elif index.column() == TableModel.SCORE_COL:
@@ -703,7 +703,6 @@ class EffectList(QWidget):
 
         self.list_widget = QListWidget()
         self.list_widget.setItemDelegate(EffectList.GridDelegate(parent = self.list_widget))
-        #self.list_widget.setUniformItemSizes(True)
 
         if listMode == QListView.ViewMode.ListMode:
             self.set_list_view()
@@ -716,6 +715,7 @@ class EffectList(QWidget):
 
         self.btn_play = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart), "")
         self.btn_play.clicked.connect(self.toogle_play)
+        self.btn_play.setShortcut("Ctrl+E")
         self.btn_play.setFixedSize(app_theme.button_size_small)
         self.btn_play.setIconSize(app_theme.icon_size_small)
 
@@ -1404,13 +1404,24 @@ class Player(QWidget):
         self.controls_layout = QHBoxLayout(controls_widget)
         self.controls_layout.setSpacing(8)
 
-        self.btn_prev = QPushButton(self.icon_prev, "")
-        self.btn_play = QPushButton(self.icon_play, "")
-        self.btn_next = QPushButton(self.icon_next, "")
+        prev_action = QAction(self.icon_prev, _("Previous"), self)
+        prev_action.setShortcut("Ctrl+B")
+        prev_action.triggered.connect(self.prev_track)
 
-        self.btn_next.clicked.connect(self.next_track)
-        self.btn_prev.clicked.connect(self.prev_track)
-        self.btn_play.clicked.connect(self.toggle_play)
+        play_action = QAction(self.icon_play, _("Play"), self)
+        play_action.setShortcut("Ctrl+P")
+        play_action.triggered.connect(self.toggle_play)
+
+        next_action = QAction(self.icon_next, _("Next"), self)
+        next_action.setShortcut("Ctrl+N")
+        next_action.triggered.connect(self.next_track)
+
+        self.btn_prev = QToolButton()
+        self.btn_prev.setDefaultAction(prev_action)
+        self.btn_play = QToolButton()
+        self.btn_play.setDefaultAction(play_action)
+        self.btn_next = QToolButton()
+        self.btn_next.setDefaultAction(next_action)
 
         for btn in [self.btn_prev, self.btn_play, self.btn_next]:
             btn.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
@@ -1423,7 +1434,7 @@ class Player(QWidget):
 
         self.repeat_mode_changed = self.btn_repeat.value_changed
 
-        self.slider_vol = VolumeSlider(AppSettings.value(SettingKeys.VOLUME, 70, type=int))
+        self.slider_vol = VolumeSlider(AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
         self.slider_vol.set_button_size(QSize(app_theme.button_size, app_theme.button_size))
         self.slider_vol.set_icon_size(QSize(app_theme.icon_size, app_theme.icon_size))
         self.slider_vol.slider_vol.setMinimumWidth(200)
@@ -1441,7 +1452,7 @@ class Player(QWidget):
 
         # controls_layout.addWidget(self.visualizer, 1)
         self.controls_layout.addSpacing(12)
-        self.controls_layout.addLayout(self.slider_vol,1)
+        self.controls_layout.addLayout(self.slider_vol,0)
         self.controls_layout.addWidget(self.btn_repeat)
         self.setBackgroundRole(QPalette.ColorRole.Midlight)
         self.setAutoFillBackground(True)
@@ -1556,7 +1567,8 @@ class Player(QWidget):
         self.trackChanged.emit(current_index, None)
 
     def prev_track(self):
-        if self.track_count == 0: return
+        if self.track_count == 0:
+            return
         current_index = (self.current_index - 1) % self.track_count
         self.engine.stop()
         self.trackChanged.emit(current_index, None)
@@ -2495,11 +2507,16 @@ class MusicPlayer(QMainWindow):
 
     def update_available_tags(self, entries: list[Mp3Entry]):
         global available_tags
+
         tags_set = set(get_music_tags().keys())
+        genres_set = set()
+
         for entry in entries:
             tags_set.update(entry.tags)
+            tags_set.update(entry.genre)
 
         available_tags = sorted(list(tags_set))
+
         self.filter_widget.update_tags_and_presets()
 
     def load_files(self, table: SongTable, mp3_files: list[Path]):
@@ -2561,11 +2578,13 @@ class MusicPlayer(QMainWindow):
             entry_index = table.index_of(entry)
             if entry_index >= 0:
                 self.current_index = entry_index
+                table.clearSelection()
                 table.selectRow(entry_index)
             self.player.play_track(entry, entry_index)
 
         elif 0 <= index < table.rowCount():
             self.current_index = index
+            table.clearSelection()
             table.selectRow(index)
             data = table.mp3_data(index)
             self.player.play_track(data, index)
