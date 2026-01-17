@@ -6,7 +6,7 @@ import jsonpickle
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLayout, QTabWidget, QWidget, \
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
-    QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox
+    QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox, QLabel
 from google import genai
 from google.genai.types import ListModelsConfig
 
@@ -243,8 +243,10 @@ class SettingKeys(StrEnum):
     VISUALIZER = "visualizer"
     THEME = "theme"
     LOCALE = "locale"
+    START_TOUR = "startTour"
 
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
+    DYNAMIC_SCORE_COLUMN = "dynamicScoreColumn"
     COLUMN_FAVORITE_VISIBLE = "columnFavoriteVisible"
     COLUMN_SCORE_VISIBLE = "columnScoreVisible"
     COLUMN_TITLE_VISIBLE = "columnTitleVisible"
@@ -404,25 +406,21 @@ class SettingsDialog(QDialog):
         self.title_file_name_columns.setChecked(AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False, type=bool))
         table_layout.addRow("", self.title_file_name_columns)
 
+        self.dynamic_score_column = QCheckBox(_("Dynamic Category Columns"))
+        self.dynamic_score_column.setChecked(AppSettings.value(SettingKeys.DYNAMIC_SCORE_COLUMN, False, type=bool))
+        table_layout.addRow("", self.dynamic_score_column)
+        dynamic_score_description = QLabel(_("Only show score column if any filters are active."))
+        dynamic_score_description.setStyleSheet(f"font-size:12px")
+        dynamic_score_description.setContentsMargins(28, 0, 0, 0)
+        table_layout.addRow("", dynamic_score_description)
+
         self.dynamic_table_columns = QCheckBox(_("Dynamic Category Columns"))
         self.dynamic_table_columns.setChecked(AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
         table_layout.addRow("", self.dynamic_table_columns)
-
-        self.fav_column = QCheckBox(_("Favorite Column Visible"))
-        self.fav_column.setChecked(AppSettings.value(SettingKeys.COLUMN_FAVORITE_VISIBLE, True, type=bool))
-        table_layout.addRow("", self.fav_column)
-
-        self.title_column = QCheckBox(_("Title Column Visible"))
-        self.title_column.setChecked(AppSettings.value(SettingKeys.COLUMN_TITLE_VISIBLE, False, type=bool))
-        table_layout.addRow("", self.title_column)
-
-        self.artist_column = QCheckBox(_("Artist Column Visible"))
-        self.artist_column.setChecked(AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
-        table_layout.addRow("", self.artist_column)
-
-        self.album_column = QCheckBox(_("Album Column Visible"))
-        self.album_column.setChecked(AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
-        table_layout.addRow("", self.album_column)
+        dynamic_colomns_description = QLabel(_("Only category columns with an active filter value are display else they are hidden automatically."))
+        dynamic_colomns_description.setStyleSheet(f"font-size:12px")
+        dynamic_colomns_description.setContentsMargins(28,0,0,0)
+        table_layout.addRow("", dynamic_colomns_description)
 
         self.summary_column = QCheckBox(_("Summary Visible"))
         self.summary_column.setChecked(AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool))
@@ -548,11 +546,8 @@ class SettingsDialog(QDialog):
         AppSettings.setValue(SettingKeys.AI_MODEL, self.model_combo.currentText())
         AppSettings.setValue(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
+        AppSettings.setValue(SettingKeys.DYNAMIC_SCORE_COLUMN, self.dynamic_score_column.isChecked())
         AppSettings.setValue(SettingKeys.SKIP_ANALYZED_MUSIC, self.skip_analyzed_mp3.isChecked())
-        AppSettings.setValue(SettingKeys.COLUMN_FAVORITE_VISIBLE, self.fav_column.isChecked())
-        AppSettings.setValue(SettingKeys.COLUMN_TITLE_VISIBLE, self.title_column.isChecked())
-        AppSettings.setValue(SettingKeys.COLUMN_ARTIST_VISIBLE, self.artist_column.isChecked())
-        AppSettings.setValue(SettingKeys.COLUMN_ALBUM_VISIBLE, self.album_column.isChecked())
         AppSettings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())
 
         _categories= []

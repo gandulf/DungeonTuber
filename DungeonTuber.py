@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QListView, QStyleOption, QToolButton
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
-    QPersistentModelIndex, QFileInfo, QEvent, QRect
+    QPersistentModelIndex, QFileInfo, QEvent, QRect, QTimer
 from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QKeyEvent, QFont, QFontMetrics, \
     QActionGroup, QPixmap, QPen
 
@@ -57,7 +57,7 @@ from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, clear_layout
 
 from components.sliders import CategoryWidget, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider, BPMSlider
-from components.widgets import StarRating, IconLabel
+from components.widgets import StarRating, IconLabel, FeatureOverlay
 from components.visualizer import Visualizer
 from components.layouts import FlowLayout
 from components.charts import RussellEmotionWidget
@@ -713,7 +713,7 @@ class EffectList(QWidget):
         player_layout.setContentsMargins(0,0,0,0)
         player_layout.setSpacing(0)
 
-        self.btn_play = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart), "")
+        self.btn_play = QToolButton(icon = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
         self.btn_play.clicked.connect(self.toogle_play)
         self.btn_play.setShortcut("Ctrl+E")
         self.btn_play.setFixedSize(app_theme.button_size_small)
@@ -740,15 +740,15 @@ class EffectList(QWidget):
 
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
 
-        self.headerLabel = IconLabel(QIcon.fromTheme("effects"), "Effects")
+        self.headerLabel = IconLabel(QIcon.fromTheme("effects"), _("Effects"))
         self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         self.headerLabel.setStyleSheet(f"font-size: {app_theme.font_size}px; font-weight: bold;")
         self.headerLabel.setFixedHeight(app_theme.button_height_small)
 
-        list_view = QPushButton(icon = QIcon.fromTheme("list"))
+        list_view = QToolButton(icon = QIcon.fromTheme("list"))
         list_view.clicked.connect(self.set_list_view)
 
-        grid_view = QPushButton(icon = QIcon.fromTheme("grid"))
+        grid_view = QToolButton(icon = QIcon.fromTheme("grid"))
         grid_view.clicked.connect(self.set_grid_view)
 
         self.headerLabel.add_widget(list_view)
@@ -1208,7 +1208,7 @@ class SongTable(QTableView):
         self.setColumnHidden(TableModel.GENRE_COL, not AppSettings.value(SettingKeys.COLUMN_GENRE_VISIBLE, False, type=bool))
         self.setColumnHidden(TableModel.BPM_COL, not AppSettings.value(SettingKeys.COLUMN_BPM_VISIBLE, False, type=bool))
 
-        if self.table_model.filter_config is None or self.table_model.filter_config.empty():
+        if AppSettings.value(SettingKeys.DYNAMIC_SCORE_COLUMN, True, type=bool) and (self.table_model.filter_config is None or self.table_model.filter_config.empty()):
             self.setColumnHidden(TableModel.SCORE_COL, True)
 
         for col, category in enumerate(get_music_categories()):
@@ -1663,8 +1663,8 @@ class FilterWidget(QWidget):
         self.player = player
 
         self.russel_widget = RussellEmotionWidget()
-        self.russel_widget.setMaximumSize(QSize(350, 350))
-        self.russel_widget.setMinimumSize(QSize(300, 300))
+        self.russel_widget.setMaximumSize(QSize(450, 450))
+        self.russel_widget.setMinimumSize(QSize(160, 160))
         self.russel_widget.valueChanged.connect(self.on_russel_changed)
         self.russel_widget.mouseReleased.connect(self.on_russel_released)
         self.russel_widget.setVisible(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
@@ -1695,16 +1695,14 @@ class FilterWidget(QWidget):
         self.slider_tabs = QTabWidget()
         self.slider_tabs.tabBar().setAutoHide(True)
 
-        # --- Sliders Section ---
-        self.sliders_widget = QWidget()
-        self.sliders_layout = QVBoxLayout(self.sliders_widget)
-        self.sliders_layout.setContentsMargins(8, 8, 8, 8)
-
         # sliders_container.addWidget(self.sliders_widget, 1)
-        self.presets_layout = QHBoxLayout()
+        self.presets_widget = QWidget()
+        self.presets_layout = QHBoxLayout(self.presets_widget)
+        self.presets_layout.setContentsMargins(0,0,0,0)
+        self.presets_layout.setSpacing(0)
         self.presets_layout.addStretch()
 
-        self.filter_layout.addLayout(self.presets_layout, 0)
+        self.filter_layout.addWidget(self.presets_widget, 0)
         self.filter_layout.addWidget(self.slider_tabs, 1)
         # --------------------------------------
 
@@ -1848,7 +1846,7 @@ class FilterWidget(QWidget):
         clear_layout(self.presets_layout)
         self.presets_layout.addStretch()
         for preset in get_presets():
-            button = QPushButton(preset.name, self)
+            button = QPushButton(text = preset.name)
             button.setFixedHeight(app_theme.button_height_small)
             #button.setIconSize(app_theme.icon_size_small)
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
@@ -1865,13 +1863,13 @@ class FilterWidget(QWidget):
             button.clicked.connect(functools.partial(self.select_preset, preset))
             self.presets_layout.addWidget(button)
 
-        save_preset = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs), "")
+        save_preset = QToolButton(icon = QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
         save_preset.clicked.connect(self.save_preset_action)
         save_preset.setFixedSize(app_theme.button_size_small)
         #save_preset.setIconSize(app_theme.icon_size_small)
         self.presets_layout.addWidget(save_preset)
 
-        clear_preset = QPushButton(QIcon.fromTheme(QIcon.ThemeIcon.EditClear), "")
+        clear_preset = QToolButton(icon = QIcon.fromTheme(QIcon.ThemeIcon.EditClear))
         clear_preset.clicked.connect(self.clear_sliders)
         clear_preset.setFixedSize(app_theme.button_size_small)
         #clear_preset.setIconSize(app_theme.icon_size_small)
@@ -2038,6 +2036,10 @@ class MusicPlayer(QMainWindow):
             version_text = _("Newer version available {0}").format(f"<a href=\"{DOWNLOAD_LINK}\">{get_latest_version()}</a>")
             self.update_status_label(version_text, False, False)
 
+
+        if AppSettings.value(SettingKeys.START_TOUR, True, type=bool):
+            QTimer.singleShot(500, lambda: self.start_tour())
+
     def exit(self):
         sys.exit(0)
 
@@ -2200,9 +2202,58 @@ class MusicPlayer(QMainWindow):
 
         # Help Menu
         help_menu = menu_bar.addMenu(_("Help"))
+
+        tour_action = QAction(_("Show Tour"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.HelpFaq))
+        tour_action.triggered.connect(self.start_tour)
+        help_menu.addAction(tour_action)
+
         about_action = QAction(_("About"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.HelpAbout))
         about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(about_action)
+
+
+    def start_tour(self):
+        steps = [
+            {"widget": self.directory_tree,
+             'message': """This is your source for all music. Click a folder to load all contained songs into 
+            the main table, or click a single file to play it instantly. Use this to organize your different campaign locations 
+            (e.g., Tavern Music,Combat,Stealth). You can also set a new home directory to make navigation faster."""},
+            {'widget': self.filter_widget.russel_widget,
+             'message': """This is the heart of the app. Drag the blue dot to find music that matches
+            the current emotional beat of your game. Want something tense for a boss? Drag it toward <strong>Angry/Excited</strong>.
+            Want a peaceful town theme? Move it toward <strong>Happy/Relaxed</strong>."""},
+            {'widget': next(iter(self.filter_widget.sliders.values())).slider,
+             'message': """Use these to fine-tune your search. If your party is entering a legendary cathedral, crank up the Mysticism
+             and Heroism. The list below will automatically filter for tracks that meet these specific intensity levels."""},
+            {'widget': self.filter_widget.bpm_widget,
+             'message': """This helps you match the \"heartbeat\" of your session. If the party is in a high-speed chase,
+             turn the dial up to filter for high <strong>Beats Per Minute (BPM)</strong> tracks to keep the energy high."""},
+            {'widget': self.filter_widget.tags_widget,
+             'message': """These are one-click filters. Use them to quickly narrow down your library by genre or instrument.
+             For example, toggle <strong>"Drums"</strong> and <strong>"Dark"</strong> to instantly find percussive combat tracks."""},
+            {'widget': self.filter_widget.presets_widget,
+             'message':"""Once you’ve dialed in the perfect mix of sliders, BPM, and Mood Map coordinates, you don't want to lose it!
+             Type a name into the box (like "Epic Boss" or "Spooky Cave") and click the <strong>Save</strong> icon. You can now instantly recall those
+             exact filter settings later by selecting them from the dropdown, allowing you to change the entire atmosphere of your room
+             in one click."""},
+            {'widget': self.table_tabs,
+             'message': """This shows the songs currently available based on your filters. Double-click a row to play a song, or glance at the tags to see if 
+             it’s "Sad" or "Energetic. Right click non the headers to customize their visibility."""},
+            {'widget': self.searchbar,
+             'message':"""If you know exactly what you’re looking for (like "Dragon Boss"), type it here.
+             It searches through filenames and metadata in real-time to surface that specific track."""},
+            {'widget':self.effects_list,
+             'message':"""These are your "layering" sounds. Open a directory containing you effects and click an effect to start it. These run independently of your music, allowing you to have a
+             "Tavern" song playing in the main player while "Rain" or "Bonfire" crackle in the background for extra immersion."""},
+            {'widget': self.menuBar(),
+             'message': """Feeling a bit overwhelmed? Tailor the app to your screen size or DMing style. Under this menu, you can <strong>hide</strong> or
+             <strong>show</strong> most widgets (like the Mood Map or Effects Rack). If you only need the Track List during a session, hide everything else
+             to create a clean, distraction-free interface."""}
+
+        ]
+        self.overlay = FeatureOverlay(self, steps)
+        AppSettings.setValue(SettingKeys.START_TOUR,False)
+
 
     def show_about_dialog(self):
         dialog = AboutDialog(self)

@@ -218,15 +218,15 @@ class AppTheme(QObject):
             color:white;
         }
         
-        QPushButton {
+        QPushButton, QToolButton {
             background-color: rgba(42,42,42,200);
         }
         
-        QPushButton::selected {
+        QPushButton::selected, QToolButton::selected {
             background-color: rgba(82,82,82,170);
         }
         
-        QPushButton::hover {
+        QPushButton::hover, QToolButton::hover {
             background-color: rgba(82,82,82,170);
         }
         

@@ -1,8 +1,10 @@
 import math
 
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem
-from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect, Signal
-from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton
+from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, QPoint
+from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent, QColor
+
+from theme import app_theme
 
 PAINTING_SCALE_FACTOR = 20
 
@@ -111,3 +113,169 @@ class IconLabel(QWidget):
             self.icon_label.setVisible(True)
         else:
             self.icon_label.setVisible(False)
+
+
+class FeatureOverlay(QWidget):
+    def __init__(self, parent, steps):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_DeleteOnClose)
+
+        self.steps = steps
+        self.current_step = 0
+
+        # Highlight rectangle as animatable property
+        self._highlight_rect = QRect(0, 0, 0, 0)
+
+        # Help text label
+        self.label = QLabel(self)
+        self.label.setStyleSheet(f"color: white; font-size: {app_theme.font_size}px;")
+        self.label.setWordWrap(True)
+        self.label.setContentsMargins(8,8,8,8)
+        self.label.setTextFormat(Qt.TextFormat.RichText)
+        self.label.setMinimumWidth(300)
+
+
+        # Next button
+        self.next_button = QPushButton(_("Next"), self)
+        self.next_button.setShortcut(Qt.Key.Key_Enter)
+        self.next_button.clicked.connect(self.next_step)
+
+        self.close_button = QPushButton(_("Close"), self)
+        self.close_button.setShortcut(Qt.Key.Key_Escape)
+        self.close_button.clicked.connect(self.close)
+
+        # Track parent changes
+        self.parent().installEventFilter(self)
+
+        self.setGeometry(parent.geometry())
+        self.show()
+        self.show_step(initial=True)
+
+        # Animatable property
+
+    def get_highlight_rect(self):
+        return self._highlight_rect
+
+    def set_highlight_rect(self, rect):
+        self._highlight_rect = rect
+        self.update_label_button()
+        self.update()
+
+    highlight_rect = Property(QRect, get_highlight_rect, set_highlight_rect)
+
+    def update_label_button(self, position: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignBottom):
+        label_padding = 16
+
+        parent_rect = self.parent().rect()
+        highlight_rect: QRect = self.get_highlight_rect()
+
+        self.label.setMinimumWidth(max(300, self._highlight_rect.width()))
+
+
+        if self.current_step < len(self.steps):
+            self.label.setText(self.steps[self.current_step]['message'])
+            self.label.adjustSize()
+
+        if self.current_step == len(self.steps) - 1:
+            self.next_button.setText(_("Ok"))
+            self.close_button.setVisible(False)
+        else:
+            self.next_button.setText(_("Next"))
+            self.close_button.setVisible(True)
+
+
+        if position == Qt.AlignmentFlag.AlignBottom:
+            if highlight_rect.bottom() + self.label.height() + self.next_button.height() + label_padding > parent_rect.bottom():
+                self.update_label_button(Qt.AlignmentFlag.AlignRight)
+                return
+            self.label.move(highlight_rect.left(), highlight_rect.bottom() + label_padding)
+        elif position == Qt.AlignmentFlag.AlignRight:
+            if highlight_rect.right() + self.label.width() > parent_rect.right():
+                self.update_label_button(Qt.AlignmentFlag.AlignLeft)
+                return
+            self.label.move(highlight_rect.right() +label_padding, highlight_rect.top() )
+        elif position == Qt.AlignmentFlag.AlignLeft:
+            if highlight_rect.left() - self.label.width() < parent_rect.left():
+                self.update_label_button(Qt.AlignmentFlag.AlignTop)
+                return
+            self.label.move(highlight_rect.left()- self.label.width() - label_padding, highlight_rect.top())
+        else:
+            self.label.move(highlight_rect.left(), highlight_rect.top() - self.label.height() - label_padding - self.next_button.height() - label_padding)
+
+        # Position button below label
+        self.next_button.move( self.label.geometry().right() - self.next_button.width(), self.label.geometry().bottom() + label_padding)
+        self.close_button.move(self.label.geometry().left(), self.label.geometry().bottom() + label_padding)
+
+    def compute_highlight_rect(self, widget):
+        """
+        Returns the QRect of the widget relative to the overlay,
+        accounting for window frame, DPI, and any layout offsets.
+        """
+        # Map the widget's top-left to global coordinates
+        top_left_global = widget.mapToGlobal(QPoint(0, 0))
+        bottom_right_global = widget.mapToGlobal(QPoint(widget.width(), widget.height()))
+
+        # Convert global coordinates to overlay coordinates
+        top_left_overlay = self.mapFromGlobal(top_left_global)
+        bottom_right_overlay = self.mapFromGlobal(bottom_right_global)
+
+        rect = QRect(top_left_overlay, bottom_right_overlay)
+        return rect
+
+    def show_step(self, initial=False):
+        if self.current_step >= len(self.steps):
+            self.close()
+            return
+
+        step = self.steps[self.current_step]
+        widget = step['widget']
+
+        # Correct mapping: widget -> overlay coordinates
+        target_rect = self.compute_highlight_rect(widget)
+
+        if initial:
+            # Jump immediately
+            self.set_highlight_rect(target_rect)
+        else:
+            # Animate highlight rectangle
+            self.anim = QPropertyAnimation(self, b"highlight_rect")
+            self.anim.setDuration(500)
+            self.anim.setEasingCurve(QEasingCurve.InOutCubic)
+            self.anim.setStartValue(self._highlight_rect)
+            self.anim.setEndValue(target_rect)
+            self.anim.start()
+
+    def next_step(self):
+        self.current_step += 1
+        self.show_step()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 150))
+
+        # Clear highlight area
+        painter.save()
+        painter.setCompositionMode(QPainter.CompositionMode_Clear)
+        painter.setBrush(QBrush(Qt.SolidPattern))
+        painter.drawRoundedRect(self._highlight_rect,8,8)
+        painter.restore()
+
+        # Rounded border around highlight
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawRoundedRect(self._highlight_rect, 8, 8)
+
+        painter.setBrush(QBrush(QColor(0, 0, 0, 150)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(self.label.geometry(), 8.0,8.0 )
+
+    def eventFilter(self, obj, event):
+        # Update highlight if parent resizes or moves
+        if obj == self.parent() and event.type() in (QEvent.Resize, QEvent.Move):
+            self.setGeometry(self.parent().geometry())
+            self.show_step(initial=True)
+        return super().eventFilter(obj, event)
