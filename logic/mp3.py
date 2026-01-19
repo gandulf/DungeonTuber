@@ -11,15 +11,16 @@ from os import PathLike
 from PySide6.QtCore import Property, Qt
 from PySide6.QtGui import QPixmap
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON
+from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM
 
 from config.settings import get_categories, _DEFAULT_CATEGORIES
 from config.utils import get_path, get_available_locales
+from settings import CAT_TEMPO, CAT_TENSION, CAT_HEROISM, CAT_MYSTICISM
 
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["name", "path", "title", "artist", "album", "summary","genre", "length", "favorite", "categories", "tags","_all_tags", "cover", "has_cover", "bpm"]
+    __slots__ = ["name", "path", "title", "artist", "album", "summary","genre", "length", "favorite", "categories", "_tags", "_all_tags", "_cover", "has_cover", "bpm"]
 
     name: str
     path: Path
@@ -30,15 +31,15 @@ class Mp3Entry(object):
     genre: list[str]
     length: int
     favorite: bool
-    cover: QPixmap | None
+    _cover: QPixmap | None
     has_cover: bool
     bpm: int
 
     categories : dict[str,int]
-    tags: list[str]
+    _tags: list[str]
     _all_tags: None | set[str]
 
-    def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = None, artist: str = None, album:str = None, title:str = None, genre:list[str] | str = None, bpm: int = None):
+    def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = [], artist: str = None, album:str = None, title:str = None, genre:list[str] | str = [], bpm: int = None):
         if name is not None:
             self.name = name.removesuffix(".mp3").removesuffix(".MP3")
         else:
@@ -50,8 +51,10 @@ class Mp3Entry(object):
         self.album = album
         if isinstance(genre, str):
             self.genre = [genre]
-        else:
+        elif genre:
             self.genre = genre
+        else:
+            self.genre = []
         self.summary =""
         self.length =-1
         self.favorite = False
@@ -61,17 +64,22 @@ class Mp3Entry(object):
             self.categories = {}
 
         if tags:
-            self.tags = tags
+            self._tags = tags
         else:
-            self.tags = []
+            self._tags = []
 
         self._all_tags = None
-        self.cover = None
+        self._cover = None
         self.has_cover = None
         self.bpm = bpm
 
-    def set_tags(self, tags: list[str]):
-        self.tags = tags
+    @property
+    def tags(self):
+        return self._tags
+
+    @tags.setter
+    def tags(self, tags: list[str]):
+        self._tags = tags
         self._all_tags = None
 
     def _le(self, category, value) -> bool:
@@ -87,12 +95,13 @@ class Mp3Entry(object):
         else:
             return None
 
-    def get_cover(self):
-        self.load_cover()
-        return self.cover
+    @property
+    def cover(self):
+        self._load_cover()
+        return self._cover
 
-    def load_cover(self, audio: MP3 = None):
-        if self.has_cover is None and self.cover is None:
+    def _load_cover(self, audio: MP3 = None):
+        if self.has_cover is None and self._cover is None:
             if audio is None:
                 audio = MP3(self.path, ID3=ID3)
             self.has_cover = False
@@ -103,25 +112,25 @@ class Mp3Entry(object):
                     pixmap = QPixmap()
                     pixmap.loadFromData(data)
                     icon_pixmap = pixmap.scaled(128, 128, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-                    self.cover = icon_pixmap
+                    self._cover = icon_pixmap
                     self.has_cover = True
 
-
+    @property
     def all_tags(self):
         if self._all_tags is None:
             self._all_tags = set(self.tags)
-            if self._ge("Tempo",7) and self._ge("Spannung",7) and self._ge("Heroik",6):
-                self._all_tags.add("Kampf")
+            if self._ge(CAT_TEMPO,7) and self._ge(CAT_TENSION,7) and self._ge(CAT_HEROISM,6):
+                self._all_tags.add(_("Fight"))
 
-            if self._le("Tempo",5) and self._le("Spannung",3) and self._le("Heroik",3) and self._le("Mystik",4):
-                self._all_tags.add("Reise")
+            if self._le(CAT_TEMPO,5) and self._le(CAT_TENSION,3) and self._le(CAT_HEROISM,3) and self._le(CAT_MYSTICISM,4):
+                self._all_tags.add(_("Travel"))
 
             self._all_tags = sorted(self._all_tags)
 
         return self._all_tags
 
 
-def parse_mp3(file_path : str | PathLike[str], load_cover:bool = False) -> Mp3Entry | None:
+def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
 
     try:
         entry = Mp3Entry(name=Path(file_path).name, path=file_path)
@@ -179,9 +188,6 @@ def parse_mp3(file_path : str | PathLike[str], load_cover:bool = False) -> Mp3En
             if txxx_fav and txxx_fav.text:
                 entry.favorite = bool(txxx_fav.text)
 
-            if load_cover:
-                entry.load_cover(audio)
-
         return entry
     except Exception as e:
         logger.error("Error reading tags for {0}: {1}", file_path, e)
@@ -217,21 +223,7 @@ def normalize_category(cat: str):
     return cat
 
 
-def update_mp3(path : str | PathLike[str], title: str, summary: str, favorite: bool, categories: dict[str,int], tags: list[str], genre:str = None):
-    audio = MP3(path, ID3=ID3)
-    if audio.tags is None:
-        audio.add_tags()
-
-    update_mp3_title(audio, title, False)
-    update_mp3_genre(audio, genre, False)
-    update_mp3_summary(audio,summary,False)
-    update_mp3_favorite(audio,favorite,False)
-    update_mp3_categories(audio,categories,False)
-    update_mp3_tags(audio,tags,tags,False)
-
-    audio.save
-
-def update_mp3_favorite(path : str | PathLike[str] | MP3, favorite: bool, save: bool = True):
+def _audio(path: str | PathLike[str] | MP3) -> MP3:
     if isinstance(path, MP3):
         audio = path
     else:
@@ -239,6 +231,39 @@ def update_mp3_favorite(path : str | PathLike[str] | MP3, favorite: bool, save: 
 
     if audio.tags is None:
         audio.add_tags()
+
+    return audio
+
+def update_mp3_data(path: str, data: Mp3Entry):
+    audio = _audio(path)
+
+    update_mp3_title(audio, data.title, False)
+    update_mp3_genre(audio, data.genre, False)
+    update_mp3_album(audio, data.album, False)
+    update_mp3_artist(audio, data.artist, False)
+    update_mp3_bpm(audio, data.bpm, False)
+    update_mp3_genre(audio, data.genre, False)
+    update_mp3_summary(audio, data.summary, False)
+    update_mp3_favorite(audio, data.favorite, False)
+    update_mp3_categories(audio, data.categories, False)
+    update_mp3_tags(audio, data.tags, False)
+
+    audio.save()
+
+def update_mp3(path : str | PathLike[str], title: str, summary: str, favorite: bool, categories: dict[str,int], tags: list[str], genre:str = None):
+    audio = _audio(path)
+
+    update_mp3_title(audio, title, False)
+    update_mp3_genre(audio, genre, False)
+    update_mp3_summary(audio,summary,False)
+    update_mp3_favorite(audio,favorite,False)
+    update_mp3_categories(audio,categories,False)
+    update_mp3_tags(audio,tags,False)
+
+    audio.save()
+
+def update_mp3_favorite(path : str | PathLike[str] | MP3, favorite: bool, save: bool = True):
+    audio = _audio(path)
 
     audio.tags.add(TXXX(encoding=3, desc='ai_favorite', text=[favorite]))
 
@@ -247,13 +272,7 @@ def update_mp3_favorite(path : str | PathLike[str] | MP3, favorite: bool, save: 
         logger.debug("Updated favorite to {0} for {1}", favorite, path)
 
 def update_mp3_summary(path : str| PathLike[str] | MP3, new_summary :str, save : bool = True):
-    if isinstance(path, MP3):
-        audio = path
-    else:
-        audio = MP3(path, ID3=ID3)
-
-    if audio.tags is None:
-        audio.add_tags()
+    audio = _audio(path)
 
     if new_summary:
         audio.tags.add(COMM(encoding=3, text=[new_summary]))
@@ -263,26 +282,43 @@ def update_mp3_summary(path : str| PathLike[str] | MP3, new_summary :str, save :
         logger.debug("Updated summary to {0} for {1}", new_summary,path)
 
 def update_mp3_title(path : str| PathLike[str]| MP3, new_title :str, save : bool = True):
-    if isinstance(path, MP3):
-        audio = path
-    else:
-        audio = MP3(path, ID3=ID3)
+    audio = _audio(path)
 
-    if audio.tags is None:
-        audio.add_tags()
     audio.tags.add(TIT2(encoding=3, text=[new_title]))
     if save:
         audio.save()
         logger.debug("Updated title to {0} for {1}", new_title,path)
 
-def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre : list[str] | str, save : bool = True):
-    if isinstance(path, MP3):
-        audio = path
-    else:
-        audio = MP3(path, ID3=ID3)
+def update_mp3_album(path : str| PathLike[str]| MP3, new_album :str, save : bool = True):
+    audio = _audio(path)
 
-    if audio.tags is None:
-        audio.add_tags()
+    audio.tags.add(TALB(encoding=3, text=[new_album]))
+    if save:
+        audio.save()
+        logger.debug("Updated album to {0} for {1}", new_album,path)
+
+def update_mp3_artist(path : str| PathLike[str]| MP3, new_artist :str, save : bool = True):
+    audio = _audio(path)
+
+    audio.tags.add(TPE1(encoding=3, text=[new_artist]))
+    if save:
+        audio.save()
+        logger.debug("Updated artist to {0} for {1}", new_artist, path)
+
+def update_mp3_bpm(path : str| PathLike[str]| MP3, new_bpm :int | None, save : bool = True):
+    audio = _audio(path)
+
+    if new_bpm is None:
+        if "TBPM" in audio.tags:
+            audio.tags.pop("TBPM")
+    else:
+        audio.tags.add(TBPM(encoding=3, text=[new_bpm]))
+    if save:
+        audio.save()
+        logger.debug("Updated bpm to {0} for {1}", new_bpm, path)
+
+def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre : list[str] | str, save : bool = True):
+    audio = _audio(path)
 
     if isinstance(new_genre, str):
         audio.tags.add(TCON(encoding=3, text=[new_genre]))
@@ -295,13 +331,7 @@ def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre : list[str] | str
 
 
 def update_mp3_categories(path: str | PathLike[str] | MP3, categories: dict[str, int], save: bool = True):
-    if isinstance(path, MP3):
-        audio = path
-    else:
-        audio = MP3(path, ID3=ID3)
-
-    if audio.tags is None:
-        audio.add_tags()
+    audio = _audio(path)
 
     if categories:
         if isinstance(categories, list):
@@ -315,13 +345,7 @@ def update_mp3_categories(path: str | PathLike[str] | MP3, categories: dict[str,
     if save:
         audio.save()
 def update_mp3_category(path: str| PathLike[str] | MP3, category : str, new_value : int | None, save : bool = True):
-    if isinstance(path, MP3):
-        audio = path
-    else:
-        audio = MP3(path, ID3=ID3)
-
-    if audio.tags is None:
-        audio.add_tags()
+    audio = _audio(path)
 
     cats = {}
     txxx_cats = audio.tags.get("TXXX:ai_categories")
@@ -343,13 +367,7 @@ def update_mp3_category(path: str| PathLike[str] | MP3, category : str, new_valu
         logger.debug("Updated {} to {1} for {2}", category, new_value,path)
 
 def update_mp3_tags(path: str| PathLike[str] | MP3, tags : list[str], save : bool = True):
-    if isinstance(path, MP3):
-        audio = path
-    else:
-        audio = MP3(path, ID3=ID3)
-
-    if audio.tags is None:
-        audio.add_tags()
+    audio = _audio(path)
 
     if tags:
         audio.tags.add(
@@ -369,13 +387,7 @@ def list_mp3s(path : str | PathLike[str]):
 
 def update_categories_and_tags(path : str | PathLike[str] | MP3, summary : str, categories: dict[str,int] = None, tags: list[str] = None):
     """Adds categories and summary as MP3 tags to the file."""
-    if isinstance(path, MP3):
-        audio = path
-    else:
-        audio = MP3(path, ID3=ID3)
-
-    if audio.tags is None:
-        audio.add_tags()
+    audio = _audio(path)
 
     update_mp3_summary(audio, summary, False)
     update_mp3_categories(audio, categories, False)
@@ -401,6 +413,32 @@ def print_mp3_tags(file_path: str | PathLike[str]):
         logger.error("An error occurred while reading tags: {0}",e)
 
 
+def remove_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
+    files = parse_m3u(playlist)
+
+    to_filter = [entry.path for entry in entries]
+    filtered = [parse_mp3(file) for file in files if file not in to_filter]
+
+    create_m3u(filtered, playlist)
+
+def append_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
+    try:
+        if len(entries) > 0:
+            logger.debug("Appending playlist '{0}'...", playlist)
+
+            # write the playlist
+            with open(playlist, 'a', encoding="utf-8") as of:
+                for mp3 in entries:
+                    relpath = os.path.relpath(mp3.path, str(Path(playlist).parent)).replace("\\", "/")
+                    of.write(f"#EXTINF:{mp3.length},{mp3.name}\n")
+                    of.write(relpath + "\n")
+        else:
+            logger.warning("No mp3 files found.")
+
+    except Exception:
+        logger.error("ERROR occurred when processing entries.")
+        logger.error("Text: {0}", sys.exc_info()[0])
+
 def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
 
     try:
@@ -408,7 +446,7 @@ def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
             logger.debug("Writing playlist '{0}'...", playlist)
 
             # write the playlist
-            with open(playlist, 'w') as of:
+            with open(playlist, 'w', encoding="utf-8") as of:
                 of.write("#EXTM3U\n")
 
                 # sorted by track number
@@ -421,11 +459,11 @@ def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
             logger.warning("No mp3 files found.")
 
     except Exception:
-        logger.error("ERROR occured when processing entries.")
+        logger.error("ERROR occurred when processing entries.")
         logger.error("Text: {0}", sys.exc_info()[0])
 
 def parse_m3u(file_path : str | PathLike[str]) -> list[Path] | None:
-    with open(file_path,'r') as infile:
+    with open(file_path,'r', encoding="utf-8") as infile:
 
         # All M3U files start with #EXTM3U.
         # If the first line doesn't start with this, we're either

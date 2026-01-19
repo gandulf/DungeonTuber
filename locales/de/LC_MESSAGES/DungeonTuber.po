@@ -84,7 +84,7 @@ msgstr "Hell"
 msgid "Dark"
 msgstr "Dunkel"
 
-msgid "Save As Preset"
+msgid "Save as Preset"
 msgstr "Als Preset speichern"
 
 msgid "Clear Values"
@@ -119,6 +119,9 @@ msgstr "Verzeichnis konnte nicht analysiert werden: {0}"
 
 msgid "Failed to scan directory: {0}"
 msgstr "Verzeichnis konnte nicht gescannt werden: {0}"
+
+msgid "Failed to load: {0}"
+msgstr "Fehler beim Öffnen: {0}"
 
 msgid "Select Playlist to Load"
 msgstr "Playlist zum Laden auswählen"
@@ -285,9 +288,6 @@ msgstr "Datei konnte nicht umbenannt werden: {0}"
 msgid "Analyze"
 msgstr "Analysieren"
 
-msgid "Edit Description"
-msgstr "Beschreibung bearbeiten"
-
 msgid "No Track Selected"
 msgstr "Kein Track ausgewählt"
 
@@ -359,9 +359,6 @@ msgstr "Liste alle Kategorien auf und bewerte sie auf eine Skala von {0} bis {1}
 
 msgid "AI TagsDescription"
 msgstr "Eine Auswahl von Tags die auf das Musikstück am besten zutreffen."
-
-msgid "Processed {0}."
-msgstr "{0} bearbeitet."
 
 # Valence
 msgid "Valence"
@@ -540,3 +537,125 @@ msgstr "Aufwärts"
 
 msgid "Refresh"
 msgstr "Aktualisieren"
+
+msgid "Skipping already analyzed file {0}"
+msgstr "Überspringe bereits analysierte Datei {0}"
+
+msgid "AI Model"
+msgstr "KI Modell"
+
+msgid "Only show score column if any filters are active."
+msgstr "Zeige Bewertungsspalte nur, wenn Filter aktiv sind."
+
+msgid "Only category columns with an active filter value are display else they are hidden automatically."
+msgstr "Zeige nur Kategoriespalten mit aktivem Filterwert, andere werden automatisch ausgeblendet."
+
+msgid "Circumplex model of emotion"
+msgstr "Zirkumplex-Modell der Emotionen"
+
+msgid "Beats per Minute"
+msgstr "Beats pro Minute"
+
+msgid "BPM (Beats per Minute)"
+msgstr "BPM (Beats pro Minute)"
+
+msgid "Effects Tree"
+msgstr "Effektbaum"
+
+msgid "Show Tour"
+msgstr "Tour anzeigen"
+
+msgid "Select Effects Directory"
+msgstr "Effektverzeichnis auswählen"
+
+msgid "Mute"
+msgstr "Stummschalten"
+
+msgid "Next"
+msgstr "Weiter"
+
+msgid "Previous"
+msgstr "Zurück"
+
+msgid "Play"
+msgstr "Abspielen"
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid "Ok"
+msgstr "Ok"
+
+msgid "Author"
+msgstr "Autor"
+
+msgid "Genre"
+msgstr "Genre"
+
+msgid "BPM"
+msgstr "BPM"
+
+msgid "Tour Directory Tree"
+msgstr "Dies ist deine Quelle für alle Musikstücke. Klicke auf einen Ordner, um alle enthaltenen Songs in "
+"die Haupttabelle zu laden, oder klicke auf eine einzelne Datei, um sie sofort abzuspielen. Nutze dies, "
+"um deine verschiedenen Kampagnen-Orte zu organisieren (z. B. Tavernenmusik, Kampf, Stealth). Du kannst "
+"auch ein neues Startverzeichnis festlegen, um die Navigation zu beschleunigen."
+
+msgid "Tour Russel Widget"
+msgstr "Dies ist das Herzstück der App. Ziehe den blauen Punkt, um Musik zu finden, die zur "
+"aktuellen emotionalen Stimmung deines Spiels passt. Suchst du etwas Angespanntes für einen Bosskampf? "
+"Ziehe ihn in Richtung <strong>Wütend/Aufgeregt</strong>. Möchtest du ein friedliches Stadtthema? "
+"Bewege ihn in Richtung <strong>Glücklich/Entspannt</strong>."
+
+msgid "Tour Category Slider"
+msgstr "Nutze diese Regler zur Feinabstimmung deiner Suche. Wenn deine Gruppe eine legendäre Kathedrale "
+"betritt, drehe Mystik und Heroismus hoch. Die Liste unten filtert automatisch nach Tracks, "
+"die genau diese Intensitätsstufen erfüllen."
+
+msgid "Tour BPM Widget"
+msgstr "Dies hilft dir, den „Herzschlag“ deiner Spielrunde anzupassen. Wenn sich die Gruppe in einer "
+"rasanten Verfolgungsjagd befindet, drehe den Regler hoch, um nach Tracks mit hohen "
+"<strong>Beats Per Minute (BPM)</strong> zu filtern und die Energie hochzuhalten."
+
+msgid "Tour Tags Widget"
+msgstr "Dies sind Ein-Klick-Filter. Nutze sie, um deine Bibliothek schnell nach Genre oder Instrument "
+"einzugrenzen. Aktiviere zum Beispiel <strong>Drums</strong> und <strong>Düster</strong>, um sofort "
+"perkussive Kampf-Tracks zu finden."
+
+msgid "Tour Presets Widget"
+msgstr "Sobald du die perfekte Mischung aus Reglern, BPM und Mood-Map-Koordinaten gefunden hast, "
+"möchtest du sie sicher nicht wieder verlieren! Gib einen Namen in das Feld ein (wie „Epischer Boss“ "
+"oder „Gruselige Höhle“) und klicke auf das <strong>Speichern</strong>-Icon. Du kannst diese exakten "
+"Filtereinstellungen später sofort wieder aufrufen, indem du sie aus dem Dropdown-Menü auswählst. "
+"So änderst du die gesamte Atmosphäre deines Raums mit nur einem Klick."
+
+msgid "Tour Song Table"
+msgstr "Hier werden die Songs angezeigt, die basierend auf deinen Filtern aktuell verfügbar sind. "
+"Doppelklicke auf eine Zeile, um einen Song abzuspielen, oder wirf einen Blick auf die Tags, um zu sehen, "
+"ob er „Traurig“ oder „Energetisch“ ist. Rechtsklicke auf die Kopfzeilen, um deren Sichtbarkeit anzupassen."
+
+msgid "Tour Searchbar"
+msgstr "Wenn du genau weißt, wonach du suchst (wie „Drachenboss“), gib es hier ein. "
+"Die Suche durchforstet Dateinamen und Metadaten in Echtzeit, um diesen speziellen Track zu finden."
+
+msgid "Tour Effectslist"
+msgstr "Dies sind deine Hintergrund-Sounds. Öffne ein Verzeichnis mit deinen Effekten und klicke auf "
+"einen Effekt, um ihn zu starten. Diese laufen unabhängig von deiner Musik. So kannst du einen "
+"„Tavernen“-Song im Hauptplayer abspielen, während im Hintergrund „Regen“ oder ein „Lagerfeuer“ "
+"für zusätzliche Immersion knistern."
+
+msgid "Tour Menubar"
+msgstr "Fühlst du dich ein wenig überwältigt? Passe die App an deine Bildschirmgröße oder deinen "
+"Stil als Spielleiter an. In diesem Menü kannst du die meisten Widgets (wie die Mood-Map oder das "
+"Effekt-Rack) <strong>ausblenden</strong> oder <strong>anzeigen</strong>. Wenn du während einer "
+"Sitzung nur die Trackliste benötigst, blende alles andere aus, um eine saubere, "
+"ablenkungsfreie Benutzeroberfläche zu erhalten."
+
+msgid "<New Playlist>"
+msgstr "<Neue Playlist>"
+
+msgid "Add to playlist"
+msgstr "Zur Playlist hinzufügen"
+
+msgid "Remove from playlist"
+msgstr "Aus Playlist entfernen"

@@ -84,7 +84,7 @@ msgstr "Claro"
 msgid "Dark"
 msgstr "Oscuro"
 
-msgid "Save As Preset"
+msgid "Save as Preset"
 msgstr "Guardar como ajuste predefinido"
 
 msgid "Clear Values"
@@ -284,9 +284,6 @@ msgstr "Error al renombrar el archivo: {0}"
 
 msgid "Analyze"
 msgstr "Analizar"
-
-msgid "Edit Description"
-msgstr "Editar descripción"
 
 msgid "No Track Selected"
 msgstr "Ninguna pista seleccionada"
@@ -535,3 +532,110 @@ msgstr "Subir de nivel"
 
 msgid "Refresh"
 msgstr "Refrescar"
+
+msgid "Skipping already analyzed file {0}"
+msgstr "Omitiendo archivo ya analizado {0}"
+
+msgid "AI Model"
+msgstr "Modelo de IA"
+
+msgid "Only show score column if any filters are active."
+msgstr "Mostrar columna de puntuación solo si hay filtros activos."
+
+msgid "Only category columns with an active filter value are display else they are hidden automatically."
+msgstr "Solo se muestran las columnas de categoría con un valor de filtro activo; de lo contrario, se ocultan automáticamente."
+
+msgid "Circumplex model of emotion"
+msgstr "Modelo circunflejo de la emoción"
+
+msgid "Beats per Minute"
+msgstr "Beats por Minuto"
+
+msgid "BPM (Beats per Minute)"
+msgstr "BPM (Beats por Minuto)"
+
+msgid "Effects Tree"
+msgstr "Árbol de efectos"
+
+msgid "Show Tour"
+msgstr "Mostrar recorrido"
+
+msgid "Select Effects Directory"
+msgstr "Seleccionar directorio de efectos"
+
+msgid "Mute"
+msgstr "Silenciar"
+
+msgid "Next"
+msgstr "Siguiente"
+
+msgid "Previous"
+msgstr "Anterior"
+
+msgid "Play"
+msgstr "Reproducir"
+
+msgid "Close"
+msgstr "Cerrar"
+
+msgid "Ok"
+msgstr "Aceptar"
+
+msgid "Author"
+msgstr "Autor"
+
+msgid "Genre"
+msgstr "Género"
+
+msgid "BPM"
+msgstr "BPM"
+
+msgid "Tour Directory Tree"
+msgstr "Esta es tu fuente principal de música. Haz clic en una carpeta para cargar todas sus canciones en "
+"la tabla principal, o pulsa en un archivo individual para reproducirlo al instante. Úsalo para organizar tus "
+"distintas localizaciones de campaña (ej. Música de Taberna, Combate, Sigilo). También puedes definir un "
+"nuevo directorio de inicio para navegar más rápido."
+
+msgid "Tour Russel Widget"
+msgstr "Este es el corazón de la aplicación. Arrastra el punto azul para encontrar música que encaje con "
+"el pulso emocional de tu partida. ¿Buscas algo tenso para un jefe? Arrástralo hacia <strong>Enfadado/Excitado</strong>. "
+"¿Prefieres un tema tranquilo para un pueblo? Muévelo hacia <strong>Feliz/Relajado</strong>."
+
+msgid "Tour Category Slider"
+msgstr "Usa estos controles para ajustar tu búsqueda. Si tu grupo va a entrar en una catedral legendaria, "
+"sube el Misticismo y el Heroísmo. La lista de abajo se filtrará automáticamente para mostrar pistas "
+"que cumplan con esos niveles de intensidad específicos."
+
+msgid "Tour BPM Widget"
+msgstr "Esto te ayuda a marcar el «latido» de tu sesión. Si el grupo está en una persecución a toda velocidad, "
+"sube el dial para filtrar pistas con muchas <strong>Pulsaciones Por Minuto (BPM)</strong> y mantener la energía alta."
+
+msgid "Tour Tags Widget"
+msgstr "Estos son filtros de un solo clic. Úsalos para acotar rápidamente tu biblioteca por género o instrumento. "
+"Por ejemplo, activa <strong>Tambores</strong> y <strong>Oscuro</strong> para encontrar al instante pistas de combate rítmicas."
+
+msgid "Tour Presets Widget"
+msgstr "¡Cuando encuentres la mezcla perfecta de controles, BPM y coordenadas en el Mapa de Humor, no querrás perderla! "
+"Escribe un nombre en la casilla (como 'Jefe Épico' o 'Cueva Tenebrosa') y haz clic en el icono de <strong>Guardar</strong>. "
+"Podrás recuperar esos ajustes exactos seleccionándolos en el desplegable, cambiando toda la atmósfera de la sala "
+"con un solo clic."
+
+msgid "Tour Song Table"
+msgstr "Aquí aparecen las canciones disponibles según tus filtros. Haz doble clic en una fila para reproducir un tema, "
+"o echa un vistazo a las etiquetas para ver si es 'Triste' o 'Enérgico'. Haz clic derecho en los encabezados "
+"para personalizar su visibilidad."
+
+msgid "Tour Searchbar"
+msgstr "Si sabes exactamente lo que buscas (como 'Jefe Dragón'), escríbelo aquí. "
+"Busca en nombres de archivo y metadatos en tiempo real para localizar esa pista específica."
+
+msgid "Tour Effectslist"
+msgstr "Estos son tus sonidos de ambiente. Abre un directorio que contenga tus efectos y haz clic en uno para activarlo. "
+"Funcionan de forma independiente a la música, permitiéndote sonar un tema de 'Taberna' en el reproductor principal "
+"mientras de fondo se escucha la 'Lluvia' o una 'Hoguera' para mayor inmersión."
+
+msgid "Tour Menubar"
+msgstr "¿Te sientes abrumado? Adapta la aplicación a tu tamaño de pantalla o a tu estilo de narración. "
+"En este menú puedes <strong>ocultar</strong> o <strong>mostrar</strong> la mayoría de los widgets (como el Mapa de Humor "
+"o el Rack de Efectos). Si solo necesitas la lista de canciones durante la sesión, oculta todo lo demás "
+"para tener una interfaz limpia y sin distracciones."

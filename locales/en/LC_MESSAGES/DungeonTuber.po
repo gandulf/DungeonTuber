@@ -84,8 +84,8 @@ msgstr "Light"
 msgid "Dark"
 msgstr "Dark"
 
-msgid "Save As Preset"
-msgstr "Save As Preset"
+msgid "Save as Preset"
+msgstr "Save as Preset"
 
 msgid "Filter songs..."
 msgstr "Filter songs..."
@@ -119,6 +119,9 @@ msgstr "Failed to analyze directory: {0}"
 
 msgid "Failed to scan directory: {0}"
 msgstr "Failed to scan directory: {0}"
+
+msgid "Failed to load: {0}"
+msgstr "Failed to load: {0}"
 
 msgid "Select Playlist to Load"
 msgstr "Select Playlist to Load"
@@ -284,9 +287,6 @@ msgstr "Failed to rename file: {0}"
 
 msgid "Analyze"
 msgstr "Analyze"
-
-msgid "Edit Description"
-msgstr "Edit Description"
 
 msgid "No Track Selected"
 msgstr "No Track Selected"
@@ -534,3 +534,114 @@ msgstr "Go up"
 
 msgid "Refresh"
 msgstr "Refresh"
+
+msgid "Skipping already analyzed file {0}"
+msgstr "Skipping already analyzed file {0}"
+
+msgid "AI Model"
+msgstr "AI Model"
+
+msgid "Only show score column if any filters are active."
+msgstr "Only show score column if any filters are active."
+
+msgid "Only category columns with an active filter value are display else they are hidden automatically."
+msgstr "Only category columns with an active filter value are display else they are hidden automatically."
+
+msgid "Circumplex model of emotion"
+msgstr "Circumplex model of emotion"
+
+msgid "Beats per Minute"
+msgstr "Beats per Minute"
+
+msgid "BPM (Beats per Minute)"
+msgstr "BPM (Beats per Minute)"
+
+msgid "Effects Tree"
+msgstr "Effects Tree"
+
+msgid "Show Tour"
+msgstr "Show Tour"
+
+msgid "Select Effects Directory"
+msgstr "Select Effects Directory"
+
+msgid "Mute"
+msgstr "Mute"
+
+msgid "Next"
+msgstr "Next"
+
+msgid "Previous"
+msgstr "Previous"
+
+msgid "Play"
+msgstr "Play"
+
+msgid "Close"
+msgstr "Close"
+
+msgid "Ok"
+msgstr "Ok"
+
+msgid "Author"
+msgstr "Author"
+
+msgid "Genre"
+msgstr "Genre"
+
+msgid "BPM"
+msgstr "BPM"
+
+msgid "Tour Directory Tree"
+msgstr "This is your source for all music. Click a folder to load all contained songs into"
+"the main table, or click a single file to play it instantly. Use this to organize your different campaign locations"
+"(e.g., Tavern Music,Combat,Stealth). You can also set a new home directory to make navigation faster."
+
+msgid "Tour Russel Widget"
+msgstr "This is the heart of the app. Drag the blue dot to find music that matches"
+"the current emotional beat of your game. Want something tense for a boss? Drag it toward <strong>Angry/Excited</strong>."
+"Want a peaceful town theme? Move it toward <strong>Happy/Relaxed</strong>."""
+
+msgid "Tour Category Slider"
+msgstr "Use these to fine-tune your search. If your party is entering a legendary cathedral, crank up the Mysticism"
+"and Heroism. The list below will automatically filter for tracks that meet these specific intensity levels."
+
+msgid "Tour BPM Widget"
+msgstr "This helps you match the \"heartbeat\" of your session. If the party is in a high-speed chase,"
+"turn the dial up to filter for high <strong>Beats Per Minute (BPM)</strong> tracks to keep the energy high."
+
+msgid "Tour Tags Widget"
+msgstr "These are one-click filters. Use them to quickly narrow down your library by genre or instrument."
+"For example, toggle <strong>Drums</strong> and <strong>Dark</strong> to instantly find percussive combat tracks."
+
+msgid "Tour Presets Widget"
+msgstr "Once you’ve dialed in the perfect mix of sliders, BPM, and Mood Map coordinates, you don't want to lose it!"
+"Type a name into the box (like 'Epic Boss' or 'Spooky Cave') and click the <strong>Save</strong> icon. You can now instantly recall those"
+"exact filter settings later by selecting them from the dropdown, allowing you to change the entire atmosphere of your room"
+"in one click."
+
+msgid "Tour Song Table"
+msgstr "This shows the songs currently available based on your filters. Double-click a row to play a song, or glance at the tags to see if"
+"it’s 'Sad' or 'Energetic'. Right click non the headers to customize their visibility."
+
+msgid "Tour Searchbar"
+msgstr "If you know exactly what you’re looking for (like 'Dragon Boss'), type it here."
+"It searches through filenames and metadata in real-time to surface that specific track."
+
+msgid "Tour Effectslist"
+msgstr "These are your layering sounds. Open a directory containing you effects and click an effect to start it. These run independently of your music, allowing you to have a"
+"'Tavern' song playing in the main player while 'Rain' or 'Bonfire' crackle in the background for extra immersion."
+
+msgid "Tour Menubar"
+msgstr "Feeling a bit overwhelmed? Tailor the app to your screen size or DMing style. Under this menu, you can <strong>hide</strong> or"
+"<strong>show</strong> most widgets (like the Mood Map or Effects Rack). If you only need the Track List during a session, hide everything else"
+"to create a clean, distraction-free interface."
+
+msgid "<New Playlist>"
+msgstr "<Neue Playlist>"
+
+msgid "Add to playlist"
+msgstr "Add to playlist"
+
+msgid "Remove from playlist"
+msgstr "Remove from playlist"

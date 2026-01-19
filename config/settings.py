@@ -133,7 +133,8 @@ def set_music_tags(tags :dict[str,str] | None):
 
 
 def get_music_category(key: str) -> MusicCategory:
-    return next(cat for cat in get_music_categories() if cat.name == key or cat.key == key)
+    cats = [cat for cat in get_music_categories() if cat.name == key or cat.key == key]
+    return  next(cats) if cats and len(cats)>0 else None
 
 def get_categories() -> list[str]:
     global _CATEGORIES
@@ -238,12 +239,14 @@ class SettingKeys(StrEnum):
     ROOT_DIRECTORY = "rootDirectory"
     DIRECTORY_TREE = "directoryTree"
     RUSSEL_WIDGET ="russelWidget"
+    CATEGORY_WIDGETS ="categoryWidgets"
     BPM_WIDGET = "bpmWidget"
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"
     THEME = "theme"
     LOCALE = "locale"
     START_TOUR = "startTour"
+    OPEN_TABLES = "openTables"
 
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
     DYNAMIC_SCORE_COLUMN = "dynamicScoreColumn"

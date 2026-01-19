@@ -364,7 +364,7 @@ class Worker(QRunnable):
             else:
                 logger.warning("Could not find categories for {0}.", file_path)
 
-            self.analyzer.progress.emit(_("Processed {0}.").format(Path(file_path).name))
+            self.analyzer.progress.emit(_("File {0} processed.").format(Path(file_path).name))
         except Exception as e:
             traceback.print_exc()
             logger.error("An error occurred while adding tags to {0}: {1}", file_path,e)

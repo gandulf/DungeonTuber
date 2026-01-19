@@ -1,7 +1,7 @@
 import math
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton
-from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, QPoint
+from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, QPoint, QSortFilterProxyModel
 from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent, QColor
 
 from theme import app_theme
@@ -89,8 +89,11 @@ class IconLabel(QWidget):
         if final_stretch:
             self.layout.addStretch()
 
-    def add_widget(self, widget:QWidget):
-        self.layout.addWidget(widget,0)
+    def add_widget(self, widget:QWidget, stretch: int = 0):
+        self.layout.addWidget(widget,stretch)
+
+    def insert_widget(self,index: int, widget:QWidget, stretch: int = 0):
+        self.layout.insertWidget(index, widget,stretch)
 
     def set_alignment(self, alignment: Qt.AlignmentFlag):
         self.text_label.setAlignment(alignment)
@@ -279,3 +282,25 @@ class FeatureOverlay(QWidget):
             self.setGeometry(self.parent().geometry())
             self.show_step(initial=True)
         return super().eventFilter(obj, event)
+
+
+class FileFilterProxyModel(QSortFilterProxyModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        # 0 is usually the 'Name' column in QFileSystemModel
+        self.setFilterKeyColumn(0)
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        # This ensures that if a file matches, its parent folders remain visible
+        # Otherwise, the file would be hidden because its parent is filtered out
+        if super().filterAcceptsRow(source_row, source_parent):
+            return True
+
+        # Check if any children match the filter
+        source_model = self.sourceModel()
+        source_index = source_model.index(source_row, 0, source_parent)
+        for i in range(source_model.rowCount(source_index)):
+            if self.filterAcceptsRow(i, source_index):
+                return True
+        return False
