@@ -29,7 +29,7 @@ import vlc
 from vlc import MediaPlayer
 
 from config import log
-from mp3 import append_m3u, remove_m3u, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, update_mp3, update_mp3_data
+
 
 log.setup_logging()
 
@@ -65,8 +65,8 @@ from components.layouts import FlowLayout
 from components.charts import RussellEmotionWidget
 
 from logic.analyzer import Analyzer, is_analyzed, is_voxalyzed
-from logic.mp3 import Mp3Entry, update_mp3_favorite, parse_mp3, update_mp3_summary, update_mp3_title, update_mp3_tags, update_mp3_category, parse_m3u, \
-    create_m3u, list_mp3s, normalize_category
+from logic.mp3 import Mp3Entry, update_mp3_favorite, parse_mp3, update_mp3_title, update_mp3_category, parse_m3u, \
+    create_m3u, list_mp3s, normalize_category, append_m3u, remove_m3u, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, update_mp3_data
 from logic.audioengine import AudioEngine
 
 # --- Constants ---
@@ -639,7 +639,7 @@ class TableModel(QAbstractTableModel):
             return Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable
 
 
-class EffectList(QWidget):
+class EffectWidget(QWidget):
     open_item: QPushButton = None
 
     last_item: QListWidgetItem = None
@@ -754,7 +754,7 @@ class EffectList(QWidget):
             if self.is_grid_mode():
                 effect_mp3 = index.data(Qt.ItemDataRole.UserRole)
 
-                if option.rect.width() < EffectList.grid_threshold:
+                if option.rect.width() < EffectWidget.grid_threshold:
                     new_width = option.rect.width()
                 else:
                     new_width = (option.rect.width() // 2)
@@ -780,7 +780,7 @@ class EffectList(QWidget):
         self.engine = AudioEngine(False)
 
         self.list_widget = QListWidget()
-        self.list_widget.setItemDelegate(EffectList.GridDelegate(parent = self.list_widget))
+        self.list_widget.setItemDelegate(EffectWidget.GridDelegate(parent = self.list_widget))
 
         if listMode == QListView.ViewMode.ListMode:
             self.set_list_view()
@@ -854,9 +854,9 @@ class EffectList(QWidget):
 
     def calculate_grid_size(self):
         if self.list_widget.viewMode() == QListView.ViewMode.IconMode:
-            if self.list_widget.width() < EffectList.grid_threshold:
+            if self.list_widget.width() < EffectWidget.grid_threshold:
                 new_width = self.list_widget.width()
-            elif self.list_widget.width() < EffectList.grid_threshold*2:
+            elif self.list_widget.width() < EffectWidget.grid_threshold*2:
                 new_width = (self.list_widget.width() // 2) - 10
             else:
                 new_width = (self.list_widget.width() // 3) - 10
@@ -959,6 +959,8 @@ class EffectList(QWidget):
             self.load_directory(directory)
 
 
+
+
 class DirectoryTree(QTreeView):
     open = Signal(QModelIndex)
 
@@ -997,7 +999,7 @@ class DirectoryTree(QTreeView):
         self.proxy_model = FileFilterProxyModel()
         self.proxy_model.setSourceModel(self.directory_model)
 
-        self.directory_model.directoryLoaded.connect(self.proxy_model.invalidateFilter)
+        self.directory_model.directoryLoaded.connect(self.on_directories_loaded)
         self.setModel(self.proxy_model)
         self.setIndentation(8)
         self.setSortingEnabled(True)
@@ -1032,6 +1034,12 @@ class DirectoryTree(QTreeView):
 
     _ignore_keys = [Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left,Qt.Key.Key_Right]
 
+
+    def on_directories_loaded(self):
+        self.proxy_model.beginFilterChange()
+
+        self.proxy_model.endFilterChange(QSortFilterProxyModel.Direction.Rows)
+
     def selectionChanged(self, selected, deselected, /):
         if len(self.selectedIndexes())>0:
             self.set_home_action.setEnabled(True)
@@ -1045,6 +1053,7 @@ class DirectoryTree(QTreeView):
         if event.key() in self._ignore_keys:
             super().keyPressEvent(event)
             return
+
         if event.key() == Qt.Key_Backspace:
             self.search_string = self.search_string[:-1]
         # If it's a valid character (letter/number), append to search
@@ -1066,6 +1075,8 @@ class DirectoryTree(QTreeView):
         self._apply_proxy_root()
 
         self.viewport().update()
+
+
 
     def paintEvent(self, event):
         # 1. Let the standard TreeView draw the folders/files first
@@ -2568,7 +2579,7 @@ class MusicPlayer(QMainWindow):
         self.central_layout.addWidget(main_widget)
         self.central_layout.setCollapsible(1, False)
 
-        self.effects_list = EffectList()
+        self.effects_list = EffectWidget()
         self.central_layout.addWidget(self.effects_list)
         self.central_layout.setCollapsible(2, True)
 
@@ -2889,7 +2900,7 @@ class MusicPlayer(QMainWindow):
         elif Path(path).is_file():
             self.load_playlist(path)
         else:
-            QMessageBox.critical(self, _("Open Error"), _("Failed to load: {0}").format(e))
+            QMessageBox.critical(self, _("Open Error"), _("Failed to load: {0}").format(path))
 
     def play_track(self, index: int, entry: Mp3Entry | None):
         table = self.current_table()

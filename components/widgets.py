@@ -4,8 +4,6 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushBu
 from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, QPoint, QSortFilterProxyModel
 from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent, QColor
 
-from theme import app_theme
-
 PAINTING_SCALE_FACTOR = 20
 
 class StarRating:
@@ -133,7 +131,7 @@ class FeatureOverlay(QWidget):
 
         # Help text label
         self.label = QLabel(self)
-        self.label.setStyleSheet(f"color: white; font-size: {app_theme.font_size}px;")
+        self.label.setStyleSheet(f"color: white; font-size: 15px;")
         self.label.setWordWrap(True)
         self.label.setContentsMargins(8,8,8,8)
         self.label.setTextFormat(Qt.TextFormat.RichText)
@@ -234,6 +232,10 @@ class FeatureOverlay(QWidget):
 
         step = self.steps[self.current_step]
         widget = step['widget']
+
+        if not widget.isVisible():
+            self.next_step()
+
 
         # Correct mapping: widget -> overlay coordinates
         target_rect = self.compute_highlight_rect(widget)

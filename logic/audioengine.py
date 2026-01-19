@@ -23,7 +23,7 @@ class AudioEngine(QObject):
 
     video_frame : VisualizerFrame
 
-    list_player: vlc.MediaListPlayer = None
+    list_player: MediaListPlayer = None
     player: vlc.Media = None
 
     def __init__(self, visualizer : bool = True):

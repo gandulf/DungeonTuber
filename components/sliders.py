@@ -6,7 +6,6 @@ from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter,
 from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QPushButton, QHBoxLayout, QProxyStyle, QWidget, \
     QGraphicsOpacityEffect, QDial, QToolButton
 
-from audioengine import DEFAULT_VOLUME
 from config.settings import MusicCategory
 from config.theme import app_theme
 
@@ -788,7 +787,7 @@ class VolumeSlider(QHBoxLayout):
         elif self.last_volume is not None:
             self.slider_vol.setValue(self.last_volume)
         else:
-            self.slider_vol.setValue(DEFAULT_VOLUME)
+            self.slider_vol.setValue(70)
 
         self.volume_changed.emit(self.slider_vol.value())
 

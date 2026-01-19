@@ -13,9 +13,8 @@ from PySide6.QtGui import QPixmap
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM
 
-from config.settings import get_categories, _DEFAULT_CATEGORIES
+from config.settings import get_categories, _DEFAULT_CATEGORIES, CAT_TEMPO, CAT_TENSION, CAT_HEROISM, CAT_MYSTICISM
 from config.utils import get_path, get_available_locales
-from settings import CAT_TEMPO, CAT_TENSION, CAT_HEROISM, CAT_MYSTICISM
 
 logger = logging.getLogger("main")
 
