@@ -1,4 +1,4 @@
-name: Create Dungeon Tuber Windows 
+name: Release
 
 on:
   push:
