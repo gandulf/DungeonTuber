@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QAbstractItemView, QMenu, QDialog, QFormLayout, QLineEdit, QCheckBox,
     QDialogButtonBox, QTextEdit, QStatusBar, QProgressBar, QHeaderView, QTableView, QStyleOptionViewItem,
     QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QStyle, QSlider, QListWidget, QListWidgetItem,
-    QListView, QStyleOption, QToolButton, QSpinBox
+    QListView, QStyleOption, QToolButton, QSpinBox, QAbstractScrollArea
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
     QPersistentModelIndex, QFileInfo, QEvent, QRect, QTimer, QObject
@@ -196,6 +196,84 @@ def _get_score_background_brush(score: int | None) -> QBrush | None:
     else:
         return None
 
+class AutoSearchHelper():
+
+    _ignore_keys = [Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right]
+
+    def __init__(self, proxy_model: QSortFilterProxyModel, parent:QAbstractScrollArea = None):
+        self.parent = parent
+        self.proxy_model = proxy_model
+        self.search_string = ""
+
+    def keyPressEvent(self, event):
+        # If user presses Backspace, remove last char
+        if event.key() in self._ignore_keys:
+            self.parent.keyPressEvent(event)
+            return False
+
+        if event.key() == Qt.Key_Backspace:
+            self.search_string = self.search_string[:-1]
+        # If it's a valid character (letter/number), append to search
+        elif event.text().isalnum() or event.text() in " _-":
+            self.search_string += event.text()
+        # If Escape is pressed, clear filter
+        elif event.key() == Qt.Key_Escape:
+            self.search_string = ""
+        else:
+            self.parent.keyPressEvent(event)
+            return False
+
+        # Apply the filter to the proxy
+        self.proxy_model.setFilterFixedString(self.search_string)
+
+        self.parent.viewport().update()
+
+        return True
+
+    def paintEvent(self, event):
+
+        # 2. If there is a search string, draw the popup overlay
+        if self.search_string:
+            painter = QPainter(self.parent.viewport())
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            # Style settings
+            font = QFont()
+            font.setPixelSize(app_theme.font_size*0.8)
+            painter.setFont(font)
+            metrics = QFontMetrics(font)
+
+            padding = 10
+            text_width = metrics.horizontalAdvance(self.search_string)
+            text_height = metrics.height()
+
+            # Calculate the rectangle size and position (Top Right)
+            rect_w = text_width + (padding * 2)
+            rect_h = text_height + padding
+            margin = 10
+
+            popup_rect = QRect(
+                self.parent.viewport().width() - rect_w - margin,
+                margin,
+                rect_w,
+                rect_h
+            )
+
+            # Draw the background (Semi-transparent dark grey)
+            painter.setBrush(QColor(50, 50, 50, 200))
+            if self.proxy_model.rowCount() == 0:
+                painter.setPen(app_theme.get_red(100))  # Light red border
+            else:
+                painter.setPen(QColor(200, 200, 200))  # Light border
+            painter.drawRoundedRect(popup_rect, 5, 5)
+
+            # Draw the text
+            painter.setPen(Qt.GlobalColor.white)
+            painter.drawText(popup_rect, Qt.AlignmentFlag.AlignCenter, self.search_string)
+
+            painter.end()
+
+
 
 class EffectWidget(QWidget):
     open_item: QPushButton = None
@@ -204,7 +282,7 @@ class EffectWidget(QWidget):
 
     icon_size = QSize(16, 16)
 
-    def __init__(self, listMode: QListView.ViewMode = QListView.ViewMode.ListMode):
+    def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__()
 
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
@@ -217,7 +295,7 @@ class EffectWidget(QWidget):
 
         self.engine = AudioEngine(False)
 
-        self.list_widget = EffectList(listMode=listMode)
+        self.list_widget = EffectList(list_mode=list_mode)
         self.list_widget.doubleClicked.connect(self.on_item_double_clicked)
 
         player_layout = QHBoxLayout()
@@ -377,10 +455,10 @@ class EffectTableModel(QAbstractTableModel):
 
         return super().setData(index, value, role)
 
+
+
 class EffectList(QListView):
     grid_threshold = 200
-
-    _ignore_keys = [Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right]
 
     class EffectListItemDelegate(QStyledItemDelegate):
         top_padding = 4
@@ -498,9 +576,8 @@ class EffectList(QListView):
                     size.setHeight(48)
             return size
 
-    def __init__(self, listMode: QListView.ViewMode = QListView.ViewMode.ListMode, parent=None):
+    def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode, parent=None):
         super().__init__(parent)
-        self.search_string = ""
 
         self.setItemDelegate(EffectList.EffectListItemDelegate(parent=self))
 
@@ -510,26 +587,16 @@ class EffectList(QListView):
         self.proxy_model.setSourceModel(self.table_model)
         self.setModel(self.proxy_model)
 
-        if listMode == QListView.ViewMode.ListMode:
+        self.auto_search_helper = AutoSearchHelper(self.proxy_model,self)
+
+        if list_mode == QListView.ViewMode.ListMode:
             self.set_list_view()
         else:
             self.set_grid_view()
 
     def load_effects(self, data: list[Mp3Entry]):
         self.table_model = EffectTableModel(data)
-        self.proxy_model = QSortFilterProxyModel(self)
-        self.proxy_model.setDynamicSortFilter(True)
         self.proxy_model.setSourceModel(self.table_model)
-        self.setModel(self.proxy_model)
-
-        # self.list_widget.clear()
-        # for effect in effects:
-        #     effect_path = os.path.join(dir_path, effect)
-        #     effect_mp3 = parse_mp3(effect_path)
-        #
-        #     effect_item = QListWidgetItem()
-        #     effect_item.setFlags(effect_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -546,7 +613,7 @@ class EffectList(QListView):
                 new_width = (self.width() // 3) - 10
 
             new_width = min(128 + 30, new_width)
-            new_height = new_width * (3.0/4.0)
+            new_height = int(new_width * (3.0/4.0))
             self.setGridSize(QSize(new_width, new_height))
             self.setIconSize(QSize(new_width-10, new_height))  # Large covers
             self.setSpacing(0)
@@ -580,72 +647,11 @@ class EffectList(QListView):
         self.update()
 
     def keyPressEvent(self, event):
-        # If user presses Backspace, remove last char
-        if event.key() in self._ignore_keys:
-            super().keyPressEvent(event)
-            return
-
-        if event.key() == Qt.Key_Backspace:
-            self.search_string = self.search_string[:-1]
-        # If it's a valid character (letter/number), append to search
-        elif event.text().isalnum() or event.text() in " _-":
-            self.search_string += event.text()
-        # If Escape is pressed, clear filter
-        elif event.key() == Qt.Key_Escape:
-            self.search_string = ""
-        else:
-            super().keyPressEvent(event)
-            return
-
-        # Apply the filter to the proxy
-        self.proxy_model.setFilterFixedString(self.search_string)
-
-        self.viewport().update()
+        self.auto_search_helper.keyPressEvent(event)
 
     def paintEvent(self, event):
-        # 1. Let the standard TreeView draw the folders/files first
         super().paintEvent(event)
-
-        # 2. If there is a search string, draw the popup overlay
-        if self.search_string:
-            painter = QPainter(self.viewport())
-            painter.setRenderHint(QPainter.Antialiasing)
-
-            # Style settings
-            font = QFont()
-            font.setPixelSize(app_theme.font_size*0.8)
-            painter.setFont(font)
-            metrics = QFontMetrics(font)
-
-            padding = 10
-            text_width = metrics.horizontalAdvance(self.search_string)
-            text_height = metrics.height()
-
-            # Calculate the rectangle size and position (Top Right)
-            rect_w = text_width + (padding * 2)
-            rect_h = text_height + padding
-            margin = 10
-
-            popup_rect = QRect(
-                self.viewport().width() - rect_w - margin,
-                margin,
-                rect_w,
-                rect_h
-            )
-
-            # Draw the background (Semi-transparent dark grey)
-            painter.setBrush(QColor(50, 50, 50, 200))
-            if self.proxy_model.rowCount() == 0:
-                painter.setPen(app_theme.get_red(100))  # Light red border
-            else:
-                painter.setPen(QColor(200, 200, 200))  # Light border
-            painter.drawRoundedRect(popup_rect, 5, 5)
-
-            # Draw the text
-            painter.setPen(Qt.white)
-            painter.drawText(popup_rect, Qt.AlignCenter, self.search_string)
-
-            painter.end()
+        self.auto_search_helper.paintEvent(event)
 
 class Player(QWidget):
     icon_prev: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipBackward)
@@ -910,11 +916,12 @@ class Player(QWidget):
 
 class DirectoryWidget(QWidget):
 
-    def __init__(self,player: Player, parent=None):
+    def __init__(self,player: Player, media_player: MediaPlayer, parent=None):
         super(DirectoryWidget, self).__init__(parent)
 
         self.player = player
-        self.directory_tree = DirectoryTree(self.player)
+        self.media_player = media_player
+        self.directory_tree = DirectoryTree(self.player, self.media_player)
 
         self.directory_layout = QVBoxLayout(self)
         self.directory_layout.setContentsMargins(0, 0, 0, 0)
@@ -948,11 +955,10 @@ class DirectoryWidget(QWidget):
 class DirectoryTree(QTreeView):
     open = Signal(QModelIndex)
 
-    _ignore_keys = [Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right]
-
-    def __init__(self, player: Player):
-        super().__init__()
+    def __init__(self, player: Player, media_player: MediaPlayer, parent=None):
+        super().__init__(parent)
         self.player = player
+        self.media_player = media_player
         self.setMinimumWidth(150)
 
         self._source_root_index = QPersistentModelIndex()
@@ -981,7 +987,6 @@ class DirectoryTree(QTreeView):
         self.directory_model.setNameFilters(["*.mp3"])
         self.directory_model.setNameFilterDisables(False)
 
-        self.search_string = ""
         self.proxy_model = FileFilterProxyModel()
         self.proxy_model.setSourceModel(self.directory_model)
 
@@ -998,7 +1003,7 @@ class DirectoryTree(QTreeView):
         self.setExpandsOnDoubleClick(True)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
-
+        self.autoSearchHelper = AutoSearchHelper(self.proxy_model, self)
 
         # Restore expanded state
         expanded_dirs = AppSettings.value(SettingKeys.EXPANDED_DIRS, [], type=list)
@@ -1032,79 +1037,13 @@ class DirectoryTree(QTreeView):
             self.open_action.setEnabled(False)
 
     def keyPressEvent(self, event):
-        # If user presses Backspace, remove last char
-        if event.key() in self._ignore_keys:
-            super().keyPressEvent(event)
-            return
-
-        if event.key() == Qt.Key_Backspace:
-            self.search_string = self.search_string[:-1]
-        # If it's a valid character (letter/number), append to search
-        elif event.text().isalnum() or event.text() in " _-":
-            self.search_string += event.text()
-        # If Escape is pressed, clear filter
-        elif event.key() == Qt.Key_Escape:
-            self.search_string = ""
-        else:
-            super().keyPressEvent(event)
-            return
-
-        # Apply the filter to the proxy
-        self.proxy_model.setFilterFixedString(self.search_string)
-
-        # 2. IMPORTANT: Re-map the root index.
-        # When the filter changes, the old proxy root index becomes invalid.
-
-        self._apply_proxy_root()
-
-        self.viewport().update()
-
-
+        if self.autoSearchHelper.keyPressEvent(event):
+            self._apply_proxy_root()
+            self.viewport().update()
 
     def paintEvent(self, event):
-        # 1. Let the standard TreeView draw the folders/files first
         super().paintEvent(event)
-
-        # 2. If there is a search string, draw the popup overlay
-        if self.search_string:
-            painter = QPainter(self.viewport())
-            painter.setRenderHint(QPainter.Antialiasing)
-
-            # Style settings
-            font = QFont()
-            font.setPixelSize(app_theme.font_size*0.8)
-            painter.setFont(font)
-            metrics = QFontMetrics(font)
-
-            padding = 10
-            text_width = metrics.horizontalAdvance(self.search_string)
-            text_height = metrics.height()
-
-            # Calculate the rectangle size and position (Top Right)
-            rect_w = text_width + (padding * 2)
-            rect_h = text_height + padding
-            margin = 10
-
-            popup_rect = QRect(
-                self.viewport().width() - rect_w - margin,
-                margin,
-                rect_w,
-                rect_h
-            )
-
-            # Draw the background (Semi-transparent dark grey)
-            painter.setBrush(QColor(50, 50, 50, 200))
-            if self.proxy_model.rowCount() == 0:
-                painter.setPen(app_theme.get_red(100))  # Light red border
-            else:
-                painter.setPen(QColor(200, 200, 200))  # Light border
-            painter.drawRoundedRect(popup_rect, 5, 5)
-
-            # Draw the text
-            painter.setPen(Qt.white)
-            painter.drawText(popup_rect, Qt.AlignCenter, self.search_string)
-
-            painter.end()
+        self.autoSearchHelper.paintEvent(event)
 
     def setRootIndexInSource(self, source_index: QModelIndex):
         """Use this instead of setRootIndex to set your 'Home' folder."""
@@ -1123,7 +1062,7 @@ class DirectoryTree(QTreeView):
         data = self.model().itemData(index)
         file_info: QFileInfo = data[QFileSystemModel.Roles.FileInfoRole]
         if file_info.isDir():
-            self.player.load_directory(file_info.filePath())
+            self.media_player.load_directory(file_info.filePath())
         else:
             entry = parse_mp3(Path(file_info.filePath()))
             self.player.play_track(entry, -1)
@@ -1432,8 +1371,6 @@ class SongTable(QTableView):
     table_model: SongTableModel
     proxy_model: QSortFilterProxyModel
 
-    _ignore_keys = [Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right]
-
     class CategoryDelegate(QStyledItemDelegate):
 
         def setModelData(self, editor, model, index):
@@ -1573,11 +1510,34 @@ class SongTable(QTableView):
     def __init__(self, _analyzer: Analyzer, _media_player: MediaPlayer):
         super().__init__()
 
-        self.search_string=""
         self.table_model = SongTableModel()
         self.media_player = _media_player
         self.analyzer = _analyzer
         self.analyzer.result.connect(self.refresh_item)
+
+        self.proxy_model = QSortFilterProxyModel(self)
+        self.proxy_model.setDynamicSortFilter(True)
+        self.proxy_model.setSourceModel(self.table_model)
+        self.proxy_model.setFilterRole(Qt.ItemDataRole.DisplayRole)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.proxy_model.setFilterKeyColumn(SongTableModel.FILE_COL)
+
+        self.setModel(self.proxy_model)
+        self.setColumnWidth(SongTableModel.FAV_COL, 48)
+        self.setColumnWidth(SongTableModel.FILE_COL, 400)
+        self.setColumnWidth(SongTableModel.SCORE_COL, 80)
+        self.resizeColumnToContents(SongTableModel.TITLE_COL)
+        self.resizeColumnToContents(SongTableModel.ALBUM_COL)
+        self.resizeColumnToContents(SongTableModel.GENRE_COL)
+        self.setColumnWidth(SongTableModel.BPM_COL, 64)
+        self.resizeColumnToContents(SongTableModel.ARTIST_COL)
+
+        self.auto_search_helper = AutoSearchHelper(self.proxy_model, self)
+
+        self.setSortingEnabled(False)
+
+        self.horizontalHeader().setSectionResizeMode(SongTableModel.FAV_COL, QHeaderView.ResizeMode.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(SongTableModel.SCORE_COL, QHeaderView.ResizeMode.ResizeToContents)
 
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
@@ -1689,11 +1649,6 @@ class SongTable(QTableView):
             self.viewport().update()
 
     def keyPressEvent(self, event: QKeyEvent):
-        # If user presses Backspace, remove last char
-        if event.key() in self._ignore_keys:
-            super().keyPressEvent(event)
-            return
-
         if event.key() == Qt.Key.Key_Enter:
             index = self.selectionModel().currentIndex()
             self.play_track.emit(index.row(), index.data(Qt.ItemDataRole.UserRole))
@@ -1701,67 +1656,13 @@ class SongTable(QTableView):
         elif event.key() == Qt.Key.Key_Delete:
             self.remove_items()
             return
-        elif event.key() == Qt.Key_Backspace:
-            self.search_string = self.search_string[:-1]
-        # If it's a valid character (letter/number), append to search
-        elif event.text().isalnum() or event.text() in " _-":
-            self.search_string += event.text()
-        # If Escape is pressed, clear filter
-        elif event.key() == Qt.Key_Escape:
-            self.search_string = ""
         else:
-            super().keyPressEvent(event)
-            return
-
-        # Apply the filter to the proxy
-        self.proxy_model.setFilterWildcard(self.search_string)
-
-        self.viewport().update()
+            self.auto_search_helper.keyPressEvent(event)
 
     def paintEvent(self, event):
         # 1. Let the standard TreeView draw the folders/files first
         super().paintEvent(event)
-
-        # 2. If there is a search string, draw the popup overlay
-        if self.search_string:
-            painter = QPainter(self.viewport())
-            painter.setRenderHint(QPainter.Antialiasing)
-
-            # Style settings
-            font = QFont()
-            font.setPixelSize(app_theme.font_size*0.8)
-            painter.setFont(font)
-            metrics = QFontMetrics(font)
-
-            padding = 10
-            text_width = metrics.horizontalAdvance(self.search_string)
-            text_height = metrics.height()
-
-            # Calculate the rectangle size and position (Top Right)
-            rect_w = text_width + (padding * 2)
-            rect_h = text_height + padding
-            margin = 10
-
-            popup_rect = QRect(
-                self.viewport().width() - rect_w - margin,
-                margin,
-                rect_w,
-                rect_h
-            )
-
-            # Draw the background (Semi-transparent dark grey)
-            painter.setBrush(QColor(50, 50, 50, 200))
-            if self.proxy_model.rowCount() == 0:
-                painter.setPen(app_theme.get_red(100))  # Light red border
-            else:
-                painter.setPen(QColor(200, 200, 200))  # Light border
-            painter.drawRoundedRect(popup_rect, 5, 5)
-
-            # Draw the text
-            painter.setPen(Qt.white)
-            painter.drawText(popup_rect, Qt.AlignCenter, self.search_string)
-
-            painter.end()
+        self.auto_search_helper.paintEvent(event)
 
     def on_table_double_click(self, index: QModelIndex):
         if index.column() == SongTableModel.FILE_COL:
@@ -1783,37 +1684,9 @@ class SongTable(QTableView):
 
     def populate_table(self, table_data: list[Mp3Entry]):
         self.table_model = SongTableModel(table_data)
-        self.proxy_model = QSortFilterProxyModel(self)
-        self.proxy_model.setDynamicSortFilter(True)
         self.proxy_model.setSourceModel(self.table_model)
-        self.proxy_model.setFilterRole(Qt.ItemDataRole.DisplayRole)
-        self.proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.proxy_model.setFilterKeyColumn(SongTableModel.FILE_COL)
 
-        self.setModel(self.proxy_model)
-        self.setColumnWidth(SongTableModel.FAV_COL, 48)
-        self.setColumnWidth(SongTableModel.FILE_COL, 400)
-        self.setColumnWidth(SongTableModel.SCORE_COL, 80)
-        self.resizeColumnToContents(SongTableModel.TITLE_COL)
-        self.resizeColumnToContents(SongTableModel.ALBUM_COL)
-        self.resizeColumnToContents(SongTableModel.GENRE_COL)
-        self.setColumnWidth(SongTableModel.BPM_COL, 64)
-        self.resizeColumnToContents(SongTableModel.ARTIST_COL)
-
-        self.setSortingEnabled(False)
-
-        self.horizontalHeader().setSectionResizeMode(SongTableModel.FAV_COL, QHeaderView.ResizeMode.ResizeToContents)
-        self.horizontalHeader().setSectionResizeMode(SongTableModel.SCORE_COL, QHeaderView.ResizeMode.ResizeToContents)
-
-        category_delegate = SongTable.CategoryDelegate(self)
-        for col in range(len(get_music_categories())):
-            self.horizontalHeader().setSectionResizeMode(SongTableModel.CAT_COL + col, QHeaderView.ResizeMode.ResizeToContents)
-
-            self.setItemDelegateForColumn(SongTableModel.CAT_COL + col, category_delegate)
-
-        self.setItemDelegateForColumn(SongTableModel.BPM_COL, category_delegate)
         self.update_category_column_visibility()
-        self.setSortingEnabled(True)
 
     def is_column_visible(self, category: str):
         if AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool):
@@ -2545,7 +2418,7 @@ class MusicPlayer(QMainWindow):
             {'widget': self.filter_widget.tags_widget, 'message': _("Tour Tags Widget")},
             {'widget': self.filter_widget.presets_widget, 'message':_("Tour Presets Widget")},
             {'widget': self.table_tabs, 'message': _("Tour Song Table")},
-            {'widget':self.effects_list, 'message':_("Tour Effectslist")},
+            {'widget': self.effects_list, 'message':_("Tour Effectslist")},
             {'widget': self.menuBar(), 'message': _("Tour Menubar")}
         ]
         self.overlay = FeatureOverlay(self, steps)
@@ -2646,7 +2519,7 @@ class MusicPlayer(QMainWindow):
         self.central_layout.splitterMoved.connect(self.layout_splitter_moved)
         self.setCentralWidget(self.central_layout)
 
-        self.directory_widget = DirectoryWidget(self.player)
+        self.directory_widget = DirectoryWidget(self.player,self)
         self.central_layout.addWidget(self.directory_widget)
         self.central_layout.setCollapsible(0, True)
 
