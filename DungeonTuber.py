@@ -28,9 +28,7 @@ import logging
 import vlc
 from vlc import MediaPlayer
 
-from components.dialogs import EditSongDialog, AboutDialog
 from config import log
-
 
 log.setup_logging()
 
@@ -62,9 +60,10 @@ from config.utils import get_path, get_latest_version, is_latest_version, get_cu
 
 from components.sliders import CategoryWidget, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider, BPMSlider
 from components.widgets import StarRating, IconLabel, FeatureOverlay, FileFilterProxyModel
-from components.visualizer import Visualizer
+from components.visualizer import Visualizer, EmptyVisualizerWidget
 from components.layouts import FlowLayout
 from components.charts import RussellEmotionWidget
+from components.dialogs import EditSongDialog, AboutDialog
 
 from logic.analyzer import Analyzer, is_analyzed, is_voxalyzed
 from logic.mp3 import Mp3Entry, update_mp3_favorite, parse_mp3, update_mp3_title, update_mp3_category, parse_m3u, \
@@ -80,23 +79,24 @@ selected_tags: list[str] = []
 
 categories: dict[str, int] = {}
 
+
 class FilterConfig:
-    categories : dict[str,int]
-    tags : list[str]
+    categories: dict[str, int]
+    tags: list[str]
     bpm: int | None
     genres: list[str]
 
-    def __init__(self, categories = {}, tags=[], bpm = None, genres = []):
+    def __init__(self, categories={}, tags=[], bpm=None, genres=[]):
         self.categories = categories
         self.tags = tags
         self.bpm = bpm
         self.genres = genres
 
-    def get_category(self, category:str, default: int = None):
+    def get_category(self, category: str, default: int = None):
         category = normalize_category(category)
         return self.categories.get(category, default)
 
-    def empty(self)->bool:
+    def empty(self) -> bool:
         empty = True
         for value in self.categories.values():
             if value is not None:
@@ -106,6 +106,7 @@ class FilterConfig:
         empty = empty and (self.tags is None or len(self.tags) == 0) and self.bpm is None and (self.genres is None or len(self.genres) == 0)
 
         return empty
+
 
 def _calculate_score(_filter_config: FilterConfig, data: Mp3Entry):
     score = None
@@ -140,8 +141,10 @@ def _calculate_score(_filter_config: FilterConfig, data: Mp3Entry):
 
     return round(score) if score is not None else None
 
+
 _black = QColor(Qt.GlobalColor.black)
 _transparent = QBrush(Qt.GlobalColor.transparent)
+
 
 def _get_category_background_brush(desired_value: int | None, value: int) -> QBrush | None:
     if value is None or desired_value is None or desired_value == 0:
@@ -156,6 +159,7 @@ def _get_category_background_brush(desired_value: int | None, value: int) -> QBr
     else:
         return app_theme.get_red(51)
 
+
 def _get_bpm_background_brush(desired_value: int | None, value: int) -> QBrush | None:
     if value is None or desired_value is None or desired_value == 0:
         return _transparent
@@ -168,6 +172,7 @@ def _get_bpm_background_brush(desired_value: int | None, value: int) -> QBrush |
         return app_theme.get_orange(51)
     else:
         return app_theme.get_red(51)
+
 
 def _get_score_foreground_brush(score: int | None) -> QColor | None:
     if score is not None:
@@ -196,11 +201,11 @@ def _get_score_background_brush(score: int | None) -> QBrush | None:
     else:
         return None
 
-class AutoSearchHelper():
 
+class AutoSearchHelper():
     _ignore_keys = [Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right]
 
-    def __init__(self, proxy_model: QSortFilterProxyModel, parent:QAbstractScrollArea = None):
+    def __init__(self, proxy_model: QSortFilterProxyModel, parent: QAbstractScrollArea = None):
         self.parent = parent
         self.proxy_model = proxy_model
         self.search_string = ""
@@ -208,7 +213,6 @@ class AutoSearchHelper():
     def keyPressEvent(self, event):
         # If user presses Backspace, remove last char
         if event.key() in self._ignore_keys:
-            self.parent.keyPressEvent(event)
             return False
 
         if event.key() == Qt.Key_Backspace:
@@ -220,7 +224,6 @@ class AutoSearchHelper():
         elif event.key() == Qt.Key_Escape:
             self.search_string = ""
         else:
-            self.parent.keyPressEvent(event)
             return False
 
         # Apply the filter to the proxy
@@ -239,7 +242,7 @@ class AutoSearchHelper():
 
             # Style settings
             font = QFont()
-            font.setPixelSize(app_theme.font_size*0.8)
+            font.setPixelSize(app_theme.font_size * 0.8)
             painter.setFont(font)
             metrics = QFontMetrics(font)
 
@@ -274,7 +277,6 @@ class AutoSearchHelper():
             painter.end()
 
 
-
 class EffectWidget(QWidget):
     open_item: QPushButton = None
 
@@ -291,18 +293,18 @@ class EffectWidget(QWidget):
         self._icon_play = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart).pixmap(QSize(16, 16))
 
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0,0,0,0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.engine = AudioEngine(False)
 
         self.list_widget = EffectList(list_mode=list_mode)
         self.list_widget.doubleClicked.connect(self.on_item_double_clicked)
 
-        player_layout = QHBoxLayout()
-        player_layout.setContentsMargins(0,0,0,0)
-        player_layout.setSpacing(0)
+        self.player_layout = QHBoxLayout()
+        self.player_layout.setContentsMargins(0, 0, 0, 0)
+        self.player_layout.setSpacing(0)
 
-        self.btn_play = QToolButton(icon = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
+        self.btn_play = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
         self.btn_play.clicked.connect(self.toogle_play)
         self.btn_play.setShortcut("Ctrl+E")
         self.btn_play.setFixedSize(app_theme.button_size_small)
@@ -313,8 +315,8 @@ class EffectWidget(QWidget):
         self.volume_slider.set_button_size(app_theme.button_size_small)
         self.volume_slider.set_icon_size(app_theme.icon_size_small)
         self.volume_slider.slider_vol.setFixedHeight(app_theme.button_height_small)
-        player_layout.addWidget(self.btn_play, 0)
-        player_layout.addLayout(self.volume_slider,1)
+        self.player_layout.addWidget(self.btn_play, 0)
+        self.player_layout.addLayout(self.volume_slider, 1)
 
         open_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), text=_("Open Directory"), parent=self)
         open_dir.triggered.connect(self.pick_effects_directory)
@@ -332,10 +334,10 @@ class EffectWidget(QWidget):
         self.headerLabel.text_label.setStyleSheet(f"font-size: {app_theme.font_size}px; font-weight: bold;")
         self.headerLabel.setFixedHeight(app_theme.button_height_small)
 
-        list_view = QToolButton(icon = QIcon.fromTheme("list"))
+        list_view = QToolButton(icon=QIcon.fromTheme("list"))
         list_view.clicked.connect(self.list_widget.set_list_view)
 
-        grid_view = QToolButton(icon = QIcon.fromTheme("grid"))
+        grid_view = QToolButton(icon=QIcon.fromTheme("grid"))
         grid_view.clicked.connect(self.list_widget.set_grid_view)
 
         self.headerLabel.add_widget(list_view)
@@ -350,7 +352,7 @@ class EffectWidget(QWidget):
         else:
             self.load_directory(effects_dir)
 
-        self.layout.addLayout(player_layout, 0)
+        self.layout.addLayout(self.player_layout, 0)
         self.layout.addWidget(self.list_widget, 1)
 
         self.list_widget.calculate_grid_size()
@@ -376,7 +378,7 @@ class EffectWidget(QWidget):
 
             if self.last_index is not None:
                 self.list_widget.model().setData(self.last_index, Qt.CheckState.Unchecked, Qt.ItemDataRole.CheckStateRole)
-            self.list_widget.model().setData(index,Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
+            self.list_widget.model().setData(index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
             self.last_index = index
 
     def play_effect(self, effect: Mp3Entry):
@@ -393,7 +395,7 @@ class EffectWidget(QWidget):
             self.open_item.setParent(None)
 
         effect_files = list_mp3s(dir_path)
-        effects = [parse_mp3(os.path.join(dir_path,file_path)) for file_path in effect_files]
+        effects = [parse_mp3(os.path.join(dir_path, file_path)) for file_path in effect_files]
 
         self.list_widget.load_effects(effects)
 
@@ -405,8 +407,8 @@ class EffectWidget(QWidget):
             self.refresh_dir.setVisible(True)
             self.load_directory(directory)
 
-class EffectTableModel(QAbstractTableModel):
 
+class EffectTableModel(QAbstractTableModel):
     _checked: QPersistentModelIndex = QPersistentModelIndex()
 
     def __init__(self, data: list[Mp3Entry] = []):
@@ -425,7 +427,7 @@ class EffectTableModel(QAbstractTableModel):
 
         return super().flags(index) | Qt.ItemFlag.ItemIsUserCheckable
 
-    def data(self, index, /, role = ...):
+    def data(self, index, /, role=...):
         if not index.isValid():
             return None
 
@@ -454,7 +456,6 @@ class EffectTableModel(QAbstractTableModel):
             return True
 
         return super().setData(index, value, role)
-
 
 
 class EffectList(QListView):
@@ -495,7 +496,7 @@ class EffectList(QListView):
                 painter.save()
                 painter.setBrush(app_theme.get_green_brush(50))
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawRect(option.rect.adjusted(1,1,-1,-1))
+                painter.drawRect(option.rect.adjusted(1, 1, -1, -1))
                 painter.restore()
 
                 # Make text bold for checked items
@@ -516,7 +517,7 @@ class EffectList(QListView):
 
                 if check_state == Qt.CheckState.Checked:
                     painter.setBrush(option.palette.color(QPalette.ColorRole.Highlight))
-                    painter.drawRoundedRect(rect, 4.0,4.0)
+                    painter.drawRoundedRect(rect, 4.0, 4.0)
 
                 # 4. Draw the Icon
                 icon = option.icon
@@ -533,18 +534,16 @@ class EffectList(QListView):
 
                     rect = icon_rect
 
-
                 # 5. Draw the Text on top
                 text = index.data(Qt.ItemDataRole.DisplayRole)
                 if text:
-
                     # Optional: Add a subtle shadow or background for readability
                     # painter.fillRect(rect, QColor(0, 0, 0, 100))
 
-                    label_height =  painter.fontMetrics().height() +8
-                    label_rect =  QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height)
+                    label_height = painter.fontMetrics().height() + 8
+                    label_rect = QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height)
 
-                    painter.setBrush(QColor(0,0,0,100))
+                    painter.setBrush(QColor(0, 0, 0, 100))
                     painter.setPen(Qt.PenStyle.NoPen)
                     painter.drawRect(label_rect)
 
@@ -554,7 +553,6 @@ class EffectList(QListView):
                 painter.restore()
             else:
                 super().paint(painter, option, index)
-
 
         def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex):
             # IMPORTANT: You must increase the size hint,
@@ -587,7 +585,7 @@ class EffectList(QListView):
         self.proxy_model.setSourceModel(self.table_model)
         self.setModel(self.proxy_model)
 
-        self.auto_search_helper = AutoSearchHelper(self.proxy_model,self)
+        self.auto_search_helper = AutoSearchHelper(self.proxy_model, self)
 
         if list_mode == QListView.ViewMode.ListMode:
             self.set_list_view()
@@ -607,22 +605,22 @@ class EffectList(QListView):
         if self.viewMode() == QListView.ViewMode.IconMode:
             if self.width() < self.grid_threshold:
                 new_width = self.width()
-            elif self.width() < self.grid_threshold*2:
+            elif self.width() < self.grid_threshold * 2:
                 new_width = (self.width() // 2) - 10
             else:
                 new_width = (self.width() // 3) - 10
 
             new_width = min(128 + 30, new_width)
-            new_height = int(new_width * (3.0/4.0))
+            new_height = int(new_width * (3.0 / 4.0))
             self.setGridSize(QSize(new_width, new_height))
-            self.setIconSize(QSize(new_width-10, new_height))  # Large covers
+            self.setIconSize(QSize(new_width - 10, new_height))  # Large covers
             self.setSpacing(0)
         else:
             self.setGridSize(QSize())
-            self.setIconSize(QSize(32,32))  # Large covers
+            self.setIconSize(QSize(32, 32))  # Large covers
             self.setSpacing(0)
 
-    def set_list_view(self ):
+    def set_list_view(self):
         self.setViewMode(QListView.ViewMode.ListMode)
         self.setFlow(QListView.Flow.TopToBottom)
         # 3. Prevent items from being moved around by the user
@@ -647,11 +645,13 @@ class EffectList(QListView):
         self.update()
 
     def keyPressEvent(self, event):
-        self.auto_search_helper.keyPressEvent(event)
+        if not self.auto_search_helper.keyPressEvent(event):
+            super().keyPressEvent(event)
 
     def paintEvent(self, event):
         super().paintEvent(event)
         self.auto_search_helper.paintEvent(event)
+
 
 class Player(QWidget):
     icon_prev: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipBackward)
@@ -674,19 +674,20 @@ class Player(QWidget):
     def __init__(self, audioEngine: AudioEngine, parent=None):
         super().__init__(parent)
 
-        player_layout = QVBoxLayout(self)
-        player_layout.setSpacing(8)
+        self.player_layout = QVBoxLayout(self)
+        self.player_layout.setSpacing(8)
 
         self.engine = audioEngine
         self.engine.state_changed.connect(self.on_playback_state_changed)
         self.engine.position_changed.connect(self.update_progress)
         self.engine.track_finished.connect(self.on_track_finished)
 
-        self.track_label = QLabel(_("No Track Selected"))
+        self.seeker_layout = QVBoxLayout(self)
 
+        self.track_label = QLabel(_("No Track Selected"))
         self.track_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.track_label.setObjectName("trackLabel")
-        player_layout.addWidget(self.track_label)
+        self.seeker_layout.addWidget(self.track_label)
 
         # --- Progress Bar and Time Labels ---
         progress_layout = QHBoxLayout()
@@ -694,6 +695,7 @@ class Player(QWidget):
         self.time_label = QLabel("00:00")
         self.progress_slider = JumpSlider(Qt.Orientation.Horizontal)
         self.progress_slider.setRange(0, 1000)
+        self.progress_slider.setMinimumWidth(100)
         self.duration_label = QLabel("00:00")
         self.progress_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
         self.progress_slider.setTickInterval(50)
@@ -703,7 +705,9 @@ class Player(QWidget):
         progress_layout.addWidget(self.time_label)
         progress_layout.addWidget(self.progress_slider)
         progress_layout.addWidget(self.duration_label)
-        player_layout.addLayout(progress_layout)
+
+        self.seeker_layout.addLayout(progress_layout)
+
         # --- End Progress Bar ---
 
         controls_widget = QWidget()
@@ -733,6 +737,10 @@ class Player(QWidget):
             btn.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
             btn.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
 
+        for btn in [self.btn_prev, self.btn_next]:
+            btn.setFixedSize(app_theme.button_size_small)
+            btn.setIconSize(app_theme.icon_size_small)
+
         self.btn_repeat = RepeatButton(AppSettings.value(SettingKeys.REPEAT_MODE, 0, type=int))
         self.btn_repeat.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
         self.btn_repeat.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
@@ -741,37 +749,53 @@ class Player(QWidget):
         self.repeat_mode_changed = self.btn_repeat.value_changed
 
         self.slider_vol = VolumeSlider(AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
-        self.slider_vol.set_button_size(QSize(app_theme.button_size, app_theme.button_size))
-        self.slider_vol.set_icon_size(QSize(app_theme.icon_size, app_theme.icon_size))
+        self.slider_vol.set_button_size(app_theme.button_size_small)
+        self.slider_vol.set_icon_size(app_theme.icon_size_small)
         self.slider_vol.slider_vol.setMinimumWidth(200)
 
         self.slider_vol.volume_changed.connect(self.adjust_volume)
         self.volume_changed = self.slider_vol.volume_changed
 
-        self.controls_layout.addWidget(self.btn_prev)
         self.controls_layout.addWidget(self.btn_play)
-        self.controls_layout.addWidget(self.btn_next)
-        self.controls_layout.addSpacing(12)
+        self.controls_layout.addWidget(self.btn_prev, alignment=Qt.AlignmentFlag.AlignBottom)
+        self.controls_layout.addWidget(self.btn_next, alignment=Qt.AlignmentFlag.AlignBottom)
+        self.controls_layout.addSpacing(8)
 
         self.visualizer = Visualizer.get_visualizer(self.engine)
-        self.controls_layout.addWidget(self.visualizer, 2)
+        if isinstance(self.visualizer, EmptyVisualizerWidget):
+            self.controls_layout.addLayout(self.seeker_layout, 2)
+        else:
+            self.player_layout.insertLayout(0, self.seeker_layout)
+            self.controls_layout.addWidget(self.visualizer, 2)
 
         # controls_layout.addWidget(self.visualizer, 1)
-        self.controls_layout.addSpacing(12)
-        self.controls_layout.addLayout(self.slider_vol,0)
+        self.controls_layout.addSpacing(8)
+        self.controls_layout.addLayout(self.slider_vol)
         self.controls_layout.addWidget(self.btn_repeat)
         self.setBackgroundRole(QPalette.ColorRole.Midlight)
         self.setAutoFillBackground(True)
 
-        player_layout.addWidget(controls_widget,1)
+        self.player_layout.addWidget(controls_widget, 1)
 
         self.adjust_volume(self.slider_vol.volume)
 
     def refresh_visualizer(self):
         index = self.controls_layout.indexOf(self.visualizer)
-        self.controls_layout.takeAt(index).widget().setParent(None)
+        if index is None or index == -1:
+            index = self.controls_layout.indexOf(self.seeker_layout)
+            self.controls_layout.takeAt(index)
+            self.seeker_layout.setParent(None)
+        else:
+            self.controls_layout.takeAt(index)
+            self.visualizer.setParent(None)
+
         self.visualizer = Visualizer.get_visualizer(self.engine, self.visualizer)
-        self.controls_layout.insertWidget(index, self.visualizer, 2)
+        if isinstance(self.visualizer, EmptyVisualizerWidget):
+            self.seeker_layout.setParent(None)
+            self.controls_layout.insertLayout(index, self.seeker_layout, 2)
+        else:
+            self.player_layout.insertLayout(0, self.seeker_layout)
+            self.controls_layout.insertWidget(index, self.visualizer, 2)
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.ApplicationFontChange:
@@ -829,9 +853,10 @@ class Player(QWidget):
         if self._update_progress_ticks:
             total_ms = self.engine.get_total_time()
             if total_ms > 0:
+                single_step = max (1, round((1000.0 / total_ms) * 1000))
                 self.progress_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
-                self.progress_slider.setSingleStep(round((1000.0 / total_ms) * 1000))
-                self.progress_slider.setTickInterval(round(((1000.0 / total_ms) * 1000) * 10))
+                self.progress_slider.setSingleStep(single_step)
+                self.progress_slider.setTickInterval(max(10, round(((1000.0 / total_ms) * 1000) * 10)))
                 self._update_progress_ticks = False
 
     def on_playback_state_changed(self, is_playing):
@@ -902,7 +927,7 @@ class Player(QWidget):
                 self.engine.load_media(track_path)
                 self.visualizer.load_mp3(track_path)
                 self.visualizer.set_state(True, self.slider_vol.volume)
-                self.track_label.setText(Path(track_path).name)
+                self.track_label.setText(data.name)
 
                 # Reset progress on new track
                 self.reset()
@@ -916,7 +941,7 @@ class Player(QWidget):
 
 class DirectoryWidget(QWidget):
 
-    def __init__(self,player: Player, media_player: MediaPlayer, parent=None):
+    def __init__(self, player: Player, media_player: MediaPlayer, parent=None):
         super(DirectoryWidget, self).__init__(parent)
 
         self.player = player
@@ -951,6 +976,7 @@ class DirectoryWidget(QWidget):
 
         self.directory_layout.addWidget(self.headerLabel)
         self.directory_layout.addWidget(self.directory_tree)
+
 
 class DirectoryTree(QTreeView):
     open = Signal(QModelIndex)
@@ -1029,7 +1055,7 @@ class DirectoryTree(QTreeView):
         self.proxy_model.endFilterChange(QSortFilterProxyModel.Direction.Rows)
 
     def selectionChanged(self, selected, deselected, /):
-        if len(self.selectedIndexes())>0:
+        if len(self.selectedIndexes()) > 0:
             self.set_home_action.setEnabled(True)
             self.open_action.setEnabled(True)
         else:
@@ -1040,6 +1066,9 @@ class DirectoryTree(QTreeView):
         if self.autoSearchHelper.keyPressEvent(event):
             self._apply_proxy_root()
             self.viewport().update()
+        else:
+            super().keyPressEvent(event)
+
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -1129,6 +1158,7 @@ class DirectoryTree(QTreeView):
         if path in expanded_dirs:
             expanded_dirs.remove(path)
             AppSettings.setValue(SettingKeys.EXPANDED_DIRS, expanded_dirs)
+
 
 class SongTableModel(QAbstractTableModel):
     FAV_COL = 0
@@ -1361,7 +1391,6 @@ class SongTableModel(QAbstractTableModel):
             return Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable
 
 
-
 class SongTable(QTableView):
     play_track = Signal(int, Mp3Entry)
 
@@ -1386,7 +1415,7 @@ class SongTable(QTableView):
     class StarDelegate(QStyledItemDelegate):
         star_rating = StarRating()
 
-        def __init__(self, parent:QObject =None):
+        def __init__(self, parent: QObject = None):
             super().__init__(parent)
 
         def paint(self, painter, option, index):
@@ -1408,7 +1437,7 @@ class SongTable(QTableView):
     class LabelItemDelegate(QtWidgets.QStyledItemDelegate):
         _size = QSize(300, 40)
 
-        def __init__(self, parent: QObject=None):
+        def __init__(self, parent: QObject = None):
             super().__init__(parent)
 
         def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex):
@@ -1648,7 +1677,7 @@ class SongTable(QTableView):
         if key == SettingKeys.COLUMN_SUMMARY_VISIBLE:
             self.viewport().update()
 
-    def keyPressEvent(self, event: QKeyEvent):
+    def keyPressEvent(self, event: QKeyEvent):        
         if event.key() == Qt.Key.Key_Enter:
             index = self.selectionModel().currentIndex()
             self.play_track.emit(index.row(), index.data(Qt.ItemDataRole.UserRole))
@@ -1656,8 +1685,8 @@ class SongTable(QTableView):
         elif event.key() == Qt.Key.Key_Delete:
             self.remove_items()
             return
-        else:
-            self.auto_search_helper.keyPressEvent(event)
+        elif not self.auto_search_helper.keyPressEvent(event):
+            super().keyPressEvent(event)
 
     def paintEvent(self, event):
         # 1. Let the standard TreeView draw the folders/files first
@@ -1679,8 +1708,6 @@ class SongTable(QTableView):
         index = self.index_of(data)
         if index >= 0:
             self.model().setData(self.model().index(index, SongTableModel.FILE_COL), data, Qt.ItemDataRole.UserRole)
-
-
 
     def populate_table(self, table_data: list[Mp3Entry]):
         self.table_model = SongTableModel(table_data)
@@ -1707,7 +1734,8 @@ class SongTable(QTableView):
         self.setColumnHidden(SongTableModel.GENRE_COL, not AppSettings.value(SettingKeys.COLUMN_GENRE_VISIBLE, False, type=bool))
         self.setColumnHidden(SongTableModel.BPM_COL, not AppSettings.value(SettingKeys.COLUMN_BPM_VISIBLE, False, type=bool))
 
-        if AppSettings.value(SettingKeys.DYNAMIC_SCORE_COLUMN, True, type=bool) and (self.table_model.filter_config is None or self.table_model.filter_config.empty()):
+        if AppSettings.value(SettingKeys.DYNAMIC_SCORE_COLUMN, True, type=bool) and (
+                self.table_model.filter_config is None or self.table_model.filter_config.empty()):
             self.setColumnHidden(SongTableModel.SCORE_COL, True)
 
         for col, category in enumerate(get_music_categories()):
@@ -1773,7 +1801,6 @@ class SongTable(QTableView):
                     logger.error("Failed to rename file: {0}", e)
                     QMessageBox.warning(self, _("Update Error"), _("Failed to rename file: {0}").format(e))
 
-
             row = self.index_of(data)
             if row >= 0:
                 self.model().setData(self.model().index(row, 0), new_data, Qt.ItemDataRole.UserRole)
@@ -1793,7 +1820,6 @@ class SongTable(QTableView):
         if self.playlist is not None:
             remove_m3u(datas, self.playlist)
 
-
     def show_context_menu(self, point):
         # index = self.indexAt(point)
         menu = QMenu(self)
@@ -1806,7 +1832,7 @@ class SongTable(QTableView):
         menu.addSeparator()
 
         datas = [self.mp3_data(model_index.row()) for model_index in self.selectionModel().selectedRows()]
-        add_to_playlist = QMenu(_("Add to playlist"), icon = QIcon.fromTheme(QIcon.ThemeIcon.ListAdd))
+        add_to_playlist = QMenu(_("Add to playlist"), icon=QIcon.fromTheme(QIcon.ThemeIcon.ListAdd))
 
         add_new_action = add_to_playlist.addAction(_("<New Playlist>"))
         add_new_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
@@ -1822,12 +1848,12 @@ class SongTable(QTableView):
 
         menu.addMenu(add_to_playlist)
 
-
         remove_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Remove from playlist") if self.playlist else _("Remove"))
         remove_action.triggered.connect(self.remove_items)
 
         menu.show()
         menu.exec(self.mapToGlobal(point))
+
 
 class FilterWidget(QWidget):
     values_changed = Signal()
@@ -1874,7 +1900,7 @@ class FilterWidget(QWidget):
         # sliders_container.addWidget(self.sliders_widget, 1)
         self.presets_widget = QWidget()
         self.presets_layout = QHBoxLayout(self.presets_widget)
-        self.presets_layout.setContentsMargins(0,0,0,0)
+        self.presets_layout.setContentsMargins(0, 0, 0, 0)
         self.presets_layout.setSpacing(0)
         self.presets_layout.addStretch()
 
@@ -1913,7 +1939,7 @@ class FilterWidget(QWidget):
         two_rows = len(categories) > 15
 
         row1 = QHBoxLayout()
-        row1.setContentsMargins(0,0,0,0)
+        row1.setContentsMargins(0, 0, 0, 0)
         row1.setSpacing(0)
 
         row2 = None
@@ -1966,11 +1992,15 @@ class FilterWidget(QWidget):
         AppSettings.setValue(SettingKeys.CATEGORY_WIDGETS, not AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool))
         self.update_sliders()
 
+    def toggle_presets(self):
+        AppSettings.setValue(SettingKeys.PRESET_WIDGETS, not AppSettings.value(SettingKeys.PRESET_WIDGETS, True, type=bool))
+        self.update_presets()
+
     def toggle_bpm_widget(self):
         AppSettings.setValue(SettingKeys.BPM_WIDGET, not AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
         self.bpm_widget.setVisible(AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
         self.bpm_widget.set_value(0)
-        #self.update_sliders()
+        # self.update_sliders()
 
     def toggle_tag(self, state):
         toggle = self.sender()
@@ -2001,16 +2031,18 @@ class FilterWidget(QWidget):
     def update_sliders(self):
         self.russel_widget.setParent(None)
         self.bpm_widget.setParent(None)
-        
+
         self.slider_tabs.clear()
         self.sliders = {}
 
-        if not AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool) and not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool) and not AppSettings.value(SettingKeys.BPM_WIDGET, True, type = bool):
+        if not AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool) and not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True,
+                                                                                                          type=bool) and not AppSettings.value(
+                SettingKeys.BPM_WIDGET, True, type=bool):
             self.slider_tabs.setVisible(False)
         else:
             self.slider_tabs.setVisible(True)
 
-        if AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type = bool):
+        if AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool):
             general_categories = get_categories().copy()
             categories_group = {}
             for cat in get_music_categories():
@@ -2030,36 +2062,41 @@ class FilterWidget(QWidget):
 
     def update_presets(self):
         clear_layout(self.presets_layout)
-        self.presets_layout.addStretch()
-        for preset in get_presets():
-            button = QPushButton(text = preset.name)
-            button.setFixedHeight(app_theme.button_height_small)
-            #button.setIconSize(app_theme.icon_size_small)
-            button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
-            remove_preset = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Remove"), self)
-            remove_preset.setData(preset)
-            remove_preset.triggered.connect(self.remove_preset_action)
-            button.addAction(remove_preset)
+        if AppSettings.value(SettingKeys.PRESET_WIDGETS, True, type=bool):
+            self.presets_widget.setVisible(True)
+            self.presets_layout.addStretch()
+            for preset in get_presets():
+                button = QPushButton(text=preset.name)
+                button.setFixedHeight(app_theme.button_height_small)
+                # button.setIconSize(app_theme.icon_size_small)
+                button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
-            reset_preset = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRestore), _("Reset Presets"), self)
-            reset_preset.triggered.connect(self.reset_preset_action)
-            button.addAction(reset_preset)
+                remove_preset = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Remove"), self)
+                remove_preset.setData(preset)
+                remove_preset.triggered.connect(self.remove_preset_action)
+                button.addAction(remove_preset)
 
-            button.clicked.connect(functools.partial(self.select_preset, preset))
-            self.presets_layout.addWidget(button)
+                reset_preset = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRestore), _("Reset Presets"), self)
+                reset_preset.triggered.connect(self.reset_preset_action)
+                button.addAction(reset_preset)
 
-        save_preset = QToolButton(icon = QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
-        save_preset.clicked.connect(self.save_preset_action)
-        save_preset.setFixedSize(app_theme.button_size_small)
-        #save_preset.setIconSize(app_theme.icon_size_small)
-        self.presets_layout.addWidget(save_preset)
+                button.clicked.connect(functools.partial(self.select_preset, preset))
+                self.presets_layout.addWidget(button)
 
-        clear_preset = QToolButton(icon = QIcon.fromTheme(QIcon.ThemeIcon.EditClear))
-        clear_preset.clicked.connect(self.clear_sliders)
-        clear_preset.setFixedSize(app_theme.button_size_small)
-        #clear_preset.setIconSize(app_theme.icon_size_small)
-        self.presets_layout.addWidget(clear_preset)
+            save_preset = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
+            save_preset.clicked.connect(self.save_preset_action)
+            save_preset.setFixedSize(app_theme.button_size_small)
+            # save_preset.setIconSize(app_theme.icon_size_small)
+            self.presets_layout.addWidget(save_preset)
+
+            clear_preset = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.EditClear))
+            clear_preset.clicked.connect(self.clear_sliders)
+            clear_preset.setFixedSize(app_theme.button_size_small)
+            # clear_preset.setIconSize(app_theme.icon_size_small)
+            self.presets_layout.addWidget(clear_preset)
+        else:
+            self.presets_widget.setVisible(False)
 
     def clear_sliders(self):
         for slider in self.sliders.values():
@@ -2147,7 +2184,7 @@ class FilterWidget(QWidget):
             self.values_changed.emit()
 
     def config(self):
-        config = FilterConfig(categories=self.categories(),tags= selected_tags, bpm=self.bpm_widget.value(), genres=[])
+        config = FilterConfig(categories=self.categories(), tags=selected_tags, bpm=self.bpm_widget.value(), genres=[])
         return config
 
     def categories(self):
@@ -2174,8 +2211,9 @@ class FilterWidget(QWidget):
         self.set_category_value(cat_valence, valence, False)
         self.set_category_value(cat_arousal, arousal, True)
 
-    def on_bpm_changed(self, value:int):
+    def on_bpm_changed(self, value: int):
         self.values_changed.emit()
+
 
 class MusicPlayer(QMainWindow):
     trackChanged = Signal(int)
@@ -2272,7 +2310,6 @@ class MusicPlayer(QMainWindow):
         self.dir_tree_action.triggered.connect(self.toggle_directory_tree)
         view_menu.addAction(self.dir_tree_action)
 
-
         filter_menu = QMenu(_("Filter"), self, icon=QIcon.fromTheme("filter"))
 
         view_menu.addMenu(filter_menu)
@@ -2282,6 +2319,12 @@ class MusicPlayer(QMainWindow):
         filter_action.setChecked(AppSettings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
         filter_action.triggered.connect(self.filter_widget.toggle)
         filter_menu.addAction(filter_action)
+
+        self.presets_action = QAction(_("Presets"), self, icon=QIcon.fromTheme("russel"))
+        self.presets_action.setCheckable(True)
+        self.presets_action.setChecked(AppSettings.value(SettingKeys.PRESET_WIDGETS, True, type=bool))
+        self.presets_action.triggered.connect(self.filter_widget.toggle_presets)
+        filter_menu.addAction(self.presets_action)
 
         self.russel_action = QAction(_("Circumplex model of emotion"), self, icon=QIcon.fromTheme("russel"))
         self.russel_action.setCheckable(True)
@@ -2294,7 +2337,6 @@ class MusicPlayer(QMainWindow):
         self.categories_action.setChecked(AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool))
         self.categories_action.triggered.connect(self.filter_widget.toggle_category_widgets)
         filter_menu.addAction(self.categories_action)
-
 
         self.bpm_action = QAction(_("Beats per Minute"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
         self.bpm_action.setCheckable(True)
@@ -2339,7 +2381,7 @@ class MusicPlayer(QMainWindow):
         font_size_menu.addAction(font_size_large_action)
         view_menu.addMenu(font_size_menu)
 
-        visualizer_menu = QMenu(_("Visualizer"), self, icon= QIcon.fromTheme("spectrum"))
+        visualizer_menu = QMenu(_("Visualizer"), self, icon=QIcon.fromTheme("spectrum"))
 
         visualizer_group = QActionGroup(self, exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
 
@@ -2408,22 +2450,26 @@ class MusicPlayer(QMainWindow):
         about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(about_action)
 
+    def get_first_slider(self):
+        if len(self.filter_widget.sliders.values()) > 0:
+            return next(iter(self.filter_widget.sliders.values())).slider
+        else:
+            return None
 
     def start_tour(self):
         steps = [
-            {"widget": self.directory_tree, 'message': _("Tour Directory Tree")},
+            {"widget": self.directory_widget, 'message': _("Tour Directory Tree")},
             {'widget': self.filter_widget.russel_widget, 'message': _("Tour Russel Widget")},
-            {'widget': next(iter(self.filter_widget.sliders.values())).slider, 'message': _("Tour Category Slider")},
+            {'widget': self.get_first_slider(), 'message': _("Tour Category Slider")},
             {'widget': self.filter_widget.bpm_widget, 'message': _("Tour BPM Widget")},
             {'widget': self.filter_widget.tags_widget, 'message': _("Tour Tags Widget")},
-            {'widget': self.filter_widget.presets_widget, 'message':_("Tour Presets Widget")},
+            {'widget': self.filter_widget.presets_widget, 'message': _("Tour Presets Widget")},
             {'widget': self.table_tabs, 'message': _("Tour Song Table")},
-            {'widget': self.effects_list, 'message':_("Tour Effectslist")},
+            {'widget': self.effects_widget, 'message': _("Tour Effectslist")},
             {'widget': self.menuBar(), 'message': _("Tour Menubar")}
         ]
         self.overlay = FeatureOverlay(self, steps)
-        AppSettings.setValue(SettingKeys.START_TOUR,False)
-
+        AppSettings.setValue(SettingKeys.START_TOUR, False)
 
     def show_about_dialog(self):
         dialog = AboutDialog(self)
@@ -2466,12 +2512,14 @@ class MusicPlayer(QMainWindow):
             sizes[0] = 200
             self.central_layout.setSizes(sizes)
             AppSettings.setValue(SettingKeys.DIRECTORY_TREE, True)
+            self.directory_widget.setEnabled(True)
         else:
             sizes = self.central_layout.sizes()
             sizes[1] = sizes[1] + sizes[0]
             sizes[0] = 0
             self.central_layout.setSizes(sizes)
             AppSettings.setValue(SettingKeys.DIRECTORY_TREE, False)
+            self.directory_widget.setEnabled(False)
 
     def toggle_effects_tree(self, visible: bool = None):
 
@@ -2481,16 +2529,17 @@ class MusicPlayer(QMainWindow):
         if visible:
             sizes = self.central_layout.sizes()
             sizes[1] = sizes[1] - 200
-            sizes[2]=200
+            sizes[2] = 200
             self.central_layout.setSizes(sizes)
             AppSettings.setValue(SettingKeys.EFFECTS_TREE, True)
+            self.effects_widget.setEnabled(True)
         else:
             sizes = self.central_layout.sizes()
             sizes[1] = sizes[1] + sizes[2]
             sizes[2] = 0
             self.central_layout.setSizes(sizes)
             AppSettings.setValue(SettingKeys.EFFECTS_TREE, False)
-
+            self.effects_widget.setEnabled(False)
 
     def open_settings(self):
 
@@ -2503,11 +2552,21 @@ class MusicPlayer(QMainWindow):
             if self.current_table() is not None:
                 self.current_table().update_category_column_visibility()
 
-    def layout_splitter_moved(self, pos_x, pos_y):
-        if pos_x == 0:
-            self.dir_tree_action.setChecked(False)
+    def layout_splitter_moved(self, pos_x: int, index: int):
+        if index == 1:
+            if pos_x == 0:
+                self.dir_tree_action.setChecked(False)
+                self.directory_widget.setEnabled(False)
+            else:
+                self.dir_tree_action.setChecked(True)
+                self.directory_widget.setEnabled(True)
         else:
-            self.dir_tree_action.setChecked(True)
+            if pos_x + self.central_layout.handleWidth() >= self.width():
+                self.effects_tree_action.setChecked(False)
+                self.effects_widget.setEnabled(False)
+            else:
+                self.effects_tree_action.setChecked(True)
+                self.effects_widget.setEnabled(True)
 
     def init_ui(self):
 
@@ -2519,7 +2578,7 @@ class MusicPlayer(QMainWindow):
         self.central_layout.splitterMoved.connect(self.layout_splitter_moved)
         self.setCentralWidget(self.central_layout)
 
-        self.directory_widget = DirectoryWidget(self.player,self)
+        self.directory_widget = DirectoryWidget(self.player, self)
         self.central_layout.addWidget(self.directory_widget)
         self.central_layout.setCollapsible(0, True)
 
@@ -2531,8 +2590,8 @@ class MusicPlayer(QMainWindow):
         self.central_layout.addWidget(main_widget)
         self.central_layout.setCollapsible(1, False)
 
-        self.effects_list = EffectWidget()
-        self.central_layout.addWidget(self.effects_list)
+        self.effects_widget = EffectWidget()
+        self.central_layout.addWidget(self.effects_widget)
         self.central_layout.setCollapsible(2, True)
 
         # Menu Bar
@@ -2662,7 +2721,7 @@ class MusicPlayer(QMainWindow):
         if file_path:
             try:
                 if self.save_playlist(file_path, entries):
-                    self.update_status_label(_("Save Complete")+": "+ _("File {0} processed.").format(Path(file_path).name), progress=False)
+                    self.update_status_label(_("Save Complete") + ": " + _("File {0} processed.").format(Path(file_path).name), progress=False)
                     return file_path
                 else:
                     QMessageBox.critical(self, _("Save Error"), _("No favorites found."))
@@ -2819,7 +2878,7 @@ class MusicPlayer(QMainWindow):
             self.player.current_index = table.index_of(data)
 
     def load_initial_directory(self):
-        open_tables = AppSettings.value(SettingKeys.OPEN_TABLES, [], type = list)
+        open_tables = AppSettings.value(SettingKeys.OPEN_TABLES, [], type=list)
 
         if open_tables:
             for open_table in open_tables:

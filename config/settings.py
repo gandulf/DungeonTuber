@@ -241,6 +241,7 @@ class SettingKeys(StrEnum):
     DIRECTORY_TREE = "directoryTree"
     RUSSEL_WIDGET ="russelWidget"
     CATEGORY_WIDGETS ="categoryWidgets"
+    PRESET_WIDGETS ="presetWidgets"
     BPM_WIDGET = "bpmWidget"
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"

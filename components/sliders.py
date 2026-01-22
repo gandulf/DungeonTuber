@@ -116,7 +116,10 @@ class JumpSlider(QSlider):
         super().leaveEvent(event)
 
     def _roundStep(self, a, step_size):
-        return round(float(a) / step_size) * step_size
+        if step_size == 0:
+            return a
+        else:
+            return round(float(a) / step_size) * step_size
 
     def mousePressEvent(self, event: QMouseEvent):
         self.mouse_pressed.emit(event)
@@ -730,7 +733,7 @@ class VolumeSlider(QHBoxLayout):
         self.btn_volume.setDefaultAction(toggle_mute_action)
         self.btn_volume.setShortcutEnabled(True)
         self._update_volume_icon(value)
-        self.addWidget(self.btn_volume,0)
+        self.addWidget(self.btn_volume,0, alignment = Qt.AlignmentFlag.AlignBottom)
 
         self.slider_vol = JumpSlider(Qt.Orientation.Horizontal)
         self.slider_vol.setRange(0, 100)

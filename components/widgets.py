@@ -233,9 +233,9 @@ class FeatureOverlay(QWidget):
         step = self.steps[self.current_step]
         widget = step['widget']
 
-        if not widget.isVisible():
+        if widget is None or not widget.isVisible() or not widget.isEnabled():
             self.next_step()
-
+            return
 
         # Correct mapping: widget -> overlay coordinates
         target_rect = self.compute_highlight_rect(widget)
