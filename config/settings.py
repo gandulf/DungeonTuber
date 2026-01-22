@@ -230,6 +230,7 @@ class SettingKeys(StrEnum):
 
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
+    NORMALIZE_VOLUME = "normalizeVolume"
     EFFECTS_DIRECTORY ="effectsDirectory"
     EFFECTS_TREE = "effectsTree"
     LAST_DIRECTORY = "lastDirectory"
@@ -397,8 +398,23 @@ class SettingsDialog(QDialog):
 
         self.skip_analyzed_mp3.setChecked(AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
         self.analyzer_layout.addRow("", self.skip_analyzed_mp3)
-        #
 
+        #
+        self.player_layout = QFormLayout()
+        player_group = QGroupBox(_("Player"))
+        player_group.setLayout(self.player_layout)
+
+        self.normalize_volume = QCheckBox(_("Normalize Volume*"))
+        self.normalize_volume.setToolTip(_("Requires restart"))
+        self.normalize_volume.setChecked(AppSettings.value(SettingKeys.NORMALIZE_VOLUME, True, type=bool))
+        self.player_layout.addRow("", self.normalize_volume)
+        normalize_volume_description = QLabel(_("All songs will be played at a normalized volume."))
+        normalize_volume_description.setStyleSheet(f"font-size:12px")
+        normalize_volume_description.setContentsMargins(28, 0, 0, 0)
+        self.player_layout.addRow("", normalize_volume_description)
+
+        layout.addWidget(player_group, 0)
+        #
         table_layout = QFormLayout()
         table_group = QGroupBox(_("Song Table"))
         table_group.setLayout(table_layout)
@@ -543,7 +559,17 @@ class SettingsDialog(QDialog):
         if row >= 0:
             self.tags_table.removeRow(row)
 
+    def requires_restart(self):
+        result = False
+        current_locale = AppSettings.value(SettingKeys.LOCALE, type=str)
+        result = result or current_locale != self.locale_combo.currentData()
+        result = result or self.normalize_volume.isChecked() != AppSettings.value(SettingKeys.NORMALIZE_VOLUME,True, type=bool)
+
+        return result
+
     def accept(self):
+        requires_restart = self.requires_restart()
+
         AppSettings.setValue(SettingKeys.GEMINI_API_KEY, self.gemini_api_key_input.text())
         AppSettings.setValue(SettingKeys.OPENAI_API_KEY, self.openai_api_key_input.text())
         AppSettings.setValue(SettingKeys.AI_MODEL, self.model_combo.currentText())
@@ -552,6 +578,9 @@ class SettingsDialog(QDialog):
         AppSettings.setValue(SettingKeys.DYNAMIC_SCORE_COLUMN, self.dynamic_score_column.isChecked())
         AppSettings.setValue(SettingKeys.SKIP_ANALYZED_MUSIC, self.skip_analyzed_mp3.isChecked())
         AppSettings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())
+        AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
+
+        AppSettings.setValue(SettingKeys.NORMALIZE_VOLUME, self.normalize_volume.isChecked())
 
         _categories= []
         for row in range(self.categories_table.rowCount()):
@@ -580,9 +609,8 @@ class SettingsDialog(QDialog):
 
         set_music_tags(_tags)
 
-        current_locale = AppSettings.value(SettingKeys.LOCALE, type=str)
-        if current_locale != self.locale_combo.currentData():
-            AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
+
+        if requires_restart:
 
             reply = QMessageBox.question(self, _("Restart Required"),
                                          _("Changing the language requires a restart. Do you want to restart now?"),

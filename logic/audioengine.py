@@ -42,23 +42,35 @@ class AudioEngine(QObject):
     def init_vlc(self, visualizer : bool = True):
         vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
 
+        if AppSettings.value(SettingKeys.NORMALIZE_VOLUME, True, type=bool):
+            args = [
+                "--audio-filter=compressor",
+                "--compressor-threshold=-25.0",
+                "--compressor-ratio=20.0",
+                "--compressor-attack=5.0",
+                "--compressor-release=500.0",
+                "--compressor-makeup-gain=12.0",
+                "--compressor-knee=2.5",
+                "--compressor-rms-peak=0.0"  # Peak is better for limiting max volume
+            ]
+        else:
+            args = []
+
         # Define the audio output module based on the OS
         if platform.system() == "Windows":
-            aout = "directsound"  # or "wasapi" for modern Windows
+            args.append("--aout=directsound")  # or "wasapi" for modern Windows
         elif platform.system() == "Linux":
-            aout = "pulseaudio"
+            args.append("--aout=pulseaudio")
         elif platform.system() == "Darwin":  # macOS
-            aout = "auhal"
-        else:
-            aout = None
-
-        # Create the VLC instance with the correct flag
-        audio_out_parameter = f"--aout={aout}" if aout else ""
+            args.append("--aout=auhal")
 
         if vis == "VLC" and visualizer:
-            self.instance = vlc.Instance(audio_out_parameter, '--audio-visual=visual', '--effect-list=spectrum')  # With Spectrum video
+            args.append("--audio-visual=visual")
+            args.append("--effect-list=spectrum")
         else:
-            self.instance = vlc.Instance(audio_out_parameter,'--no-video')  # Audio only
+            args.append("--no-video")  # Audio only
+
+        self.instance = vlc.Instance(args)
         self.list_player = self.instance.media_list_player_new()
         self.player = self.list_player.get_media_player()
         self.player.audio_set_volume(self.current_volume)

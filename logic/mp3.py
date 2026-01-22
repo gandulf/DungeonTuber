@@ -19,7 +19,7 @@ from config.utils import get_path, get_available_locales
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["name", "path", "title", "artist", "album", "summary","genre", "length", "favorite", "categories", "_tags", "_all_tags", "_cover", "has_cover", "bpm"]
+    __slots__ = ["name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_all_tags", "_cover", "has_cover", "bpm"]
 
     name: str
     path: Path
@@ -27,7 +27,7 @@ class Mp3Entry(object):
     artist: str
     album: str
     summary: str
-    genre: list[str]
+    genres: list[str]
     length: int
     favorite: bool
     _cover: QPixmap | None
@@ -49,11 +49,11 @@ class Mp3Entry(object):
         self.artist = artist
         self.album = album
         if isinstance(genre, str):
-            self.genre = [genre]
+            self.genres = [genre]
         elif genre:
-            self.genre = genre
+            self.genres = genre
         else:
-            self.genre = []
+            self.genres = []
         self.summary =""
         self.length =-1
         self.favorite = False
@@ -116,17 +116,18 @@ class Mp3Entry(object):
 
     @property
     def all_tags(self):
-        if self._all_tags is None:
-            self._all_tags = set(self.tags)
-            if self._ge(CAT_TEMPO,7) and self._ge(CAT_TENSION,7) and self._ge(CAT_HEROISM,6):
-                self._all_tags.add(_("Fight"))
-
-            if self._le(CAT_TEMPO,5) and self._le(CAT_TENSION,3) and self._le(CAT_HEROISM,3) and self._le(CAT_MYSTICISM,4):
-                self._all_tags.add(_("Travel"))
-
-            self._all_tags = sorted(self._all_tags)
-
-        return self._all_tags
+        return self.tags
+        # if self._all_tags is None:
+        #     self._all_tags = set(self.tags)
+        #     if self._ge(CAT_TEMPO,7) and self._ge(CAT_TENSION,7) and self._ge(CAT_HEROISM,6):
+        #         self._all_tags.add(_("Fight"))
+        #
+        #     if self._le(CAT_TEMPO,5) and self._le(CAT_TENSION,3) and self._le(CAT_HEROISM,3) and self._le(CAT_MYSTICISM,4):
+        #         self._all_tags.add(_("Travel"))
+        #
+        #     self._all_tags = sorted(self._all_tags)
+        #
+        # return self._all_tags
 
 
 def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
@@ -149,7 +150,7 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
                 entry.album = audio.tags.get("TALB").text[0]
 
             if 'TCON' in audio:
-                entry.genre = audio.tags.get('TCON').text
+                entry.genres = audio.tags.get('TCON').text
 
             if 'TBPM' in audio:
                 entry.bpm = int(audio.tags.get('TBPM').text[0])
@@ -196,7 +197,7 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
 
 _categories = None
 
-def _normalize_categories(cat : dict[str,int]) :
+def _lazy_init_categories():
     global _categories
 
     if _categories is None:
@@ -205,12 +206,22 @@ def _normalize_categories(cat : dict[str,int]) :
         for val in _DEFAULT_CATEGORIES:
             _categories[val] = [translation.gettext(val).lower() for translation in translations]
 
+
+def _normalize_categories(cat : dict[str,int]) :
+    global _categories
+
+    if _categories is None:
+        _lazy_init_categories()
+
     norm =  {normalize_category(key): value for key,value in cat.items()}
 
     return norm
 
 
 def normalize_category(cat: str):
+    if _categories is None:
+        _lazy_init_categories()
+
     if cat in get_categories():
         return cat
 
@@ -237,11 +248,11 @@ def update_mp3_data(path: str, data: Mp3Entry):
     audio = _audio(path)
 
     update_mp3_title(audio, data.title, False)
-    update_mp3_genre(audio, data.genre, False)
+    update_mp3_genre(audio, data.genres, False)
     update_mp3_album(audio, data.album, False)
     update_mp3_artist(audio, data.artist, False)
     update_mp3_bpm(audio, data.bpm, False)
-    update_mp3_genre(audio, data.genre, False)
+    update_mp3_genre(audio, data.genres, False)
     update_mp3_summary(audio, data.summary, False)
     update_mp3_favorite(audio, data.favorite, False)
     update_mp3_categories(audio, data.categories, False)

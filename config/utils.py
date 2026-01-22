@@ -11,6 +11,8 @@ from packaging import version
 
 logger = logging.getLogger("main")
 
+DOWNLOAD_LINK = "https://github.com/gandulf/DungeonTuber/releases/latest"
+
 def clear_layout(layout):
     while layout.count():
         child = layout.takeAt(0)
