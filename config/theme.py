@@ -32,42 +32,53 @@ class AppTheme(QObject):
     _color_cache : dict[string,QColor] = {}
     _brush_cache : dict[string,QBrush] = {}
 
+    _small_factor = 0.7
+
     def __init__(self):
         super().__init__()
         self._font_size : int = AppSettings.value(SettingKeys.FONT_SIZE, 14, type=int) # Default size
-        self._icon_size = self._font_size * 2
-        self._button_size = self._font_size * 4
+        self._icon_width = self._font_size * 2
+        self._icon_height = self._font_size * 2
+        self._icon_size =  QSize(self._icon_width,self._icon_height)
+        self._icon_size_small = QSize(int(self._icon_width * self._small_factor),int(self._icon_height* self._small_factor))
+
+        self._button_width = self._font_size * 4
+        self._button_height = self._font_size * 4
+        self._button_size = QSize(self._button_width, self._button_height)
+        self._button_height_small =int(self._button_height * self._small_factor)
+        self._button_width_small = int(self._button_width * self._small_factor)
+        self._button_size_small = QSize(self._button_width_small, self._button_height_small)
 
         self.light_palette = self.get_light_mode_palette()
         self.dark_palette = self.get_dark_mode_palette()
 
     @Property(int)
-    def icon_size(self):
+    def icon_size(self) -> QSize:
         return self._icon_size
 
     @Property(int)
     def icon_height(self):
-        return self._icon_size
+        return self._icon_height
 
     @Property(int)
     def icon_width(self):
-        return self._icon_size
+        return self._icon_width
 
     @Property(int)
-    def button_size(self):
+    def button_size(self) -> QSize:
         return self._button_size
 
     @Property(int)
     def icon_size_small(self) -> QSize:
-        return QSize(self._icon_size * 0.7, self._icon_size * 0.7)
+        return self._icon_size_small
 
     @Property(int)
     def button_height_small(self) -> int:
-        return self._button_size *0.7
+        return self._button_height_small
 
     @Property(int)
     def button_size_small(self) -> QSize:
-        return QSize(self._button_size *0.7, self._button_size *0.7)
+        return self._button_size_small
 
     @Property(int)
     def font_size(self):
@@ -139,7 +150,7 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(127, 127, 127))
             palette.setColor(QPalette.ColorRole.BrightText, palette.color(QPalette.ColorRole.Accent))
             palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
-            palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 102, 255))
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(80, 80, 80))
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, QColor(127, 127, 127), )
@@ -154,7 +165,7 @@ class AppTheme(QObject):
     def get_light_mode_palette(self) -> QPalette:
         if self.light_palette is None:
             palette = QPalette()
-            palette.setColor(QPalette.ColorRole.Accent,  QColor(1, 71, 173))
+            palette.setColor(QPalette.ColorRole.Accent,  QColor(0,80,203))
             # darkPalette.setColor(QPalette.Window, QColor(53, 53, 53))
             # darkPalette.setColor(QPalette.WindowText, Qt.white)
             # darkPalette.setColor(QPalette.Disabled, QPalette.WindowText, QColor(127, 127, 127))
@@ -171,7 +182,7 @@ class AppTheme(QObject):
             # darkPalette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(127, 127, 127))
             # darkPalette.setColor(QPalette.BrightText, Qt.red)
             # darkPalette.setColor(QPalette.Link, QColor(42, 130, 218))
-            # darkPalette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.Highlight, QColor(0, 102, 255))
             # darkPalette.setColor(QPalette.Disabled, QPalette.Highlight, QColor(80, 80, 80))
             # darkPalette.setColor(QPalette.HighlightedText, Qt.white)
             # darkPalette.setColor(QPalette.Disabled, QPalette.HighlightedText, QColor(127, 127, 127), )
@@ -183,6 +194,31 @@ class AppTheme(QObject):
             self.light_palette = palette
 
         return self.light_palette
+
+    def create_play_pause_icon(self):
+        # 1. Get the system theme icons
+        play_icon_theme = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart)
+        pause_icon_theme = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause)
+
+        # 2. Create a new empty icon to hold both states
+        combined_icon = QIcon()
+
+        # 3. Transfer pixmaps from theme icons to the combined icon
+        # We loop through standard sizes to ensure sharpness at different scales
+        for size in [16, 24, 32, 48, 64]:
+            q_size = QSize(size, size)
+
+            # Add 'Play' to the Unchecked (Off) state
+            play_pixmap = play_icon_theme.pixmap(q_size)
+            if not play_pixmap.isNull():
+                combined_icon.addPixmap(play_pixmap, QIcon.Mode.Normal, QIcon.State.Off)
+
+            # Add 'Pause' to the Checked (On) state
+            pause_pixmap = pause_icon_theme.pixmap(q_size)
+            if not pause_pixmap.isNull():
+                combined_icon.addPixmap(pause_pixmap, QIcon.Mode.Normal, QIcon.State.On)
+
+        return combined_icon
 
     def set_theme(self, theme: str):
         AppSettings.setValue(SettingKeys.THEME, theme)
@@ -203,6 +239,10 @@ class AppTheme(QObject):
                     QPushButton {{
                         padding: {self._font_size // 2}px;
                     }}
+                    
+                    QPushButton[class="play"]::checked, QToolButton[class="play"]::checked {{
+                        background-color: rgb(0, 102, 255);                        
+                    }}                    
                 """
 
         QIcon.setThemeName(theme)

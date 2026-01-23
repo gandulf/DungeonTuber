@@ -1,13 +1,17 @@
+import logging
 import os
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication, QDialogButtonBox, QLineEdit, QSpinBox, \
-    QTextEdit, QCheckBox, QFormLayout
+    QTextEdit, QCheckBox, QFormLayout, QMessageBox
 
 from config.theme import app_theme
 from config.utils import get_path, is_latest_version, get_latest_version, DOWNLOAD_LINK
-from logic.mp3 import Mp3Entry
+from logic.mp3 import Mp3Entry, update_mp3_data
+
+logger = logging.getLogger("main")
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
@@ -108,7 +112,7 @@ class EditSongDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
-    def get_data(self):
+    def accept(self, /):
 
         self.data.title = self.title_edit.text()
         self.data.artist = self.artist_edit.text()
@@ -117,9 +121,33 @@ class EditSongDialog(QDialog):
         self.data.genres = list(map(str.strip, self.genre_edit.text().split(","))) if self.genre_edit.text() != "" else []
         self.data.summary = self.summary_edit.toPlainText()
         self.data.favorite = self.favorite_edit.isChecked()
-        self.data.tags =list(map(str.strip, self.tags_edit.text().split(","))) if self.tags_edit.text() != "" else []
+        self.data.tags = list(map(str.strip, self.tags_edit.text().split(","))) if self.tags_edit.text() != "" else []
+
+        new_name = self.name_edit.text()
+
+        # Update Summary
+        update_mp3_data(self.data.path, self.data)
+
+        # Update Name (Filename)
+        if new_name != self.data.name:
+            try:
+                old_path = Path(self.data.path)
+                new_filename = new_name
+                if not new_filename.lower().endswith(".mp3"):
+                    new_filename += ".mp3"
+
+                new_path = old_path.with_name(new_filename)
+                os.rename(old_path, new_path)
+
+                self.data.path = Path(new_path)
+                self.data.name = new_filename.removesuffix(".mp3").removesuffix(".MP3")
 
 
-        return self.name_edit.text(), self.data
+            except Exception as e:
+                logger.error("Failed to rename file: {0}", e)
+                QMessageBox.warning(self, _("Update Error"), _("Failed to rename file: {0}").format(e))
+
+        super().accept()
+
 
 

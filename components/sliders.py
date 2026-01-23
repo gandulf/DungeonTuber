@@ -1,10 +1,10 @@
 from enum import StrEnum
 
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer, QKeyCombination
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer, QKeyCombination, QMimeData
 from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter, QIcon, QLinearGradient, QPolygon, QFontMetrics, QPaintEvent, QAction, \
-    QKeySequence, QShortcut
+    QKeySequence, QShortcut, QDrag, QPixmap
 from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QPushButton, QHBoxLayout, QProxyStyle, QWidget, \
-    QGraphicsOpacityEffect, QDial, QToolButton
+    QGraphicsOpacityEffect, QDial, QToolButton, QApplication
 
 from config.settings import MusicCategory
 from config.theme import app_theme
@@ -454,6 +454,7 @@ class ToggleSlider(QCheckBox):
         self._font_height_ratio = font_height_ratio
 
         self._handle_position_multiplier = 0
+        self._drag_start_position = None
 
         self._animation = QPropertyAnimation(self, b"handlePositionMultiplier")
         self._animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
@@ -462,6 +463,60 @@ class ToggleSlider(QCheckBox):
         self.stateChanged.connect(self._on_state_changed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._update_text()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start_position = event.position().toPoint()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if not (event.buttons() & Qt.MouseButton.LeftButton):
+            return
+        if not self._drag_start_position:
+            return
+
+        if (event.position().toPoint() - self._drag_start_position).manhattanLength() < QApplication.startDragDistance():
+            return
+
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        mime_data.setText(self._checked_text)
+        drag.setMimeData(mime_data)
+
+        # Create custom pixmap
+        font = self.font()
+        if font.pixelSize() > 2:
+            font.setPixelSize(font.pixelSize() - 2)
+        font.setBold(True)
+        fm = QFontMetrics(font)
+        text_size = fm.size(Qt.TextFlag.TextSingleLine, self._checked_text)
+
+        padding = 10
+        rect_width = text_size.width() + padding * 2
+        rect_height = text_size.height() + padding
+
+        pixmap = QPixmap(rect_width, rect_height)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setFont(font)
+
+        # Draw rounded rect
+        painter.setBrush(self.palette().color(QPalette.ColorRole.Accent))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(0, 0, rect_width, rect_height, 12, 12)
+
+        # Draw text
+        painter.setPen(self.palette().color(QPalette.ColorRole.HighlightedText))
+        painter.drawText(QRect(0, 0, rect_width, rect_height), Qt.AlignmentFlag.AlignCenter, self._checked_text)
+
+        painter.end()
+
+        drag.setPixmap(pixmap)
+        drag.setHotSpot(QPoint(rect_width // 2, rect_height // 2))
+
+        drag.exec(Qt.DropAction.LinkAction)
 
     def _update_text(self):
         self.setText(self._checked_text if self.isChecked() else self._unchecked_text)
@@ -588,28 +643,30 @@ class ToggleSlider(QCheckBox):
         self._animation.setDuration(self._ANIMATION_DURATION)
 
     def _get_checked_handle_brush(self):
-        if isinstance(self.palette().accent(), QBrush):
-            return self.palette().accent()
+        if isinstance(self.palette().highlight(), QBrush):
+            return QBrush(self.palette().highlight().color().darker(130))
         else:
-            return QBrush(self.palette().accent())
+            return QBrush(self.palette().highlight().darker(130))
+
 
     def _get_checked_body_brush(self):
-        if isinstance(self.palette().accent(), QBrush):
-            return QBrush(self.palette().accent().color().lighter(170))
+        if isinstance(self.palette().highlight(), QBrush):
+            return self.palette().highlight()
         else:
-            return QBrush(self.palette().accent().lighter(170))
+            return QBrush(self.palette().highlight())
 
     def _get_unchecked_handle_brush(self):
+        if isinstance(self.palette().button(), QBrush):
+            return QBrush(self.palette().button().color().darker(110))
+        else:
+            return QBrush(self.palette().button().darker(110))
+
+    def _get_unchecked_body_brush(self):
         if isinstance(self.palette().button(), QBrush):
             return self.palette().button()
         else:
             return QBrush(self.palette().button())
 
-    def _get_unchecked_body_brush(self):
-        if isinstance(self.palette().button(), QBrush):
-            return QBrush(self.palette().button().color().lighter(170))
-        else:
-            return QBrush(self.palette().button().lighter(170))
 
 
 class VolumeSliderStyle(QProxyStyle):
@@ -657,7 +714,7 @@ class VolumeSliderStyle(QProxyStyle):
             fill_width = int(w * progress)
             fill_height = int(h * progress)
 
-            painter.drawText(0, 20, f"{round(progress * 100, 0)}%")
+            painter.drawText(0, 20, f"{round(progress * widget.maximum(), 0)}%")
 
             # 4. Draw the Filled Part (Clipped)
             painter.save()
@@ -667,9 +724,9 @@ class VolumeSliderStyle(QProxyStyle):
             # Use a gradient for a professional "Volume" look
             gradient = QLinearGradient(0, 0, w, 0)
             gradient.setColorAt(0.0, app_theme.get_green())  # Green
-            gradient.setColorAt(0.7, app_theme.get_green())  # Green
-            gradient.setColorAt(0.8, app_theme.get_yellow())  # Orange
-            gradient.setColorAt(0.9, app_theme.get_orange())  # Orange
+            gradient.setColorAt(0.5, app_theme.get_green())  # Green
+            gradient.setColorAt(0.7, app_theme.get_yellow())  # Orange
+            gradient.setColorAt(0.8, app_theme.get_orange())  # Orange
             gradient.setColorAt(1.0, app_theme.get_red())  # Red
 
             painter.setBrush(gradient)  # gradient fill
@@ -728,18 +785,18 @@ class VolumeSlider(QHBoxLayout):
         toggle_mute_action.triggered.connect(self.toggle_mute)
 
         self.btn_volume = QToolButton()
-        self.btn_volume.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
-        self.btn_volume.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
+        self.btn_volume.setFixedSize(app_theme.button_size)
+        self.btn_volume.setIconSize(app_theme.icon_size)
         self.btn_volume.setDefaultAction(toggle_mute_action)
         self.btn_volume.setShortcutEnabled(True)
         self._update_volume_icon(value)
         self.addWidget(self.btn_volume,0, alignment = Qt.AlignmentFlag.AlignBottom)
 
         self.slider_vol = JumpSlider(Qt.Orientation.Horizontal)
-        self.slider_vol.setRange(0, 100)
+        self.slider_vol.setRange(0, 150)
         self.slider_vol.setValue(value)
         self.slider_vol.setMinimumWidth(100)
-        self.slider_vol.setFixedHeight(app_theme.button_size)
+        self.slider_vol.setFixedHeight(app_theme.button_size.height())
         self.slider_vol.max_glow_size = 2
         self.slider_vol.valueChanged.connect(self._on_value_changed)
         self.slider_vol.setStyle(VolumeSliderStyle())
@@ -797,7 +854,7 @@ class VolumeSlider(QHBoxLayout):
     def _update_volume_icon(self, volume):
         if volume == 0:
             self.btn_volume.setIcon(self.icon_volume_off)
-        elif volume < 50:
+        elif volume < 70:
             self.btn_volume.setIcon(self.icon_volume_down)
         else:
             self.btn_volume.setIcon(self.icon_volume_up)

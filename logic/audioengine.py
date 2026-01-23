@@ -2,7 +2,7 @@ import platform
 
 import vlc
 
-from PySide6.QtCore import QTimer, Signal, QObject, QSize
+from PySide6.QtCore import QTimer, Signal, QObject
 from vlc import MediaListPlayer
 
 from components.visualizer import VisualizerFrame
@@ -124,12 +124,12 @@ class AudioEngine(QObject):
         self.state_changed.emit(False)
         self.set_position(0)
 
-    def set_user_volume(self, value_0_100):
+    def set_user_volume(self, value_0_150):
         """Logarithmic volume mapping."""
-        if value_0_100 <= 0:
+        if value_0_150 <= 0:
             vol = 0
         else:
-            vol = int((value_0_100 ** 2) / 100)
+            vol = int((value_0_150 ** 2) / 100)
 
         self.current_volume = vol
         self.player.audio_set_volume(vol)

@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QAbstractItemView, QMenu, QDialog, QFormLayout, QLineEdit, QCheckBox,
     QDialogButtonBox, QTextEdit, QStatusBar, QProgressBar, QHeaderView, QTableView, QStyleOptionViewItem,
     QStyledItemDelegate, QFileSystemModel, QTreeView, QSplitter, QStyle, QSlider, QListWidget, QListWidgetItem,
-    QListView, QStyleOption, QToolButton, QSpinBox, QAbstractScrollArea
+    QListView, QStyleOption, QToolButton, QSpinBox, QAbstractScrollArea, QSizePolicy
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
     QPersistentModelIndex, QFileInfo, QEvent, QRect, QTimer, QObject
@@ -67,7 +67,8 @@ from components.dialogs import EditSongDialog, AboutDialog
 
 from logic.analyzer import Analyzer, is_analyzed, is_voxalyzed
 from logic.mp3 import Mp3Entry, update_mp3_favorite, parse_mp3, update_mp3_title, update_mp3_category, parse_m3u, \
-    create_m3u, list_mp3s, normalize_category, append_m3u, remove_m3u, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, update_mp3_data
+    create_m3u, list_mp3s, normalize_category, append_m3u, remove_m3u, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, update_mp3_data, \
+    update_mp3_tags
 from logic.audioengine import AudioEngine
 
 # --- Constants ---
@@ -289,9 +290,6 @@ class EffectWidget(QWidget):
 
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
 
-        self._icon_pause = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause).pixmap(QSize(16, 16))
-        self._icon_play = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart).pixmap(QSize(16, 16))
-
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
@@ -305,6 +303,10 @@ class EffectWidget(QWidget):
         self.player_layout.setSpacing(0)
 
         self.btn_play = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
+        self.btn_play.setProperty("class", "play")
+        self.btn_play.setCheckable(True)
+        self.btn_play.setEnabled(False)
+        self.btn_play.setIcon(app_theme.create_play_pause_icon())
         self.btn_play.clicked.connect(self.toogle_play)
         self.btn_play.setShortcut("Ctrl+E")
         self.btn_play.setFixedSize(app_theme.button_size_small)
@@ -360,13 +362,14 @@ class EffectWidget(QWidget):
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.PaletteChange:
             self.headerLabel.set_icon(QIcon.fromTheme("effects"))
+            self.btn_play.setIcon(app_theme.create_play_pause_icon())
             # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
 
     def toogle_play(self):
         if self.engine.pause_toggle():
-            self.btn_play.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause))
+            self.btn_play.setChecked(True)
         else:
-            self.btn_play.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
+            self.btn_play.setChecked(False)
 
     def on_volume_changed(self, volume: int = 70):
         self.engine.set_user_volume(volume)
@@ -379,11 +382,12 @@ class EffectWidget(QWidget):
             if self.last_index is not None:
                 self.list_widget.model().setData(self.last_index, Qt.CheckState.Unchecked, Qt.ItemDataRole.CheckStateRole)
             self.list_widget.model().setData(index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
-            self.last_index = index
+            self.last_index = QPersistentModelIndex(index)
 
     def play_effect(self, effect: Mp3Entry):
         self.engine.loop_media(effect.path)
-        self.btn_play.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause))
+        self.btn_play.setChecked(True)
+        self.btn_play.setEnabled(True)
 
     def refresh_directory(self):
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
@@ -436,7 +440,7 @@ class EffectTableModel(QAbstractTableModel):
         elif role == Qt.ItemDataRole.DecorationRole:
             data = index.data(Qt.ItemDataRole.UserRole)
             return QIcon(data.cover) if data.cover is not None else None
-        elif role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
+        elif role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             data = index.data(Qt.ItemDataRole.UserRole)
             return data.name
         elif role == Qt.ItemDataRole.UserRole:
@@ -447,7 +451,6 @@ class EffectTableModel(QAbstractTableModel):
     def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
 
         if role == Qt.ItemDataRole.CheckStateRole:
-            # Update your internal data structure
             if value == Qt.CheckState.Checked:
                 self._checked = index
 
@@ -484,13 +487,8 @@ class EffectList(QListView):
             self.initStyleOption(option, index)
 
             effect_mp3 = index.data(Qt.ItemDataRole.UserRole)
-            # 1. Retrieve the check state from the model/item
-            # Qt.CheckStateRole returns 0 (Unchecked), 1 (Partially), or 2 (Checked)
+
             check_state = index.data(Qt.ItemDataRole.CheckStateRole)
-
-            # Shift the entire drawing rectangle down by 'top_padding'
-            # This creates a margin at the top of the item
-
             if check_state == Qt.CheckState.Checked:
                 # Change background for checked items
                 painter.save()
@@ -598,7 +596,6 @@ class EffectList(QListView):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # Calculate width for 2 columns (minus scrollbar width)
         self.calculate_grid_size()
 
     def calculate_grid_size(self):
@@ -623,9 +620,7 @@ class EffectList(QListView):
     def set_list_view(self):
         self.setViewMode(QListView.ViewMode.ListMode)
         self.setFlow(QListView.Flow.TopToBottom)
-        # 3. Prevent items from being moved around by the user
         self.setMovement(QListView.Movement.Static)
-        # 4. Make items wrap to the next line
         self.setResizeMode(QListView.ResizeMode.Fixed)
 
         self.calculate_grid_size()
@@ -635,9 +630,7 @@ class EffectList(QListView):
     def set_grid_view(self):
         self.setViewMode(QListView.ViewMode.IconMode)
         self.setFlow(QListView.Flow.LeftToRight)
-        # 3. Prevent items from being moved around by the user
         self.setMovement(QListView.Movement.Static)
-        # 4. Make items wrap to the next line
         self.setResizeMode(QListView.ResizeMode.Adjust)
 
         self.calculate_grid_size()
@@ -655,8 +648,6 @@ class EffectList(QListView):
 
 class Player(QWidget):
     icon_prev: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipBackward)
-    icon_play: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart)
-    icon_pause: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause)
     icon_next: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipForward)
     icon_open: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen)
 
@@ -686,6 +677,8 @@ class Player(QWidget):
 
         self.track_label = QLabel(_("No Track Selected"))
         self.track_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.track_label.setMinimumWidth(100)
+        self.track_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.track_label.setObjectName("trackLabel")
         self.seeker_layout.addWidget(self.track_label)
 
@@ -718,9 +711,10 @@ class Player(QWidget):
         prev_action.setShortcut("Ctrl+B")
         prev_action.triggered.connect(self.prev_track)
 
-        play_action = QAction(self.icon_play, _("Play"), self)
-        play_action.setShortcut("Ctrl+P")
-        play_action.triggered.connect(self.toggle_play)
+        self.play_action = QAction(app_theme.create_play_pause_icon(), _("Play"), self)
+        self.play_action.setShortcut("Ctrl+P")
+        self.play_action.setCheckable(True)
+        self.play_action.triggered.connect(self.toggle_play)
 
         next_action = QAction(self.icon_next, _("Next"), self)
         next_action.setShortcut("Ctrl+N")
@@ -729,21 +723,22 @@ class Player(QWidget):
         self.btn_prev = QToolButton()
         self.btn_prev.setDefaultAction(prev_action)
         self.btn_play = QToolButton()
-        self.btn_play.setDefaultAction(play_action)
+        self.btn_play.setProperty("class", "play")
+        self.btn_play.setDefaultAction(self.play_action)
         self.btn_next = QToolButton()
         self.btn_next.setDefaultAction(next_action)
 
         for btn in [self.btn_prev, self.btn_play, self.btn_next]:
-            btn.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
-            btn.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
+            btn.setFixedSize(app_theme.button_size)
+            btn.setIconSize(app_theme.icon_size)
 
         for btn in [self.btn_prev, self.btn_next]:
             btn.setFixedSize(app_theme.button_size_small)
             btn.setIconSize(app_theme.icon_size_small)
 
         self.btn_repeat = RepeatButton(AppSettings.value(SettingKeys.REPEAT_MODE, 0, type=int))
-        self.btn_repeat.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
-        self.btn_repeat.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
+        self.btn_repeat.setFixedSize(app_theme.button_size)
+        self.btn_repeat.setIconSize(app_theme.icon_size)
         self.btn_repeat.value_changed.connect(self.on_repeat_mode_changed)
 
         self.repeat_mode_changed = self.btn_repeat.value_changed
@@ -800,8 +795,8 @@ class Player(QWidget):
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.ApplicationFontChange:
             for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
-                btn.setFixedSize(QSize(app_theme.button_size, app_theme.button_size))
-                btn.setIconSize(QSize(app_theme.icon_size, app_theme.icon_size))
+                btn.setFixedSize(app_theme.button_size)
+                btn.setIconSize(app_theme.icon_size)
 
         if event.type() == QEvent.Type.PaletteChange:
             self._reload_icons()
@@ -809,13 +804,13 @@ class Player(QWidget):
 
     def _reload_icons(self):
         self.icon_prev = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipBackward)
-        self.icon_play = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart)
-        self.icon_pause = QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackPause)
         self.icon_next = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipForward)
         self.icon_open = QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen)
 
-        for icon in [self.icon_prev, self.icon_next, self.icon_pause, self.icon_play, self.icon_pause]:
+        for icon in [self.icon_prev, self.icon_next, self.icon_open]:
             icon.setFallbackThemeName(app_theme.theme())
+
+        self.play_action.setIcon(app_theme.create_play_pause_icon())
 
     def on_repeat_mode_changed(self, mode):
         AppSettings.setValue(SettingKeys.REPEAT_MODE, self.btn_repeat.REPEAT_MODES.index(mode))
@@ -853,7 +848,7 @@ class Player(QWidget):
         if self._update_progress_ticks:
             total_ms = self.engine.get_total_time()
             if total_ms > 0:
-                single_step = max (1, round((1000.0 / total_ms) * 1000))
+                single_step = max(1, round((1000.0 / total_ms) * 1000))
                 self.progress_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
                 self.progress_slider.setSingleStep(single_step)
                 self.progress_slider.setTickInterval(max(10, round(((1000.0 / total_ms) * 1000) * 10)))
@@ -879,7 +874,8 @@ class Player(QWidget):
     def toggle_play(self):
         if self.engine.player.is_playing():
             self.engine.pause_toggle()
-            self.btn_play.setIcon(self.icon_play)
+            # self.btn_play.setIcon(self.icon_play)
+            self.play_action.setChecked(False)
         else:
             if self.engine.player.get_media() is None:
                 if self.track_count >= 0:
@@ -888,7 +884,8 @@ class Player(QWidget):
                     return
             else:
                 self.engine.pause_toggle()
-            self.btn_play.setIcon(self.icon_pause)
+            # self.btn_play.setIcon(self.icon_pause)
+            self.play_action.setChecked(True)
 
     def next_track(self):
         if self.track_count == 0:
@@ -905,10 +902,12 @@ class Player(QWidget):
         self.trackChanged.emit(current_index, None)
 
     def play(self):
-        self.btn_play.setIcon(self.icon_pause)
+        # self.btn_play.setIcon(self.icon_pause)
+        self.play_action.setChecked(True)
 
     def stop(self):
-        self.btn_play.setIcon(self.icon_play)
+        # self.btn_play.setIcon(self.icon_play)
+        self.play_action.setChecked(False)
         self.progress_slider.setValue(0)
         self.time_label.setText("00:00")
 
@@ -917,6 +916,16 @@ class Player(QWidget):
         self.duration_label.setText("00:00")
         self.progress_slider.setValue(0)
         self._update_progress_ticks = True
+
+    def elide_text(self, label, text):
+        metrics = QFontMetrics(label.font())
+        # Qt.ElideRight puts the "..." at the end
+        elided = metrics.elidedText(text, Qt.ElideRight, label.width())
+        label.setText(elided)
+        if elided != text:
+            label.setToolTip(text)
+        else:
+            label.setToolTip(None)
 
     def play_track(self, data, index):
         self.current_data = data
@@ -927,7 +936,7 @@ class Player(QWidget):
                 self.engine.load_media(track_path)
                 self.visualizer.load_mp3(track_path)
                 self.visualizer.set_state(True, self.slider_vol.volume)
-                self.track_label.setText(data.name)
+                self.elide_text(self.track_label, data.name)
 
                 # Reset progress on new track
                 self.reset()
@@ -987,30 +996,29 @@ class DirectoryTree(QTreeView):
         self.media_player = media_player
         self.setMinimumWidth(150)
 
-        self._source_root_index = QPersistentModelIndex()
-
         self.open_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Open"), self)
         self.open_action.triggered.connect(self.do_open_action)
-        self.addAction(self.open_action)
+
+        self.edit_song_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditPaste), _("Edit Song"), self)
+        self.edit_song_action.triggered.connect(self.edit_song)
 
         self.go_parent_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoUp), _("Go to parent"), self)
         self.go_parent_action.triggered.connect(self.do_parent_action)
-        self.addAction(self.go_parent_action)
 
         self.set_home_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoHome), _("Set As Home"), self)
         self.set_home_action.triggered.connect(self.do_set_home_action)
-        self.addAction(self.set_home_action)
 
         self.clear_home_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Clear Home"), self)
         self.clear_home_action.triggered.connect(self.do_clear_home_action)
         self.clear_home_action.setVisible(False)
-        self.addAction(self.clear_home_action)
+
+        self._source_root_index = QPersistentModelIndex()
 
         self.directory_model = QFileSystemModel()
         self.directory_model.setReadOnly(True)
         self.directory_model.setIconProvider(QtWidgets.QFileIconProvider())
         self.directory_model.setRootPath("C:/")
-        self.directory_model.setNameFilters(["*.mp3"])
+        self.directory_model.setNameFilters(["*.mp3", "*.m3u"])
         self.directory_model.setNameFilterDisables(False)
 
         self.proxy_model = FileFilterProxyModel()
@@ -1027,7 +1035,8 @@ class DirectoryTree(QTreeView):
         self.setAnimated(True)
         self.sortByColumn(0, Qt.SortOrder.AscendingOrder)
         self.setExpandsOnDoubleClick(True)
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
 
         self.autoSearchHelper = AutoSearchHelper(self.proxy_model, self)
 
@@ -1069,7 +1078,6 @@ class DirectoryTree(QTreeView):
         else:
             super().keyPressEvent(event)
 
-
     def paintEvent(self, event):
         super().paintEvent(event)
         self.autoSearchHelper.paintEvent(event)
@@ -1092,9 +1100,64 @@ class DirectoryTree(QTreeView):
         file_info: QFileInfo = data[QFileSystemModel.Roles.FileInfoRole]
         if file_info.isDir():
             self.media_player.load_directory(file_info.filePath())
+        elif file_info.suffix() in ("m3u", "M3U"):
+            self.media_player.load_playlist(file_info.filePath())
         else:
             entry = parse_mp3(Path(file_info.filePath()))
             self.player.play_track(entry, -1)
+
+    def mp3_data(self, index: QModelIndex):
+        data = self.model().itemData(index)
+        file_info: QFileInfo = data[QFileSystemModel.Roles.FileInfoRole]
+        if file_info.isDir() or file_info.suffix() in ("m3u", "M3U"):
+            return None
+        else:
+            return parse_mp3(Path(file_info.filePath()))
+
+    def edit_song(self):
+        data: Mp3Entry = self.mp3_data(self.selectionModel().currentIndex())
+        dialog = EditSongDialog(data, self)
+        if dialog.exec():
+            if self.selectionModel().currentIndex().row() >= 0:
+                self.update()
+
+    def show_context_menu(self, point):
+        # model_index = self.indexAt(point)
+
+        menu = QMenu(self)
+
+        menu.addAction(self.open_action)
+
+        #
+        datas = [self.mp3_data(model_index) for model_index in self.selectionModel().selectedRows()]
+        datas = [data for data in datas if data is not None]
+        if len(datas) > 0:
+            menu.addAction(self.edit_song_action)
+
+            add_to_playlist = QMenu(_("Add to playlist"), icon=QIcon.fromTheme(QIcon.ThemeIcon.ListAdd))
+
+            add_new_action = add_to_playlist.addAction(_("<New Playlist>"))
+            add_new_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
+            add_new_action.triggered.connect(functools.partial(self.media_player.pick_new_playlist, datas))
+            add_to_playlist.addAction(add_new_action)
+
+            for playlist in self.media_player.get_playlists():
+                add_action = add_to_playlist.addAction(Path(playlist).name.removesuffix(".m3u").removesuffix(".M3U"))
+                add_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
+                add_action.triggered.connect(functools.partial(self.media_player.add_to_playlist, playlist, datas))
+
+            menu.addMenu(add_to_playlist)
+
+        menu.addSeparator()
+
+        #
+        menu.addAction(self.go_parent_action)
+        menu.addAction(self.set_home_action)
+        menu.addAction(self.clear_home_action)
+
+        #
+        menu.show()
+        menu.exec(self.mapToGlobal(point))
 
     def do_parent_action(self):
         if self.rootIndex().isValid() and self.rootIndex().parent() is not None:
@@ -1538,6 +1601,7 @@ class SongTable(QTableView):
 
     def __init__(self, _analyzer: Analyzer, _media_player: MediaPlayer):
         super().__init__()
+        self.setAcceptDrops(True)
 
         self.table_model = SongTableModel()
         self.media_player = _media_player
@@ -1677,7 +1741,7 @@ class SongTable(QTableView):
         if key == SettingKeys.COLUMN_SUMMARY_VISIBLE:
             self.viewport().update()
 
-    def keyPressEvent(self, event: QKeyEvent):        
+    def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Enter:
             index = self.selectionModel().currentIndex()
             self.play_track.emit(index.row(), index.data(Qt.ItemDataRole.UserRole))
@@ -1773,37 +1837,13 @@ class SongTable(QTableView):
             data = self.mp3_data(model_index.row())
             self.analyzer.process(data.path)
 
-    def edit_name(self):
+    def edit_song(self):
         data: Mp3Entry = self.selectionModel().currentIndex().data(Qt.ItemDataRole.UserRole)
         dialog = EditSongDialog(data, self)
         if dialog.exec():
-            new_name, new_data = dialog.get_data()
-
-            # Update Summary
-            update_mp3_data(data.path, new_data)
-
-            # Update Name (Filename)
-            if new_name != data.name:
-                try:
-                    old_path = Path(data.path)
-                    new_filename = new_name
-                    if not new_filename.lower().endswith(".mp3"):
-                        new_filename += ".mp3"
-
-                    new_path = old_path.with_name(new_filename)
-                    os.rename(old_path, new_path)
-
-                    new_data.path = Path(new_path)
-                    new_data.name = new_filename.removesuffix(".mp3").removesuffix(".MP3")
-
-
-                except Exception as e:
-                    logger.error("Failed to rename file: {0}", e)
-                    QMessageBox.warning(self, _("Update Error"), _("Failed to rename file: {0}").format(e))
-
             row = self.index_of(data)
             if row >= 0:
-                self.model().setData(self.model().index(row, 0), new_data, Qt.ItemDataRole.UserRole)
+                self.model().setData(self.model().index(row, 0), data, Qt.ItemDataRole.UserRole)
                 self.update()
 
     def remove_items(self):
@@ -1827,7 +1867,7 @@ class SongTable(QTableView):
         analyze_action.triggered.connect(self.analyze_files)
 
         edit_name_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.EditPaste), _("Edit Song"))
-        edit_name_action.triggered.connect(self.edit_name)
+        edit_name_action.triggered.connect(self.edit_song)
 
         menu.addSeparator()
 
@@ -1842,7 +1882,7 @@ class SongTable(QTableView):
         for playlist in self.media_player.get_playlists():
             if self.playlist == playlist:
                 continue
-            add_action = add_to_playlist.addAction(Path(playlist).name)
+            add_action = add_to_playlist.addAction(Path(playlist).name.removesuffix(".m3u").removesuffix(".M3U"))
             add_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
             add_action.triggered.connect(functools.partial(self.media_player.add_to_playlist, playlist, datas))
 
@@ -1853,6 +1893,39 @@ class SongTable(QTableView):
 
         menu.show()
         menu.exec(self.mapToGlobal(point))
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        if event.mimeData().hasText():
+            tag = event.mimeData().text()
+            index = self.indexAt(event.position().toPoint())
+            if index.isValid():
+                data = index.data(Qt.ItemDataRole.UserRole)
+                if data:
+                    if data.tags is None:
+                        data.tags = []
+
+                    if tag not in data.tags:
+                        data.tags.append(tag)
+                        update_mp3_tags(data.path, data.tags)
+
+                        file_col_index = index.siblingAtColumn(SongTableModel.FILE_COL)
+                        self.model().dataChanged.emit(file_col_index, file_col_index, [Qt.ItemDataRole.DisplayRole])
+
+            event.acceptProposedAction()
+        else:
+            super().dropEvent(event)
 
 
 class FilterWidget(QWidget):
@@ -2037,7 +2110,7 @@ class FilterWidget(QWidget):
 
         if not AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool) and not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True,
                                                                                                           type=bool) and not AppSettings.value(
-                SettingKeys.BPM_WIDGET, True, type=bool):
+            SettingKeys.BPM_WIDGET, True, type=bool):
             self.slider_tabs.setVisible(False)
         else:
             self.slider_tabs.setVisible(True)
@@ -2608,6 +2681,8 @@ class MusicPlayer(QMainWindow):
         # Table Widget for Playlist
 
         self.table_tabs = QTabWidget()
+        self.table_tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table_tabs.tabBar().customContextMenuRequested.connect(self.show_tabs_context_menu)
         self.table_tabs.tabBar().setAutoHide(True)
         self.table_tabs.setMovable(False)
         self.table_tabs.setTabsClosable(True)
@@ -2638,6 +2713,23 @@ class MusicPlayer(QMainWindow):
 
         self.init_main_menu()
 
+    def show_tabs_context_menu(self, position):
+        # 4. Identify which tab was clicked
+        tab_index = self.table_tabs.tabBar().tabAt(position)
+
+        if tab_index == -1:
+            return  # Right-click happened on empty space of the tab bar
+
+        # Create the menu
+        menu = QMenu(self)
+
+        refresh_action = QAction(_("Refresh"), icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh))
+        refresh_action.triggered.connect(functools.partial(self.reload_table, tab_index))
+
+        menu.addAction(refresh_action)
+
+        menu.exec(self.table_tabs.tabBar().mapToGlobal(position))
+
     def result_status_label(self):
         if self.analyzer.active_worker() <= 1:
             t = threading.Timer(2, function=self.hide_status_label)
@@ -2667,6 +2759,7 @@ class MusicPlayer(QMainWindow):
         table.play_track.connect(self.play_track)
 
         index = self.table_tabs.addTab(table, icon, name)
+
         self.table_tabs.setCurrentIndex(index)
         return table
 
@@ -2845,9 +2938,25 @@ class MusicPlayer(QMainWindow):
         table_data_list = [parse_mp3(f) for f in mp3_files]
 
         table.populate_table(table_data_list)
-        self.player.track_count = len(table_data_list)
-        self.update_available_tags(table_data_list)
-        self.filter_widget.update_russel_heatmap(table_data_list)
+
+        if table == self.current_table():
+            self.player.track_count = len(table_data_list)
+            self.update_available_tags(table_data_list)
+            self.filter_widget.update_russel_heatmap(table_data_list)
+
+    def reload_table(self, index: int):
+        table = self.table(index)
+
+        if table.playlist:
+            mp3_files = parse_m3u(table.playlist)
+            self.load_files(table, mp3_files)
+        else:
+            base_path = Path(table.directory)
+            mp3_files = list(base_path.rglob("*.mp3"))
+            self.load_files(table, mp3_files)
+
+    def table(self, index: int) -> SongTable | None:
+        return self.table_tabs.widget(index)
 
     def current_table(self) -> SongTable | None:
         return self.table_tabs.currentWidget()

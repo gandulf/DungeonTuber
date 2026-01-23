@@ -208,8 +208,6 @@ def _lazy_init_categories():
 
 
 def _normalize_categories(cat : dict[str,int]) :
-    global _categories
-
     if _categories is None:
         _lazy_init_categories()
 
@@ -244,7 +242,7 @@ def _audio(path: str | PathLike[str] | MP3) -> MP3:
 
     return audio
 
-def update_mp3_data(path: str, data: Mp3Entry):
+def update_mp3_data(path: str | PathLike[str], data: Mp3Entry):
     audio = _audio(path)
 
     update_mp3_title(audio, data.title, False)
