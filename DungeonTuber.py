@@ -1238,7 +1238,7 @@ class SongTableModel(QAbstractTableModel):
 
     def __init__(self, data: list[Mp3Entry] = []):
         super(SongTableModel, self).__init__()
-        self._data = data
+        self._data = [song for song in data if song is not None]
 
     def get_category(self, index: QModelIndex | int):
         if isinstance(index, int):
@@ -1354,6 +1354,8 @@ class SongTableModel(QAbstractTableModel):
         return False
 
     def data(self, index: QModelIndex | QPersistentModelIndex, role: int = ...):
+        if not index.isValid():
+            return None
 
         if role == Qt.ItemDataRole.SizeHintRole:
 
@@ -1385,12 +1387,13 @@ class SongTableModel(QAbstractTableModel):
                 return _get_bpm_background_brush(self.filter_config.bpm, value)
         elif role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             data = index.data(Qt.ItemDataRole.UserRole)
+            if data is None:
+                return None
+
             if index.column() == SongTableModel.FAV_COL:
                 return data.favorite
             elif index.column() == SongTableModel.FILE_COL:
-                name = data.title if AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False,
-                                                       type=bool) else data.name
-
+                name = data.title if AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False,type=bool) else data.name
                 if data.summary:
                     return name + " " + data.summary
                 else:
@@ -1895,19 +1898,38 @@ class SongTable(QTableView):
         menu.exec(self.mapToGlobal(point))
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasText():
+        if event.mimeData().hasUrls():
+            if self.playlist:
+                event.accept()
+            else:
+                event.ignore()
+        elif event.mimeData().hasText():
             event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
 
     def dragMoveEvent(self, event):
-        if event.mimeData().hasText():
+        if event.mimeData().hasUrls():
+            if self.playlist:
+                event.accept()
+            else:
+                event.ignore()
+        elif event.mimeData().hasText():
             event.acceptProposedAction()
         else:
             super().dragMoveEvent(event)
 
     def dropEvent(self, event):
-        if event.mimeData().hasText():
+        if event.mimeData().hasUrls():
+            if self.playlist:
+                event.accept()
+                songs = [parse_mp3(Path(url.toLocalFile())) for url in event.mimeData().urls()]
+                songs = [song for song in songs if song is not None]
+                append_m3u(songs, self.playlist)
+                self.table_model.addRows(songs)
+            else:
+                event.ignore()
+        elif event.mimeData().hasText():
             tag = event.mimeData().text()
             index = self.indexAt(event.position().toPoint())
             if index.isValid():
@@ -2936,6 +2958,7 @@ class MusicPlayer(QMainWindow):
             return
 
         table_data_list = [parse_mp3(f) for f in mp3_files]
+        table_data_list = [song for song in table_data_list if song is not None]
 
         table.populate_table(table_data_list)
 
