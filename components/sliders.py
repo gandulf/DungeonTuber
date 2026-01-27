@@ -205,7 +205,7 @@ class CategoryTooltip(QWidget):
         self.__text_widget = QLabel(self)
         self.__text_widget.setText("")
 
-        self.__text_widget.setStyleSheet(f"font-size: {app_theme.font_size*0.8}px")
+        self.__text_widget.setStyleSheet(f"font-size: {app_theme.font_size_small}pt")
         self.__text_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.__fade_in_animation = QPropertyAnimation(self.__opacity_effect, b'opacity')
@@ -278,7 +278,7 @@ class CategoryTooltip(QWidget):
         painter.drawRoundedRect(self.rect(),4.0,4.0)
 
     def setText(self, text: str):
-        self.__text_widget.setStyleSheet(f"font-size: {app_theme.font_size * 0.8}px")
+        self.__text_widget.setStyleSheet(f"font-size: {app_theme.font_size_small}pt")
 
         if self.isVisible() and text == "":
             self._auto_hidden = True
@@ -338,9 +338,11 @@ class CategoryTooltip(QWidget):
 
 
 class CategoryWidget(QVBoxLayout):
-    valueChanged = Signal(int)
+    valueChanged = Signal(object)  #actual int | None but not possible with c++ binding
     _block_signals = False
     _orig_value: int
+
+    _disable_value :int
 
     def __init__(self, category: MusicCategory = None, parent=None, min_value=0, max_value=10):
         super(CategoryWidget, self).__init__(parent)
@@ -353,8 +355,11 @@ class CategoryWidget(QVBoxLayout):
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.setToolTip(category.get_detailed_description())
 
+
+        self._disable_value= min_value - 1
         self.slider = JumpSlider(Qt.Orientation.Vertical)
-        self.slider.setRange(min_value, max_value)
+        self.slider.setRange(min_value - 1, max_value)
+        self.slider.setValue(self._disable_value)
         self.slider.setTickPosition(QSlider.TickPosition.TicksBothSides)
         self.slider.setTickInterval(1)
         self.slider.setPageStep(1)
@@ -388,11 +393,13 @@ class CategoryWidget(QVBoxLayout):
         if self._orig_value is None or self.value() != self._orig_value:
             self.valueChanged.emit(self.value())
 
-    def _forward_value_changed(self, value: int):
+
+    def _forward_value_changed(self, value: int | None):
         self.update_value_label(value)
 
         if not self._block_signals:
             self.valueChanged.emit(value)
+
 
     def blockSignals(self, block: bool = True):
         self._block_signals = block
@@ -401,24 +408,29 @@ class CategoryWidget(QVBoxLayout):
         self._block_signals = False
 
     def refresh_tooltip(self, show: bool = True):
-        nearest_level = min(self.category.levels.keys(), key=lambda x: abs(int(x) - self.value()))
-        text = self.category.levels.get(nearest_level, "")
-        self.tooltip.setText(text)
+        if self.value() is not None:
+            nearest_level = min(self.category.levels.keys(), key=lambda x: abs(int(x) - self.value()))
+            text = self.category.levels.get(nearest_level, "")
+            self.tooltip.setText(text)
+        else:
+            text = ""
 
         if text != "" and show and self.tooltip.isHidden():
             self.tooltip.show(True)
 
-
-    def update_value_label(self, value: int = None):
+    def update_value_label(self, value: int | None = None):
         if value is None:
             value = self.slider.value()
 
-        if value:
+        if value != self._disable_value:
             self.val_label.setText(str(value))
             self.refresh_tooltip(False)
         else:
             self.val_label.setText("")
             self.tooltip.setText("")
+
+    def reset(self, signal: bool = True):
+        self.set_value(self._disable_value, signal)
 
     def set_value(self, value, signal: bool = True):
         _original_block_signals = False
@@ -426,7 +438,7 @@ class CategoryWidget(QVBoxLayout):
             _original_block_signals: bool = self._block_signals
             self._block_signals = True
 
-        value = value if value is not None else 0
+        value = value if value is not None else self._disable_value
 
         self.slider.setValue(value)
 
@@ -435,7 +447,7 @@ class CategoryWidget(QVBoxLayout):
             self.update_value_label(value)
 
     def value(self):
-        return self.slider.value()
+        return self.slider.value() if self.slider.value() != self._disable_value else None
 
 
 class ToggleSlider(QCheckBox):
@@ -445,13 +457,14 @@ class ToggleSlider(QCheckBox):
     _TEXT_SIDE_PADDING = 4
 
     def __init__(self, checked_text="", unchecked_text="", font_height_ratio=0.5,
-                 parent=None):
+                 parent=None, draggable = True):
         super().__init__(parent=parent)
         assert (0 < font_height_ratio <= 1)
 
         self._checked_text = checked_text
         self._unchecked_text = unchecked_text
         self._font_height_ratio = font_height_ratio
+        self._draggable = draggable
 
         self._handle_position_multiplier = 0
         self._drag_start_position = None
@@ -465,7 +478,7 @@ class ToggleSlider(QCheckBox):
         self._update_text()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if self._draggable and event.button() == Qt.MouseButton.LeftButton:
             self._drag_start_position = event.position().toPoint()
         super().mousePressEvent(event)
 
@@ -487,6 +500,7 @@ class ToggleSlider(QCheckBox):
         font = self.font()
         if font.pixelSize() > 2:
             font.setPixelSize(font.pixelSize() - 2)
+
         font.setBold(True)
         fm = QFontMetrics(font)
         text_size = fm.size(Qt.TextFlag.TextSingleLine, self._checked_text)
@@ -503,7 +517,7 @@ class ToggleSlider(QCheckBox):
         painter.setFont(font)
 
         # Draw rounded rect
-        painter.setBrush(self.palette().color(QPalette.ColorRole.Accent))
+        painter.setBrush(self.palette().color(QPalette.ColorRole.Highlight))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(0, 0, rect_width, rect_height, 12, 12)
 

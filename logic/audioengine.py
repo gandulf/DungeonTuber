@@ -1,9 +1,7 @@
 import platform
 
-import vlc
-
 from PySide6.QtCore import QTimer, Signal, QObject
-from vlc import MediaListPlayer
+from vlc import MediaListPlayer, Media, Instance, PlaybackMode, State
 
 from components.visualizer import VisualizerFrame
 from config.settings import AppSettings, SettingKeys
@@ -24,7 +22,7 @@ class AudioEngine(QObject):
     video_frame : VisualizerFrame
 
     list_player: MediaListPlayer = None
-    player: vlc.Media = None
+    player: Media = None
 
     def __init__(self, visualizer : bool = True):
         super().__init__()
@@ -70,7 +68,7 @@ class AudioEngine(QObject):
         else:
             args.append("--no-video")  # Audio only
 
-        self.instance = vlc.Instance(args)
+        self.instance = Instance(args)
         self.list_player = self.instance.media_list_player_new()
         self.player = self.list_player.get_media_player()
         self.player.audio_set_volume(self.current_volume)
@@ -93,7 +91,7 @@ class AudioEngine(QObject):
         self.list_player.set_media_list(media_list)
 
         # 4. Set the playback mode to Loop (Repeat)
-        self.list_player.set_playback_mode(vlc.PlaybackMode.loop)
+        self.list_player.set_playback_mode(PlaybackMode.loop)
         self.list_player.get_media_player().audio_set_volume(75)
         # Start playing
         self.list_player.play()
@@ -149,7 +147,7 @@ class AudioEngine(QObject):
     def _check_status(self):
         """Poll VLC status to detect end of track and update position."""
         state = self.player.get_state()
-        if state == vlc.State.Ended:
+        if state == State.Ended:
             if not self._manual_stop:
                 self.track_finished.emit()
 

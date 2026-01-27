@@ -13,13 +13,13 @@ from PySide6.QtGui import QPixmap
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM
 
-from config.settings import get_categories, _DEFAULT_CATEGORIES, CAT_TEMPO, CAT_TENSION, CAT_HEROISM, CAT_MYSTICISM
+from config.settings import get_categories, _DEFAULT_CATEGORIES
 from config.utils import get_path, get_available_locales
 
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_all_tags", "_cover", "has_cover", "bpm"]
+    __slots__ = ["name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_all_tags", "_cover", "has_cover", "bpm","_moods"]
 
     name: str
     path: Path
@@ -36,7 +36,9 @@ class Mp3Entry(object):
 
     categories : dict[str,int]
     _tags: list[str]
+    _moods: None | set[str]
     _all_tags: None | set[str]
+
 
     def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = [], artist: str = None, album:str = None, title:str = None, genre:list[str] | str = [], bpm: int = None):
         if name is not None:
@@ -68,6 +70,7 @@ class Mp3Entry(object):
             self._tags = []
 
         self._all_tags = None
+        self._moods =[]
         self._cover = None
         self.has_cover = None
         self.bpm = bpm
@@ -79,6 +82,11 @@ class Mp3Entry(object):
     @tags.setter
     def tags(self, tags: list[str]):
         self._tags = tags
+        self._all_tags = None
+
+    def add_tag(self, tag:str):
+
+        self.tags.append(tag)
         self._all_tags = None
 
     def _le(self, category, value) -> bool:
@@ -116,18 +124,12 @@ class Mp3Entry(object):
 
     @property
     def all_tags(self):
-        return self.tags
-        # if self._all_tags is None:
-        #     self._all_tags = set(self.tags)
-        #     if self._ge(CAT_TEMPO,7) and self._ge(CAT_TENSION,7) and self._ge(CAT_HEROISM,6):
-        #         self._all_tags.add(_("Fight"))
-        #
-        #     if self._le(CAT_TEMPO,5) and self._le(CAT_TENSION,3) and self._le(CAT_HEROISM,3) and self._le(CAT_MYSTICISM,4):
-        #         self._all_tags.add(_("Travel"))
-        #
-        #     self._all_tags = sorted(self._all_tags)
-        #
-        # return self._all_tags
+
+        if self._all_tags is None:
+            self._all_tags = set(self.tags + self._moods)
+            self._all_tags = sorted(self._all_tags)
+
+        return self._all_tags
 
 
 def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
@@ -183,6 +185,9 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
             txxx_tags = audio.tags.get("TXXX:ai_tags")
             if txxx_tags and txxx_tags.text:
                 entry.tags = txxx_tags.text
+
+            if "TXXX:ab:mood" in audio.tags:
+                entry._moods = audio.tags.get("TXXX:ab:mood").text
 
             txxx_fav = audio.tags.get("TXXX:ai_favorite")
             if txxx_fav and txxx_fav.text:
@@ -408,15 +413,16 @@ def update_categories_and_tags(path : str | PathLike[str] | MP3, summary : str, 
 def print_mp3_tags(file_path: str | PathLike[str]):
     """Prints all ID3 tags from an MP3 file."""
     try:
-        audio = MP3(file_path, ID3=ID3)
-        if audio.tags:
-            logger.debug("\n--- Tags for {0} ---", file_path)
-            for key, value in audio.tags.items():
-                if not key.startswith("APIC"):
-                    logger.debug("{0}: {1}", key,value)
-            logger.debug("---------------------------------\n")
-        else:
-            logger.warning("No tags found in {}", file_path)
+        if logger.isEnabledFor(logging.DEBUG):
+            audio = MP3(file_path, ID3=ID3)
+            if audio.tags:
+                logger.debug("\n--- Tags for {0} ---", file_path)
+                for key, value in audio.tags.items():
+                    if not key.startswith("APIC"):
+                        logger.debug("{0}: {1}", key,value)
+                logger.debug("---------------------------------\n")
+            else:
+                logger.warning("No tags found in {}", file_path)
     except Exception as e:
         logger.error("An error occurred while reading tags: {0}",e)
 

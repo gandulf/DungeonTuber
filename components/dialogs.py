@@ -104,7 +104,7 @@ class EditSongDialog(QDialog):
 
         file_name = QLabel(os.path.abspath(data.path))
         file_name.setWordWrap(True)
-        file_name.setStyleSheet(f"font-size:{app_theme.font_size * 0.8}px;")
+        file_name.setStyleSheet(f"font-size:{app_theme.font_size_small}pt;")
         layout.addRow(_("File") + ":", file_name)
 
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)

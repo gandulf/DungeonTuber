@@ -61,13 +61,13 @@ class IconLabel(QWidget):
         if (ev.button() == Qt.MouseButton.LeftButton):
             self.clicked.emit()
 
-    def __init__(self, icon: QIcon, text, final_stretch=True):
-        super(IconLabel, self).__init__()
+    def __init__(self, icon: QIcon, text:str, final_stretch:bool=True, parent:QWidget= None):
+        super(IconLabel, self).__init__(parent)
 
-        self.layout = QHBoxLayout()
+        self.layout = QHBoxLayout(self)
+        self.layout.setObjectName("IconLabel_layout")
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
-        self.setLayout(self.layout)
 
         self.icon_label = QLabel()
         if icon is not None:
@@ -131,7 +131,7 @@ class FeatureOverlay(QWidget):
 
         # Help text label
         self.label = QLabel(self)
-        self.label.setStyleSheet(f"color: white; font-size: 15px;")
+        self.label.setStyleSheet(f"color: white; font-size: 13pt;")
         self.label.setWordWrap(True)
         self.label.setContentsMargins(8,8,8,8)
         self.label.setTextFormat(Qt.TextFormat.RichText)

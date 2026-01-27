@@ -1,11 +1,12 @@
-import base64
+import json
 import logging
 import os
 import subprocess
 import sys
-from os import PathLike
 
-import requests
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+
 from PySide6.QtWidgets import QApplication
 from packaging import version
 
@@ -24,6 +25,8 @@ def get_path(path:str):
         # Running as compiled executable
         if sys._MEIPASS is not None:
             icon_path = os.path.join(sys._MEIPASS, path)
+        elif "__compiled__" in globals():
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0]), path))
         else:
             icon_path = os.path.join(os.path.dirname(sys.executable), path)
             if not os.path.exists(icon_path):
@@ -51,19 +54,28 @@ _latest_version : str | None = None
 
 def get_latest_version():
     global _latest_version
-    if _latest_version is None and is_frozen():
-        url = f"https://api.github.com/repos/gandulf/DungeonTuber/releases/latest"
+    if _latest_version is None:
+        url = "https://api.github.com/repos/gandulf/DungeonTuber/releases/latest"
+        headers = {"User-Agent": "Python-urllib/3.x"}
         try:
-            response = requests.get(url)
-            response.raise_for_status() # Fehler bei 404/500 auslösen
-            data = response.json()
-            if data["tag_name"]:
-                _latest_version = data["tag_name"].lstrip("v")
-            else:
-                _latest_version = ""
+            req = Request(url, headers=headers)
+
+            with urlopen(req) as response:
+                # urllib raises an HTTPError for non-200 codes automatically
+                status = response.getcode()
+                raw_data = response.read().decode("utf-8")
+                data = json.loads(raw_data)
+
+                # Check if tag_name exists and is not None
+                tag = data.get("tag_name")
+                _latest_version = tag.lstrip("v") if tag else ""
+
+        except HTTPError as e:
+            logger.error("HTTP Error {0}: Unable to fetch version info", e.code)
+            _latest_version = ""
         except Exception as e:
             logger.error("Unable to fetch latest version info: {0}", e)
-            _latest_version =""
+            _latest_version = ""
 
 
     if _latest_version is not None and _latest_version != "":
@@ -106,19 +118,7 @@ def restart_application():
     except Exception as e:
         logger.exception("Failed to restart. {0}",e)
 
-def file_to_base64(file_path: str | PathLike[str]):
-    try:
-        with open(file_path, "rb") as file:
-            # Read the file data
-            file_data = file.read()
-            # Encode to base64 bytes
-            base64_bytes = base64.b64encode(file_data)
-            # Convert bytes to string
-            base64_string = base64_bytes.decode("utf-8")
-            return base64_string
-    except Exception as e:
-        logger.exception("Error: {0}",e)
-        return None
+
 
 def is_frozen():
     # Returns True if running as a PyInstaller bundle

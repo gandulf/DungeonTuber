@@ -4,6 +4,8 @@ import random
 import sys
 import traceback
 import logging
+import urllib.request
+import urllib.error
 from abc import abstractmethod
 
 from queue import Queue
@@ -13,36 +15,31 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
 
-from google import genai
-from google.genai.errors import ClientError
-from google.genai.types import UploadFileConfig, Content, Part, GenerateContentConfig, Schema, Type, ThinkingConfig
-from openai import OpenAI
-from pydantic import BaseModel
-
-from config.utils import file_to_base64
 from logic.mp3 import Mp3Entry, parse_mp3, update_categories_and_tags, print_mp3_tags, list_mp3s
 
-from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_music_categories, get_music_tags, \
-    DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_API_KEY, DEFAULT_OPEN_AI_API_KEY, DEFAULT_OPEN_AI_MODEL, get_categories
+from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_music_tags, get_categories
 
 logger = logging.getLogger("main")
 
+
 def is_analyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
-        entry= file_path
+        entry = file_path
     else:
         entry = parse_mp3(file_path)
 
     return (set(get_categories()) == set(entry.categories.keys()) and entry.summary is not None
             and entry.summary != "This is a mock summary." and not "Voxalyzer" in entry.summary)
 
+
 def is_voxalyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
-        entry= file_path
+        entry = file_path
     else:
         entry = parse_mp3(file_path)
 
     return entry.summary is not None and "Voxalyzer" in entry.summary
+
 
 def categories_to_string(categories: list[MusicCategory]):
     lines = []
@@ -51,6 +48,7 @@ def categories_to_string(categories: list[MusicCategory]):
         lines.append(f"{cat.name}: {cat.description}\n {cat.levels}")
 
     return "\n\n".join(lines)
+
 
 def tags_to_string(data: dict[str, str]):
     lines = []
@@ -70,16 +68,12 @@ class Analyzer(QObject):
 
     @classmethod
     def get_analyzer(cls):
-        model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL)
+        baseUrl = AppSettings.value(SettingKeys.VOXALYZER_URL, None, type=str)
 
-        if model == "mock" or model is None:
+        if baseUrl is None or baseUrl == "":
             return MockAnalyzer()
-        elif "gemini" in model:
-            return GeminiAnalyzer()
-        elif "gpt" in model:
-            return OpenAiAnalyzer()
         else:
-            return None
+            return VoxalyzerAnalyzer()
 
     def __init__(self):
         super().__init__()
@@ -148,88 +142,6 @@ class Analyzer(QObject):
         return result
 
 
-class GeminiAnalyzer(Analyzer):
-
-    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
-        api_key: str = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
-        model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL)
-
-        if not api_key:
-            logger.warning(_("API Key is missing"))
-            self.error.emit(_("API Key is missing"))
-            return None
-
-        try:
-            client = genai.Client(api_key=api_key)
-
-            with open(file_path, "rb") as file_content:
-                myfile = client.files.upload(file=file_content, config=UploadFileConfig(mime_type="audio/mpeg"))
-
-            prompt =_("AI UserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, categories_to_string(get_music_categories()), tags_to_string(get_music_tags()))
-
-
-            response = client.models.generate_content(
-                model=model,
-                contents=[
-                    Content(
-                        parts=[
-                            Part(text=prompt),
-                            Part(myfile)
-                        ]
-                    )
-                ],
-                config=GenerateContentConfig(
-                    thinking_config=ThinkingConfig(thinking_budget=0),  # Disables thinking
-                    response_mime_type="application/json",
-                    system_instruction=_("AI SystemPrompt").format(CATEGORY_MIN,CATEGORY_MAX),
-                    response_schema=Schema(
-                        type=Type.OBJECT,
-                        properties={
-                            "summary": Schema(
-                                type=Type.STRING,
-                                description=_("AI SummaryDescription"),
-                            ),
-                            "categories": Schema(
-                                type=Type.ARRAY,
-                                description=_("AI CategoriesDescription").format(CATEGORY_MIN,CATEGORY_MAX),
-                                items=Schema(
-                                    type=Type.OBJECT,
-                                    properties={
-                                        "category": Schema(type=Type.STRING),
-                                        "scale": Schema(type=Type.INTEGER)
-                                    },
-                                    required=["category", "scale"],
-                                ),
-                            ),
-                            "tags": Schema(
-                                type=Type.ARRAY,
-                                description=_("AI TagsDescription"),
-                                items=Schema(
-                                    type=Type.STRING
-                                )
-                            ),
-                        },
-                        required=["summary", "categories", "tags"],
-                    ),
-                ),
-            )
-
-            logger.debug(response.text)
-
-            # Parse the JSON response and add tags
-
-            return json.loads(response.text)
-        except json.JSONDecodeError as e:
-            traceback.print_exc()
-            logger.error("Failed to decode JSON from response: {0}",e.message)
-        except ClientError as e:
-            self.error.emit(e.message)
-            logger.error("Failed to analyze file: {0}",e.message)
-        except Exception as e:
-            traceback.print_exc()
-            logger.error("Failed to analyze file: {0}",e.message)
-        return None
-
 class MockAnalyzer(Analyzer):
 
     def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
@@ -252,69 +164,44 @@ class MockAnalyzer(Analyzer):
 
         return mock_response
 
-# 1. Define the Schema using Pydantic (OpenAI's preferred way for Structured Outputs)
-class CategoryItem(BaseModel):
-    category: str
-    scale: int
 
-class AnalysisResponse(BaseModel):
-    summary: str
-    categories: List[CategoryItem]
-    tags: List[str]
-
-class OpenAiAnalyzer(Analyzer):
+class VoxalyzerAnalyzer(Analyzer):
 
     def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+        baseUrl: str = AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str)
+        if not baseUrl or baseUrl == "":
+            logger.error("Voxalyzer URL not set.")
+            return None
 
-        api_key: str = AppSettings.value(SettingKeys.OPENAI_API_KEY, DEFAULT_OPEN_AI_API_KEY)
-        model = AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_OPEN_AI_MODEL)  # Must support structured outputs
+        if baseUrl.endswith("/"):
+            url = f"{baseUrl}analyze"
+        else:
+            url = f"{baseUrl}/analyze"
 
-        prompt = _("AI UserPrompt").format(CATEGORY_MIN, CATEGORY_MAX, categories_to_string(get_music_categories()),
-                                              tags_to_string(get_music_tags()))
+        logger.debug(f"Sending request to {url} for file {file_path}")
 
-        encoded_string = file_to_base64(file_path)
+        try:
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
 
-        system_prompt = _("AI SystemPrompt").format(CATEGORY_MIN, CATEGORY_MAX)
+            req = urllib.request.Request(url, data=file_content, method='POST')
+            req.add_header('Content-Type', 'application/octet-stream')
 
-        client = OpenAI(
-            api_key=api_key,
-        )
+            with urllib.request.urlopen(req) as response:
+                if response.status == 200:
+                    response_body = response.read()
+                    return json.loads(response_body)
+                else:
+                    logger.error(f"Error: {response.status} - {response.reason}")
+                    return None
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "input_audio",
-                        "input_audio": {
-                            "data": encoded_string,
-                            "format": "mp3"
-                        }
-                    }
-                    ]
-                }
-            ],
-            #response_format=AnalysisResponse,
-        )
+        except urllib.error.URLError as e:
+            logger.error(f"URLError: {e.reason}")
+            return None
+        except Exception as e:
+            logger.error(f"An error occurred: {e}")
+            return None
 
-        #result = response.choices[0].message.parsed
-        result = response.choices[0].message.content
-        categories: dict[str,str] = json.loads(result.lstrip("```json").rstrip("```"))
-        tags = categories.pop("Tags",None)
-
-        norm_categories = []
-        for key,scale in categories.items():
-            norm_categories.append({"category": key, "scale": scale})
-
-        response = {
-            "summary": "Analyzed with OpenAI",
-            "categories": norm_categories,
-            "tags": tags
-        }
-
-        return response
 
 class Worker(QRunnable):
     analyzer: Analyzer
@@ -367,4 +254,4 @@ class Worker(QRunnable):
             self.analyzer.progress.emit(_("File {0} processed.").format(Path(file_path).name))
         except Exception as e:
             traceback.print_exc()
-            logger.error("An error occurred while adding tags to {0}: {1}", file_path,e)
+            logger.error("An error occurred while adding tags to {0}: {1}", file_path, e)

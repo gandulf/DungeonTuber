@@ -36,7 +36,7 @@ VSVersionInfo(
         StringStruct('LegalCopyright', 'Gandulf Kohlweiss. All rights reserved.'),
         StringStruct('OriginalFilename', 'DungeonTuber.exe'),
         StringStruct('ProductName', 'DungeonTuber'),
-        StringStruct('ProductVersion', '0.1.5')])
+        StringStruct('ProductVersion', '0.1.6')])
       ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]

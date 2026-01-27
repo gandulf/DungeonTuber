@@ -1,41 +1,45 @@
 import json
 import logging
+from dataclasses import dataclass, asdict
 from enum import StrEnum
+from functools import total_ordering
 
-import jsonpickle
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLayout, QTabWidget, QWidget, \
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
     QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox, QLabel
-from google import genai
-from google.genai.types import ListModelsConfig
 
-from config.utils import get_path, get_available_locales, restart_application
+from config.utils import get_available_locales, restart_application
 
 logger = logging.getLogger("main")
 
 # --- Configuration ---
-CATEGORY_MIN = 1
+CATEGORY_MIN = 0
 CATEGORY_MAX = 10
 
 CAT_VALENCE = "Valence"
 CAT_AROUSAL = "Arousal"
 
-CAT_TEMPO = "Tempo"
+CAT_ENGAGEMENT = "Engagement"
 CAT_DARKNESS = "Darkness"
-CAT_EMOTIONAL = "Emotional"
-CAT_MYSTICISM = "Mysticism"
-CAT_TENSION = "Tension"
-CAT_HEROISM = "Heroism"
 
-class MusicCategory():
+CAT_AGGRESSIVE = "Aggressive"
+CAT_HAPPY = "Happy"
+CAT_PARTY = "Party"
+CAT_RELAXED = "Relaxed"
+CAT_SAD = "Sad"
+
+
+@total_ordering
+@dataclass(eq=True)
+class MusicCategory:
     key: str
     name: str
     description: str
     levels: dict[int, str]
     group: str = None
 
-    def __init__(self, name: str, description: str, levels: dict[int, str], group: str = None, key :str = None):
+    def __init__(self, name: str, description: str, levels: dict[int, str], group: str = '', key: str = None):
         if key is None:
             self.key = name
         else:
@@ -45,18 +49,43 @@ class MusicCategory():
         self.levels = levels
         self.group = group
 
+    def __hash__(self):
+        return hash(self.key)
+
+    def __lt__(self, other):
+        return self.key < other.key
+
+    def __eq__(self, other):
+        if not isinstance(other, MusicCategory):
+            return False
+        return self.key == other.key or self.name == other.name
+    
+    def json_dump(self):
+        return json.dumps(asdict(self))
+
+    @classmethod
+    def json_dump_list(cls, categories: list):
+        return json.dumps([asdict(mc) for mc in categories])
+
+    @classmethod
+    def json_load(cls, json_string: str):
+        data = json.loads(json_string)
+        return MusicCategory(**data)
+
     @classmethod
     def from_key(cls, key: str):
         name = _(key)
         description = _(key + " Description")
         levels = {1: _(key + " Low"),
-                       5: _(key + " Medium"),
-                       10: _(key + " High")
-                       }
+                  5: _(key + " Medium"),
+                  10: _(key + " High")
+                  }
 
-        return MusicCategory(name, description, levels, key = key)
+        group = "Mood" if key in [CAT_SAD, CAT_AGGRESSIVE, CAT_RELAXED, CAT_HAPPY, CAT_PARTY] else ""
 
-    def equals(self, name_or_key:str ):
+        return MusicCategory(name, description, levels, key=key, group=group)
+
+    def equals(self, name_or_key: str):
         return self.name == name_or_key or self.key == name_or_key or self.name == _(name_or_key)
 
     def get_detailed_description(self):
@@ -67,43 +96,72 @@ class MusicCategory():
 
         return tooltip.removesuffix("\n")
 
+
+@dataclass(eq=True)
 class Preset:
-
     name: str
-    categories: dict[str,int] | None = None
+    categories: dict[str, int] | None
     tags: list[str]
+    genres: list[str]
 
-    def __init__(self, name: str, levels: dict[str, int],tags: list[str]= None):
+    def __init__(self, name: str, levels: dict[str, int], tags: list[str] = None, genres: list[str] = None):
         self.name = name
         self.categories = levels
         self.tags = tags
+        self.genres = genres
 
-_PRESETS: list[Preset] |None = None
+    def __hash__(self):
+        return hash(self.name)
 
-_TAGS =["Travel","Fight"]
+    def __eq__(self, other):
+        # Equality must match the hash logic
+        if not isinstance(other, Preset):
+            return False
+        return self.name == other.name
+
+    @classmethod
+    def json_dump_list(cls, presets: list):
+        return json.dumps([asdict(mc) for mc in presets])
+
+    def json_dump(self):
+        return json.dumps(asdict(self))
+
+    @classmethod
+    def json_load(cls, json_string: str):
+        data = json.loads(json_string)
+        return Preset(**data)
+
+
+_PRESETS: list[Preset] | None = None
+
+_TAGS = []
 _MUSIC_TAGS = None
 
-_DEFAULT_CATEGORIES =[CAT_VALENCE, CAT_AROUSAL, CAT_TEMPO, CAT_EMOTIONAL, CAT_MYSTICISM, CAT_HEROISM]
+_DEFAULT_CATEGORIES = [CAT_VALENCE, CAT_AROUSAL, CAT_ENGAGEMENT, CAT_DARKNESS, CAT_AGGRESSIVE, CAT_HAPPY, CAT_PARTY, CAT_RELAXED, CAT_SAD]
 _MUSIC_CATEGORIES = None
 _CATEGORIES = None
+
 
 def get_presets() -> list[Preset]:
     global _PRESETS
     if _PRESETS is None:
-        _PRESETS =[
+        _PRESETS = [
             Preset(_("Grim"),
-                   {_(CAT_VALENCE): 1, _(CAT_AROUSAL):5, _(CAT_TEMPO): 0, _(CAT_HEROISM): 4, _(CAT_EMOTIONAL): 3, _(CAT_MYSTICISM): 4}),
+                   {_(CAT_VALENCE): 1, _(CAT_AROUSAL): 5, _(CAT_ENGAGEMENT): 3, _(CAT_AGGRESSIVE): 4, _(CAT_SAD): 7, _(CAT_RELAXED): 1}),
         ]
 
     return _PRESETS
 
+
 def remove_preset(preset: Preset):
     _PRESETS.remove(preset)
-    AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(_PRESETS))
+    AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
+
 
 def add_preset(preset: Preset):
     _PRESETS.append(preset)
-    AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(_PRESETS))
+    AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
+
 
 def set_presets(presets: list[Preset]):
     global _PRESETS
@@ -113,28 +171,31 @@ def set_presets(presets: list[Preset]):
     else:
         presets = [preset for preset in presets if preset.name is not None]
         _PRESETS = presets
-        AppSettings.setValue(SettingKeys.PRESETS, jsonpickle.encode(presets))
+        AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
 
-def get_music_tags() -> dict[str,str]:
+
+def get_music_tags() -> dict[str, str]:
     global _MUSIC_TAGS
     if _MUSIC_TAGS is None:
-        _MUSIC_TAGS = {_("Tag " +key):_("Tag "+key +" Description") for key in _TAGS}
+        _MUSIC_TAGS = {_("Tag " + key): _("Tag " + key + " Description") for key in _TAGS}
 
     return _MUSIC_TAGS
 
-def set_music_tags(tags :dict[str,str] | None):
+
+def set_music_tags(tags: dict[str, str] | None):
     global _MUSIC_TAGS
     if tags is None:
         _MUSIC_TAGS = None
         AppSettings.remove(SettingKeys.TAGS)
     else:
         _MUSIC_TAGS = tags
-        AppSettings.setValue(SettingKeys.TAGS, jsonpickle.encode(tags))
+        AppSettings.setValue(SettingKeys.TAGS, json.dumps(tags))
 
 
 def get_music_category(key: str) -> MusicCategory:
     cats = [cat for cat in get_music_categories() if cat.name == key or cat.key == key]
-    return  next(cats) if cats and len(cats)>0 else None
+    return cats[0] if cats and len(cats) > 0 else None
+
 
 def get_categories() -> list[str]:
     global _CATEGORIES
@@ -144,11 +205,13 @@ def get_categories() -> list[str]:
 
     return _CATEGORIES
 
+
 def get_music_categories() -> list[MusicCategory]:
     global _MUSIC_CATEGORIES
     if _MUSIC_CATEGORIES is None:
         _MUSIC_CATEGORIES = [MusicCategory.from_key(key) for key in _DEFAULT_CATEGORIES]
     return _MUSIC_CATEGORIES
+
 
 def set_music_categories(categories: list[MusicCategory] | None):
     global _MUSIC_CATEGORIES
@@ -156,7 +219,7 @@ def set_music_categories(categories: list[MusicCategory] | None):
         AppSettings.remove(SettingKeys.CATEGORIES)
         _CATEGORIES = None
     else:
-        AppSettings.setValue(SettingKeys.CATEGORIES, jsonpickle.encode(categories))
+        AppSettings.setValue(SettingKeys.CATEGORIES, MusicCategory.json_dump_list(categories))
         _CATEGORIES = [cat.name for cat in categories]
 
     _MUSIC_CATEGORIES = categories
@@ -164,17 +227,6 @@ def set_music_categories(categories: list[MusicCategory] | None):
 
 AppSettings: QSettings = QSettings("Gandulf", "DungeonTuber")
 
-def default_gemini_api_key() -> str | None:
-    try:
-        return str(open(get_path("apikey.txt"), "r").readline())
-    except FileNotFoundError:
-        return None
-
-
-DEFAULT_GEMINI_API_KEY = default_gemini_api_key()
-DEFAULT_OPEN_AI_API_KEY = ""
-DEFAULT_OPEN_AI_MODEL = "gpt-4o-audio-preview"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 def reset_presets():
     global _PRESETS
@@ -182,56 +234,11 @@ def reset_presets():
     AppSettings.remove(SettingKeys.PRESETS)
 
 
-_AI_MODLES = None
-_DEFAUL_AI_MODLES = [
-                "gemini-2.0-flash",
-                "gemini-2.5-flash",
-                "gemini-3.0-flash",
-                "gemini-2.5-pro",
-                "gemini-3.0-pro"
-            ]
-
-_FIXED_AI_MODLES = [
-                "gpt-4o-audio-preview",
-                "gpt-4o-mini-audio-preview",
-                "mock"
-            ]
-
-def get_gemini_models():
-    global _AI_MODLES
-    if _AI_MODLES is None:
-        try:
-            audio_capable_families = ['gemini-4', 'gemini-3.5', 'gemini-3', 'gemini-2.5', 'gemini-1.5']
-            api_key = AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY)
-            if api_key is not None and api_key != "":
-                client = genai.Client(api_key=AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
-                _AI_MODLES = []
-                for model in client.models.list(config=ListModelsConfig(page_size=100, query_base=True)):
-                    # Filter for models that support multimodal input (Audio/Video/Images)
-                    if any(family in model.name for family in audio_capable_families):
-                        # We look for 'multimodal' or specific audio support in the description
-                        capabilities = "Audio/Multimodal" if "flash" in model.name or "pro" in model.name else "Text Only"
-
-                        if capabilities == "Audio/Multimodal":
-                            _AI_MODLES.append(model.name.removeprefix("models/"))
-
-        except Exception as e:
-            logger.exception("Failed to list models: {0}",e)
-
-        if _AI_MODLES is None or len(_AI_MODLES) ==0:
-            _AI_MODLES = _DEFAUL_AI_MODLES
-
-    return _AI_MODLES + _FIXED_AI_MODLES
-
 class SettingKeys(StrEnum):
-    GEMINI_API_KEY = "geminiApiKey"
-    OPENAI_API_KEY = "openAiApiKey"
-    AI_MODEL = "aiModel"
-
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
     NORMALIZE_VOLUME = "normalizeVolume"
-    EFFECTS_DIRECTORY ="effectsDirectory"
+    EFFECTS_DIRECTORY = "effectsDirectory"
     EFFECTS_TREE = "effectsTree"
     LAST_DIRECTORY = "lastDirectory"
     FILTER_VISIBLE = "filterVisible"
@@ -239,9 +246,9 @@ class SettingKeys(StrEnum):
     EXPANDED_DIRS = "expandedDirs"
     ROOT_DIRECTORY = "rootDirectory"
     DIRECTORY_TREE = "directoryTree"
-    RUSSEL_WIDGET ="russelWidget"
-    CATEGORY_WIDGETS ="categoryWidgets"
-    PRESET_WIDGETS ="presetWidgets"
+    RUSSEL_WIDGET = "russelWidget"
+    CATEGORY_WIDGETS = "categoryWidgets"
+    PRESET_WIDGETS = "presetWidgets"
     BPM_WIDGET = "bpmWidget"
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"
@@ -266,6 +273,8 @@ class SettingKeys(StrEnum):
     TAGS = "tags"
     CATEGORIES = "categories"
     PRESETS = "presets"
+
+    VOXALYZER_URL ="voxalyzerUrl"
 
 
 class SettingsDialog(QDialog):
@@ -341,7 +350,7 @@ class SettingsDialog(QDialog):
 
     def ai_model_changed(self, text: str):
         if "gemini" in text:
-            self.analyzer_layout.setRowVisible(self.gemini_api_key_input,True)
+            self.analyzer_layout.setRowVisible(self.gemini_api_key_input, True)
             self.analyzer_layout.setRowVisible(self.openai_api_key_input, False)
         elif "gpt" in text:
             self.analyzer_layout.setRowVisible(self.gemini_api_key_input, False)
@@ -353,36 +362,12 @@ class SettingsDialog(QDialog):
             self.analyzer_layout.setRowVisible(self.gemini_api_key_input, True)
             self.analyzer_layout.setRowVisible(self.openai_api_key_input, True)
 
-
     def init_general_tab(self):
         layout = QVBoxLayout(self.general_tab)
 
-        self.analyzer_layout = QFormLayout()
-        analyzer_group = QGroupBox(_("Analyzer"))
-        analyzer_group.setLayout(self.analyzer_layout)
-
+        analyzer_group = QGroupBox(_("System"))
+        self.analyzer_layout = QFormLayout(analyzer_group)
         layout.addWidget(analyzer_group, 0)
-
-        self.gemini_api_key_input = QLineEdit()
-        self.gemini_api_key_input.setText(AppSettings.value(SettingKeys.GEMINI_API_KEY, DEFAULT_GEMINI_API_KEY))
-        self.analyzer_layout.addRow(_("Gemini API Key") + ":", self.gemini_api_key_input)
-
-        self.openai_api_key_input = QLineEdit()
-        self.openai_api_key_input.setText(AppSettings.value(SettingKeys.OPENAI_API_KEY, DEFAULT_OPEN_AI_API_KEY))
-        self.analyzer_layout.addRow(_("OpenAI API Key") + ":", self.openai_api_key_input)
-
-        self.model_combo = QComboBox()
-        self.model_combo.setEditable(False)
-        self.model_combo.addItems(get_gemini_models())
-        self.model_combo.setCurrentText(AppSettings.value(SettingKeys.AI_MODEL, DEFAULT_GEMINI_MODEL))
-        self.model_combo.currentTextChanged.connect(self.ai_model_changed)
-        self.analyzer_layout.addRow(_("AI Model") + ":", self.model_combo)
-
-        self.ai_model_changed(self.model_combo.currentText())
-
-        self.skip_analyzed_mp3 = QCheckBox(_("Skip Analyzed Music"))
-        self.skip_analyzed_mp3.setChecked(AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
-        self.analyzer_layout.addRow("", self.skip_analyzed_mp3)
 
         self.locale_combo = QComboBox(editable=False)
         self.locale_combo.setToolTip(_("Requires restart"))
@@ -393,32 +378,32 @@ class SettingsDialog(QDialog):
         for i, locale in enumerate(get_available_locales()):
             self.locale_combo.addItem(_(locale), locale)
             if current_language == locale:
-                self.locale_combo.setCurrentIndex(i+1)
+                self.locale_combo.setCurrentIndex(i + 1)
 
         self.analyzer_layout.addRow(_("Language") + " *", self.locale_combo)
 
-        self.skip_analyzed_mp3.setChecked(AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool))
-        self.analyzer_layout.addRow("", self.skip_analyzed_mp3)
+        self.voxalyzerUrl = QLineEdit()
+        self.voxalyzerUrl.setPlaceholderText("http://localhost:8000/analyze")
+        self.voxalyzerUrl.setText(AppSettings.value(SettingKeys.VOXALYZER_URL, type=str))
+        self.analyzer_layout.addRow(_("Voxalyzer BaseUrl") , self.voxalyzerUrl)
 
         #
-        self.player_layout = QFormLayout()
         player_group = QGroupBox(_("Player"))
-        player_group.setLayout(self.player_layout)
+        self.player_layout = QFormLayout(player_group)
 
         self.normalize_volume = QCheckBox(_("Normalize Volume*"))
         self.normalize_volume.setToolTip(_("Requires restart"))
         self.normalize_volume.setChecked(AppSettings.value(SettingKeys.NORMALIZE_VOLUME, True, type=bool))
         self.player_layout.addRow("", self.normalize_volume)
         normalize_volume_description = QLabel(_("All songs will be played at a normalized volume."))
-        normalize_volume_description.setStyleSheet(f"font-size:12px")
+        normalize_volume_description.setStyleSheet(f"font-size:9pt")
         normalize_volume_description.setContentsMargins(28, 0, 0, 0)
         self.player_layout.addRow("", normalize_volume_description)
 
         layout.addWidget(player_group, 0)
         #
-        table_layout = QFormLayout()
         table_group = QGroupBox(_("Song Table"))
-        table_group.setLayout(table_layout)
+        table_layout = QFormLayout(table_group)
 
         layout.addWidget(table_group, 0)
 
@@ -430,7 +415,7 @@ class SettingsDialog(QDialog):
         self.dynamic_score_column.setChecked(AppSettings.value(SettingKeys.DYNAMIC_SCORE_COLUMN, False, type=bool))
         table_layout.addRow("", self.dynamic_score_column)
         dynamic_score_description = QLabel(_("Only show score column if any filters are active."))
-        dynamic_score_description.setStyleSheet(f"font-size:12px")
+        dynamic_score_description.setStyleSheet(f"font-size:9pt")
         dynamic_score_description.setContentsMargins(28, 0, 0, 0)
         table_layout.addRow("", dynamic_score_description)
 
@@ -438,8 +423,8 @@ class SettingsDialog(QDialog):
         self.dynamic_table_columns.setChecked(AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
         table_layout.addRow("", self.dynamic_table_columns)
         dynamic_colomns_description = QLabel(_("Only category columns with an active filter value are display else they are hidden automatically."))
-        dynamic_colomns_description.setStyleSheet(f"font-size:12px")
-        dynamic_colomns_description.setContentsMargins(28,0,0,0)
+        dynamic_colomns_description.setStyleSheet(f"font-size:9pt")
+        dynamic_colomns_description.setContentsMargins(28, 0, 0, 0)
         table_layout.addRow("", dynamic_colomns_description)
 
         self.summary_column = QCheckBox(_("Summary Visible"))
@@ -564,26 +549,26 @@ class SettingsDialog(QDialog):
         result = False
         current_locale = AppSettings.value(SettingKeys.LOCALE, type=str)
         result = result or current_locale != self.locale_combo.currentData()
-        result = result or self.normalize_volume.isChecked() != AppSettings.value(SettingKeys.NORMALIZE_VOLUME,True, type=bool)
+        result = result or self.normalize_volume.isChecked() != AppSettings.value(SettingKeys.NORMALIZE_VOLUME, True, type=bool)
 
         return result
 
     def accept(self):
         requires_restart = self.requires_restart()
 
-        AppSettings.setValue(SettingKeys.GEMINI_API_KEY, self.gemini_api_key_input.text())
-        AppSettings.setValue(SettingKeys.OPENAI_API_KEY, self.openai_api_key_input.text())
-        AppSettings.setValue(SettingKeys.AI_MODEL, self.model_combo.currentText())
         AppSettings.setValue(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_SCORE_COLUMN, self.dynamic_score_column.isChecked())
-        AppSettings.setValue(SettingKeys.SKIP_ANALYZED_MUSIC, self.skip_analyzed_mp3.isChecked())
         AppSettings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())
         AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
+        if self.voxalyzerUrl.text() == '' or self.voxalyzerUrl.text() is None:
+            AppSettings.remove(SettingKeys.VOXALYZER_URL)
+        else:
+            AppSettings.setValue(SettingKeys.VOXALYZER_URL, self.voxalyzerUrl.text())
 
         AppSettings.setValue(SettingKeys.NORMALIZE_VOLUME, self.normalize_volume.isChecked())
 
-        _categories= []
+        _categories = []
         for row in range(self.categories_table.rowCount()):
             cat_item = self.categories_table.item(row, 0)
             group_item = self.categories_table.item(row, 1)
@@ -609,7 +594,6 @@ class SettingsDialog(QDialog):
                     _tags[tag] = desc
 
         set_music_tags(_tags)
-
 
         if requires_restart:
 

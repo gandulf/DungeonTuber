@@ -2,7 +2,7 @@ import string
 
 from PySide6.QtCore import QObject, Property, Qt, QSize
 from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QProxyStyle, QStyle
 
 from config.settings import AppSettings, SettingKeys
 from config.utils import get_path
@@ -15,6 +15,8 @@ def _alpha(color: QColor, alpha: int = None):
     new_color.setAlpha(alpha)
     return new_color
 
+def _pt_to_px(pt):
+    return int(pt * (96 / 72))
 
 QIcon.setThemeSearchPaths([get_path("assets/icons")] + QIcon.themeSearchPaths())
 
@@ -34,16 +36,19 @@ class AppTheme(QObject):
 
     _small_factor = 0.7
 
+
+
     def __init__(self):
         super().__init__()
-        self._font_size : int = AppSettings.value(SettingKeys.FONT_SIZE, 14, type=int) # Default size
-        self._icon_width = self._font_size * 2
-        self._icon_height = self._font_size * 2
+        self._font_size : float = AppSettings.value(SettingKeys.FONT_SIZE, 10.5, type=int) # Default size
+        self._font_size_small : float = self._font_size * 0.8  # Small size
+        self._icon_width = _pt_to_px(self._font_size * 2)
+        self._icon_height = _pt_to_px(self._font_size * 2)
         self._icon_size =  QSize(self._icon_width,self._icon_height)
         self._icon_size_small = QSize(int(self._icon_width * self._small_factor),int(self._icon_height* self._small_factor))
 
-        self._button_width = self._font_size * 4
-        self._button_height = self._font_size * 4
+        self._button_width = _pt_to_px(self._font_size * 4)
+        self._button_height = _pt_to_px(self._font_size * 4)
         self._button_size = QSize(self._button_width, self._button_height)
         self._button_height_small =int(self._button_height * self._small_factor)
         self._button_width_small = int(self._button_width * self._small_factor)
@@ -81,13 +86,18 @@ class AppTheme(QObject):
         return self._button_size_small
 
     @Property(int)
-    def font_size(self):
+    def font_size(self) -> float:
         return self._font_size
+
+    @Property(int)
+    def font_size_small(self) -> float:
+        return self._font_size_small
 
     @font_size.setter
     def font_size(self, size):
         AppSettings.setValue(SettingKeys.FONT_SIZE, size)
         self._font_size = size
+        self._font_size_small = self._font_size * 0.8  # Small size
         # Re-apply the stylesheet to trigger a global update
         self.apply_stylesheet()
 
@@ -234,10 +244,7 @@ class AppTheme(QObject):
 
         style = f"""
                     QWidget {{
-                        font-size: {self._font_size}px;
-                    }}
-                    QPushButton {{
-                        padding: {self._font_size // 2}px;
+                        font-size: {self.font_size}pt;
                     }}
                     
                     QPushButton[class="play"]::checked, QToolButton[class="play"]::checked {{
@@ -272,11 +279,11 @@ class AppTheme(QObject):
         
         QMenu {
             background-color: rgb(42, 42, 42);
-            border: 1px solid rgb(60, 60, 60);            
+            border: 1px solid rgb(60, 60, 60);                        
         }
         
         QMenu::item {
-            padding:5px;         
+            padding:5px;                     
         }
         
         QMenu::icon {
@@ -284,7 +291,7 @@ class AppTheme(QObject):
         }
         
         QMenu::item:selected {            
-            background: rgba(100, 100, 100, 150);
+            background: rgba(100, 100, 100, 150);            
         }
         
         QComboBox {
@@ -300,6 +307,5 @@ class AppTheme(QObject):
         """
 
         self.application.setStyleSheet(style)
-
 
 app_theme: AppTheme = AppTheme()

@@ -488,20 +488,6 @@ msgstr "Solidary (steadfast, courageous)"
 msgid "Heroism High"
 msgstr "Heroic, legendary, fateful, and divine (battles, victories)"
 
-#TAG Fight
-msgid "Tag Fight"
-msgstr "Fight"
-
-msgid "Tag Fight Description"
-msgstr "Hectic, exciting, driving music (Tempo>6, Tension>6, Heroism>5)"
-
-#TAG Travel
-msgid "Tag Travel"
-msgstr "Travel"
-
-msgid "Tag Travel Description"
-msgstr "Nordic music, Vikings, Russia (Tempo<6, Tension<4, Heroism<4, Mysticism<5)"
-
 msgid "Grim"
 msgstr "Grim"
 

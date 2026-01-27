@@ -8,63 +8,67 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/gandulf/DungeonTuber)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**DungeonTuber** ist ein spezialisierter Musikplayer für Game Master (Spielleiter), Streamer und Storyteller, die per Knopfdruck die perfekte Atmosphäre schaffen wollen. Im Gegensatz zu Standard-Playern ermöglicht DungeonTuber das Kategorisieren und Filtern deiner Musik basierend auf emotionalem Gewicht, Intensität und genre-spezifischen Metadaten.
-
+**DungeonTuber** ist ein spezialisierter Musikplayer für Rollenspiel-Spielleiter (GMs), Streamer und Geschichtenerzähler, die die perfekte Atmosphäre sofort griffbereit brauchen. Im Gegensatz zu Standard-Playern ermöglicht DungeonTuber die Kategorisierung und Filterung deiner Musik basierend auf emotionalem Gewicht, Intensität und genre-spezifischen Metadaten.
+ 
 ![Screenshot der Anwendung](docs/screen1.png)
 
 ---
 
 ## 🚀 Hauptmerkmale
 
-* **Atmosphären-Regler:** Verfeinere deine Suche mit Schiebereglern für **Tempo**, **Dunkelheit**, **Emotional**, **Mystik**, **Spannung** und **Heroik**.
-* **Gemini-Integration:** Tracks werden analysiert, um objektive Bewertungen (1–10) für deine Musikbibliothek über mehrere thematische Dimensionen hinweg zu liefern.
-* **Quick-Tag Filterung:** Sofort-Schalter für gängige RPG-Szenarien wie *Emotionale Momente*, *Kampf*, *Magisches Ritual* und *Reise*.
-* **Intuitive Bibliotheksansicht:** Überblicke deine gesamte Sammlung mit den zugehörigen Bewertungen und Tags in einer einfach scanbaren Liste.
+* **Atmosphärische Slider:** Verfeinere deine Suche mit Schiebereglern für **anpassbare Kategorien/Merkmale**.
+* **Schnell-Tag-Filter:** Sofortige Umschalter für gängige RPG-Szenarien wie *Emotionale*, *Kampf*, *Magisches Ritual* und *Reise*.
+* **Intuitive Bibliotheksansicht:** Überblicke deine gesamte Sammlung mit den zugehörigen Scores und Tags in einer einzigen, scannbaren Liste.
 
 ---
 
 ## 📥 Installationshinweis
-> [!Tip]
-> Wahrscheinlich erscheint beim Ausführen des Installers die blaue Meldung „Der Computer wurde durch Windows geschützt“ (SmartScreen). Dies liegt daran, dass ich (noch) über keine gültige Signatur verfüge, um den Installer zu zertifizieren. Klicke einfach auf „Weitere Informationen“ und anschließend auf „Trotzdem ausführen“.
 
-## 📖 Tutorial: So nutzt du DungeonTuber
+> [!Tip]
+> Wahrscheinlich erhältst du beim Ausführen des Installers die blaue "Windows SmartScreen-Benachrichtigung". Dies liegt daran, dass ich _(noch)_ keine gültige Signatur besitze, um den Installer zu signieren. 
+> Klicke einfach auf *"Weitere Informationen"* und dann auf *"Trotzdem ausführen"*.
+
+## 📖 Tutorial: So benutzt du DungeonTuber
 
 ### 1. Bibliothek aufbauen
-Nutze das **Datei**-Menü, um deine Audiodateien zu importieren, oder navigiere durch den Verzeichnisbaum, um Ordner in der Tabelle zu öffnen oder Songs direkt abzuspielen.
-Die App nutzt **Gemini**, um deine Tracks zu scannen. Um dies zu nutzen, musst du einen Gemini API-Key oder AI Studio Key erstellen und unter **Settings** (Einstellungen) einfügen.
-> [!Note]
-> Informationen zum Erhalt eines API-Keys findest du im **Internet**, z.B. [How to Generate Gemini API Key for Free in 2025](https://wedevs.com/blog/510096/how-to-generate-gemini-api-key/)
+Nutze das **Datei**-Menü, um deine Audiodateien zu importieren, oder navigiere durch den Verzeichnisbaum, um Ordner in der Tabelle unten zu öffnen oder Songs direkt abzuspielen.
+Die App nutzt **Voxalyzer**, um deine Tracks zu scannen. Um dies zu verwenden, musst du eine lokale Instanz davon ausführen und die Basis-URL unter **Einstellungen** hinterlegen.
+> [!Tip]
+> Wenn du eine große MP3-Bibliothek lokal analysieren möchtest, schau dir das Nebenprojekt [Voxalyzer](https://github.com/gandulf/Voxalyzer) an.
 
 ### 2. Nach Stimmung filtern
 Die Stärke von DungeonTuber liegt im oberen Bedienfeld:
-* **Regler anpassen:** Bewege die Schieberegler (z. B. erhöhe *Mystik* und *Dunkelheit* für einen unheimlichen Dungeon), um die Liste nach Songs zu filtern, die genau diesen Werten entsprechen.
+* **Regler anpassen:** Bewege die Regler (z. B. erhöhe *Mystik* und *Dunkelheit* für einen gruseligen Dungeon), um deine Liste nach Songs zu filtern, die genau diesem "Score" entsprechen.
 * **Tags umschalten:** Klicke auf die pillenförmigen Buttons (wie **Kampf** oder **Reise**), um schnell nach bestimmten Szenentypen zu filtern.
 
 ### 3. Wiedergabe & Lautstärke
-* **Navigation:** Nutze die Standardtasten für Wiedergabe, Pause und Überspringen in der Mittelkonsole.
-* **Fortschrittsbalken:** Die Wellenform/Zeitachse ermöglicht es dir, zu bestimmten Momenten in einem Track zu springen.
-* **Lautstärkeregelung:** Nutze den grünen Keilschieber auf der rechten Seite, um den Audiopegel stufenlos anzupassen.
+* **Navigation:** Nutze die Standardtasten für Play, Pause und Überspringen in der Mittelkonsole.
+* **Fortschrittsbalken:** Die Wellenform/Timeline ermöglicht es dir, zu bestimmten Momenten in einem Track zu springen.
+* **Lautstärkeregelung:** Nutze den grünen Keil-Schieberegler auf der rechten Seite, um den Audiopegel stufenlos anzupassen.
 * **Shuffle:** Klicke auf das Shuffle-Symbol, um die aktuell gefilterte Auswahl zufällig wiederzugeben.
 
 ### 4. Suche & Favoriten
-* **Suchleiste:** Nutze die "Filter songs..." Leiste über der Hauptliste, um einen bestimmten Track namentlich zu finden.
-* **Favoriten:** Klicke auf den **goldenen Stern** neben einem Track, um ihn als Favoriten für den schnellen Zugriff während deiner Sessions zu markieren.
+* **Suche:** Tippe einfach los, um in der Hauptliste oder im Verzeichnisbaum nach einem bestimmten Titelnamen zu filtern.
+* **Favoriten:** Klicke auf den **Goldenen Stern** neben einem Track, um ihn als Favoriten zu markieren und während deiner Sessions schnell darauf zugreifen zu können.
 
 ---
 
 ## 🛠 Kategorie-Referenz 
 
 > [!IMPORTANT]
-> **WIP** – Die finalen Standardkategorien können sich ändern und können von dir selbst unter den Einstellungen angepasst werden, um deinen persönlichen Bedürfnissen zu entsprechen.
+> **WIP** (In Arbeit). Die endgültigen Standardkategorien können sich noch ändern und können von dir selbst in den Einstellungen angepasst werden, um deinen persönlichen Bedürfnissen zu entsprechen.
 
-| Kategorie     | Beschreibung                                  |
-|:--------------|:--------------------------------------------|
-| **Tempo** | Die Geschwindigkeit und Energie des Tracks. |
-| **Dunkelheit**| Düstere, grimmige oder schwermütige Töne.    |
-| **Emotional** | Emotionale, sanfte Klänge.                  |
-| **Mystik** | Ätherische, magische oder geheimnisvolle Qualitäten. |
-| **Spannung** | Anspannung und Suspense.                    |
-| **Heroik** | Epische, triumphale und orchestrale Energie. |
+| Merkmal | Modell-Nutzung & Akustische Beschreibung |
+| :--- | :--- |
+| **Valence** | Die **emotionale Positivität** eines Tracks. Hohe Valence klingt glücklich/fröhlich; niedrige Valence klingt traurig oder wütend. |
+| **Arousal** | Das **Intensitäts- und Energieniveau**. Hohes Arousal ist hektisch und laut; niedriges Arousal ist ruhig, leise oder schläfrig. |
+| **Engagement** | Der Grad, in dem die Musik Aufmerksamkeit erregt, meist getrieben durch **rhythmische Stabilität** und "Tanzbarkeit". |
+| **Darkness** | Zeigt **Tieffrequenzdichte** und Moll-Tonalität an; assoziiert mit düsteren oder grimmigen Atmosphären. |
+| **Aggressive** | Intensiver Sound mit **Verzerrung**, schnellen Transienten und hartem perkussivem "Attack". |
+| **Happy** | Prognostiziert helle **Dur-Tonalität** und fröhliche rhythmische Muster. |
+| **Party** | Zum Tanzen geeignet; charakterisiert durch **starken Bass**, stetige Beats und hohe rhythmische Energie. |
+| **Relaxed** | Gekennzeichnet durch eine **geringe Dynamik**, langsamere Tempi und sanfte, weiche klangliche Qualitäten. |
+| **Sad** | Niedrige Valence und niedrige Energie; assoziiert mit **melancholischen** Melodien und langsamerem, ernstem Tempo. |
 
 *Viel Spaß beim Abenteuer!*
 
@@ -72,41 +76,21 @@ Die Stärke von DungeonTuber liegt im oberen Bedienfeld:
 
 ## 🧠 Details zur KI-Analyse
 
-DungeonTuber nutzt Googles **Gemini 2.5 Flash** Modell, um Audiodateien zu analysieren und zu kategorisieren. 
-Der Prozess beinhaltet das Hochladen der Audiodatei an die Gemini-API und die Verwendung eines spezifischen Prompts zur Generierung von Metadaten.
+> [!Update]
+> KI-API-Aufrufe an öffentliche Modelle wurden zugunsten des lokalen Analyzers (Voxalyzer) entfernt. 
 
-### System-Anweisung
-Der System-Prompt definiert die Persona und die Bewertungsphilosophie:
-> Du bist ein erfahrener Hörer von Fantasy-, Film- und Rollenspielmusik. Du bewertest Musik so, wie sie von einem durchschnittlichen Hörer wahrgenommen wird – nicht technisch oder analytisch, sondern emotional und szenisch.
->
-> * Deine Bewertungen müssen über viele hundert Tracks hinweg konsistent bleiben.
-> * Eine 3 bedeutet immer dasselbe, unabhängig davon, welcher Track zuvor bewertet wurde.
-> * Die Werte sollten im Verhältnis zueinander sinnvoll verteilt sein (nicht alles ist eine 1 oder 10).
-> * Nutze die volle Skala von 1 bis 10, wenn es angemessen ist.
-> * Halte dich strikt an die vorgegebenen Kategorien, Tags und deren Beschreibungen.
-> * Gib nur JSON zurück, ohne zusätzliche Erklärungen.
-
-### Benutzer-Prompt
-Der Benutzer-Prompt liefert den Kontext (speziell zugeschnitten auf RPGs wie "Das Schwarze Auge" oder "D&D") sowie die Definitionen für Kategorien und Tags:
-> Aufgabe: Kategorisiere das folgende Musikstück für die Verwendung in einem Rollenspiel.
-> Bewerte das Stück basierend auf den unten stehenden Kategorien mit jeweils einem Wert von 1 bis 10.
->
-> Hier ist die Liste der Kategorien zur Bewertung, zusammen mit ihren Beschreibungen:<br/>
-> *[Dynamische Liste von Kategorien, Beschreibungen und Intensitätsstufen]*
->
-> Weise anschließend einige Tags aus der folgenden Liste zu, die am besten passen. Hier ist keine Skala erforderlich:<br/>
-> *[Dynamische Liste von Tags und Beschreibungen]*
+Der Prozess umfasst das Hochladen der Audiodatei an den Voxalyzer, wo lokale Essentia-Modelle verwendet werden, um die bereitgestellten Dateien zu analysieren.
 
 ---
 
 ## 🛠️ Build-Anweisungen
 
-
-## Übersetzungen aktualisieren:
-Bearbeite die Übersetzungen in den Dateien `_locales/**/LC_MESSAGES/DungeonTuber.po` und führe dann die folgenden Befehle aus, um die .mo-Dateien zu aktualisieren. 
+### Übersetzungen aktualisieren:
+Bearbeite die Übersetzungen in den Dateien `_locales/**/LC_MESSAGES/DungeonTuber.po` und führe dann die folgenden Befehle aus, um die `.mo`-Dateien zu aktualisieren. 
 ```bash
 msgfmt -o locales/en/LC_MESSAGES/DungeonTuber.mo locales/en/LC_MESSAGES/DungeonTuber.po
 msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonTuber.po
+msgfmt -o locales/es/LC_MESSAGES/DungeonTuber.mo locales/es/LC_MESSAGES/DungeonTuber.po
 ```
 
 
