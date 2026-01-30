@@ -47,6 +47,8 @@ jobs:
         mode: standalone
         low-memory: true
         output-dir: dist
+        file-version: ${{ steps.vars.outputs.app_version }}
+        product-version: ${{ steps.vars.outputs.app_version }}
         jobs: 1
 
     - name: Create Pyinstaller Executable
