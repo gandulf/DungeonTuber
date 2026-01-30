@@ -1,7 +1,7 @@
 # Compilation mode, standalone everywhere, except on macOS there app bundle
 # nuitka-project-if: {OS} in ("Windows", "Linux", "FreeBSD"):
 #    nuitka-project: --mode=standalone
-#    nuitka-project: --windows-console-mode=hide
+#    nuitka-project: --windows-console-mode=disable
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/docs/icon.ico
 # nuitka-project-else:
 #    nuitka-project: --mode=standalone
@@ -1421,16 +1421,16 @@ class SongTableModel(QAbstractTableModel):
             if index.column() == SongTableModel.SCORE_COL:
                 score = index.data(Qt.ItemDataRole.DisplayRole)
                 return _get_score_background_brush(score)
-            elif index.column() >= SongTableModel.GENRE_COL:
+            elif index.column() == SongTableModel.GENRE_COL:
                 value = index.data(Qt.ItemDataRole.UserRole)
                 return _get_genre_background_brush(self.filter_config.genres, value.genres)
+            elif index.column() == SongTableModel.BPM_COL:
+                value = index.data(Qt.ItemDataRole.DisplayRole)
+                return _get_bpm_background_brush(self.filter_config.bpm, value)
             elif index.column() >= SongTableModel.CAT_COL:
                 value = index.data(Qt.ItemDataRole.DisplayRole)
                 category = self.get_category(index)
                 return _get_category_background_brush(self.filter_config.get_category(category, None), value)
-            elif index.column() >= SongTableModel.BPM_COL:
-                value = index.data(Qt.ItemDataRole.DisplayRole)
-                return _get_bpm_background_brush(self.filter_config.bpm, value)
         elif role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             data = index.data(Qt.ItemDataRole.UserRole)
             if data is None:

@@ -1,10 +1,10 @@
 ; Setup script for pyinstaller or nuitka generated exe
 
-#ifexist "dist\DungeonTuber\DungeonTuber.exe"
-  #define SourceFolder "dist\DungeonTuber"
+#ifexist "dist\DungeonTuber.dist\DungeonTuber.exe"
+  #define SourceFolder "dist\DungeonTuber.dist"
 #else
-  #ifexist "dist\DungeonTuber.dist\DungeonTuber.exe"
-    #define SourceFolder "dist\DungeonTuber.dist"
+  #ifexist "dist\DungeonTuber\DungeonTuber.exe"
+    #define SourceFolder "dist\DungeonTuber"
   #endif
 #endif
 
