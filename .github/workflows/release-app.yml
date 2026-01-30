@@ -45,6 +45,7 @@ jobs:
         nuitka-version: main
         script-name: DungeonTuber.py
         low-memory: true
+        output-dir: dist
         jobs: 1
 
     - name: Create Pyinstaller Executable
