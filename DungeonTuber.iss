@@ -20,7 +20,7 @@ DefaultGroupName=DungeonTuber
 UninstallDisplayIcon={app}\DungeonTuber.exe
 Compression=lzma2
 SolidCompression=yes
-OutputDir={#SourcePath}
+OutputDir=.\
 OutputBaseFilename=DungeonTuber-{#AppVersion}
 
 [Files]

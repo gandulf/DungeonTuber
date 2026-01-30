@@ -60,7 +60,7 @@ jobs:
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
       with:
         path: DungeonTuber.iss
-        options: /O+ /F"DungeonTuber-${{ steps.vars.outputs.app_version }}"
+        options: /O+
 
     - name: Prepare Certificate for Signing
       shell: pwsh
