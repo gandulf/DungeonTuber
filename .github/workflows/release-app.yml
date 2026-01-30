@@ -44,6 +44,7 @@ jobs:
       with:
         nuitka-version: main
         script-name: DungeonTuber.py
+        mode: standalone
         low-memory: true
         output-dir: dist
         jobs: 1
