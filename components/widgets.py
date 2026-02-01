@@ -289,9 +289,30 @@ class FeatureOverlay(QWidget):
 class FileFilterProxyModel(QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.setSortCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         # 0 is usually the 'Name' column in QFileSystemModel
         self.setFilterKeyColumn(0)
+
+    def lessThan(self, left, right):
+        # 1. Get a reference to the source model (QFileSystemModel)
+        source_model = self.sourceModel()
+
+        # 2. Check if the items are directories
+        is_left_dir = source_model.isDir(left)
+        is_right_dir = source_model.isDir(right)
+
+        # 3. Logic: If one is a directory and the other isn't,
+        # the directory is always "less than" (appears first)
+        if is_left_dir and not is_right_dir:
+            return self.sortOrder() == Qt.AscendingOrder
+
+        if not is_left_dir and is_right_dir:
+            return self.sortOrder() == Qt.DescendingOrder
+
+        # 4. If both are the same type (both dirs or both files),
+        # fall back to standard sorting (alphabetical, size, etc.)
+        return super().lessThan(left, right)
 
     def filterAcceptsRow(self, source_row, source_parent):
         # This ensures that if a file matches, its parent folders remain visible

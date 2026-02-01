@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer, QKeyCombination, QMimeData
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer, QKeyCombination, QMimeData, QByteArray
 from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter, QIcon, QLinearGradient, QPolygon, QFontMetrics, QPaintEvent, QAction, \
     QKeySequence, QShortcut, QDrag, QPixmap
 from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QPushButton, QHBoxLayout, QProxyStyle, QWidget, \
@@ -47,6 +47,8 @@ class BPMSlider(QWidget):
     def set_value(self, value):
         self.bpm_widget.setValue(value)
 
+    def reset(self):
+        self.bpm_widget.setValue(0)
     def _snap_and_update_label(self, value):
         """Rounds the dial value to the closest multiple of 20 and updates the label."""
 
@@ -193,8 +195,6 @@ class CategoryTooltip(QWidget):
 
         self.__current_opacity = 0.0
 
-        self._auto_hidden=False
-
         self.__show_delay = 100
         self.__hide_delay = 100
         self.__fade_in_duration = 150
@@ -270,6 +270,10 @@ class CategoryTooltip(QWidget):
         super().show()
 
     def paintEvent(self, event: QPaintEvent):
+        # hide empty tooltip
+        if self.__text_widget.text() == "":
+            return
+
         super(CategoryTooltip, self).paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -279,17 +283,8 @@ class CategoryTooltip(QWidget):
 
     def setText(self, text: str):
         self.__text_widget.setStyleSheet(f"font-size: {app_theme.font_size_small}pt")
-
-        if self.isVisible() and text == "":
-            self._auto_hidden = True
-            self.hide()
-        else:
-            self.__text_widget.setText(text)
-            self._update_ui()
-            if not self.isVisible() and self._auto_hidden == True and text != "":
-                self.show()
-                self._auto_hidden = False
-        return
+        self.__text_widget.setText(text)
+        self._update_ui()
 
     def _update_ui(self, text:str = None):
         pos = self.__parent.mapToGlobal(self.__parent.rect().topLeft())
@@ -341,6 +336,7 @@ class CategoryWidget(QVBoxLayout):
     valueChanged = Signal(object)  #actual int | None but not possible with c++ binding
     _block_signals = False
     _orig_value: int
+    _visible_tooltip = False
 
     _disable_value :int
 
@@ -380,13 +376,15 @@ class CategoryWidget(QVBoxLayout):
         self.addWidget(self.val_label)
 
     def mouse_down(self, event: QMouseEvent):
-        self.refresh_tooltip(True)
+        self._visible_tooltip =True
+        self.refresh_tooltip()
 
         self.blockSignals()
         self._orig_value = self.value()
 
 
     def mouse_up(self, event: QMouseEvent):
+        self._visible_tooltip=False
         self.unblockSignals()
         self.tooltip.hide()
 
@@ -407,15 +405,14 @@ class CategoryWidget(QVBoxLayout):
     def unblockSignals(self):
         self._block_signals = False
 
-    def refresh_tooltip(self, show: bool = True):
+    def refresh_tooltip(self, show:bool=True):
         if self.value() is not None:
             nearest_level = min(self.category.levels.keys(), key=lambda x: abs(int(x) - self.value()))
-            text = self.category.levels.get(nearest_level, "")
-            self.tooltip.setText(text)
+            self.tooltip.setText(self.category.levels.get(nearest_level, ""))
         else:
-            text = ""
+            self.tooltip.setText("")
 
-        if text != "" and show and self.tooltip.isHidden():
+        if show and self._visible_tooltip and self.tooltip.isHidden():
             self.tooltip.show(True)
 
     def update_value_label(self, value: int | None = None):
@@ -493,7 +490,7 @@ class ToggleSlider(QCheckBox):
 
         drag = QDrag(self)
         mime_data = QMimeData()
-        mime_data.setText(self._checked_text)
+        mime_data.setData("text/slider", QByteArray(self._checked_text.encode(encoding="utf-8")) )
         drag.setMimeData(mime_data)
 
         # Create custom pixmap

@@ -13,14 +13,15 @@ from PySide6.QtGui import QPixmap
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM
 
-from config.settings import get_categories, _DEFAULT_CATEGORIES
+from config.settings import get_category_keys, _DEFAULT_CATEGORIES
 from config.utils import get_path, get_available_locales
 
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_all_tags", "_cover", "has_cover", "bpm","_moods"]
+    __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_all_tags", "_cover", "has_cover", "bpm","_moods"]
 
+    index: int
     name: str
     path: Path
     title: str
@@ -74,6 +75,7 @@ class Mp3Entry(object):
         self._cover = None
         self.has_cover = None
         self.bpm = bpm
+        self.index = None
 
     @property
     def tags(self):
@@ -95,10 +97,17 @@ class Mp3Entry(object):
     def _ge(self, category, value) -> bool:
         return category in self.categories and self.get_category_value(category) >= value
 
-    def get_category_value(self,category: str):
-        category = normalize_category(category)
-        if self.categories is not None and category in self.categories:
-            return self.categories.get(category, None)
+    def __hash__(self):
+        return hash(self.path)
+
+    def __eq__(self, other):
+        if not isinstance(other, Mp3Entry):
+            return False
+        return self.path == other.path
+
+    def get_category_value(self, category_key: str):
+        if self.categories is not None and category_key in self.categories:
+            return self.categories.get(category_key, None)
         else:
             return None
 
@@ -176,7 +185,7 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
                 try:
                     cats_map = json.loads(txxx_cats.text[0])
                     if isinstance(cats_map, dict):
-                        entry.categories = _normalize_categories(cats_map)
+                        entry.categories = cats_map
 
                 except json.JSONDecodeError:
                     pass
@@ -210,31 +219,6 @@ def _lazy_init_categories():
         _categories = {}
         for val in _DEFAULT_CATEGORIES:
             _categories[val] = [translation.gettext(val).lower() for translation in translations]
-
-
-def _normalize_categories(cat : dict[str,int]) :
-    if _categories is None:
-        _lazy_init_categories()
-
-    norm =  {normalize_category(key): value for key,value in cat.items()}
-
-    return norm
-
-
-def normalize_category(cat: str):
-    if _categories is None:
-        _lazy_init_categories()
-
-    if cat in get_categories():
-        return cat
-
-    lower_cat = cat.lower()
-    for key, values in _categories.items():
-        if lower_cat in values:
-            return _(key)
-
-    return cat
-
 
 def _audio(path: str | PathLike[str] | MP3) -> MP3:
     if isinstance(path, MP3):
@@ -430,22 +414,29 @@ def print_mp3_tags(file_path: str | PathLike[str]):
 def remove_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
     files = parse_m3u(playlist)
 
-    to_filter = [entry.path for entry in entries]
-    filtered = [parse_mp3(file) for file in files if file not in to_filter]
+    filtered = [file for file in files if file not in entries]
 
     create_m3u(filtered, playlist)
 
-def append_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
+def append_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str], index: int = -1):
     try:
         if len(entries) > 0:
-            logger.debug("Appending playlist '{0}'...", playlist)
 
-            # write the playlist
-            with open(playlist, 'a', encoding="utf-8") as of:
-                for mp3 in entries:
-                    relpath = os.path.relpath(mp3.path, str(Path(playlist).parent)).replace("\\", "/")
-                    of.write(f"#EXTINF:{mp3.length},{mp3.name}\n")
-                    of.write(relpath + "\n")
+            if index<0:
+                logger.debug("Appending playlist '{0}'...", playlist)
+
+                # write the playlist
+                with open(playlist, 'a', encoding="utf-8") as of:
+                    for mp3 in entries:
+                        relpath = os.path.relpath(mp3.path, str(Path(playlist).parent)).replace("\\", "/")
+                        of.write(f"#EXTINF:{mp3.length},{mp3.name}\n")
+                        of.write(relpath + "\n")
+            else:
+                mp3s = parse_m3u(playlist)
+                for i in reversed(entries):
+                    mp3s.insert(index,i)
+                create_m3u(mp3s, playlist)
+
         else:
             logger.warning("No mp3 files found.")
 
@@ -476,7 +467,7 @@ def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
         logger.error("ERROR occurred when processing entries.")
         logger.error("Text: {0}", sys.exc_info()[0])
 
-def parse_m3u(file_path : str | PathLike[str]) -> list[Path] | None:
+def parse_m3u(file_path : str | PathLike[str]) -> list[Mp3Entry] | None:
     with open(file_path,'r', encoding="utf-8") as infile:
 
         # All M3U files start with #EXTM3U.
@@ -487,10 +478,7 @@ def parse_m3u(file_path : str | PathLike[str]) -> list[Path] | None:
         if not line.startswith('#EXTM3U'):
             return None
 
-        # initialize playlist variables before reading file
-        playlist=[]
-        #song=track(None,None,None)
-
+        paths = []
         base_dir = Path(Path(infile.name)).parent
 
         for line in infile:
@@ -503,10 +491,13 @@ def parse_m3u(file_path : str | PathLike[str]) -> list[Path] | None:
             elif len(line) != 0:
                 # pull song path from all other, non-blank lines
                 # song.path=line
+
                 if Path(line).is_absolute():
-                    playlist.append(Path(line))
+                    paths.append(Path(line))
                 else:
-                    playlist.append(Path(base_dir, line))
+                    paths.append(Path(base_dir, line))
                 # reset the song variable so it doesn't use the same EXTINF more than once
 
+    playlist = [parse_mp3(f) for f in paths]
+    playlist = [song for song in playlist if song is not None]
     return playlist

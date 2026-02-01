@@ -180,15 +180,6 @@ msgstr "Tags"
 msgid "Analyzer"
 msgstr "Analyzer"
 
-msgid "Gemini API Key"
-msgstr "Gemini API Key"
-
-msgid "OpenAI API Key"
-msgstr "OpenAI API Key"
-
-msgid "Enable Mock Mode"
-msgstr "Enable Mock Mode"
-
 msgid "Skip Analyzed Music"
 msgstr "Skip Analyzed Music"
 
@@ -327,39 +318,6 @@ msgstr "About"
 msgid "Help"
 msgstr "Help"
 
-msgid "AI UserPrompt"
-msgstr "Task:"
-"Categorize the following piece of music for use in a role-playing game like \"The Dark Eye\" or \"Dungeons and Dragons\"."
-"Rate the piece based on the categories below with a value from {0} to {1} each."
-"\n"
-"Here is the list of categories to rate the music piece by, along with their descriptions:\n"
-"{2}"
-"\n"
-"Then, assign a few tags from the following list that fit best. No scale is necessary here:\n"
-"{3}"
-
-msgid "AI SystemPrompt"
-msgstr "You are an experienced listener of fantasy, film, and role-playing music."
-"You evaluate music as perceived by an average listener,"
-"not technically or analytically, but emotionally and scenically."
-"\n"
-"Your ratings must remain consistent across many hundreds of tracks.\n"
-"A 3 always means the same thing, regardless of which track was rated before.\n"
-"Values should be meaningfully distributed relative to each other (not everything {0} or {1}).\n"
-"Use the full scale from {0} to {1} when appropriate.\n"
-"Strictly adhere to the specified categories, and their descriptions.\n"
-"Strictly adhere to the specified tags, and their descriptions, do not use any other new tags.\n"
-"Return only JSON, without additional explanations."
-
-msgid "AI SummaryDescription"
-msgstr "A brief summary of the musical piece regarding mood (approx. 20 words)."
-
-msgid "AI CategoriesDescription"
-msgstr "List all categories and rate them on a scale from {0} to {1}"
-
-msgid "AI TagsDescription"
-msgstr "A list of tags that best apply to the musical piece."
-
 # Valence
 msgid "Valence"
 msgstr "Valence"
@@ -368,13 +326,13 @@ msgid "Valence Description"
 msgstr "The intrinsic attractiveness (positive) or averseness (negative) of an event, object, or situation."
 
 msgid "Valence Low"
-msgstr "Negative (e.g., sad, angry, stressed)"
+msgstr "Negative, sad, angry, stressed"
 
 msgid "Valence Medium"
 msgstr "Neutral"
 
 msgid "Valence High"
-msgstr "Positive (e.g., happy, calm, excited)"
+msgstr "Positive, happy, calm, excited"
 
 # Arousal
 msgid "Arousal"
@@ -384,29 +342,13 @@ msgid "Arousal Description"
 msgstr "The physiological and psychological state of being awake or reactive to stimuli, ranging from sleep to excitement."
 
 msgid "Arousal Low"
-msgstr "Low Energy (e.g., dull, sleepy, relaxed)"
+msgstr "Low Energy, dull, sleepy, relaxed"
 
 msgid "Arousal Medium"
 msgstr "Moderate Energy"
 
 msgid "Arousal High"
-msgstr "High Energy (e.g., intense, frantic, alert)"
-
-# Tempo
-msgid "Tempo"
-msgstr "Tempo"
-
-msgid "Tempo Description"
-msgstr "Tempo / Movement & Intensity"
-
-msgid "Tempo Low"
-msgstr "Calm, subtle, and very slow (stately)"
-
-msgid "Tempo Medium"
-msgstr "Moderate (fluid, neutral)"
-
-msgid "Tempo High"
-msgstr "Driving, fast, and overwhelming (epic, hectic, pulsing)"
+msgstr "High Energy, intense, frantic, alert"
 
 # Darkness
 msgid "Darkness"
@@ -424,69 +366,123 @@ msgstr "Neutral (unbiased, observant)"
 msgid "Darkness High"
 msgstr "Sinister, threatening, and nightmarish (demonic, intrigue)"
 
-# Emotional
-msgid "Emotional"
-msgstr "Emotional"
+# Tonal
+msgid "Tonal"
+msgstr "Tonal"
 
-msgid "Emotional Description"
-msgstr "Emotional Warmth & Distance"
+msgid "Tonal Description"
+msgstr "Tonal music revolves around a tonic (a home note). It follows established scales and keys that the human ear finds predictable and generally pleasant."
 
-msgid "Emotional Low"
-msgstr "Cool, distant, and objective"
+msgid "Tonal Low"
+msgstr "Unsettling, chaotic, stressful"
 
-msgid "Emotional Medium"
-msgstr "Balanced (calmly narrative)"
+msgid "Tonal Medium"
+msgstr "Unresolved, floating, ethereal"
 
-msgid "Emotional High"
-msgstr "Deeply emotional, heart-wrenching, and intimate (tragedy, farewells)"
+msgid "Tonal High"
+msgstr "Melodic, structured, emotionally clear"
 
-# Mysticism
-msgid "Mysticism"
-msgstr "Mysticism"
+# Engagement
+msgid "Engagement"
+msgstr "Engagement"
 
-msgid "Mysticism Description"
-msgstr "Supernatural vs. Mundane"
+msgid "Engagement Description"
+msgstr "Engagement measures how much a track grabs the listener’s attention, primarily through rhythmic stability, percussive strength, and predictability."
 
-msgid "Mysticism Low"
-msgstr "Mundane, down-to-earth, and earthly; tavern-ready, folksy, and acoustic"
+msgid "Engagement Low"
+msgstr "Background, ambient"
 
-msgid "Mysticism Medium"
-msgstr "Occasional magical nuances, civilized (classic-orchestral, orderly)"
+msgid "Engagement Medium"
+msgstr "Moderate energy"
 
-msgid "Mysticism High"
-msgstr "Strongly magical, transcendent, abstract, spherically alienated and otherworldly"
+msgid "Engagement High"
+msgstr "Focus, high-energy"
 
-# Tension
-msgid "Tension"
-msgstr "Tension"
 
-msgid "Tension Description"
-msgstr "Anticipation & Relaxation"
+#Aggressive
+msgid "Aggressive"
+msgstr "Aggressive"
 
-msgid "Tension Low"
-msgstr "Relaxing, resolved, and safe"
+msgid "Aggressive Description"
+msgstr "Aggressive measures the intensity, harshness, and physical impact of the audio."
 
-msgid "Tension Medium"
-msgstr "Casual (background, unexcited)"
+msgid "Aggressive Low"
+msgstr "Soft, smooth, non-threatening"
 
-msgid "Tension High"
-msgstr "High-tension, nervous, and lurking (just before combat)"
+msgid "Aggressive Medium"
+msgstr "Tense, sturdy, firm"
 
-# Heroism
-msgid "Heroism"
-msgstr "Heroism"
+msgid "Aggressive High"
+msgstr "Violent, chaotic, overwhelming"
 
-msgid "Heroism Description"
-msgstr "Grandeur & Simplicity"
 
-msgid "Heroism Low"
-msgstr "Simple, personal, intimate, and small-scale (pub, daily life)"
+#Happy
+msgid "Happy"
+msgstr "Happy"
 
-msgid "Heroism Medium"
-msgstr "Solidary (steadfast, courageous)"
+msgid "Happy Description"
+msgstr "Happy identifies music with high valence (emotional positivity). It looks for acoustic signals that humans associate with joy, safety, and celebration."
 
-msgid "Heroism High"
-msgstr "Heroic, legendary, fateful, and divine (battles, victories)"
+msgid "Happy Low"
+msgstr "Somber, serious, melancholic"
+
+msgid "Happy Medium"
+msgstr "Neutral, stoic, professional"
+
+msgid "Happy High"
+msgstr "Joyful, triumphant, vibrant"
+
+
+#Party
+msgid "Party"
+msgstr "Party"
+
+msgid "Party Description"
+msgstr "Party is heavily influenced by the presence of a steady, synthetic, or highly compressed kick drum and a repetitive rhythmic structure."
+
+msgid "Party Low"
+msgstr "Intimate, organic, non-rhythmic"
+
+msgid "Party Medium"
+msgstr "Social but grounded, Bar music"
+
+msgid "Party High"
+msgstr "High-intensity, club-like, driving"
+
+
+#Relaxed
+msgid "Relaxed"
+msgstr "Relaxed"
+
+msgid "Relaxed Description"
+msgstr "Relaxed measures the lack of tension and physical calmness in the music."
+
+msgid "Relaxed Low"
+msgstr "Tense, jarring, highly energetic"
+
+msgid "Relaxed Medium"
+msgstr "Composed and steady, Working music"
+
+msgid "Relaxed High"
+msgstr "Tranquil, meditative, serene"
+
+#Sad
+msgid "Sad"
+msgstr "Sad"
+
+msgid "Sad Description"
+msgstr "Sad measures the emotional weight and low valence of a track. It is closely linked to Melancholy and is often the acoustic opposite of Happy."
+
+msgid "Sad Low"
+msgstr "Bright, optimistic, emotionally indifferent"
+
+msgid "Sad Medium"
+msgstr "Bittersweet, nostalgic, pensive"
+
+msgid "Sad High"
+msgstr "Tragic, grief-stricken, heavy"
+
+#
 
 msgid "Grim"
 msgstr "Grim"
@@ -523,9 +519,6 @@ msgstr "Refresh"
 
 msgid "Skipping already analyzed file {0}"
 msgstr "Skipping already analyzed file {0}"
-
-msgid "AI Model"
-msgstr "AI Model"
 
 msgid "Only show score column if any filters are active."
 msgstr "Only show score column if any filters are active."

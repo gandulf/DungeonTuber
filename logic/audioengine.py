@@ -38,7 +38,7 @@ class AudioEngine(QObject):
         self._manual_stop = False
 
     def init_vlc(self, visualizer : bool = True):
-        vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
+        vis = AppSettings.value(SettingKeys.VISUALIZER, "NONE", type=str)
 
         if AppSettings.value(SettingKeys.NORMALIZE_VOLUME, True, type=bool):
             args = [

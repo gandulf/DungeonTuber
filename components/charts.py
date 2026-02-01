@@ -206,7 +206,8 @@ class RussellEmotionWidget(QWidget):
         if notify:
             self.valueChanged.emit(self.valence, self.arousal)
         self.update()
-
+    def reset(self,notify=True):
+        self.set_value(5,5,notify)
     def add_reference_points(self, points):
         self.reference_points = self.reference_points + points
         self.update()

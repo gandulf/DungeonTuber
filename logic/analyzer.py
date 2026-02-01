@@ -17,7 +17,7 @@ from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
 
 from logic.mp3 import Mp3Entry, parse_mp3, update_categories_and_tags, print_mp3_tags, list_mp3s
 
-from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_music_tags, get_categories
+from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_music_tags, get_category_keys
 
 logger = logging.getLogger("main")
 
@@ -28,7 +28,7 @@ def is_analyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     else:
         entry = parse_mp3(file_path)
 
-    return (set(get_categories()) == set(entry.categories.keys()) and entry.summary is not None
+    return (set(get_category_keys()) == set(entry.categories.keys()) and entry.summary is not None
             and entry.summary != "This is a mock summary." and not "Voxalyzer" in entry.summary)
 
 
@@ -150,7 +150,7 @@ class MockAnalyzer(Analyzer):
         selected_tags = random.sample(sorted(get_music_tags().keys()), random.randint(0, len(get_music_tags())))
 
         mock_categories = []
-        for category in get_categories():
+        for category in get_category_keys():
             mock_categories.append({
                 "category": category,
                 "scale": random.randint(CATEGORY_MIN, CATEGORY_MAX)

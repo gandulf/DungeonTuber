@@ -132,7 +132,10 @@ class Preset:
         return Preset(**data)
 
 
-_PRESETS: list[Preset] | None = None
+_PRESETS: list[Preset] | None = [
+            Preset("Grim",
+                   {CAT_VALENCE: 1, CAT_AROUSAL: 5, CAT_ENGAGEMENT: 3, CAT_AGGRESSIVE: 4, CAT_SAD: 7, CAT_RELAXED: 1})
+        ]
 
 _TAGS = []
 _MUSIC_TAGS = None
@@ -141,27 +144,13 @@ _DEFAULT_CATEGORIES = [CAT_VALENCE, CAT_AROUSAL, CAT_ENGAGEMENT, CAT_DARKNESS, C
 _MUSIC_CATEGORIES = None
 _CATEGORIES = None
 
-
-def get_presets() -> list[Preset]:
-    global _PRESETS
-    if _PRESETS is None:
-        _PRESETS = [
-            Preset(_("Grim"),
-                   {_(CAT_VALENCE): 1, _(CAT_AROUSAL): 5, _(CAT_ENGAGEMENT): 3, _(CAT_AGGRESSIVE): 4, _(CAT_SAD): 7, _(CAT_RELAXED): 1}),
-        ]
-
-    return _PRESETS
-
-
 def remove_preset(preset: Preset):
     _PRESETS.remove(preset)
     AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
 
-
 def add_preset(preset: Preset):
     _PRESETS.append(preset)
     AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
-
 
 def set_presets(presets: list[Preset]):
     global _PRESETS
@@ -193,15 +182,15 @@ def set_music_tags(tags: dict[str, str] | None):
 
 
 def get_music_category(key: str) -> MusicCategory:
-    cats = [cat for cat in get_music_categories() if cat.name == key or cat.key == key]
+    cats = [cat for cat in get_music_categories() if cat.key == key]
     return cats[0] if cats and len(cats) > 0 else None
 
 
-def get_categories() -> list[str]:
+def get_category_keys() -> list[str]:
     global _CATEGORIES
 
     if _CATEGORIES is None:
-        _CATEGORIES = [cat.name for cat in get_music_categories()]
+        _CATEGORIES = [cat.key for cat in get_music_categories()]
 
     return _CATEGORIES
 
@@ -250,6 +239,8 @@ class SettingKeys(StrEnum):
     CATEGORY_WIDGETS = "categoryWidgets"
     PRESET_WIDGETS = "presetWidgets"
     BPM_WIDGET = "bpmWidget"
+    TAGS_WIDGET ="tagsWidget"
+    GENRES_WIDGET = "genresWidget"
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"
     THEME = "theme"
@@ -259,6 +250,7 @@ class SettingKeys(StrEnum):
 
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
     DYNAMIC_SCORE_COLUMN = "dynamicScoreColumn"
+    COLUMN_INDEX_VISIBLE = "columnIndexVisible"
     COLUMN_FAVORITE_VISIBLE = "columnFavoriteVisible"
     COLUMN_SCORE_VISIBLE = "columnScoreVisible"
     COLUMN_TITLE_VISIBLE = "columnTitleVisible"
@@ -443,8 +435,8 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self.categories_tab)
         self.categories_table = QTableWidget()
         self.categories_table.setItemDelegate(SettingsDialog.SettingsTableDelegate(groups))
-        self.categories_table.setColumnCount(4)
-        self.categories_table.setHorizontalHeaderLabels([_("Category"), _("Group"), _("Description"), _("Levels (json)")])
+        self.categories_table.setColumnCount(5)
+        self.categories_table.setHorizontalHeaderLabels([_("Key"),_("Name"), _("Group"), _("Description"), _("Levels (json)")])
         self.categories_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 
         self.fill_categories()
@@ -467,10 +459,11 @@ class SettingsDialog(QDialog):
     def fill_categories(self):
         self.categories_table.setRowCount(len(get_music_categories()))
         for row, cat in enumerate(get_music_categories()):
-            self.categories_table.setItem(row, 0, QTableWidgetItem(cat.name))
-            self.categories_table.setItem(row, 1, QTableWidgetItem(cat.group))
-            self.categories_table.setItem(row, 2, QTableWidgetItem(cat.description))
-            self.categories_table.setItem(row, 3, QTableWidgetItem(json.dumps(cat.levels, ensure_ascii=False, indent=2)))
+            self.categories_table.setItem(row, 0, QTableWidgetItem(cat.key))
+            self.categories_table.setItem(row, 1, QTableWidgetItem(cat.name))
+            self.categories_table.setItem(row, 2, QTableWidgetItem(cat.group))
+            self.categories_table.setItem(row, 3, QTableWidgetItem(cat.description))
+            self.categories_table.setItem(row, 4, QTableWidgetItem(json.dumps(cat.levels, ensure_ascii=False, indent=2)))
 
         self.categories_table.resizeRowsToContents()
 
@@ -510,10 +503,11 @@ class SettingsDialog(QDialog):
     def add_category(self):
         row = self.categories_table.rowCount()
         self.categories_table.insertRow(row)
-        self.categories_table.setItem(row, 0, QTableWidgetItem(_("New Category")))
-        self.categories_table.setItem(row, 1, QTableWidgetItem(_("Group")))
-        self.categories_table.setItem(row, 2, QTableWidgetItem(_("Description")))
-        self.categories_table.setItem(row, 3, QTableWidgetItem("""{
+        self.categories_table.setItem(row, 0, QTableWidgetItem(_("Key")))
+        self.categories_table.setItem(row, 1, QTableWidgetItem(_("New Category")))
+        self.categories_table.setItem(row, 2, QTableWidgetItem(""))
+        self.categories_table.setItem(row, 3, QTableWidgetItem(_("Description")))
+        self.categories_table.setItem(row, 4, QTableWidgetItem("""{
   "1":"",
   "5":"",
   "10":""
@@ -570,17 +564,19 @@ class SettingsDialog(QDialog):
 
         _categories = []
         for row in range(self.categories_table.rowCount()):
-            cat_item = self.categories_table.item(row, 0)
-            group_item = self.categories_table.item(row, 1)
-            desc_item = self.categories_table.item(row, 2)
-            level_item = self.categories_table.item(row, 3)
+            key_item = self.categories_table.item(row, 0)
+            cat_item = self.categories_table.item(row, 1)
+            group_item = self.categories_table.item(row, 2)
+            desc_item = self.categories_table.item(row, 3)
+            level_item = self.categories_table.item(row, 4)
             if cat_item and desc_item and group_item:
-                cat = cat_item.text()
-                group = group_item.text()
-                desc = desc_item.text()
-                levels = json.loads(level_item.text())
-                if cat:
-                    _categories.append(MusicCategory(cat, desc, levels, group=group))
+                cat_key = key_item.text()
+                cat_name = cat_item.text()
+                cat_group = group_item.text()
+                cat_desc = desc_item.text()
+                cat_levels = json.loads(level_item.text())
+                if cat_name:
+                    _categories.append(MusicCategory(cat_name, cat_desc, cat_levels, group=cat_group, key = cat_key))
         set_music_categories(_categories)
 
         _tags = {}
@@ -589,9 +585,9 @@ class SettingsDialog(QDialog):
             desc_item = self.tags_table.item(row, 1)
             if tag_item and desc_item:
                 tag = tag_item.text()
-                desc = desc_item.text()
+                cat_desc = desc_item.text()
                 if tag:
-                    _tags[tag] = desc
+                    _tags[tag] = cat_desc
 
         set_music_tags(_tags)
 

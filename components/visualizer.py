@@ -34,7 +34,7 @@ class Visualizer:
 
     @classmethod
     def get_visualizer(cls, engine, visualizer=None):
-        vis = AppSettings.value(SettingKeys.VISUALIZER, "FAKE", type=str)
+        vis = AppSettings.value(SettingKeys.VISUALIZER, "NONE", type=str)
         _visualizer = None
         if vis == "VLC":
             _visualizer = VisualizerFrame(engine)
