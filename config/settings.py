@@ -104,9 +104,9 @@ class Preset:
     tags: list[str]
     genres: list[str]
 
-    def __init__(self, name: str, levels: dict[str, int], tags: list[str] = None, genres: list[str] = None):
+    def __init__(self, name: str, categories: dict[str, int], tags: list[str] = None, genres: list[str] = None):
         self.name = name
-        self.categories = levels
+        self.categories = categories
         self.tags = tags
         self.genres = genres
 
@@ -132,10 +132,7 @@ class Preset:
         return Preset(**data)
 
 
-_PRESETS: list[Preset] | None = [
-            Preset("Grim",
-                   {CAT_VALENCE: 1, CAT_AROUSAL: 5, CAT_ENGAGEMENT: 3, CAT_AGGRESSIVE: 4, CAT_SAD: 7, CAT_RELAXED: 1})
-        ]
+_PRESETS: list[Preset] = []
 
 _TAGS = []
 _MUSIC_TAGS = None
@@ -152,10 +149,13 @@ def add_preset(preset: Preset):
     _PRESETS.append(preset)
     AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
 
+def get_presets():
+    return _PRESETS
+
 def set_presets(presets: list[Preset]):
     global _PRESETS
     if presets is None:
-        _PRESETS = None
+        _PRESETS = []
         AppSettings.remove(SettingKeys.PRESETS)
     else:
         presets = [preset for preset in presets if preset.name is not None]

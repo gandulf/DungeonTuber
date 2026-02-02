@@ -44,15 +44,16 @@ from PySide6.QtWidgets import (
     QListView, QToolButton, QAbstractScrollArea, QSizePolicy, QFileIconProvider, QScrollArea
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
-    QPersistentModelIndex, QFileInfo, QEvent, QRect, QTimer, QObject, QMimeData, QByteArray, QDataStream, QIODevice, QDir
+    QPersistentModelIndex, QFileInfo, QEvent, QRect, QTimer, QObject, QMimeData, QByteArray, QDataStream, QIODevice, QDir, QKeyCombination
 from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QKeyEvent, QFont, QFontMetrics, \
     QActionGroup, QDropEvent
 
 from vlc import MediaPlayer
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, \
-    CATEGORY_MAX, CATEGORY_MIN, CAT_VALENCE, CAT_AROUSAL, _PRESETS, MusicCategory, set_music_categories, \
-    get_music_categories, set_music_tags, get_music_tags, set_presets, add_preset, remove_preset, reset_presets, get_music_category, get_category_keys
+    CATEGORY_MAX, CATEGORY_MIN, CAT_VALENCE, CAT_AROUSAL, MusicCategory, set_music_categories, \
+    get_music_categories, set_music_tags, get_music_tags, set_presets, add_preset, remove_preset, reset_presets, get_music_category, get_category_keys, \
+    get_presets
 from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, clear_layout, \
     DOWNLOAD_LINK, is_frozen
@@ -334,21 +335,19 @@ class EffectWidget(QWidget):
         self.player_layout.setSpacing(0)
 
         self.btn_play = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
-        self.btn_play.setProperty("class", "play")
+        self.btn_play.setProperty("cssClass", "play small")
+        self.btn_play.setProperty("cssSize", "small")
         self.btn_play.setCheckable(True)
         self.btn_play.setEnabled(False)
         self.btn_play.setIcon(app_theme.create_play_pause_icon())
         self.btn_play.clicked.connect(self.toogle_play)
         self.btn_play.setShortcut("Ctrl+E")
-        self.btn_play.setFixedSize(app_theme.button_size_small)
-        self.btn_play.setIconSize(app_theme.icon_size_small)
 
         self.volume_slider = VolumeSlider()
         self.volume_slider.volume_changed.connect(self.on_volume_changed)
-        self.volume_slider.set_button_size(app_theme.button_size_small)
-        self.volume_slider.set_icon_size(app_theme.icon_size_small)
-        self.volume_slider.slider_vol.setFixedHeight(app_theme.button_height_small)
-        self.player_layout.addWidget(self.btn_play, 0)
+        self.volume_slider.btn_volume.setProperty("cssClass","mini")
+        self.volume_slider.slider_vol.setProperty("cssClass", "buttonSmall")
+        self.player_layout.addWidget(self.btn_play, 0, Qt.AlignmentFlag.AlignBottom)
         self.player_layout.addLayout(self.volume_slider, 1)
 
         open_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), text=_("Open Directory"), parent=self)
@@ -363,14 +362,16 @@ class EffectWidget(QWidget):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
         self.headerLabel = IconLabel(QIcon.fromTheme("effects"), _("Effects"))
+        self.headerLabel.set_icon_size(app_theme.icon_size_small)
         self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
-        self.headerLabel.text_label.setStyleSheet(f"font-size: {app_theme.font_size}pt; font-weight: bold;")
-        self.headerLabel.setFixedHeight(app_theme.button_height_small)
+        self.headerLabel.text_label.setProperty("cssClass","header")
 
         list_view = QToolButton(icon=QIcon.fromTheme("list"))
+        list_view.setProperty("cssClass","mini")
         list_view.clicked.connect(self.list_widget.set_list_view)
 
         grid_view = QToolButton(icon=QIcon.fromTheme("grid"))
+        grid_view.setProperty("cssClass", "mini")
         grid_view.clicked.connect(self.list_widget.set_grid_view)
 
         self.headerLabel.add_widget(list_view)
@@ -394,6 +395,10 @@ class EffectWidget(QWidget):
         if event.type() == QEvent.Type.PaletteChange:
             self.headerLabel.set_icon(QIcon.fromTheme("effects"))
             self.btn_play.setIcon(app_theme.create_play_pause_icon())
+        elif event.type() == QEvent.Type.FontChange:
+            self.headerLabel.set_icon_size(app_theme.icon_size_small)
+
+
             # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
 
     def toogle_play(self):
@@ -755,31 +760,22 @@ class Player(QWidget):
         next_action.triggered.connect(self.next_track)
 
         self.btn_prev = QToolButton()
+        self.btn_prev.setProperty("cssClass","small")
         self.btn_prev.setDefaultAction(prev_action)
         self.btn_play = QToolButton()
-        self.btn_play.setProperty("class", "play")
+        self.btn_play.setProperty("cssClass", "play")
         self.btn_play.setDefaultAction(self.play_action)
         self.btn_next = QToolButton()
+        self.btn_next.setProperty("cssClass", "small")
         self.btn_next.setDefaultAction(next_action)
 
-        for btn in [self.btn_prev, self.btn_play, self.btn_next]:
-            btn.setFixedSize(app_theme.button_size)
-            btn.setIconSize(app_theme.icon_size)
-
-        for btn in [self.btn_prev, self.btn_next]:
-            btn.setFixedSize(app_theme.button_size_small)
-            btn.setIconSize(app_theme.icon_size_small)
-
         self.btn_repeat = RepeatButton(AppSettings.value(SettingKeys.REPEAT_MODE, 0, type=int))
-        self.btn_repeat.setFixedSize(app_theme.button_size)
-        self.btn_repeat.setIconSize(app_theme.icon_size)
         self.btn_repeat.value_changed.connect(self.on_repeat_mode_changed)
 
         self.repeat_mode_changed = self.btn_repeat.value_changed
 
         self.slider_vol = VolumeSlider(AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
-        self.slider_vol.set_button_size(app_theme.button_size_small)
-        self.slider_vol.set_icon_size(app_theme.icon_size_small)
+        self.slider_vol.btn_volume.setProperty("cssClass","small")
         self.slider_vol.slider_vol.setMinimumWidth(200)
 
         self.slider_vol.volume_changed.connect(self.adjust_volume)
@@ -992,23 +988,27 @@ class DirectoryWidget(QWidget):
         self.directory_layout.setContentsMargins(0, 0, 0, 0)
         self.directory_layout.setSpacing(0)
 
-        self.headerLabel = IconLabel(QIcon.fromTheme("files"), _("Files"))
+        self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"))
+        self.headerLabel.set_icon_size(app_theme.icon_size_small)
         self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
-        self.headerLabel.text_label.setStyleSheet(f"font-size: {app_theme.font_size}pt; font-weight: bold;")
-        self.headerLabel.setFixedHeight(app_theme.button_height_small)
+        self.headerLabel.text_label.setProperty("cssClass","header")
 
         up_view_button = QToolButton()
+        up_view_button.setProperty("cssClass","mini")
         up_view_button.setDefaultAction(self.directory_tree.go_parent_action)
         self.headerLabel.insert_widget(0, up_view_button)
 
         open_button = QToolButton()
+        open_button.setProperty("cssClass", "mini")
         open_button.setDefaultAction(self.directory_tree.open_action)
         self.headerLabel.insert_widget(1, open_button)
 
         set_home_button = QToolButton()
+        set_home_button.setProperty("cssClass", "mini")
         set_home_button.setDefaultAction(self.directory_tree.set_home_action)
 
         clear_home_button = QToolButton()
+        clear_home_button.setProperty("cssClass", "mini")
         clear_home_button.setDefaultAction(self.directory_tree.clear_home_action)
 
         self.headerLabel.add_widget(set_home_button)
@@ -1017,6 +1017,11 @@ class DirectoryWidget(QWidget):
         self.directory_layout.addWidget(self.headerLabel)
         self.directory_layout.addWidget(self.directory_tree)
 
+    def changeEvent(self, event, /):
+        if event.type() == QEvent.Type.PaletteChange:
+            self.headerLabel.set_icon(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
+        elif event.type() == QEvent.Type.FontChange:
+            self.headerLabel.set_icon_size(app_theme.icon_size_small)
 
 class DirectoryTree(QTreeView):
     open = Signal(QModelIndex)
@@ -1040,10 +1045,10 @@ class DirectoryTree(QTreeView):
         self.go_parent_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoUp), _("Go to parent"), self)
         self.go_parent_action.triggered.connect(self.do_parent_action)
 
-        self.set_home_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoHome), _("Set As Home"), self)
+        self.set_home_action = QAction(QIcon.fromTheme("house-user"), _("Set As Home"), self)
         self.set_home_action.triggered.connect(self.do_set_home_action)
 
-        self.clear_home_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditClear), _("Clear Home"), self)
+        self.clear_home_action = QAction(QIcon.fromTheme("house-clear"), _("Clear Home"), self)
         self.clear_home_action.triggered.connect(self.do_clear_home_action)
         self.clear_home_action.setVisible(False)
 
@@ -1461,7 +1466,7 @@ class SongTableModel(QAbstractTableModel):
                 return QSize(40, height)
 
         elif role == Qt.ItemDataRole.TextAlignmentRole:
-            if index.column() >= SongTableModel.SCORE_COL or index.column() == SongTableModel.BPM_COL or index.column() == SongTableModel.INDEX_COL:
+            if index.column() >= SongTableModel.SCORE_COL or index.column() in[SongTableModel.BPM_COL, SongTableModel.INDEX_COL, SongTableModel.FAV_COL]:
                 return Qt.AlignmentFlag.AlignCenter
         elif role == Qt.ItemDataRole.BackgroundRole:
             if index.column() == SongTableModel.SCORE_COL:
@@ -1818,13 +1823,8 @@ class SongTable(QTableView):
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
 
-
         self.verticalHeader().setVisible(False)
-
-        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
-            self.verticalHeader().setDefaultSectionSize(56)
-        else:
-            self.verticalHeader().setDefaultSectionSize(28)
+        self.update_font_sizes()
 
         self.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self.show_header_context_menu)
@@ -1839,6 +1839,14 @@ class SongTable(QTableView):
         self.setStyleSheet('QTableView::item {padding: 0px 5px;}')
         self.doubleClicked.connect(self.on_table_double_click)
 
+    def update_font_sizes(self):
+        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
+            self.verticalHeader().setDefaultSectionSize((app_theme.font_size * 4.0) + 2)
+        else:
+            self.verticalHeader().setDefaultSectionSize((app_theme.font_size * 2.0) + 2)
+
+    def changeEvent(self, event: QEvent, /):
+        self.update_font_sizes()
 
     def on_sort_changed(self, column, order_by):
         self.setDragEnabled(column ==0)
@@ -2007,10 +2015,7 @@ class SongTable(QTableView):
         for col, category in enumerate(available_categories):
             self.setColumnHidden(SongTableModel.CAT_COL + col, not self.is_column_visible(category.name))
 
-        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
-            self.verticalHeader().setDefaultSectionSize(56)
-        else:
-            self.verticalHeader().setDefaultSectionSize(28)
+        self.update_font_sizes()
 
     def mp3_datas(self) -> list[Mp3Entry]:
         if self.model() is not None:
@@ -2195,19 +2200,8 @@ class FilterWidget(QWidget):
         self.bpm_widget = BPMSlider()
         self.bpm_widget.value_changed.connect(self.on_bpm_changed)
 
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
-
-        save_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs), _("Save as Preset"), self)
-        save_preset_action.triggered.connect(self.save_preset_action)
-        self.addAction(save_preset_action)
-
-        clear_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditClear), _("Clear Values"), self)
-        clear_preset_action.triggered.connect(self.clear_sliders)
-        self.addAction(clear_preset_action)
-
-        reset_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRestore), _("Reset Presets"), self)
-        reset_preset_action.triggered.connect(self.reset_preset_action)
-        self.addAction(reset_preset_action)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
 
         self.filter_layout = QVBoxLayout(self)
         self.filter_layout.setObjectName("filter_layout")
@@ -2252,7 +2246,8 @@ class FilterWidget(QWidget):
         label_font.setBold(True)
         tags_label = QLabel(_("Tags"))
         tags_label.setFont(label_font)
-        tags_label.setStyleSheet("font-size:7pt; text-transform:uppercase")
+        tags_label.setProperty("cssClass","mini")
+        tags_label.setStyleSheet("text-transform:uppercase")
         tags_widget_layout.addWidget(tags_label)
         tags_widget_layout.addLayout(self.tags_layout)
 
@@ -2266,7 +2261,8 @@ class FilterWidget(QWidget):
 
         genres_label = QLabel(_("Genres"))
         genres_label.setFont(label_font)
-        genres_label.setStyleSheet("font-size:7pt; text-transform:uppercase")
+        genres_label.setProperty("cssClass", "mini")
+        genres_label.setStyleSheet("text-transform:uppercase")
         genres_widget_layout.addWidget(genres_label)
         genres_widget_layout.addLayout(self.genres_layout)
 
@@ -2277,6 +2273,39 @@ class FilterWidget(QWidget):
         self.update_tags()
         self.update_genres()
         self.update_presets()
+
+
+    def show_context_menu(self, point):
+        # index = self.indexAt(point)
+        menu = QMenu(self)
+
+        if len(get_presets())>0:
+            presets_menu = QMenu(_("Presets"), icon=QIcon.fromTheme("russel"))
+            for preset in get_presets():
+                add_action = presets_menu.addAction(preset.name)
+                add_action.triggered.connect(functools.partial(self.select_preset, preset))
+
+            menu.addMenu(presets_menu)
+            menu.addSeparator()
+
+        save_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs), _("Save as Preset"), self)
+        save_preset_action.triggered.connect(self.save_preset_action)
+        menu.addAction(save_preset_action)
+
+        clear_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditClear), _("Clear Values"), self)
+        clear_preset_action.triggered.connect(self.clear_sliders)
+        menu.addAction(clear_preset_action)
+
+        reset_preset_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRestore), _("Reset Presets"), self)
+        reset_preset_action.triggered.connect(self.reset_preset_action)
+        menu.addAction(reset_preset_action)
+
+
+
+        menu.show()
+        menu.exec(self.mapToGlobal(point))
+
+
 
     def build_sliders(self, categories: list[MusicCategory], group: str = None):
         sliders_widget = QWidget()
@@ -2494,10 +2523,9 @@ class FilterWidget(QWidget):
         if AppSettings.value(SettingKeys.PRESET_WIDGETS, True, type=bool):
             self.presets_widget.setVisible(True)
             self.presets_layout.addStretch()
-            for preset in _PRESETS:
+            for preset in get_presets():
                 button = QPushButton(text=preset.name)
-                button.setFixedHeight(app_theme.button_height_small)
-                # button.setIconSize(app_theme.icon_size_small)
+                button.setProperty("cssClass","small")
                 button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
                 remove_preset = QAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Remove"), self)
@@ -2513,15 +2541,13 @@ class FilterWidget(QWidget):
                 self.presets_layout.addWidget(button)
 
             save_preset = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
+            save_preset.setProperty("cssClass", "small")
             save_preset.clicked.connect(self.save_preset_action)
-            save_preset.setFixedSize(app_theme.button_size_small)
-            # save_preset.setIconSize(app_theme.icon_size_small)
             self.presets_layout.addWidget(save_preset)
 
             clear_preset = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.EditClear))
+            clear_preset.setProperty("cssClass", "small")
             clear_preset.clicked.connect(self.clear_sliders)
-            clear_preset.setFixedSize(app_theme.button_size_small)
-            # clear_preset.setIconSize(app_theme.icon_size_small)
             self.presets_layout.addWidget(clear_preset)
         else:
             self.presets_widget.setVisible(False)
@@ -2811,17 +2837,20 @@ class MusicPlayer(QMainWindow):
         self.effects_tree_action.triggered.connect(self.toggle_effects_tree)
         view_menu.addAction(self.effects_tree_action)
 
-        font_size_small_action = QAction(_("Small"), self)
+        font_size_small_action = QAction(_("Smaller"), self)
         font_size_small_action.setCheckable(True)
-        font_size_small_action.triggered.connect(lambda: setattr(app_theme, 'font_size', 9))
+        font_size_small_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Minus))
+        font_size_small_action.triggered.connect(lambda: setattr(app_theme, 'font_size', app_theme.font_size - 1.0))
 
         font_size_medium_action = QAction(_("Medium"), self)
         font_size_medium_action.setCheckable(True)
+        font_size_medium_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_0))
         font_size_medium_action.triggered.connect(lambda: setattr(app_theme, 'font_size', 10.5))
 
-        font_size_large_action = QAction(_("Large"), self)
+        font_size_large_action = QAction(_("Larger"), self)
         font_size_large_action.setCheckable(True)
-        font_size_large_action.triggered.connect(lambda: setattr(app_theme, 'font_size', 12))
+        font_size_large_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Plus))
+        font_size_large_action.triggered.connect(lambda: setattr(app_theme, 'font_size', app_theme.font_size + 1.0))
 
         font_size_group = QActionGroup(self, exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
         font_size_group.addAction(font_size_small_action)
@@ -2910,6 +2939,10 @@ class MusicPlayer(QMainWindow):
         about_action = QAction(_("About"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.HelpAbout))
         about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(about_action)
+
+    def change_font_size(self, change:float):
+        current_size = app_theme.font_size
+        setattr(app_theme, "font_size", current_size+change)
 
     def get_first_slider(self):
         if len(self.filter_widget.sliders.values()) > 0:
@@ -3071,13 +3104,16 @@ class MusicPlayer(QMainWindow):
         # Table Widget for Playlist
 
         self.table_tabs = QTabWidget()
+        self.table_tabs.tabBar().setMovable(True)
         self.table_tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table_tabs.tabBar().customContextMenuRequested.connect(self.show_tabs_context_menu)
         self.table_tabs.tabBar().setAutoHide(True)
-        self.table_tabs.setMovable(False)
         self.table_tabs.setTabsClosable(True)
         self.table_tabs.currentChanged.connect(self.table_tab_changed)
         self.table_tabs.tabCloseRequested.connect(self.table_tab_close)
+        self.table_tabs.tabBar().tabMoved.connect(self.table_tab_moved)
+
+        self.add_table_tab("Welcome", QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
 
         main_layout.addWidget(self.table_tabs, 2)
 
@@ -3097,6 +3133,7 @@ class MusicPlayer(QMainWindow):
         self.analyzer.result.connect(self.result_status_label)
 
         self.init_main_menu()
+
 
     def show_tabs_context_menu(self, position):
         # 4. Identify which tab was clicked
@@ -3141,6 +3178,10 @@ class MusicPlayer(QMainWindow):
             self.status_progress.setVisible(progress)
 
     def add_table_tab(self, name: str, icon: QIcon) -> SongTable:
+        current_table = self.current_table()
+        if current_table is not None and current_table.playlist is None and current_table.directory is None:
+            self.table_tabs.removeTab(self.table_tabs.currentIndex())
+
         table = SongTable(self.analyzer, self)
 
         table.play_track.connect(self.play_track)
@@ -3165,6 +3206,9 @@ class MusicPlayer(QMainWindow):
         self.table_tabs.removeTab(index)
         self.table_tabs.tabBar().setVisible(self.table_tabs.count() > 1)
 
+        AppSettings.setValue(SettingKeys.OPEN_TABLES, self.get_open_tables())
+
+    def table_tab_moved(self, fromIndex:int, toIndex:int):
         AppSettings.setValue(SettingKeys.OPEN_TABLES, self.get_open_tables())
 
     def update_category_values(self):
@@ -3376,6 +3420,8 @@ class MusicPlayer(QMainWindow):
 
     def close_tables(self):
         self.table_tabs.clear()
+        self.add_table_tab("Welcome", QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
+
     def reload_table(self, index: int):
         table = self.table(index)
 

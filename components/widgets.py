@@ -40,7 +40,8 @@ class StarRating:
 
             rect = rect.adjusted(5, 5, -5, -5)
             y_offset = (rect.height() - PAINTING_SCALE_FACTOR) / 2
-            painter.translate(rect.x(), rect.y() + y_offset)
+            x_offset = (rect.width() - PAINTING_SCALE_FACTOR) / 2
+            painter.translate(rect.x()+x_offset, rect.y() + y_offset)
             painter.scale(PAINTING_SCALE_FACTOR, PAINTING_SCALE_FACTOR)
 
             if filled:
@@ -69,6 +70,7 @@ class IconLabel(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
 
+        self.icon = icon
         self.icon_label = QLabel()
         if icon is not None:
             self.icon_label.setPixmap(icon.pixmap(self.icon_size))
@@ -86,6 +88,9 @@ class IconLabel(QWidget):
 
         if final_stretch:
             self.layout.addStretch()
+
+    def set_icon_size(self, size:QSize):
+        self.icon_label.setPixmap(self.icon.pixmap(size))
 
     def add_widget(self, widget:QWidget, stretch: int = 0):
         self.layout.addWidget(widget,stretch)
@@ -131,7 +136,7 @@ class FeatureOverlay(QWidget):
 
         # Help text label
         self.label = QLabel(self)
-        self.label.setStyleSheet(f"color: white; font-size: 13pt;")
+        self.label.setStyleSheet("color: white;")
         self.label.setWordWrap(True)
         self.label.setContentsMargins(8,8,8,8)
         self.label.setTextFormat(Qt.TextFormat.RichText)

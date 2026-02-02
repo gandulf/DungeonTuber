@@ -1,7 +1,7 @@
 import string
 
 from PySide6.QtCore import QObject, Property, Qt, QSize
-from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon
+from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon, QFont
 from PySide6.QtWidgets import QApplication, QProxyStyle, QStyle
 
 from config.settings import AppSettings, SettingKeys
@@ -34,7 +34,7 @@ class AppTheme(QObject):
     _color_cache : dict[string,QColor] = {}
     _brush_cache : dict[string,QBrush] = {}
 
-    _small_factor = 0.7
+    _small_factor = 0.6
 
 
 
@@ -42,20 +42,28 @@ class AppTheme(QObject):
         super().__init__()
         self._font_size : float = AppSettings.value(SettingKeys.FONT_SIZE, 10.5, type=int) # Default size
         self._font_size_small : float = self._font_size * 0.8  # Small size
+        self._calculate_sizes()
+
+        self.light_palette = self.get_light_mode_palette()
+        self.dark_palette = self.get_dark_mode_palette()
+
+    def _calculate_sizes(self):
+        self._font_size_small = self._font_size * 0.8  # Small size
+
         self._icon_width = _pt_to_px(self._font_size * 2)
         self._icon_height = _pt_to_px(self._font_size * 2)
-        self._icon_size =  QSize(self._icon_width,self._icon_height)
-        self._icon_size_small = QSize(int(self._icon_width * self._small_factor),int(self._icon_height* self._small_factor))
+        self._icon_size = QSize(self._icon_width, self._icon_height)
+
+        self._icon_width_small = int(self._icon_width * self._small_factor)
+        self._icon_height_small =  int(self._icon_height * self._small_factor)
+        self._icon_size_small = QSize(self._icon_width_small, self._icon_height_small)
 
         self._button_width = _pt_to_px(self._font_size * 4)
         self._button_height = _pt_to_px(self._font_size * 4)
         self._button_size = QSize(self._button_width, self._button_height)
-        self._button_height_small =int(self._button_height * self._small_factor)
+        self._button_height_small = int(self._button_height * self._small_factor)
         self._button_width_small = int(self._button_width * self._small_factor)
         self._button_size_small = QSize(self._button_width_small, self._button_height_small)
-
-        self.light_palette = self.get_light_mode_palette()
-        self.dark_palette = self.get_dark_mode_palette()
 
     @Property(int)
     def icon_size(self) -> QSize:
@@ -82,6 +90,10 @@ class AppTheme(QObject):
         return self._button_height_small
 
     @Property(int)
+    def button_width_small(self) -> int:
+        return self._button_width_small
+
+    @Property(int)
     def button_size_small(self) -> QSize:
         return self._button_size_small
 
@@ -97,7 +109,9 @@ class AppTheme(QObject):
     def font_size(self, size):
         AppSettings.setValue(SettingKeys.FONT_SIZE, size)
         self._font_size = size
-        self._font_size_small = self._font_size * 0.8  # Small size
+
+        self._calculate_sizes()
+
         # Re-apply the stylesheet to trigger a global update
         self.apply_stylesheet()
 
@@ -242,20 +256,69 @@ class AppTheme(QObject):
     def apply_stylesheet(self):
         theme = self.theme()
 
+        global_font = QFont()
+        global_font.setPointSizeF(self.font_size)
+        self.application.setFont(global_font)
+
         style = f"""
-                    QWidget {{
-                        font-size: {self.font_size}pt;
+                    QPushButton[cssClass~="play"]::checked, QToolButton[cssClass~="play"]::checked {{
+                        background-color: rgb(0, 102, 255);                        
                     }}
                     
-                    QPushButton[class="play"]::checked, QToolButton[class="play"]::checked {{
-                        background-color: rgb(0, 102, 255);                        
+                    QLabel[cssClass~="header"] {{
+                        font-size: {app_theme._font_size}pt;
+                        font-weight: bold;
+                    }}
+                    
+                    QLabel[cssClass~="small"] {{
+                        font-size: {app_theme._font_size_small}pt;                    
+                    }}
+                    
+                    QLabel[cssClass~="mini"] {{
+                        font-size: {app_theme._font_size_small * 0.8}pt;                    
+                    }}
+                    
+                    QSlider[cssClass="button"] {{                                                                        
+                        height: {self._button_height}px;
+                    }}
+                    
+                    QSlider[cssClass="buttonSmall"] {{                                                                       
+                        height: {self._button_height_small + 4}px;
+                    }}
+                    
+                    QToolButton {{                                                 
+                        width: {self._button_width}px;                        
+                        height: {self._button_height}px;
+                        qproperty-iconSize: {self._icon_width}px;
+                    }}
+                    
+                    QToolButton[cssClass~="small"]  {{                        
+                        width: {self._button_width_small}px;                        
+                        height: {self._button_height_small}px;
+                        qproperty-iconSize: {self._icon_width_small}px;
+                    }}
+                    QPushButton[cssClass~="small"]  {{                                                                                                                        
+                        height: {self._button_height_small}px;
+                        qproperty-iconSize: {self._icon_width_small}px;
                     }}                    
+                    
+                    QToolButton[cssClass~="mini"] {{                                                                        
+                        width: {int(self._button_width_small * 0.7)}px;                        
+                        height: {int(self._button_height_small * 0.7)}px;
+                        qproperty-iconSize: {int(self._icon_width_small)}px;
+                    }}                    
+                    
+                    QPushButton[cssClass~="mini"] {{                                                                                                                        
+                        height: {int(self._button_height_small * 0.7)}px;
+                        qproperty-iconSize: {int(self._icon_width_small)}px;
+                    }}
+                    
+                    
                 """
 
         QIcon.setThemeName(theme)
 
         if theme == "LIGHT":
-
             self.application.setPalette(self.get_light_mode_palette())
         else:
             self.application.setPalette(self.get_dark_mode_palette())

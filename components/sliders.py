@@ -796,8 +796,6 @@ class VolumeSlider(QHBoxLayout):
         toggle_mute_action.triggered.connect(self.toggle_mute)
 
         self.btn_volume = QToolButton()
-        self.btn_volume.setFixedSize(app_theme.button_size)
-        self.btn_volume.setIconSize(app_theme.icon_size)
         self.btn_volume.setDefaultAction(toggle_mute_action)
         self.btn_volume.setShortcutEnabled(True)
         self._update_volume_icon(value)
@@ -807,7 +805,7 @@ class VolumeSlider(QHBoxLayout):
         self.slider_vol.setRange(0, 150)
         self.slider_vol.setValue(value)
         self.slider_vol.setMinimumWidth(100)
-        self.slider_vol.setFixedHeight(app_theme.button_size.height())
+        self.slider_vol.setProperty("cssClass","button")
         self.slider_vol.max_glow_size = 2
         self.slider_vol.valueChanged.connect(self._on_value_changed)
         self.slider_vol.setStyle(VolumeSliderStyle())
