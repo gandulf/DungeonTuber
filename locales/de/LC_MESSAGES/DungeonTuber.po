@@ -54,14 +54,14 @@ msgstr "Verzeichnisbaum"
 msgid "Font Size"
 msgstr "Schriftgröße"
 
-msgid "Small"
-msgstr "Klein"
+msgid "Smaller"
+msgstr "Kleiner"
 
 msgid "Medium"
 msgstr "Mittel"
 
-msgid "Large"
-msgstr "Groß"
+msgid "Larger"
+msgstr "Größer"
 
 msgid "Visualizer"
 msgstr "Visualisierung"
@@ -98,6 +98,9 @@ msgstr "Entfernen"
 
 msgid "Clear Values"
 msgstr "Filter zurücksetzen"
+
+msgid "Presets"
+msgstr "Presets"
 
 msgid "Reset Presets"
 msgstr "Presets zurücksetzen"
@@ -192,17 +195,8 @@ msgstr "MP3-Titel statt Dateinamen verwenden"
 msgid "Dynamic Category Columns"
 msgstr "Dynamische Kategoriespalten"
 
-msgid "Favorite Column Visible"
-msgstr "Spalte 'Favoriten' sichtbar"
-
-msgid "Title Column Visible"
-msgstr "Spalte 'Titel' sichtbar"
-
-msgid "Artist Column Visible"
-msgstr "Spalte 'Interpret' sichtbar"
-
-msgid "Album Column Visible"
-msgstr "Spalte 'Album' sichtbar"
+msgid "Dynamic Score Column"
+msgstr "Dynamische Bewertungsspalte"
 
 msgid "Summary Visible"
 msgstr "Zusammenfassung sichtbar"

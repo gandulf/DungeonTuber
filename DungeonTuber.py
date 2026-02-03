@@ -327,7 +327,7 @@ class EffectWidget(QWidget):
 
         self.engine = AudioEngine(False)
 
-        self.list_widget = EffectList(list_mode=list_mode)
+        self.list_widget = EffectList(self, list_mode=list_mode)
         self.list_widget.doubleClicked.connect(self.on_item_double_clicked)
 
         self.player_layout = QHBoxLayout()
@@ -336,7 +336,6 @@ class EffectWidget(QWidget):
 
         self.btn_play = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
         self.btn_play.setProperty("cssClass", "play small")
-        self.btn_play.setProperty("cssSize", "small")
         self.btn_play.setCheckable(True)
         self.btn_play.setEnabled(False)
         self.btn_play.setIcon(app_theme.create_play_pause_icon())
@@ -354,10 +353,10 @@ class EffectWidget(QWidget):
         open_dir.triggered.connect(self.pick_effects_directory)
         self.addAction(open_dir)
 
-        self.refresh_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), text=_("Refresh"), parent=self)
-        self.refresh_dir.triggered.connect(self.refresh_directory)
-        self.refresh_dir.setVisible(effects_dir is not None)
-        self.addAction(self.refresh_dir)
+        self.refresh_dir_action = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), text=_("Refresh"), parent=self)
+        self.refresh_dir_action.triggered.connect(self.refresh_directory)
+        self.refresh_dir_action.setVisible(effects_dir is not None)
+        self.addAction(self.refresh_dir_action)
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
@@ -444,7 +443,7 @@ class EffectWidget(QWidget):
                                                      dir=AppSettings.value(SettingKeys.EFFECTS_DIRECTORY))
         if directory:
             AppSettings.setValue(SettingKeys.EFFECTS_DIRECTORY, directory)
-            self.refresh_dir.setVisible(True)
+            self.refresh_dir_action.setVisible(True)
             self.load_directory(directory)
 
 
@@ -608,7 +607,7 @@ class EffectList(QListView):
                     size.setHeight(48)
             return size
 
-    def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode, parent=None):
+    def __init__(self, parent=None, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__(parent)
 
         self.setItemDelegate(EffectList.EffectListItemDelegate(parent=self))
@@ -629,6 +628,12 @@ class EffectList(QListView):
     def load_effects(self, data: list[Mp3Entry]):
         self.table_model = EffectTableModel(data)
         self.proxy_model.setSourceModel(self.table_model)
+
+    def changeEvent(self, event, /):
+        if event.type() == QEvent.Type.FontChange:
+            list_font = self.font()
+            list_font.setPointSizeF(app_theme.font_size)
+            self.setFont(list_font)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -703,7 +708,7 @@ class Player(QWidget):
 
         self.player_layout = QVBoxLayout(self)
         self.player_layout.setObjectName("player_layout")
-        self.player_layout.setSpacing(8)
+        self.player_layout.setSpacing(app_theme.spacing)
 
         self.engine = audioEngine
         self.engine.state_changed.connect(self.on_playback_state_changed)
@@ -721,9 +726,9 @@ class Player(QWidget):
         self.seeker_layout.addWidget(self.track_label)
 
         # --- Progress Bar and Time Labels ---
-        progress_layout = QHBoxLayout()
-        progress_layout.setObjectName("progress_layout")
-        progress_layout.setSpacing(8)
+        self.progress_layout = QHBoxLayout()
+        self.progress_layout.setObjectName("progress_layout")
+        self.progress_layout.setSpacing(app_theme.spacing)
         self.time_label = QLabel("00:00")
         self.progress_slider = JumpSlider(Qt.Orientation.Horizontal)
         self.progress_slider.setRange(0, 1000)
@@ -734,17 +739,17 @@ class Player(QWidget):
         self.progress_slider.sliderReleased.connect(self.seek_position)
         self.progress_slider.valueChanged.connect(self.jump_to_position)
 
-        progress_layout.addWidget(self.time_label)
-        progress_layout.addWidget(self.progress_slider)
-        progress_layout.addWidget(self.duration_label)
+        self.progress_layout.addWidget(self.time_label)
+        self.progress_layout.addWidget(self.progress_slider)
+        self.progress_layout.addWidget(self.duration_label)
 
-        self.seeker_layout.addLayout(progress_layout)
+        self.seeker_layout.addLayout(self.progress_layout)
 
         # --- End Progress Bar ---
 
         controls_widget = QWidget()
         self.controls_layout = QHBoxLayout(controls_widget)
-        self.controls_layout.setSpacing(8)
+        self.controls_layout.setSpacing(app_theme.spacing)
 
         prev_action = QAction(self.icon_prev, _("Previous"), self)
         prev_action.setShortcut("Ctrl+B")
@@ -784,7 +789,6 @@ class Player(QWidget):
         self.controls_layout.addWidget(self.btn_play)
         self.controls_layout.addWidget(self.btn_prev, alignment=Qt.AlignmentFlag.AlignBottom)
         self.controls_layout.addWidget(self.btn_next, alignment=Qt.AlignmentFlag.AlignBottom)
-        self.controls_layout.addSpacing(8)
 
         self.visualizer = Visualizer.get_visualizer(self.engine)
         if isinstance(self.visualizer, EmptyVisualizerWidget):
@@ -793,8 +797,6 @@ class Player(QWidget):
             self.player_layout.insertLayout(0, self.seeker_layout)
             self.controls_layout.addWidget(self.visualizer, 2)
 
-        # controls_layout.addWidget(self.visualizer, 1)
-        self.controls_layout.addSpacing(8)
         self.controls_layout.addLayout(self.slider_vol)
         self.controls_layout.addWidget(self.btn_repeat)
         self.setBackgroundRole(QPalette.ColorRole.Midlight)
@@ -824,9 +826,9 @@ class Player(QWidget):
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.ApplicationFontChange:
-            for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
-                btn.setFixedSize(app_theme.button_size)
-                btn.setIconSize(app_theme.icon_size)
+            self.player_layout.setSpacing(app_theme.spacing)
+            self.progress_layout.setSpacing(app_theme.spacing)
+            self.controls_layout.setSpacing(app_theme.spacing)
 
         if event.type() == QEvent.Type.PaletteChange:
             self._reload_icons()
@@ -982,7 +984,7 @@ class DirectoryWidget(QWidget):
 
         self.player = player
         self.media_player = media_player
-        self.directory_tree = DirectoryTree(self.player, self.media_player)
+        self.directory_tree = DirectoryTree(self, self.player, self.media_player)
 
         self.directory_layout = QVBoxLayout(self)
         self.directory_layout.setContentsMargins(0, 0, 0, 0)
@@ -1026,7 +1028,7 @@ class DirectoryWidget(QWidget):
 class DirectoryTree(QTreeView):
     open = Signal(QModelIndex)
 
-    def __init__(self, player: Player, media_player: MediaPlayer, parent=None):
+    def __init__(self,parent,  player: Player, media_player: MediaPlayer, ):
         super().__init__(parent)
         self.player = player
         self.media_player = media_player
@@ -1108,6 +1110,12 @@ class DirectoryTree(QTreeView):
                 self.clear_home_action.setVisible(True)
 
         self.open.connect(self.tree_load_file)
+
+    def changeEvent(self, event, /):
+        if event.type() == QEvent.Type.FontChange:
+            list_font = self.font()
+            list_font.setPointSizeF(app_theme.font_size)
+            self.setFont(list_font)
 
     def on_directories_loaded(self):
         self.proxy_model.beginFilterChange()
@@ -2192,8 +2200,6 @@ class FilterWidget(QWidget):
         self.player = player
 
         self.russel_widget = RussellEmotionWidget()
-        self.russel_widget.setMaximumSize(QSize(250, 250))
-        self.russel_widget.setMinimumSize(QSize(160, 160))
         self.russel_widget.valueChanged.connect(self.on_russel_changed)
         self.russel_widget.mouseReleased.connect(self.on_russel_released)
 
@@ -2838,17 +2844,14 @@ class MusicPlayer(QMainWindow):
         view_menu.addAction(self.effects_tree_action)
 
         font_size_small_action = QAction(_("Smaller"), self)
-        font_size_small_action.setCheckable(True)
         font_size_small_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Minus))
         font_size_small_action.triggered.connect(lambda: setattr(app_theme, 'font_size', app_theme.font_size - 1.0))
 
         font_size_medium_action = QAction(_("Medium"), self)
-        font_size_medium_action.setCheckable(True)
         font_size_medium_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_0))
         font_size_medium_action.triggered.connect(lambda: setattr(app_theme, 'font_size', 10.5))
 
         font_size_large_action = QAction(_("Larger"), self)
-        font_size_large_action.setCheckable(True)
         font_size_large_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Plus))
         font_size_large_action.triggered.connect(lambda: setattr(app_theme, 'font_size', app_theme.font_size + 1.0))
 
@@ -2856,13 +2859,6 @@ class MusicPlayer(QMainWindow):
         font_size_group.addAction(font_size_small_action)
         font_size_group.addAction(font_size_medium_action)
         font_size_group.addAction(font_size_large_action)
-
-        if app_theme.font_size == 9:
-            font_size_small_action.setChecked(True)
-        elif app_theme.font_size == 10.5:
-            font_size_medium_action.setChecked(True)
-        elif app_theme.font_size == 12:
-            font_size_medium_action.setChecked(True)
 
         font_size_menu = QMenu(_("Font Size"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.FormatTextBold))
 

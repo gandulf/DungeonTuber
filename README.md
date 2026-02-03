@@ -103,7 +103,7 @@ pyinstaller DungeonTuber.spec
 The following command uses MinGW64. If you experience slow compilation, ensure your build directory is excluded from Antivirus scanning.
 
 ```bash
-python -m nuitka --jobs=16 DungeonTuber.py --product-version=0.1.6 --file-version=0.1.0.0
+python -m nuitka --jobs=16 DungeonTuber.py --product-version=0.1.7.0 --file-version=0.1.7.0
 ```
 > [!Note]
 > Add `--product-version=X.Y.Z.Q` and `--file-version=X.Y.Z.Q` to define version of created exe

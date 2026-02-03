@@ -54,14 +54,14 @@ msgstr "Directory Tree"
 msgid "Font Size"
 msgstr "Font Size"
 
-msgid "Small"
-msgstr "Small"
+msgid "Smaller"
+msgstr "Smaller"
 
 msgid "Medium"
 msgstr "Medium"
 
-msgid "Large"
-msgstr "Large"
+msgid "Larger"
+msgstr "Larger"
 
 msgid "Visualizer"
 msgstr "Visualizer"
@@ -192,17 +192,8 @@ msgstr "Use mp3 title instead of file name"
 msgid "Dynamic Category Columns"
 msgstr "Dynamic Category Columns"
 
-msgid "Favorite Column Visible"
-msgstr "Favorite Column Visible"
-
-msgid "Title Column Visible"
-msgstr "Title Column Visible"
-
-msgid "Artist Column Visible"
-msgstr "Artist Column Visible"
-
-msgid "Album Column Visible"
-msgstr "Album Column Visible"
+msgid "Dynamic Score Column"
+msgstr "Dynamic Score Column"
 
 msgid "Summary Visible"
 msgstr "Summary Visible"
@@ -624,3 +615,9 @@ msgstr "Add to playlist"
 
 msgid "Remove from playlist"
 msgstr "Remove from playlist"
+
+msgid "Normalize Volume"
+msgstr "Normalize Volume"
+
+msgid "All songs will be played at a normalized volume."
+msgstr "All songs will be played at a normalized volume."

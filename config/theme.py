@@ -36,8 +36,6 @@ class AppTheme(QObject):
 
     _small_factor = 0.6
 
-
-
     def __init__(self):
         super().__init__()
         self._font_size : float = AppSettings.value(SettingKeys.FONT_SIZE, 10.5, type=int) # Default size
@@ -50,6 +48,7 @@ class AppTheme(QObject):
     def _calculate_sizes(self):
         self._font_size_small = self._font_size * 0.8  # Small size
 
+        self._spacing = int(self._font_size * 0.8)
         self._icon_width = _pt_to_px(self._font_size * 2)
         self._icon_height = _pt_to_px(self._font_size * 2)
         self._icon_size = QSize(self._icon_width, self._icon_height)
@@ -66,22 +65,26 @@ class AppTheme(QObject):
         self._button_size_small = QSize(self._button_width_small, self._button_height_small)
 
     @Property(int)
+    def spacing(self) -> int:
+        return self._spacing
+
+    @Property(QSize)
     def icon_size(self) -> QSize:
         return self._icon_size
 
     @Property(int)
-    def icon_height(self):
+    def icon_height(self) -> int:
         return self._icon_height
 
     @Property(int)
-    def icon_width(self):
+    def icon_width(self) -> int:
         return self._icon_width
 
-    @Property(int)
+    @Property(QSize)
     def button_size(self) -> QSize:
         return self._button_size
 
-    @Property(int)
+    @Property(QSize)
     def icon_size_small(self) -> QSize:
         return self._icon_size_small
 
@@ -93,15 +96,15 @@ class AppTheme(QObject):
     def button_width_small(self) -> int:
         return self._button_width_small
 
-    @Property(int)
+    @Property(QSize)
     def button_size_small(self) -> QSize:
         return self._button_size_small
 
-    @Property(int)
+    @Property(float)
     def font_size(self) -> float:
         return self._font_size
 
-    @Property(int)
+    @Property(float)
     def font_size_small(self) -> float:
         return self._font_size_small
 

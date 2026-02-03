@@ -383,12 +383,12 @@ class SettingsDialog(QDialog):
         player_group = QGroupBox(_("Player"))
         self.player_layout = QFormLayout(player_group)
 
-        self.normalize_volume = QCheckBox(_("Normalize Volume*"))
+        self.normalize_volume = QCheckBox(_("Normalize Volume")+"*")
         self.normalize_volume.setToolTip(_("Requires restart"))
         self.normalize_volume.setChecked(AppSettings.value(SettingKeys.NORMALIZE_VOLUME, True, type=bool))
         self.player_layout.addRow("", self.normalize_volume)
         normalize_volume_description = QLabel(_("All songs will be played at a normalized volume."))
-        normalize_volume_description.setStyleSheet(f"font-size:9pt")
+        normalize_volume_description.setProperty("cssClass","small")
         normalize_volume_description.setContentsMargins(28, 0, 0, 0)
         self.player_layout.addRow("", normalize_volume_description)
 
@@ -403,11 +403,11 @@ class SettingsDialog(QDialog):
         self.title_file_name_columns.setChecked(AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False, type=bool))
         table_layout.addRow("", self.title_file_name_columns)
 
-        self.dynamic_score_column = QCheckBox(_("Dynamic Category Columns"))
+        self.dynamic_score_column = QCheckBox(_("Dynamic Score Column"))
         self.dynamic_score_column.setChecked(AppSettings.value(SettingKeys.DYNAMIC_SCORE_COLUMN, False, type=bool))
         table_layout.addRow("", self.dynamic_score_column)
         dynamic_score_description = QLabel(_("Only show score column if any filters are active."))
-        dynamic_score_description.setStyleSheet(f"font-size:9pt")
+        dynamic_score_description.setProperty("cssClass", "small")
         dynamic_score_description.setContentsMargins(28, 0, 0, 0)
         table_layout.addRow("", dynamic_score_description)
 
@@ -415,7 +415,7 @@ class SettingsDialog(QDialog):
         self.dynamic_table_columns.setChecked(AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
         table_layout.addRow("", self.dynamic_table_columns)
         dynamic_colomns_description = QLabel(_("Only category columns with an active filter value are display else they are hidden automatically."))
-        dynamic_colomns_description.setStyleSheet(f"font-size:9pt")
+        dynamic_colomns_description.setProperty("cssClass", "small")
         dynamic_colomns_description.setContentsMargins(28, 0, 0, 0)
         table_layout.addRow("", dynamic_colomns_description)
 
