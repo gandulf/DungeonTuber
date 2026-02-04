@@ -1,8 +1,10 @@
+import ctypes
 import json
 import logging
 import os
 import subprocess
 import sys
+from ctypes import wintypes
 
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -36,15 +38,62 @@ def get_path(path:str):
         icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), path)
     return icon_path
 
-def get_current_version() -> str | None:
-    try:
-        return str(open(get_path("version.txt"), "r").readline())
-    except FileNotFoundError:
-        return "v0.1.0"
+
+class VS_FIXEDFILEINFO(ctypes.Structure):
+    _fields_ = [
+        ("dwSignature", wintypes.DWORD),
+        ("dwStrucVersion", wintypes.DWORD),
+        ("dwFileVersionMS", wintypes.DWORD),
+        ("dwFileVersionLS", wintypes.DWORD),
+        ("dwProductVersionMS", wintypes.DWORD),
+        ("dwProductVersionLS", wintypes.DWORD),
+        ("dwFileFlagsMask", wintypes.DWORD),
+        ("dwFileFlags", wintypes.DWORD),
+        ("dwFileOS", wintypes.DWORD),
+        ("dwFileType", wintypes.DWORD),
+        ("dwFileSubtype", wintypes.DWORD),
+        ("dwFileDateMS", wintypes.DWORD),
+        ("dwFileDateLS", wintypes.DWORD),
+    ]
+
+def get_current_version()->str:
+    # Get the path to the current running .exe
+    if "__compiled__" in globals():
+        # sys.argv[0] is generally the reliable way to find the outer .exe in Nuitka
+        exe_path = os.path.abspath(sys.argv[0])
+    elif getattr(sys, 'frozen', False):
+        exe_path = sys.executable
+    else:
+        return "Dev"
+
+    size = ctypes.windll.version.GetFileVersionInfoSizeW(exe_path, None)
+    if not size:
+        return "Unknown"
+
+    buffer = ctypes.create_string_buffer(size)
+    ctypes.windll.version.GetFileVersionInfoW(exe_path, 0, size, buffer)
+
+    fixed_info_ptr = ctypes.POINTER(VS_FIXEDFILEINFO)()
+    u_len = ctypes.c_uint()
+
+    # Query the root block
+    if ctypes.windll.version.VerQueryValueW(buffer, "\\", ctypes.byref(fixed_info_ptr), ctypes.byref(u_len)):
+        fixed_info = fixed_info_ptr.contents
+
+        # Versions are packed as (Major << 16) | Minor
+        ms = fixed_info.dwProductVersionMS
+        ls = fixed_info.dwProductVersionLS
+
+        return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+
+    return "Unknown"
 
 def is_latest_version():
-    latest_version = get_latest_version()
     current_version = QApplication.instance().applicationVersion()
+    if current_version == "Dev" or current_version == "Unknown":
+        return True
+
+    latest_version = get_latest_version()
     if latest_version and version.parse(latest_version) > version.parse(current_version):
         return False
     else:

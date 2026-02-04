@@ -19,7 +19,6 @@ jobs:
       id: vars
       run: |        
         $version = $env:GITHUB_REF_NAME.TrimStart("v")
-        $version | Set-Content -Encoding ASCII version.txt
         (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '" + $version + "'") | Out-File -encoding UTF8noBom version.rc
         (Get-Content pyproject.toml) -replace 'version = "(.*?)"', ('version = "' + $version + '"') | Out-File -encoding UTF8noBom pyproject.toml
         echo "app_version=$version" >> $env:GITHUB_OUTPUT
@@ -68,6 +67,8 @@ jobs:
         # Decode the Base64 secret into a physical .pfx file
         $certBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_BASE64 }}")
         [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)
+        echo "${{ secrets.PFX_BASE64 }}"
+        echo "p:${{ secrets.PFX_PASSWORD }}"
 
     - name: Prepare Signtool
       uses: KamaranL/add-signtool-action@v1
