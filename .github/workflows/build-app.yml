@@ -25,9 +25,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip        
-        pip install .[dev] flake8        
-        echo "${{ secrets.PFX_BASE64 }}"
-        echo "p:${{ secrets.PFX_PASSWORD }}"
+        pip install .[dev] flake8                
 
     - name: Lint with flake8
       run: |
