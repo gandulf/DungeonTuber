@@ -66,9 +66,7 @@ jobs:
       run: |
         # Decode the Base64 secret into a physical .pfx file
         $certBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_BASE64 }}")
-        [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)
-        echo "${{ secrets.PFX_BASE64 }}"
-        echo "p:${{ secrets.PFX_PASSWORD }}"
+        [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)        
 
     - name: Prepare Signtool
       uses: KamaranL/add-signtool-action@v1
