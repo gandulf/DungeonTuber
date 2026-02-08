@@ -3126,9 +3126,12 @@ class MusicPlayer(QMainWindow):
         self.analyzer.error.connect(self.update_status_label)
         self.analyzer.error.connect(self.result_status_label)
         self.analyzer.result.connect(self.result_status_label)
+        self.analyzer.result.connect(self.update_table_entry)
 
         self.init_main_menu()
 
+    def update_table_entry(self, path):
+        self.current_table().refresh_item(path)
 
     def show_tabs_context_menu(self, position):
         # 4. Identify which tab was clicked

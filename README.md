@@ -2,7 +2,6 @@
 
 [![en](https://img.shields.io/badge/lang-en-green.svg)](https://github.com/gandulf/DungeonTuber/blob/master/README.md)
 [![de](https://img.shields.io/badge/lang-de-green.svg)](https://github.com/gandulf/DungeonTuber/blob/master/README.de.md)
-![es](https://img.shields.io/badge/lang-es-green.svg)
 [![Build](https://github.com/gandulf/DungeonTuber/actions/workflows/build-app.yml/badge.svg)](https://github.com/gandulf/DungeonTuber/actions/workflows/build-app.yml)
 [![Release](https://github.com/gandulf/DungeonTuber/actions/workflows/release-app.yml/badge.svg)](https://github.com/gandulf/DungeonTuber/actions/workflows/release-app.yml)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/gandulf/DungeonTuber)
@@ -91,7 +90,6 @@ Edit translations in _locales/**/LC_MESSAGES/DungeonTuber.po_ files and then run
 ```bash
 msgfmt -o locales/en/LC_MESSAGES/DungeonTuber.mo locales/en/LC_MESSAGES/DungeonTuber.po
 msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonTuber.po
-msgfmt -o locales/es/LC_MESSAGES/DungeonTuber.mo locales/es/LC_MESSAGES/DungeonTuber.po
 ```
 
 ### Using PyInstaller (Recommended)

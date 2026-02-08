@@ -273,6 +273,8 @@ def update_mp3_summary(path : str| PathLike[str] | MP3, new_summary :str, save :
 
     if new_summary:
         audio.tags.add(COMM(encoding=3, text=[new_summary]))
+    else:
+        audio.tags.add(COMM(encoding=3, text=""))
 
     if (save):
         audio.save()
