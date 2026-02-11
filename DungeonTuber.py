@@ -3124,8 +3124,6 @@ class MusicPlayer(QMainWindow):
 
         self.analyzer.progress.connect(self.update_status_label)
         self.analyzer.error.connect(self.update_status_label)
-        self.analyzer.error.connect(self.result_status_label)
-        self.analyzer.result.connect(self.result_status_label)
         self.analyzer.result.connect(self.update_table_entry)
 
         self.init_main_menu()
@@ -3153,11 +3151,6 @@ class MusicPlayer(QMainWindow):
 
         menu.exec(self.table_tabs.tabBar().mapToGlobal(position))
 
-    def result_status_label(self):
-        if self.analyzer.active_worker() <= 1:
-            t = threading.Timer(2, function=self.hide_status_label)
-            t.start()
-
     def hide_status_label(self):
         if self.analyzer.active_worker() == 0:
             self.statusBar().setVisible(False)
@@ -3172,7 +3165,7 @@ class MusicPlayer(QMainWindow):
     def update_status_label(self, msg: str, progress: bool = True):
         if msg is not None:
             self.statusBar().setVisible(True)
-            self.statusBar().showMessage(msg)
+            self.statusBar().showMessage(msg, 5000)
             self.status_progress.setVisible(progress)
 
     def add_table_tab(self, name: str, icon: QIcon) -> SongTable:
