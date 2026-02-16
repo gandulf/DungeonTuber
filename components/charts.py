@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QApplication
+from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Signal, Qt, QEvent, QPointF, QRectF, QSize
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor, QPaintEvent
 
@@ -224,8 +224,15 @@ class RussellEmotionWidget(QWidget):
     def reset(self, notify=True):
         self.set_value(5, 5, notify)
 
+    def set_reference_points(self, points):
+        if isinstance(points,list):
+            self.reference_points = points
+        else:
+            self.reference_points = list(points)
+        self.update()
+
     def add_reference_points(self, points):
-        self.reference_points = self.reference_points + points
+        self.reference_points.extend(points)
         self.update()
 
     def clear_scatter(self):

@@ -259,6 +259,7 @@ class SettingKeys(StrEnum):
     COLUMN_ARTIST_VISIBLE = "columnArtistVisible"
     COLUMN_BPM_VISIBLE = "columnBPMVisible"
     COLUMN_SUMMARY_VISIBLE = "columnSummaryVisible"
+    COLUMN_TAGS_VISIBLE = "columnTagsVisible"
 
     TITLE_INSTEAD_OF_FILE_NAME = "titleInsteadOfFilename"
 

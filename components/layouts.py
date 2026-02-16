@@ -1,5 +1,4 @@
-from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QLayout, QScrollArea, QWidget, QSizePolicy
+from PySide6.QtWidgets import QLayout
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 
 class FlowLayout(QLayout):

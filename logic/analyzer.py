@@ -9,7 +9,7 @@ import urllib.error
 from abc import abstractmethod
 
 from queue import Queue
-from typing import Any, List
+from typing import Any
 from os import PathLike
 from pathlib import Path
 

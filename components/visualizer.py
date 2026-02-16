@@ -3,8 +3,8 @@ import random
 import logging
 from os import PathLike
 
-from PySide6.QtCore import Signal, QSize, QTimer, QObject
-from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent, QBrush
+from PySide6.QtCore import Signal, QSize, QTimer
+from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent
 from PySide6.QtWidgets import QWidget, QFrame
 
 from config.settings import AppSettings, SettingKeys
@@ -86,14 +86,14 @@ class VisualizerFrame(QFrame, Visualizer):
         # specific, so we must give the ID of the QFrame (or similar object) to
         # vlc. Different platforms have different functions for this
         if platform.system() == "Linux":  # for Linux using the X Server
-            self.engine.player.set_xwindow(int(self.winId()))
+            self.engine.media_player.set_xwindow(int(self.winId()))
         elif platform.system() == "Windows":  # for Windows
-            self.engine.player.set_hwnd(int(self.winId()))
+            self.engine.media_player.set_hwnd(int(self.winId()))
         elif platform.system() == "Darwin":  # for MacOS
-            self.engine.player.set_nsobject(int(self.winId()))
+            self.engine.media_player.set_nsobject(int(self.winId()))
 
     def resize_visualizer(self, size: QSize):
-        self.engine.player.video_set_aspect_ratio(f"{size.width()}:{size.height()}")
+        self.engine.media_player.video_set_aspect_ratio(f"{size.width()}:{size.height()}")
 
 
 class EmptyVisualizerWidget(QWidget, Visualizer):

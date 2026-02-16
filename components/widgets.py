@@ -1,7 +1,7 @@
 import math
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton
-from PySide6.QtCore import QPointF, QSize, Qt, QRectF, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, QPoint, QSortFilterProxyModel
+from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, QPoint, QSortFilterProxyModel
 from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent, QColor
 
 PAINTING_SCALE_FACTOR = 20

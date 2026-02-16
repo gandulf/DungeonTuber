@@ -1,4 +1,3 @@
-import gettext
 import os
 
 import sys
@@ -8,18 +7,15 @@ import logging
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtCore import Property, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM
-
-from config.settings import get_category_keys, _DEFAULT_CATEGORIES
-from config.utils import get_path, get_available_locales
+from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType
 
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_all_tags", "_cover", "has_cover", "bpm","_moods"]
+    __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover", "has_cover", "bpm","_moods"]
 
     index: int
     name: str
@@ -37,9 +33,6 @@ class Mp3Entry(object):
 
     categories : dict[str,int]
     _tags: list[str]
-    _moods: None | set[str]
-    _all_tags: None | set[str]
-
 
     def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = [], artist: str = None, album:str = None, title:str = None, genre:list[str] | str = [], bpm: int = None):
         if name is not None:
@@ -70,8 +63,6 @@ class Mp3Entry(object):
         else:
             self._tags = []
 
-        self._all_tags = None
-        self._moods =[]
         self._cover = None
         self.has_cover = None
         self.bpm = bpm
@@ -84,12 +75,9 @@ class Mp3Entry(object):
     @tags.setter
     def tags(self, tags: list[str]):
         self._tags = tags
-        self._all_tags = None
 
     def add_tag(self, tag:str):
-
         self.tags.append(tag)
-        self._all_tags = None
 
     def _le(self, category, value) -> bool:
         return category in self.categories and self.get_category_value(category) <= value
@@ -127,19 +115,9 @@ class Mp3Entry(object):
                     data = audio.tags[key].data
                     pixmap = QPixmap()
                     pixmap.loadFromData(data)
-                    icon_pixmap = pixmap.scaled(128, 128, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                    icon_pixmap = pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
                     self._cover = icon_pixmap
                     self.has_cover = True
-
-    @property
-    def all_tags(self):
-
-        if self._all_tags is None:
-            self._all_tags = set(self.tags + self._moods)
-            self._all_tags = sorted(self._all_tags)
-
-        return self._all_tags
-
 
 def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
 
@@ -195,9 +173,6 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
             if txxx_tags and txxx_tags.text:
                 entry.tags = txxx_tags.text
 
-            if "TXXX:ab:mood" in audio.tags:
-                entry._moods = audio.tags.get("TXXX:ab:mood").text
-
             txxx_fav = audio.tags.get("TXXX:ai_favorite")
             if txxx_fav and txxx_fav.text:
                 entry.favorite = bool(txxx_fav.text)
@@ -206,19 +181,6 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
     except Exception as e:
         logger.error("Error reading tags for {0}: {1}", file_path, e)
     return None
-
-
-
-_categories = None
-
-def _lazy_init_categories():
-    global _categories
-
-    if _categories is None:
-        translations = [gettext.translation("DungeonTuber", get_path("locales"), fallback=False, languages=[lang]) for lang in get_available_locales()]
-        _categories = {}
-        for val in _DEFAULT_CATEGORIES:
-            _categories[val] = [translation.gettext(val).lower() for translation in translations]
 
 def _audio(path: str | PathLike[str] | MP3) -> MP3:
     if isinstance(path, MP3):
@@ -262,7 +224,7 @@ def update_mp3(path : str | PathLike[str], title: str, summary: str, favorite: b
 def update_mp3_favorite(path : str | PathLike[str] | MP3, favorite: bool, save: bool = True):
     audio = _audio(path)
 
-    audio.tags.add(TXXX(encoding=3, desc='ai_favorite', text=[favorite]))
+    audio.tags.add(TXXX(Encoding.UTF8, desc='ai_favorite', text=[favorite]))
 
     if save:
         audio.save()
@@ -272,9 +234,9 @@ def update_mp3_summary(path : str| PathLike[str] | MP3, new_summary :str, save :
     audio = _audio(path)
 
     if new_summary:
-        audio.tags.add(COMM(encoding=3, text=[new_summary]))
+        audio.tags.add(COMM(Encoding.UTF8, text=[new_summary]))
     else:
-        audio.tags.add(COMM(encoding=3, text=""))
+        audio.tags.add(COMM(Encoding.UTF8, text=""))
 
     if (save):
         audio.save()
@@ -283,7 +245,7 @@ def update_mp3_summary(path : str| PathLike[str] | MP3, new_summary :str, save :
 def update_mp3_title(path : str| PathLike[str]| MP3, new_title :str, save : bool = True):
     audio = _audio(path)
 
-    audio.tags.add(TIT2(encoding=3, text=[new_title]))
+    audio.tags.add(TIT2(Encoding.UTF8, text=[new_title]))
     if save:
         audio.save()
         logger.debug("Updated title to {0} for {1}", new_title,path)
@@ -291,7 +253,7 @@ def update_mp3_title(path : str| PathLike[str]| MP3, new_title :str, save : bool
 def update_mp3_album(path : str| PathLike[str]| MP3, new_album :str, save : bool = True):
     audio = _audio(path)
 
-    audio.tags.add(TALB(encoding=3, text=[new_album]))
+    audio.tags.add(TALB(Encoding.UTF8, text=[new_album]))
     if save:
         audio.save()
         logger.debug("Updated album to {0} for {1}", new_album,path)
@@ -299,7 +261,7 @@ def update_mp3_album(path : str| PathLike[str]| MP3, new_album :str, save : bool
 def update_mp3_artist(path : str| PathLike[str]| MP3, new_artist :str, save : bool = True):
     audio = _audio(path)
 
-    audio.tags.add(TPE1(encoding=3, text=[new_artist]))
+    audio.tags.add(TPE1(Encoding.UTF8, text=[new_artist]))
     if save:
         audio.save()
         logger.debug("Updated artist to {0} for {1}", new_artist, path)
@@ -311,7 +273,7 @@ def update_mp3_bpm(path : str| PathLike[str]| MP3, new_bpm :int | None, save : b
         if "TBPM" in audio.tags:
             audio.tags.pop("TBPM")
     else:
-        audio.tags.add(TBPM(encoding=3, text=[new_bpm]))
+        audio.tags.add(TBPM(Encoding.UTF8, text=[new_bpm]))
     if save:
         audio.save()
         logger.debug("Updated bpm to {0} for {1}", new_bpm, path)
@@ -320,9 +282,9 @@ def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre : list[str] | str
     audio = _audio(path)
 
     if isinstance(new_genre, str):
-        audio.tags.add(TCON(encoding=3, text=[new_genre]))
+        audio.tags.add(TCON(Encoding.UTF8, text=[new_genre]))
     else:
-        audio.tags.add(TCON(encoding=3, text=new_genre))
+        audio.tags.add(TCON(Encoding.UTF8, text=new_genre))
 
     if save:
         audio.save()
@@ -336,10 +298,10 @@ def update_mp3_categories(path: str | PathLike[str] | MP3, categories: dict[str,
         if isinstance(categories, list):
             categories = {item['category']: item['scale'] for item in categories}
 
-        audio.tags.add(TXXX(encoding=3, desc='ai_categories', text=[json.dumps(categories, ensure_ascii=False)]))
+        audio.tags.add(TXXX(Encoding.UTF8, desc='ai_categories', text=[json.dumps(categories, ensure_ascii=False)]))
     else:
-        audio.tags.add(TXXX(encoding=3, desc='ai_categories', text=""))
-    #audio.tags.add(TXXX(encoding=3, desc='ai_tags', text=calculate_tags_from_categories(categories)))
+        audio.tags.add(TXXX(Encoding.UTF8, desc='ai_categories', text=""))
+    #audio.tags.add(TXXX(Encoding.UTF8, desc='ai_tags', text=calculate_tags_from_categories(categories)))
 
     if save:
         audio.save()
@@ -360,7 +322,7 @@ def update_mp3_category(path: str| PathLike[str] | MP3, category : str, new_valu
     else:
         cats[category] = new_value
 
-    audio.tags.add(TXXX(encoding=3, desc='ai_categories', text=[json.dumps(cats)]))
+    audio.tags.add(TXXX(Encoding.UTF8, desc='ai_categories', text=[json.dumps(cats)]))
     if save:
         audio.save()
         logger.debug("Updated {} to {1} for {2}", category, new_value,path)
@@ -371,7 +333,7 @@ def update_mp3_tags(path: str| PathLike[str] | MP3, tags : list[str], save : boo
     if tags:
         audio.tags.add(
             TXXX(
-                encoding=3,
+                Encoding.UTF8,
                 desc='ai_tags',
                 text=tags
             )
@@ -384,7 +346,7 @@ def update_mp3_tags(path: str| PathLike[str] | MP3, tags : list[str], save : boo
 def list_mp3s(path : str | PathLike[str]):
     return glob.glob("**/*.mp3", root_dir=path, recursive=True)
 
-def update_categories_and_tags(path : str | PathLike[str] | MP3, summary : str, categories: dict[str,int] = None, tags: list[str] = None):
+def update_categories_and_tags(path : str | PathLike[str] | ID3, summary : str, categories: dict[str,int] = None, tags: list[str] = None):
     """Adds categories and summary as MP3 tags to the file."""
     audio = _audio(path)
 
@@ -395,6 +357,38 @@ def update_categories_and_tags(path : str | PathLike[str] | MP3, summary : str, 
 
     audio.save()
     logger.debug("Tags added to {0}", path)
+
+def update_mp3_cover(path : str | PathLike[str] | MP3, image_path: str | PathLike[str]):
+    audio = _audio(path)
+
+    # 2. Read the image data
+    with open(image_path, 'rb') as img:
+        img_data = img.read()
+
+    image_path = image_path.lower()
+    if image_path.endswith(".jpg") or image_path.endswith(".jpeg"):
+        mimeType = 'image/jpeg'
+    elif image_path.endswith(".png"):
+        mimeType = 'image/png'
+    elif image_path.endswith(".bmp"):
+        mimeType = 'image/bmp'
+    else:
+        mimeType = 'image/jpeg'
+
+    # 3. Add the APIC frame
+    # mime='image/jpeg' or 'image/png'
+    # type=3 is 'Front Cover'
+    audio.tags.add(
+        APIC(
+            encoding=Encoding.UTF8,
+            mime=mimeType,
+            type=PictureType.COVER_FRONT,
+            desc='Cover',
+            data=img_data
+        )
+    )
+
+    audio.save()
 
 def print_mp3_tags(file_path: str | PathLike[str]):
     """Prints all ID3 tags from an MP3 file."""
@@ -469,7 +463,7 @@ def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
         logger.error("ERROR occurred when processing entries.")
         logger.error("Text: {0}", sys.exc_info()[0])
 
-def parse_m3u(file_path : str | PathLike[str]) -> list[Mp3Entry] | None:
+def get_m3u_paths(file_path : str | PathLike[str]) -> list[Path] | None:
     with open(file_path,'r', encoding="utf-8") as infile:
 
         # All M3U files start with #EXTM3U.
@@ -499,6 +493,12 @@ def parse_m3u(file_path : str | PathLike[str]) -> list[Mp3Entry] | None:
                 else:
                     paths.append(Path(base_dir, line))
                 # reset the song variable so it doesn't use the same EXTINF more than once
+    return paths
+
+def parse_m3u(file_path : str | PathLike[str]) -> list[Mp3Entry] | None:
+    paths = get_m3u_paths(file_path)
+    if paths is None:
+        return None
 
     playlist = [parse_mp3(f) for f in paths]
     playlist = [song for song in playlist if song is not None]

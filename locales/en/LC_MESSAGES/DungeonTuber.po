@@ -621,3 +621,6 @@ msgstr "Normalize Volume"
 
 msgid "All songs will be played at a normalized volume."
 msgstr "All songs will be played at a normalized volume."
+
+msgid "Select Image"
+msgstr "Select Image"

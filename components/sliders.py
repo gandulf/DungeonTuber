@@ -3,7 +3,7 @@ from enum import StrEnum
 from PySide6.QtCore import Qt, Signal, QPropertyAnimation, Property, QEasingCurve, QPointF, QRect, QSize, QPoint, QTimer, QKeyCombination, QMimeData, QByteArray
 from PySide6.QtGui import QMouseEvent, QBrush, QPen, QColor, QPalette, QPainter, QIcon, QLinearGradient, QPolygon, QFontMetrics, QPaintEvent, QAction, \
     QKeySequence, QShortcut, QDrag, QPixmap
-from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QPushButton, QHBoxLayout, QProxyStyle, QWidget, \
+from PySide6.QtWidgets import QLabel, QSizePolicy, QSlider, QVBoxLayout, QStyle, QCheckBox, QHBoxLayout, QProxyStyle, QWidget, \
     QGraphicsOpacityEffect, QDial, QToolButton, QApplication
 
 from config.settings import MusicCategory

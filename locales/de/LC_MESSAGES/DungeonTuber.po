@@ -625,3 +625,6 @@ msgstr "Zur Playlist hinzufügen"
 
 msgid "Remove from playlist"
 msgstr "Aus Playlist entfernen"
+
+msgid "Select Image"
+msgstr "Bild auswählen"

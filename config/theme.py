@@ -2,7 +2,7 @@ import string
 
 from PySide6.QtCore import QObject, Property, Qt, QSize
 from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon, QFont
-from PySide6.QtWidgets import QApplication, QProxyStyle, QStyle
+from PySide6.QtWidgets import QApplication
 
 from config.settings import AppSettings, SettingKeys
 from config.utils import get_path
