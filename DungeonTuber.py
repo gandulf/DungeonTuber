@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QSortFilterProxyModel, QAbstractTableModel, \
     QPersistentModelIndex, QFileInfo, QEvent, QRect, QTimer, QObject, QMimeData, QByteArray, QDataStream, QIODevice, QDir, QKeyCombination, QThread
 from PySide6.QtGui import QAction, QIcon, QBrush, QPalette, QColor, QPainter, QKeyEvent, QFont, QFontMetrics, \
-    QActionGroup, QDropEvent
+    QActionGroup, QDropEvent, QPen
 
 from vlc import MediaPlayer
 
@@ -520,7 +520,7 @@ class EffectList(QListView):
     grid_threshold = 200
 
     class EffectListItemDelegate(QStyledItemDelegate):
-        top_padding = 4
+        padding = 2
         view_mode: QListView.ViewMode
 
         def __init__(self, parent: QWidget = None):
@@ -541,10 +541,14 @@ class EffectList(QListView):
             # 1. Initialize the style option
             self.initStyleOption(option, index)
 
+            painter.setClipRect(option.rect)
+
             effect_mp3 = index.data(Qt.ItemDataRole.UserRole)
 
             check_state = index.data(Qt.ItemDataRole.CheckStateRole)
-            if check_state == Qt.CheckState.Checked:
+            selected_state = option.state & QStyle.State_Selected
+
+            if self.is_list_mode() and check_state == Qt.CheckState.Checked:
                 # Change background for checked items
                 painter.save()
                 painter.setBrush(app_theme.get_green_brush(50))
@@ -556,7 +560,7 @@ class EffectList(QListView):
                 option.font.setBold(True)
 
             if self.is_grid_mode() and effect_mp3 is not None and effect_mp3.cover is not None:
-                option.rect.setTop(option.rect.top() + self.top_padding)
+                painter.save()
 
                 # 2. Draw the selection highlight/background
                 # option.widget.style().drawControl(
@@ -566,26 +570,28 @@ class EffectList(QListView):
 
                 # 3. Define the drawing area (the icon rectangle)
                 # We use option.rect to get the full space for this item
-                rect = option.rect
-
-                if check_state == Qt.CheckState.Checked:
-                    painter.setBrush(option.palette.color(QPalette.ColorRole.Highlight))
-                    painter.drawRoundedRect(rect, 4.0, 4.0)
+                rect = option.rect.adjusted(self.padding, self.padding, -self.padding, -self.padding)
 
                 # 4. Draw the Icon
                 icon = option.icon
                 if icon:
-                    # Scale icon to fit the rect
-                    icon_size = self.parent().iconSize()
-                    icon_rect = QRect(
-                        rect.left() + (rect.width() - icon_size.width()) // 2,
-                        rect.top() + (rect.height() - icon_size.height()) // 2,
-                        icon_size.width(),
-                        icon_size.height()
-                    )
-                    icon.paint(painter, icon_rect, Qt.AlignmentFlag.AlignCenter)
+                    pixmap = icon.pixmap(rect.size())
 
-                    rect = icon_rect
+                    if not pixmap.isNull():
+                        # Logic: Calculate how to scale the pixmap to fill the target_rect
+                        # while preserving aspect ratio (Aspect Ratio Fill/Crop)
+                        pix_size = pixmap.size()
+                        scaled_size = pix_size.scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+
+                        # Calculate the top-left to center the "crop"
+                        x = rect.x() + (rect.width() - scaled_size.width()) // 2
+                        y = rect.y() + (rect.height() - scaled_size.height()) // 2
+
+                        # Draw the scaled and centered pixmap
+                        # Painter's clipping (set at top of method) ensures the overflow is hidden
+                        painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
+
+                    #icon.paint(painter, rect, Qt.AlignmentFlag.AlignCenter)
 
                 # 5. Draw the Text on top
                 text = index.data(Qt.ItemDataRole.DisplayRole)
@@ -596,13 +602,33 @@ class EffectList(QListView):
                     label_height = painter.fontMetrics().height() + 8
                     label_rect = QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height)
 
-                    painter.setBrush(QColor(0, 0, 0, 100))
+                    mask_color = option.palette.color(QPalette.ColorRole.Highlight) if selected_state else option.palette.color(QPalette.ColorRole.Dark)
+                    mask_color.setAlphaF(0.5)
+
+                    painter.setBrush(mask_color)
                     painter.setPen(Qt.PenStyle.NoPen)
                     painter.drawRect(label_rect)
 
                     painter.setPen(Qt.GlobalColor.white)  # Contrast color
                     painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
 
+                painter.restore()
+
+                painter.save()
+                if check_state == Qt.CheckState.Checked:
+                    pen = QPen(option.palette.color(QPalette.ColorRole.Accent))
+                    pen.setWidth(5)
+                    painter.setPen(pen)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawRect(rect)
+                elif selected_state:
+                    highlight_color = option.palette.color(QPalette.ColorRole.Highlight)
+                    highlight_color.setAlphaF(0.5)
+                    pen = QPen(highlight_color)
+                    pen.setWidth(3)
+                    painter.setPen(pen)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawRect(rect)
                 painter.restore()
             else:
                 super().paint(painter, option, index)
@@ -622,7 +648,7 @@ class EffectList(QListView):
                 size.setWidth(new_width)
 
                 if effect_mp3 is not None and effect_mp3.cover is not None:
-                    size.setHeight(size.height() + self.top_padding)
+                    size.setHeight(size.height() + self.padding)
                 else:
                     size.setHeight(48)
             return size
