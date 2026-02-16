@@ -1039,7 +1039,7 @@ class DirectoryWidget(QWidget):
         self.directory_layout.setContentsMargins(0, 0, 0, 0)
         self.directory_layout.setSpacing(0)
 
-        self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"))
+        self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent = self)
         self.headerLabel.set_icon_size(app_theme.icon_size_small)
         self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         self.headerLabel.text_label.setProperty("cssClass", "header")
@@ -2496,6 +2496,17 @@ class FilterWidget(QWidget):
         menu.show()
         menu.exec(self.mapToGlobal(point))
 
+    def apply_settings(self):
+        self.russel_widget.setVisible(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
+        self.bpm_widget.setVisible(AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
+
+        if (not AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool)
+                and not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool)
+                and not AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool)):
+            self.slider_tabs.setVisible(False)
+        else:
+            self.slider_tabs.setVisible(True)
+
     def build_sliders(self, categories: list[MusicCategory], group: str = None):
         sliders_widget = QWidget()
         russle_layout = QHBoxLayout(sliders_widget)
@@ -2506,13 +2517,11 @@ class FilterWidget(QWidget):
 
         if group is None or group == '':
             russle_layout.addWidget(self.russel_widget, 0)
-            self.russel_widget.setVisible(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
 
         russle_layout.addLayout(sliders_layout, 1)
 
         if group is None or group == '':
             russle_layout.addWidget(self.bpm_widget, 0)
-            self.bpm_widget.setVisible(AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
 
         # self.clear_layout(sliders_layout)
         two_rows = len(categories) > 15

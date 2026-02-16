@@ -71,7 +71,7 @@ class IconLabel(QWidget):
         self.layout.setSpacing(0)
 
         self.icon = icon
-        self.icon_label = QLabel()
+        self.icon_label = QLabel(self)
         if icon is not None:
             self.icon_label.setPixmap(icon.pixmap(self.icon_size))
             self.icon_label.setVisible(True)
@@ -82,7 +82,7 @@ class IconLabel(QWidget):
         self.layout.addWidget(self.icon_label)
         self.layout.addSpacing(self.horizontal_spacing)
 
-        self.text_label = QLabel(text)
+        self.text_label = QLabel(text, self)
         self.text_label.setOpenExternalLinks(True)
         self.layout.addWidget(self.text_label)
 
