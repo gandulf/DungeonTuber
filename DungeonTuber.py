@@ -23,7 +23,6 @@ import numbers
 import sys
 import os
 
-import threading
 import traceback
 import logging
 
@@ -55,8 +54,7 @@ from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, \
     CATEGORY_MAX, CATEGORY_MIN, CAT_VALENCE, CAT_AROUSAL, MusicCategory, set_music_categories, \
     get_music_categories, set_music_tags, get_music_tags, set_presets, add_preset, remove_preset, reset_presets, get_music_category, get_presets
 from config.theme import app_theme
-from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, clear_layout, \
-    DOWNLOAD_LINK, is_frozen
+from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, clear_layout, is_frozen
 
 from components.sliders import CategoryWidget, VolumeSlider, ToggleSlider, RepeatMode, RepeatButton, JumpSlider, BPMSlider
 from components.widgets import StarRating, IconLabel, FeatureOverlay, FileFilterProxyModel
@@ -587,6 +585,7 @@ class EffectList(QListView):
                         x = rect.x() + (rect.width() - scaled_size.width()) // 2
                         y = rect.y() + (rect.height() - scaled_size.height()) // 2
 
+                        painter.setClipRect(rect)
                         # Draw the scaled and centered pixmap
                         # Painter's clipping (set at top of method) ensures the overflow is hidden
                         painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
@@ -599,8 +598,8 @@ class EffectList(QListView):
                     # Optional: Add a subtle shadow or background for readability
                     # painter.fillRect(rect, QColor(0, 0, 0, 100))
 
-                    label_height = painter.fontMetrics().height() + 8
-                    label_rect = QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height)
+                    label_height = painter.fontMetrics().height() + self.padding
+                    label_rect = QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height+1)
 
                     mask_color = option.palette.color(QPalette.ColorRole.Highlight) if selected_state else option.palette.color(QPalette.ColorRole.Dark)
                     mask_color.setAlphaF(0.5)
