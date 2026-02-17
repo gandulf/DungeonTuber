@@ -60,7 +60,7 @@ from components.models import EffectTableModel, SongTableModel
 
 from logic.mp3 import Mp3Entry, parse_mp3, \
     create_m3u, list_mp3s, get_m3u_paths, update_mp3_cover, save_playlist
-from logic.audioengine import AudioEngine
+from logic.audioengine import AudioEngine, EngineState
 from logic.analyzer import Analyzer
 
 # --- Constants ---
@@ -239,10 +239,9 @@ class PlayerWidget(QWidget):
     volume_changed = Signal(int)
     track_changed = Signal(QPersistentModelIndex, Mp3Entry)
     repeat_mode_changed = Signal(RepeatMode)
-    openClicked = Signal()
 
     current_index = QPersistentModelIndex()
-    current_data = None
+    current_data : Mp3Entry = None
 
     _update_progress_ticks: bool = True
 
@@ -393,9 +392,6 @@ class PlayerWidget(QWidget):
     def repeat_mode(self):
         return self.btn_repeat.repeat_mode()
 
-    def fire_open_clicked(self):
-        self.openClicked.emit()
-
     def adjust_volume(self, value: int):
         self.engine.set_user_volume(value)
         self.visualizer.set_state(self.engine.player.is_playing(), value)
@@ -434,34 +430,41 @@ class PlayerWidget(QWidget):
                 self.progress_slider.setTickInterval(max(10, round(((1000.0 / total_ms) * 1000) * 10)))
                 self._update_progress_ticks = False
 
-    def on_playback_state_changed(self, is_playing: bool):
-        self.visualizer.set_state(is_playing, self.slider_vol.volume)
+    def on_playback_state_changed(self, engine_state: EngineState):
+        self.visualizer.set_state(engine_state, self.slider_vol.volume)
+
+        if engine_state == EngineState.STOP:
+            self.play_action.setChecked(False)
+            self.progress_slider.setValue(0)
+            self.time_label.setText("00:00")
+        elif engine_state == EngineState.PLAY:
+            self.play_action.setChecked(True)
+        elif engine_state == EngineState.PAUSE:
+            self.play_action.setChecked(False)
 
     def on_track_finished(self):
-        repeatMode = self.btn_repeat.repeat_mode()
+        repeat_mode = self.btn_repeat.repeat_mode()
 
-        if repeatMode == RepeatMode.REPEAT_SINGLE:
+        if repeat_mode == RepeatMode.REPEAT_SINGLE:
             self.engine.stop()
-            self.track_changed.emit(QPersistentModelIndex(), self.current_data)
-        elif repeatMode == RepeatMode.REPEAT_ALL:
-            next_index = self._increment_persistent_index (self.current_index , 1)
+            self.play_track(self.current_index, self.current_data)
+        elif repeat_mode == RepeatMode.REPEAT_ALL:
+            next_index = self._increment_persistent_index(self.current_index , 1)
             self.engine.stop()
-            self.track_changed.emit(next_index, None)
-        elif repeatMode == RepeatMode.NO_REPEAT:
-            self.stop()
+            self.track_changed.emit(next_index, next_index.data(Qt.ItemDataRole.UserRole))
+        elif repeat_mode == RepeatMode.NO_REPEAT:
             self.engine.stop()
 
     def toggle_play(self):
         if self.engine.player.is_playing():
             self.engine.pause_toggle()
-            # self.btn_play.setIcon(self.icon_play)
             self.play_action.setChecked(False)
         else:
             if self.engine.player.get_media() is None:
                 self.track_changed.emit(None, None)
             else:
                 self.engine.pause_toggle()
-            # self.btn_play.setIcon(self.icon_pause)
+
             self.play_action.setChecked(True)
 
     def _increment_persistent_index(self, p_index: QPersistentModelIndex, change:int):
@@ -494,14 +497,6 @@ class PlayerWidget(QWidget):
         self.engine.stop()
         self.track_changed.emit(next_index, None)
 
-    def play(self):
-        self.play_action.setChecked(True)
-
-    def stop(self):
-        self.play_action.setChecked(False)
-        self.progress_slider.setValue(0)
-        self.time_label.setText("00:00")
-
     def reset(self):
         self.time_label.setText("00:00")
         self.duration_label.setText("00:00")
@@ -517,7 +512,7 @@ class PlayerWidget(QWidget):
         else:
             label.setToolTip(None)
 
-    def play_track(self, data: Mp3Entry, index: QPersistentModelIndex):
+    def play_track(self, index: QPersistentModelIndex, data: Mp3Entry):
         self.current_data = data
         if data:
             track_path = data.path
@@ -528,9 +523,6 @@ class PlayerWidget(QWidget):
                 self.visualizer.set_state(True, self.slider_vol.volume)
                 self.elide_text(self.track_label, data.name)
 
-                # Reset progress on new track
-                self.reset()
-                self.play()
                 self.engine.play()
 
             except Exception as e:
@@ -944,8 +936,6 @@ class MusicPlayer(QMainWindow):
         if dialog.exec():
             self.filter_widget.update_sliders(self.get_available_categories())
             self.filter_widget.update_tags(self.get_available_tags())
-            self.filter_widget.update_genres(self.get_available_genres())
-            self.filter_widget.update_presets()
             if self.current_table() is not None:
                 self.current_table().update_category_column_visibility()
 
@@ -971,7 +961,6 @@ class MusicPlayer(QMainWindow):
 
         self.player = PlayerWidget(audio_engine=self.engine)
         self.player.track_changed.connect(self.play_track)
-        self.player.openClicked.connect(self.pick_load_directory)
 
         self.central_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.central_splitter.splitterMoved.connect(self.on_layout_splitter_moved)
@@ -1180,7 +1169,7 @@ class MusicPlayer(QMainWindow):
 
     def generate_table(self, playlist_path: PathLike[str] = None, directory: PathLike[str] = None, lazy: bool = False):
         table = SongTable(self.analyzer, self)
-        table.play_track.connect(self.play_track)
+        table.item_double_clicked.connect(self.play_track)
         table.content_changed.connect(self.on_table_content_changed)
 
         if playlist_path is not None:
@@ -1363,7 +1352,7 @@ class MusicPlayer(QMainWindow):
         table = self.current_table()
         if table is None:
             if entry is not None:
-                self.player.play_track(entry, QPersistentModelIndex())
+                self.player.play_track(index, entry )
                 return
             else:
                 return
@@ -1377,12 +1366,11 @@ class MusicPlayer(QMainWindow):
             if entry_index.isValid():
                 table.clearSelection()
                 table.selectRow(entry_index.row())
-            self.player.play_track(entry, QPersistentModelIndex(entry_index))
+            self.player.play_track(QPersistentModelIndex(entry_index), entry)
         elif index.isValid():
             table.clearSelection()
             table.selectRow(index.row())
-            data = table.mp3_data(index.row())
-            self.player.play_track(data, index)
+            self.player.play_track(index, index.data(Qt.ItemDataRole.UserRole))
 
 
 app: QApplication

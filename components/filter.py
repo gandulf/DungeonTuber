@@ -1,6 +1,6 @@
 import functools
 
-from PySide6.QtCore import Qt, QPoint, Signal
+from PySide6.QtCore import Qt, QPoint, Signal, QMetaMethod
 from PySide6.QtGui import QIcon, QAction, QPalette, QFont
 from PySide6.QtWidgets import QDialogButtonBox, QFormLayout, QLineEdit, QDialog, QToolButton, QPushButton, QHBoxLayout, \
     QWidget, QVBoxLayout, QMenu, QLabel, QTabWidget
@@ -106,9 +106,13 @@ class FilterWidget(QWidget):
         self.update_presets()
 
     def attach_song_table(self, song_table : SongTable | None):
-        self.values_changed.disconnect()
+
+        meta_signal = QMetaMethod.fromSignal(self.values_changed)
+        if self.isSignalConnected(meta_signal):
+            self.values_changed.disconnect()
 
         if song_table is not None:
+            song_table.set_filter_config(self.filter_config)
             self.values_changed.connect(song_table.set_filter_config)
 
             self.update_sliders(song_table.get_available_categories())
@@ -178,6 +182,7 @@ class FilterWidget(QWidget):
         for i, cat in enumerate(categories):
 
             cat_slider = CategoryWidget(category=cat, min_value=CATEGORY_MIN, max_value=CATEGORY_MAX)
+            cat_slider.set_value(self.filter_config.get_category(cat.key,-1))
             cat_slider.valueChanged.connect(self.on_slider_value_changed)
 
             if AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool) and cat.equals(CAT_VALENCE) and not cat.equals(CAT_AROUSAL):
@@ -192,7 +197,7 @@ class FilterWidget(QWidget):
         category_widget: CategoryWidget = self.sender()
         self.filter_config.categories[category_widget.category.key] = category_widget.value()
 
-        self.values_changed.emit(self.config())
+        self.values_changed.emit(self.filter_config)
 
     def toggle(self):
         if self.isVisible():
@@ -256,12 +261,12 @@ class FilterWidget(QWidget):
     def toggle_tag(self, state: int):
         toggle = self.sender()
         self.filter_config.toggle_tag(toggle.property("tag"), state)
-        self.values_changed.emit(self.config())
+        self.values_changed.emit(self.filter_config)
 
     def toggle_genre(self, state: int):
         toggle = self.sender()
         self.filter_config.toggle_genre(toggle.property("genre"), state)
-        self.values_changed.emit(self.config())
+        self.values_changed.emit(self.filter_config)
 
     def update_tags(self , available_tags: list[str]):
         clear_layout(self.tags_layout)
@@ -426,7 +431,7 @@ class FilterWidget(QWidget):
 
         self.bpm_widget.reset(False)
 
-        self.values_changed.emit(self.config())
+        self.values_changed.emit(self.filter_config)
 
     def reset_preset_action(self):
         reset_presets()
@@ -441,10 +446,12 @@ class FilterWidget(QWidget):
     def select_preset(self, preset: Preset):
 
         for slider in self.sliders.values():
-            slider.set_value(0, False)
+            slider.reset(False)
 
+        self.filter_config.categories.clear()
         for cat, scale in preset.categories.items():
             category = get_music_category(cat)
+            self.filter_config.categories[cat] = scale
             if category in self.sliders:
                 self.sliders[category].set_value(scale, False)
 
@@ -468,13 +475,17 @@ class FilterWidget(QWidget):
 
         if CAT_VALENCE in preset.categories and CAT_AROUSAL in preset.categories:
             self.russel_widget.set_value(preset.categories[CAT_VALENCE], preset.categories[CAT_AROUSAL], False)
-        if _(CAT_VALENCE) in preset.categories and _(CAT_AROUSAL) in preset.categories:
-            self.russel_widget.set_value(preset.categories[_(CAT_VALENCE)], preset.categories[_(CAT_AROUSAL)], False)
+        else:
+            self.russel_widget.reset(False)
 
         if preset.bpm is not None:
             self.bpm_widget.set_value(preset.bpm)
+            self.filter_config.bpm = preset.bpm
+        else:
+            self.bpm_widget.reset(False)
+            self.filter_config.bpm = None
 
-        self.values_changed.emit(self.config())
+        self.values_changed.emit(self.filter_config)
 
     def save_preset_action(self):
         save_preset_dialog = QDialog()
@@ -513,16 +524,14 @@ class FilterWidget(QWidget):
         self.set_category_value(cat_valence, valence, False)
         self.set_category_value(cat_arousal, arousal, False)
 
-    def set_category_value(self, cat: str, value: float | int, notify: bool = True):
+    def set_category_value(self, cat: MusicCategory, value: float | int | None, notify: bool = True):
         if cat in self.sliders:
             self.sliders[cat].set_value(round(value), False)
 
-        if notify:
-            self.values_changed.emit(self.config())
+        self.filter_config.categories[cat.key] = value
 
-    def config(self):
-        self.filter_config.categories = self.categories()
-        return self.filter_config
+        if notify:
+            self.values_changed.emit(self.filter_config)
 
     def categories(self):
         _categories = {}
@@ -545,9 +554,13 @@ class FilterWidget(QWidget):
 
         cat_valence = get_music_category(CAT_VALENCE)
         cat_arousal = get_music_category(CAT_AROUSAL)
-        self.set_category_value(cat_valence, valence, False)
-        self.set_category_value(cat_arousal, arousal, True)
+        if cat_valence == 5 and cat_arousal == 5:
+            self.set_category_value(cat_valence, None, False)
+            self.set_category_value(cat_arousal, None, True)
+        else:
+            self.set_category_value(cat_valence, valence, False)
+            self.set_category_value(cat_arousal, arousal, True)
 
     def on_bpm_changed(self, value: int):
         self.filter_config.bpm = value
-        self.values_changed.emit(self.config())
+        self.values_changed.emit(self.filter_config)

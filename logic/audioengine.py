@@ -1,4 +1,5 @@
 import platform
+from enum import Enum
 from os import PathLike
 
 from PySide6.QtCore import QTimer, Signal, QObject
@@ -8,7 +9,15 @@ from config.settings import AppSettings, SettingKeys
 
 DEFAULT_VOLUME = 70
 
+class EngineState(Enum):
+    PAUSE = 1
+    PLAY = 2
+    STOP = 3
+
 class AudioEngine(QObject):
+
+
+
     """
     Manages VLC instance, volume control, and playback state.
     Inherits QObject to use Signals for thread-safe communication.
@@ -16,7 +25,7 @@ class AudioEngine(QObject):
     # Signals to update UI
     track_finished = Signal()
     volume_changed = Signal(int)
-    state_changed = Signal(bool)  # True if playing, False if stopped/paused
+    state_changed = Signal(EngineState)  # True if playing, False if stopped/paused
     position_changed = Signal(int, str, str)  # position (0-1000), current_time, total_time
 
     list_player: MediaListPlayer = None
@@ -90,7 +99,7 @@ class AudioEngine(QObject):
 
         # 4. Set the playback mode to Loop (Repeat)
         self.list_player.set_playback_mode(PlaybackMode.loop)
-        self.list_player.get_media_player().audio_set_volume(75)
+        self.list_player.get_media_player().audio_set_volume(self.current_volume)
         # Start playing
         self.list_player.play()
 
@@ -107,17 +116,17 @@ class AudioEngine(QObject):
 
     def pause(self):
         self.player.pause()
-        self.state_changed.emit(False)
+        self.state_changed.emit(EngineState.PAUSE)
 
     def play(self):
         self._manual_stop = False
         self.player.play()
-        self.state_changed.emit(True)
+        self.state_changed.emit(EngineState.PLAY)
 
     def stop(self):
         self._manual_stop = True
         self.player.stop()
-        self.state_changed.emit(False)
+        self.state_changed.emit(EngineState.STOP)
         self.set_position(0)
 
     def set_user_volume(self, value_0_150: int):

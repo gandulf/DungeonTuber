@@ -852,10 +852,10 @@ class VolumeSlider(QHBoxLayout):
         self._update_volume_icon(self.slider_vol.value())
 
     def increase_volume(self ):
-        self.volume = self.volume + self.slider_vol.pageStep()
+        self.volume = self.slider_vol.value() + self.slider_vol.pageStep()
 
     def decrease_volume(self, ):
-        self.volume = self.volume - self.slider_vol.pageStep()
+        self.volume = self.slider_vol.value() - self.slider_vol.pageStep()
 
     def _on_value_changed(self, value):
         self._update_volume_icon(value)

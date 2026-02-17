@@ -107,9 +107,9 @@ class Preset:
 
     def __init__(self, name: str, categories: dict[str, int], tags: list[str] = None, genres: list[str] = None, bpm: int =None):
         self.name = name
-        self.categories = categories
-        self.tags = tags
-        self.genres = genres
+        self.categories = categories.copy() if categories is not None else {}
+        self.tags = tags.copy() if tags is not None else []
+        self.genres = genres.copy() if genres is not None else []
         self.bpm = bpm
 
     def __hash__(self):

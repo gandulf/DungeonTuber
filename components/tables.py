@@ -97,7 +97,7 @@ class AutoSearchHelper():
 
 
 class SongTable(QTableView):
-    play_track = Signal(QPersistentModelIndex, Mp3Entry)
+    item_double_clicked = Signal(QPersistentModelIndex, Mp3Entry)
     content_changed = Signal()
 
     playlist: PathLike[str] = None
@@ -108,6 +108,7 @@ class SongTable(QTableView):
 
     def __init__(self, _analyzer: Analyzer, _music_player):
         super().__init__()
+
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -117,7 +118,7 @@ class SongTable(QTableView):
 
         self.table_model = SongTableModel([], self)
         self.media_player = _music_player
-        self.filter_config = self.media_player.filter_widget.config()
+        self.filter_config = self.media_player.filter_widget.filter_config
         self.analyzer = _analyzer
 
         self.proxy_model = SongTableProxyModel(self)
@@ -349,7 +350,7 @@ class SongTable(QTableView):
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Enter:
             index = self.selectionModel().currentIndex()
-            self.play_track.emit(index, index.data(Qt.ItemDataRole.UserRole))
+            self.item_double_clicked.emit(index, index.data(Qt.ItemDataRole.UserRole))
             return
         elif event.key() == Qt.Key.Key_Delete:
             self.remove_items()
@@ -365,7 +366,7 @@ class SongTable(QTableView):
     def on_table_double_click(self, index: QModelIndex):
         if index.column() == SongTableModel.FILE_COL:
             data = self.mp3_data(index.row())
-            self.play_track.emit(index, data)
+            self.item_double_clicked.emit(index, data)
         elif index.column() == SongTableModel.FAV_COL:
             data = self.mp3_data(index.row())
             data.favorite = not data.favorite
@@ -485,9 +486,12 @@ class SongTable(QTableView):
         if self.playlist is not None:
             remove_m3u(datas, self.playlist)
 
+
     def show_context_menu(self, point: QPoint):
         # index = self.indexAt(point)
         menu = QMenu(self)
+
+
 
         edit_name_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.EditPaste), _("Edit Song"))
         edit_name_action.triggered.connect(self.edit_song)
@@ -873,7 +877,7 @@ class DirectoryTree(QTreeView):
             self.media_player.load_playlist(file_info.filePath(), activate=True)
         else:
             entry = parse_mp3(Path(file_info.filePath()))
-            self.player.play_track(entry, QPersistentModelIndex())
+            self.player.play_track(QPersistentModelIndex(), entry)
 
     def mp3_data(self, index: QModelIndex):
         data = self.model().itemData(index)
