@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType
@@ -503,3 +503,39 @@ def parse_m3u(file_path : str | PathLike[str]) -> list[Mp3Entry] | None:
     playlist = [parse_mp3(f) for f in paths]
     playlist = [song for song in playlist if song is not None]
     return playlist
+
+
+
+class Mp3FileLoader(QThread):
+    files_loaded = Signal(list)
+    finished = Signal()
+
+    def __init__(self, files: list[Path], parent=None):
+        super().__init__(parent)
+        self.files = files
+        self.is_interrupted = False
+
+    def run(self):
+        chunk = []
+        for file_path in self.files:
+            if self.is_interrupted:
+                break
+            try:
+                entry = parse_mp3(file_path)
+                if entry:
+                    chunk.append(entry)
+            except Exception:
+                pass
+
+            if len(chunk) >= 20:  # Chunk size
+                self.files_loaded.emit(chunk)
+                chunk = []
+
+        if chunk:
+            self.files_loaded.emit(chunk)
+
+        self.finished.emit()
+
+    def stop(self):
+        self.is_interrupted = True
+        self.wait()
