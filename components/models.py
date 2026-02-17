@@ -9,13 +9,12 @@ from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMime
 from PySide6.QtGui import QColor, QBrush, QIcon
 from PySide6.QtWidgets import QMessageBox
 
-from components.filter import FilterConfig
-
 from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, \
     update_mp3_category
 
 from config.theme import app_theme
-from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_tags, get_music_categories, CAT_VALENCE, CAT_AROUSAL
+from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_tags, get_music_categories, CAT_VALENCE, \
+    CAT_AROUSAL, FilterConfig
 
 logger = logging.getLogger("main")
 
@@ -79,7 +78,7 @@ class SongTableModel(QAbstractTableModel):
         else:
             return self.available_categories[index.column() - SongTableModel.CAT_COL].name
 
-    def set_filter_values(self, _config: FilterConfig):
+    def set_filter_config(self, _config: FilterConfig):
         self.beginResetModel()
         self.filter_config = _config
         self.endResetModel()

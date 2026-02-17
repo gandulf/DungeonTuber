@@ -22,7 +22,7 @@ from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX
 logger = logging.getLogger("main")
 
 
-def is_analyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
+def is_analyzed(file_path: PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
         entry = file_path
     else:
@@ -32,7 +32,7 @@ def is_analyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
             and entry.summary != "This is a mock summary." and not "Voxalyzer" in entry.summary)
 
 
-def is_voxalyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
+def is_voxalyzed(file_path: PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
         entry = file_path
     else:
@@ -41,7 +41,7 @@ def is_voxalyzed(file_path: str | PathLike[str] | Mp3Entry) -> bool:
     return entry.summary is not None and "Voxalyzer" in entry.summary
 
 
-def categories_to_string(categories: list[MusicCategory]):
+def categories_to_string(categories: list[MusicCategory]) -> str:
     lines = []
     # Iteriere über die Einträge und zähle mit, um Absätze zu setzen
     for cat in categories:
@@ -50,7 +50,7 @@ def categories_to_string(categories: list[MusicCategory]):
     return "\n\n".join(lines)
 
 
-def tags_to_string(data: dict[str, str]):
+def tags_to_string(data: dict[str, str]) -> str:
     lines = []
     # Iteriere über die Einträge und zähle mit, um Absätze zu setzen
     for cat in data.items():
@@ -87,10 +87,10 @@ class Analyzer(QObject):
         return self.threadpool.activeThreadCount()
 
     @abstractmethod
-    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+    def analyze_mp3(self, file_path: PathLike[str]) -> Any:
         pass
 
-    def process(self, file_path: str | PathLike[str]) -> bool:
+    def process(self, file_path: PathLike[str]) -> bool:
         try:
 
             logger.debug("Analyzing {0}", file_path)
@@ -130,7 +130,7 @@ class Analyzer(QObject):
             logger.error("An error occurred while fetching next worker: {0}", e)
             return False
 
-    def process_directory(self, directory_path: str | PathLike[str]) -> bool:
+    def process_directory(self, directory_path: PathLike[str]) -> bool:
         logger.debug("Processing {0}...", directory_path)
         files = list_mp3s(directory_path)
 
@@ -144,7 +144,7 @@ class Analyzer(QObject):
 
 class MockAnalyzer(Analyzer):
 
-    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+    def analyze_mp3(self, file_path: PathLike[str]) -> Any:
         logger.debug("--- MOCK MODE: Simulating analysis for {0} ---", file_path)
 
         selected_tags = random.sample(sorted(get_music_tags().keys()), random.randint(0, len(get_music_tags())))
@@ -167,7 +167,7 @@ class MockAnalyzer(Analyzer):
 
 class VoxalyzerAnalyzer(Analyzer):
 
-    def analyze_mp3(self, file_path: str | PathLike[str]) -> Any:
+    def analyze_mp3(self, file_path: PathLike[str]) -> Any:
         baseUrl: str = AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str)
         if not baseUrl or baseUrl == "":
             logger.error("Voxalyzer URL not set.")
@@ -206,7 +206,7 @@ class VoxalyzerAnalyzer(Analyzer):
 class Worker(QRunnable):
     analyzer: Analyzer
 
-    def __init__(self, file_path: str | PathLike[str], analyzer: Analyzer):
+    def __init__(self, file_path: PathLike[str], analyzer: Analyzer):
         super(Worker, self).__init__()
         self.file_path = file_path
         self.analyzer = analyzer
@@ -224,7 +224,7 @@ class Worker(QRunnable):
         else:
             self.analyzer.result.emit(self.file_path)  # Return the result of the processing
 
-    def process_file(self, file_path: str | PathLike[str]):
+    def process_file(self, file_path: PathLike[str]):
         logger.debug("Processing {0}...", file_path)
 
         if AppSettings.value(SettingKeys.SKIP_ANALYZED_MUSIC, True, type=bool) and is_analyzed(file_path):

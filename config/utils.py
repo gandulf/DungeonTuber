@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from ctypes import wintypes
+from os import PathLike
 
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -22,7 +23,10 @@ def clear_layout(layout):
         if child.widget():
             child.widget().deleteLater()
 
-def get_path(path:str):
+def children_layout(layout):
+    return [ layout.itemAt(i).widget() for i in range(layout.count()) ]
+
+def get_path(path:str) -> PathLike[str]:
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
         if sys._MEIPASS is not None:
@@ -88,7 +92,7 @@ def get_current_version()->str:
 
     return "Unknown"
 
-def is_latest_version():
+def is_latest_version() -> bool:
     current_version = QApplication.instance().applicationVersion()
     if current_version == "Dev" or current_version == "Unknown":
         return True
@@ -101,7 +105,7 @@ def is_latest_version():
 
 _latest_version : str | None = None
 
-def get_latest_version():
+def get_latest_version() -> str:
     global _latest_version
     if _latest_version is None:
         url = "https://api.github.com/repos/gandulf/DungeonTuber/releases/latest"
@@ -133,7 +137,7 @@ def get_latest_version():
         return None
 
 
-def get_available_locales():
+def get_available_locales() -> list[str]:
     locales_path = get_path("locales")
     if not os.path.exists(locales_path):
         return ["de","en"]
@@ -148,7 +152,6 @@ def get_available_locales():
             locales.append(lang_code)
 
     return locales
-
 
 def restart_application():
     """Restarts the current program, compatible with PyInstaller."""
@@ -167,8 +170,6 @@ def restart_application():
     except Exception as e:
         logger.exception("Failed to restart. {0}",e)
 
-
-
-def is_frozen():
+def is_frozen() -> bool:
     # Returns True if running as a PyInstaller bundle
     return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')

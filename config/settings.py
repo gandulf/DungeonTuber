@@ -31,7 +31,7 @@ CAT_SAD = "Sad"
 
 
 @total_ordering
-@dataclass(eq=True)
+@dataclass
 class MusicCategory:
     key: str
     name: str
@@ -97,18 +97,20 @@ class MusicCategory:
         return tooltip.removesuffix("\n")
 
 
-@dataclass(eq=True)
+@dataclass
 class Preset:
     name: str
     categories: dict[str, int] | None
     tags: list[str]
     genres: list[str]
+    bpm: int
 
-    def __init__(self, name: str, categories: dict[str, int], tags: list[str] = None, genres: list[str] = None):
+    def __init__(self, name: str, categories: dict[str, int], tags: list[str] = None, genres: list[str] = None, bpm: int =None):
         self.name = name
         self.categories = categories
         self.tags = tags
         self.genres = genres
+        self.bpm = bpm
 
     def __hash__(self):
         return hash(self.name)
@@ -224,6 +226,7 @@ def reset_presets():
 
 
 class SettingKeys(StrEnum):
+    WINDOW_SIZE="windowSize"
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
     NORMALIZE_VOLUME = "normalizeVolume"
@@ -602,3 +605,42 @@ class SettingsDialog(QDialog):
                 restart_application()
 
         super().accept()
+
+
+class FilterConfig:
+    categories: dict[str, int] = {}
+    tags: list[str] = []
+    bpm: int | None = None
+    genres: list[str] = []
+
+    def __init__(self, categories={}, tags=[], bpm=None, genres=[]):
+        self.categories = categories
+        self.tags = tags
+        self.bpm = bpm
+        self.genres = genres
+
+    def get_category(self, category_key: str, default: int = None) -> int:
+        return self.categories.get(category_key, default)
+
+    def toggle_tag(self, tag:str, state:int):
+        if state == 0 and tag in self.tags:
+            self.tags.remove(tag)
+        elif tag not in self.tags:
+            self.tags.append(tag)
+
+    def toggle_genre(self, genre:str, state:int):
+        if state == 0 and genre in self.genres:
+            self.genres.remove(genre)
+        elif genre not in self.genres:
+            self.genres.append(genre)
+
+    def empty(self) -> bool:
+        empty = True
+        for value in self.categories.values():
+            if value is not None:
+                empty = False
+                break
+
+        empty = empty and (self.tags is None or len(self.tags) == 0) and self.bpm is None and (self.genres is None or len(self.genres) == 0)
+
+        return empty

@@ -1,9 +1,9 @@
 import platform
+from os import PathLike
 
 from PySide6.QtCore import QTimer, Signal, QObject
 from vlc import MediaListPlayer, Media, Instance, PlaybackMode, State
 
-from components.visualizer import VisualizerFrame
 from config.settings import AppSettings, SettingKeys
 
 DEFAULT_VOLUME = 70
@@ -18,8 +18,6 @@ class AudioEngine(QObject):
     volume_changed = Signal(int)
     state_changed = Signal(bool)  # True if playing, False if stopped/paused
     position_changed = Signal(int, str, str)  # position (0-1000), current_time, total_time
-
-    video_frame : VisualizerFrame
 
     list_player: MediaListPlayer = None
     player: Media = None
@@ -73,11 +71,11 @@ class AudioEngine(QObject):
         self.player = self.list_player.get_media_player()
         self.player.audio_set_volume(self.current_volume)
 
-    def load_media(self, file_path):
+    def load_media(self, file_path: PathLike[str]):
         media = self.instance.media_new(file_path)
         self.player.set_media(media)
 
-    def loop_media(self, file_path):
+    def loop_media(self, file_path: PathLike[str]):
         # 2. Create a Media List and add your song
         media_list = self.instance.media_list_new()
         media = self.instance.media_new(file_path)
@@ -122,7 +120,7 @@ class AudioEngine(QObject):
         self.state_changed.emit(False)
         self.set_position(0)
 
-    def set_user_volume(self, value_0_150):
+    def set_user_volume(self, value_0_150: int):
         """Logarithmic volume mapping."""
         if value_0_150 <= 0:
             vol = 0
@@ -132,7 +130,7 @@ class AudioEngine(QObject):
         self.current_volume = vol
         self.player.audio_set_volume(vol)
 
-    def set_position(self, position_0_1000):
+    def set_position(self, position_0_1000: int):
         """Set player position (0-1000 scale)."""
         if self.player.is_seekable():
             self.player.set_position(position_0_1000 / 1000.0)
@@ -165,7 +163,7 @@ class AudioEngine(QObject):
             format_time(current_time_ms),
             format_time(total_time_ms)
         )
-def format_time(ms):
+def format_time(ms: int):
     """Converts milliseconds to MM:SS string."""
     if ms < 0:
         return "00:00"

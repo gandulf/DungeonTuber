@@ -47,8 +47,17 @@ class BPMSlider(QWidget):
     def set_value(self, value):
         self.bpm_widget.setValue(value)
 
-    def reset(self):
+    def reset(self, signal:bool = True):
+        originalBlockSignal = self.bpm_widget.signalsBlocked()
+        if not signal:
+            self.bpm_widget.blockSignals(True)
+
         self.bpm_widget.setValue(0)
+
+        if not signal:
+            self.bpm_label.setText("")
+            self.bpm_widget.blockSignals(originalBlockSignal)
+
     def _snap_and_update_label(self, value):
         """Rounds the dial value to the closest multiple of 20 and updates the label."""
 
@@ -281,7 +290,7 @@ class CategoryTooltip(QWidget):
         painter.setBrush(QBrush(QColor(self.palette().color(QPalette.ColorRole.Base))))
         painter.drawRoundedRect(self.rect(),4.0,4.0)
 
-    def setText(self, text: str):
+    def set_text(self, text: str):
         self.__text_widget.setStyleSheet(f"font-size: {app_theme.font_size_small}pt")
         self.__text_widget.setText(text)
         self._update_ui()
@@ -298,7 +307,7 @@ class CategoryTooltip(QWidget):
         rect = rect.marginsAdded(self.contentsMargins())
         self.__text_widget.resize(rect.size())
         self.resize(rect.size())
-        pos.setX(pos.x() - self.width() / 2 + self.__parent.width() /2)
+        pos.setX(int(pos.x() - self.width() / 2 + self.__parent.width() / 2 ))
         pos.setY(pos.y() + self.height() + self.__parent.height() -8)
         self.move(pos)
 
@@ -332,7 +341,7 @@ class CategoryTooltip(QWidget):
 
 
 
-class CategoryWidget(QVBoxLayout):
+class CategoryWidget(QWidget):
     valueChanged = Signal(object)  #actual int | None but not possible with c++ binding
     _block_signals = False
     _orig_value: int
@@ -343,8 +352,10 @@ class CategoryWidget(QVBoxLayout):
     def __init__(self, category: MusicCategory = None, parent=None, min_value=0, max_value=10):
         super(CategoryWidget, self).__init__(parent)
 
-        self.setContentsMargins(0,0,0,0)
-        self.setSpacing(0)
+        self.layout = QVBoxLayout(self)
+
+        self.layout.setContentsMargins(0,0,0,0)
+        self.layout.setSpacing(0)
 
         self.category = category
         self.label = QLabel(category.name)
@@ -371,9 +382,9 @@ class CategoryWidget(QVBoxLayout):
         self.val_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.val_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-        self.addWidget(self.label)
-        self.addWidget(self.slider, 0, Qt.AlignmentFlag.AlignHCenter)
-        self.addWidget(self.val_label)
+        self.layout.addWidget(self.label)
+        self.layout.addWidget(self.slider, 0, Qt.AlignmentFlag.AlignHCenter)
+        self.layout.addWidget(self.val_label)
 
     def mouse_down(self, event: QMouseEvent):
         self._visible_tooltip =True
@@ -408,9 +419,9 @@ class CategoryWidget(QVBoxLayout):
     def refresh_tooltip(self, show:bool=True):
         if self.value() is not None:
             nearest_level = min(self.category.levels.keys(), key=lambda x: abs(int(x) - self.value()))
-            self.tooltip.setText(self.category.levels.get(nearest_level, ""))
+            self.tooltip.set_text(self.category.levels.get(nearest_level, ""))
         else:
-            self.tooltip.setText("")
+            self.tooltip.set_text("")
 
         if show and self._visible_tooltip and self.tooltip.isHidden():
             self.tooltip.show(True)
@@ -424,7 +435,7 @@ class CategoryWidget(QVBoxLayout):
             self.refresh_tooltip(False)
         else:
             self.val_label.setText("")
-            self.tooltip.setText("")
+            self.tooltip.set_text("")
 
     def reset(self, signal: bool = True):
         self.set_value(self._disable_value, signal)
@@ -639,7 +650,11 @@ class ToggleSlider(QCheckBox):
 
         painter.restore()
 
-    def setChecked(self, checked):
+    def setChecked(self, checked: bool, block_signals: bool = False):
+        original_blocked = self.signalsBlocked()
+        if block_signals:
+            self.blockSignals(True)
+
         super().setChecked(checked)
         # Ensure we are in the finished animation state if there are signals blocked from the outside!
         if self.signalsBlocked():
@@ -647,6 +662,9 @@ class ToggleSlider(QCheckBox):
             # Ensure the toggle is updated visually even though it seems this is not necessary.
             self.update()
         self._update_text()
+
+        if block_signals:
+            self.blockSignals(original_blocked)
 
     def setCheckedNoAnim(self, checked):
         self._animation.setDuration(0)

@@ -1,21 +1,26 @@
 import functools
 import os
 from pathlib import Path
+from os import PathLike
 
-from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, Signal, QRect, QSize, QAbstractTableModel, \
-    QObject
-from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QFont, QFontMetrics, QPalette, QPen, QDropEvent, QKeyEvent
+from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
+    Signal, QRect, QSize, QAbstractTableModel, \
+    QObject, QPoint, QItemSelection
+from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QFont, QFontMetrics, QPalette, QPen, QDropEvent, QKeyEvent, \
+    QDragEnterEvent, QDragMoveEvent, QPaintEvent
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QAbstractScrollArea, QListView, QStyleOptionViewItem, QStyle, QWidget, \
     QStyledItemDelegate, QHeaderView, QAbstractItemView, QTableView
-from logic.analyzer import Analyzer
 
-from logic.mp3 import parse_mp3, Mp3Entry, append_m3u, update_mp3_tags, remove_m3u, update_mp3_favorite, Mp3FileLoader
+from components.dialogs import EditSongDialog
+from logic.analyzer import Analyzer
+from logic.mp3 import parse_mp3, Mp3Entry, append_m3u, update_mp3_tags, remove_m3u, update_mp3_favorite, Mp3FileLoader, \
+    save_playlist
 
 from components.widgets import FileFilterProxyModel, StarRating
+from components.models import SongTableModel, SongTableProxyModel
 
-from config.settings import AppSettings, SettingKeys, CAT_VALENCE, CAT_AROUSAL
+from config.settings import AppSettings, SettingKeys, CAT_VALENCE, CAT_AROUSAL, MusicCategory, FilterConfig
 from config.theme import app_theme
-from models import SongTableModel, SongTableProxyModel
 
 class AutoSearchHelper():
     _ignore_keys = [Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right]
@@ -25,18 +30,18 @@ class AutoSearchHelper():
         self.proxy_model = proxy_model
         self.search_string = ""
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event: QKeyEvent):
         # If user presses Backspace, remove last char
         if event.key() in self._ignore_keys:
             return False
 
-        if event.key() == Qt.Key_Backspace:
+        if event.key() == Qt.Key.Key_Backspace:
             self.search_string = self.search_string[:-1]
         # If it's a valid character (letter/number), append to search
         elif event.text().isalnum() or event.text() in " _-":
             self.search_string += event.text()
         # If Escape is pressed, clear filter
-        elif event.key() == Qt.Key_Escape:
+        elif event.key() == Qt.Key.Key_Escape:
             self.search_string = ""
         else:
             return False
@@ -48,8 +53,7 @@ class AutoSearchHelper():
 
         return True
 
-    def paintEvent(self, event):
-
+    def paintEvent(self, event: QPaintEvent):
         # 2. If there is a search string, draw the popup overlay
         if self.search_string:
             painter = QPainter(self.parent.viewport())
@@ -93,11 +97,11 @@ class AutoSearchHelper():
 
 
 class SongTable(QTableView):
-    play_track = Signal(int, Mp3Entry)
-    contentChanged = Signal()
+    play_track = Signal(QPersistentModelIndex, Mp3Entry)
+    content_changed = Signal()
 
-    playlist: os.PathLike[str] = None
-    directory: os.PathLike[str] = None
+    playlist: PathLike[str] = None
+    directory: PathLike[str] = None
 
     table_model: SongTableModel
     proxy_model: SongTableProxyModel
@@ -113,8 +117,8 @@ class SongTable(QTableView):
 
         self.table_model = SongTableModel([], self)
         self.media_player = _music_player
+        self.filter_config = self.media_player.filter_widget.config()
         self.analyzer = _analyzer
-        self.filter_config = _music_player.filter_widget.config()
 
         self.proxy_model = SongTableProxyModel(self)
         self.proxy_model.sort_changed.connect(self.on_sort_changed)
@@ -152,6 +156,26 @@ class SongTable(QTableView):
         self.source_files: list[Path] = []
         self.is_loaded = False
         self.loader = None
+
+
+    def get_available_categories(self) -> list[MusicCategory]:
+        return self.table_model.available_categories
+
+    def get_available_tags(self) -> list[str]:
+        return self.table_model.available_tags
+
+    def get_available_genres(self) -> list[str]:
+        return self.table_model.available_genres
+
+    def set_filter_config(self,filter_config: FilterConfig):
+        self.filter_config = filter_config
+        self.table_model.set_filter_config(filter_config)
+
+        self.update_category_column_visibility()
+
+        self.selectRow(0)
+        self.sortByColumn(SongTableModel.SCORE_COL, Qt.SortOrder.AscendingOrder)
+
 
     def calc_header_width(self, index:int):
         font_metrics = self.horizontalHeader().fontMetrics()
@@ -205,7 +229,7 @@ class SongTable(QTableView):
     def on_load_finished(self):
         self.is_loaded = True
         self.loader = None
-        self.contentChanged.emit()
+        self.content_changed.emit()
 
     def update_font_sizes(self):
         if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
@@ -325,7 +349,7 @@ class SongTable(QTableView):
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Enter:
             index = self.selectionModel().currentIndex()
-            self.play_track.emit(index.row(), index.data(Qt.ItemDataRole.UserRole))
+            self.play_track.emit(index, index.data(Qt.ItemDataRole.UserRole))
             return
         elif event.key() == Qt.Key.Key_Delete:
             self.remove_items()
@@ -341,18 +365,29 @@ class SongTable(QTableView):
     def on_table_double_click(self, index: QModelIndex):
         if index.column() == SongTableModel.FILE_COL:
             data = self.mp3_data(index.row())
-            self.play_track.emit(index.row(), data)
+            self.play_track.emit(index, data)
         elif index.column() == SongTableModel.FAV_COL:
             data = self.mp3_data(index.row())
             data.favorite = not data.favorite
             update_mp3_favorite(data.path, data.favorite)
             self.repaint()
 
-    def refresh_item(self, file_path: str | os.PathLike[str]):
+    def refresh_item(self, file_path: PathLike[str]):
         data = parse_mp3(Path(file_path))
         index = self.index_of(data)
-        if index >= 0:
-            self.model().setData(self.model().index(index, SongTableModel.FILE_COL), data, Qt.ItemDataRole.UserRole)
+        if index.isValid():
+            self.model().setData(index, data, Qt.ItemDataRole.UserRole)
+
+    def setModel(self, model: SongTableModel | SongTableProxyModel):
+        if isinstance(model, SongTableProxyModel):
+            super().setModel(model)
+        else:
+            self.table_model = model
+            self.table_model.on_mime_drop.connect(self.update_playlist)
+            self.proxy_model.setSourceModel(model)
+
+            self.update_category_column_visibility()
+            self.is_loaded = True
 
     def populate_table(self, table_data: list[Mp3Entry]):
         self.table_model = SongTableModel(table_data, self)
@@ -365,7 +400,7 @@ class SongTable(QTableView):
 
     def update_playlist(self):
         if self.playlist is not None:
-            self.media_player.save_playlist(self.playlist, self.mp3_datas())
+            save_playlist(self.playlist, self.mp3_datas())
 
     def is_column_visible(self, category: str):
         if AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool):
@@ -405,11 +440,12 @@ class SongTable(QTableView):
         else:
             return []
 
-    def index_of(self, entry: Mp3Entry) -> int:
+    def index_of(self, entry: Mp3Entry) -> QModelIndex:
         for row in range(self.rowCount()):
             if self.mp3_data(row).path == entry.path:
-                return row
-        return -1
+                return self.model().index(row,0)
+
+        return self.model().index(-1,0)
 
     def mp3_data(self, row: int) -> Mp3Entry | None:
         index = self.model().index(row, SongTableModel.FILE_COL)
@@ -427,14 +463,12 @@ class SongTable(QTableView):
             self.analyzer.process(data.path)
 
     def edit_song(self):
-        from DungeonTuber import EditSongDialog
-
         data: Mp3Entry = self.selectionModel().currentIndex().data(Qt.ItemDataRole.UserRole)
         dialog = EditSongDialog(data, self)
         if dialog.exec():
-            row = self.index_of(data)
-            if row >= 0:
-                self.model().setData(self.model().index(row, 0), data, Qt.ItemDataRole.UserRole)
+            index = self.index_of(data)
+            if index.isValid():
+                self.model().setData(index, data, Qt.ItemDataRole.UserRole)
                 self.update()
 
     def remove_items(self):
@@ -451,7 +485,7 @@ class SongTable(QTableView):
         if self.playlist is not None:
             remove_m3u(datas, self.playlist)
 
-    def show_context_menu(self, point):
+    def show_context_menu(self, point: QPoint):
         # index = self.indexAt(point)
         menu = QMenu(self)
 
@@ -487,7 +521,7 @@ class SongTable(QTableView):
         menu.show()
         menu.exec(self.mapToGlobal(point))
 
-    def dragEnterEvent(self, event):
+    def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             if self.playlist:
                 event.accept()
@@ -504,7 +538,7 @@ class SongTable(QTableView):
         else:
             super().dragEnterEvent(event)
 
-    def dragMoveEvent(self, event):
+    def dragMoveEvent(self, event: QDragMoveEvent):
         if event.mimeData().hasUrls():
             if self.playlist:
                 event.accept()
@@ -540,7 +574,7 @@ class SongTable(QTableView):
                 songs = [parse_mp3(path) for path in paths]
                 songs = [song for song in songs if song is not None]
 
-                if (index.isValid()):
+                if index.isValid():
                     append_m3u(songs, self.playlist, index.row())
                     self.table_model.insertRows(index.row(), songs)
                 else:
@@ -571,7 +605,7 @@ class SongTable(QTableView):
         def __init__(self, parent: QObject = None):
             super().__init__(parent)
 
-        def setModelData(self, editor, model, index):
+        def setModelData(self, editor : QWidget, model : QAbstractTableModel, index: QModelIndex | QPersistentModelIndex):
             # Grab the text directly from the editor
             text = editor.text()
             if not text:
@@ -587,11 +621,11 @@ class SongTable(QTableView):
         def __init__(self, parent: QObject = None):
             super().__init__(parent)
 
-        def paint(self, painter, option, index):
+        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
             fav_icon_color = app_theme.get_green_brush()
             self.star_rating.paint(painter, index.data(), option.rect, option.palette, fav_icon_color)
 
-        def sizeHint(self, option, index):
+        def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
             return self.star_rating.size_hint()
 
     class LabelItemDelegate(QStyledItemDelegate):
@@ -600,10 +634,10 @@ class SongTable(QTableView):
         def __init__(self, parent: QObject = None):
             super().__init__(parent)
 
-        def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex):
+        def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
             return self._size
 
-        def paint(self, painter, option: QStyleOptionViewItem, index, /):
+        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex, /):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
             data = index.model().data(index, Qt.ItemDataRole.UserRole)
 
@@ -703,7 +737,7 @@ class SongTable(QTableView):
 class DirectoryTree(QTreeView):
     open = Signal(QModelIndex)
 
-    def __init__(self, parent, player, media_player):
+    def __init__(self, parent: QWidget | None, player, media_player):
         super().__init__(parent)
 
         self.player = player
@@ -772,7 +806,7 @@ class DirectoryTree(QTreeView):
         if AppSettings.value(SettingKeys.ROOT_DIRECTORY) is not None:
             index = self.directory_model.index(AppSettings.value(SettingKeys.ROOT_DIRECTORY))
             if index.isValid():
-                self.setRootIndexInSource(index)
+                self.set_root_index_in_source(index)
                 self.clear_home_action.setVisible(True)
         else:
             music = os.path.join(Path.home(), "Music")
@@ -782,12 +816,12 @@ class DirectoryTree(QTreeView):
                 index = self.directory_model.index(os.path.abspath(Path.home()))
 
             if index.isValid():
-                self.setRootIndexInSource(index)
+                self.set_root_index_in_source(index)
                 self.clear_home_action.setVisible(True)
 
         self.open.connect(self.tree_load_file)
 
-    def changeEvent(self, event, /):
+    def changeEvent(self, event: QEvent, /):
         if event.type() == QEvent.Type.FontChange:
             list_font = self.font()
             list_font.setPointSizeF(app_theme.font_size)
@@ -798,7 +832,7 @@ class DirectoryTree(QTreeView):
 
         self.proxy_model.endFilterChange(QSortFilterProxyModel.Direction.Rows)
 
-    def selectionChanged(self, selected, deselected, /):
+    def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection, /):
         if len(self.selectedIndexes()) > 0:
             self.set_home_action.setEnabled(True)
             self.open_action.setEnabled(True)
@@ -806,18 +840,18 @@ class DirectoryTree(QTreeView):
             self.set_home_action.setEnabled(False)
             self.open_action.setEnabled(False)
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event: QKeyEvent):
         if self.autoSearchHelper.keyPressEvent(event):
             self._apply_proxy_root()
             self.viewport().update()
         else:
             super().keyPressEvent(event)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent):
         super().paintEvent(event)
         self.autoSearchHelper.paintEvent(event)
 
-    def setRootIndexInSource(self, source_index: QModelIndex):
+    def set_root_index_in_source(self, source_index: QModelIndex):
         """Use this instead of setRootIndex to set your 'Home' folder."""
         self._source_root_index = QPersistentModelIndex(source_index)
         self._apply_proxy_root()
@@ -839,7 +873,7 @@ class DirectoryTree(QTreeView):
             self.media_player.load_playlist(file_info.filePath(), activate=True)
         else:
             entry = parse_mp3(Path(file_info.filePath()))
-            self.player.play_track(entry, -1)
+            self.player.play_track(entry, QPersistentModelIndex())
 
     def mp3_data(self, index: QModelIndex):
         data = self.model().itemData(index)
@@ -850,15 +884,13 @@ class DirectoryTree(QTreeView):
             return parse_mp3(Path(file_info.filePath()))
 
     def edit_song(self):
-        from DungeonTuber import  EditSongDialog
-
         data: Mp3Entry = self.mp3_data(self.selectionModel().currentIndex())
         dialog = EditSongDialog(data, self)
         if dialog.exec():
             if self.selectionModel().currentIndex().row() >= 0:
                 self.update()
 
-    def show_context_menu(self, point):
+    def show_context_menu(self, point: QPoint):
         # model_index = self.indexAt(point)
 
         menu = QMenu(self)
@@ -878,7 +910,6 @@ class DirectoryTree(QTreeView):
             add_new_action = add_to_playlist.addAction(_("<New Playlist>"))
             add_new_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
             add_new_action.triggered.connect(functools.partial(self.media_player.pick_new_playlist, datas))
-            add_to_playlist.addAction(add_new_action)
 
             for playlist in self.media_player.get_playlists():
                 add_action = add_to_playlist.addAction(Path(playlist).name.removesuffix(".m3u").removesuffix(".M3U"))
@@ -913,22 +944,22 @@ class DirectoryTree(QTreeView):
             file_path = self.directory_model.filePath(source_index)
             self.media_player.analyze_file(file_path)
 
-    def double_clicked_action(self, index):
+    def double_clicked_action(self, index: QModelIndex | QPersistentModelIndex):
         source_index = self.proxy_model.mapToSource(index)
         file_info = self.directory_model.fileInfo(source_index)
         if file_info.isFile():
             self.open.emit(index)
 
-    def _set_root_index(self, root_index: QModelIndex):
+    def _set_root_index(self, root_index: QModelIndex | QPersistentModelIndex):
         if root_index.isValid():
             source_index = self.proxy_model.mapToSource(root_index)
             AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, self.directory_model.filePath(source_index))
-            self.setRootIndexInSource(source_index)
+            self.set_root_index_in_source(source_index)
             self.clear_home_action.setVisible(True)
             self.go_parent_action.setVisible(True)
         else:
             AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, None)
-            self.setRootIndexInSource(QModelIndex())
+            self.set_root_index_in_source(QModelIndex())
             self.clear_home_action.setVisible(False)
             self.go_parent_action.setVisible(False)
 
@@ -990,7 +1021,7 @@ class EffectList(QListView):
         else:
             self.set_grid_view()
 
-    def mp3_data(self, index:QModelIndex):
+    def mp3_data(self, index: QModelIndex):
         source_index = self.proxy_model.mapToSource(index)
         return self.table_model._data[source_index.row()]
 
@@ -1050,11 +1081,11 @@ class EffectList(QListView):
 
         self.update()
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event: QKeyEvent):
         if not self.auto_search_helper.keyPressEvent(event):
             super().keyPressEvent(event)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent):
         super().paintEvent(event)
         self.auto_search_helper.paintEvent(event)
 
@@ -1066,7 +1097,7 @@ class EffectList(QListView):
         def __init__(self, parent: QWidget = None):
             super().__init__(parent)
 
-        def initStyleOption(self, option, index):
+        def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
             super().initStyleOption(option, index)
             # Remove the 'HasCheckIndicator' feature so Qt doesn't draw the box
             option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
@@ -1077,7 +1108,7 @@ class EffectList(QListView):
         def is_grid_mode(self):
             return self.parent().viewMode() == QListView.ViewMode.IconMode
 
-        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
             # 1. Initialize the style option
             self.initStyleOption(option, index)
 
@@ -1174,7 +1205,7 @@ class EffectList(QListView):
             else:
                 super().paint(painter, option, index)
 
-        def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex):
+        def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
             # IMPORTANT: You must increase the size hint,
             # otherwise the bottom of your text will be cut off!
             size = super().sizeHint(option, index)

@@ -34,7 +34,7 @@ class Mp3Entry(object):
     categories : dict[str,int]
     _tags: list[str]
 
-    def __init__(self, name: str = None, path :str | PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = [], artist: str = None, album:str = None, title:str = None, genre:list[str] | str = [], bpm: int = None):
+    def __init__(self, name: str = None, path :PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = [], artist: str = None, album:str = None, title:str = None, genre:list[str] | str = [], bpm: int = None):
         if name is not None:
             self.name = name.removesuffix(".mp3").removesuffix(".MP3")
         else:
@@ -119,7 +119,7 @@ class Mp3Entry(object):
                     self._cover = icon_pixmap
                     self.has_cover = True
 
-def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
+def parse_mp3(file_path : PathLike[str]) -> Mp3Entry | None:
 
     try:
         entry = Mp3Entry(name=Path(file_path).name, path=file_path)
@@ -182,7 +182,7 @@ def parse_mp3(file_path : str | PathLike[str]) -> Mp3Entry | None:
         logger.error("Error reading tags for {0}: {1}", file_path, e)
     return None
 
-def _audio(path: str | PathLike[str] | MP3) -> MP3:
+def _audio(path: PathLike[str] | MP3) -> MP3:
     if isinstance(path, MP3):
         audio = path
     else:
@@ -193,7 +193,7 @@ def _audio(path: str | PathLike[str] | MP3) -> MP3:
 
     return audio
 
-def update_mp3_data(path: str | PathLike[str], data: Mp3Entry):
+def update_mp3_data(path: PathLike[str], data: Mp3Entry):
     audio = _audio(path)
 
     update_mp3_title(audio, data.title, False)
@@ -209,7 +209,7 @@ def update_mp3_data(path: str | PathLike[str], data: Mp3Entry):
 
     audio.save()
 
-def update_mp3(path : str | PathLike[str], title: str, summary: str, favorite: bool, categories: dict[str,int], tags: list[str], genre:str = None):
+def update_mp3(path : PathLike[str], title: str, summary: str, favorite: bool, categories: dict[str,int], tags: list[str], genre:str = None):
     audio = _audio(path)
 
     update_mp3_title(audio, title, False)
@@ -221,7 +221,7 @@ def update_mp3(path : str | PathLike[str], title: str, summary: str, favorite: b
 
     audio.save()
 
-def update_mp3_favorite(path : str | PathLike[str] | MP3, favorite: bool, save: bool = True):
+def update_mp3_favorite(path : PathLike[str] | MP3, favorite: bool, save: bool = True):
     audio = _audio(path)
 
     audio.tags.add(TXXX(Encoding.UTF8, desc='ai_favorite', text=[favorite]))
@@ -291,7 +291,7 @@ def update_mp3_genre(path : str| PathLike[str]| MP3, new_genre : list[str] | str
         logger.debug("Updated genre to {0} for {1}", new_genre, path)
 
 
-def update_mp3_categories(path: str | PathLike[str] | MP3, categories: dict[str, int], save: bool = True):
+def update_mp3_categories(path: PathLike[str] | MP3, categories: dict[str, int], save: bool = True):
     audio = _audio(path)
 
     if categories:
@@ -343,10 +343,10 @@ def update_mp3_tags(path: str| PathLike[str] | MP3, tags : list[str], save : boo
         audio.save()
         logger.debug("Updated tags to {0} for {1}", tags,path)
 
-def list_mp3s(path : str | PathLike[str]):
+def list_mp3s(path : PathLike[str]):
     return glob.glob("**/*.mp3", root_dir=path, recursive=True)
 
-def update_categories_and_tags(path : str | PathLike[str] | ID3, summary : str, categories: dict[str,int] = None, tags: list[str] = None):
+def update_categories_and_tags(path : PathLike[str] | ID3, summary : str, categories: dict[str,int] = None, tags: list[str] = None):
     """Adds categories and summary as MP3 tags to the file."""
     audio = _audio(path)
 
@@ -358,7 +358,7 @@ def update_categories_and_tags(path : str | PathLike[str] | ID3, summary : str, 
     audio.save()
     logger.debug("Tags added to {0}", path)
 
-def update_mp3_cover(path : str | PathLike[str] | MP3, image_path: str | PathLike[str]):
+def update_mp3_cover(path : PathLike[str] | MP3, image_path: PathLike[str]):
     audio = _audio(path)
 
     # 2. Read the image data
@@ -390,7 +390,7 @@ def update_mp3_cover(path : str | PathLike[str] | MP3, image_path: str | PathLik
 
     audio.save()
 
-def print_mp3_tags(file_path: str | PathLike[str]):
+def print_mp3_tags(file_path: PathLike[str]):
     """Prints all ID3 tags from an MP3 file."""
     try:
         if logger.isEnabledFor(logging.DEBUG):
@@ -407,14 +407,14 @@ def print_mp3_tags(file_path: str | PathLike[str]):
         logger.error("An error occurred while reading tags: {0}",e)
 
 
-def remove_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
+def remove_m3u(entries: list[Mp3Entry], playlist : PathLike[str]):
     files = parse_m3u(playlist)
 
     filtered = [file for file in files if file not in entries]
 
     create_m3u(filtered, playlist)
 
-def append_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str], index: int = -1):
+def append_m3u(entries: list[Mp3Entry], playlist : PathLike[str], index: int = -1):
     try:
         if len(entries) > 0:
 
@@ -440,7 +440,7 @@ def append_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str], index: i
         logger.error("ERROR occurred when processing entries.")
         logger.error("Text: {0}", sys.exc_info()[0])
 
-def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
+def create_m3u(entries: list[Mp3Entry], playlist : PathLike[str]):
 
     try:
         if len(entries) > 0:
@@ -463,7 +463,7 @@ def create_m3u(entries: list[Mp3Entry], playlist : str | PathLike[str]):
         logger.error("ERROR occurred when processing entries.")
         logger.error("Text: {0}", sys.exc_info()[0])
 
-def get_m3u_paths(file_path : str | PathLike[str]) -> list[Path] | None:
+def get_m3u_paths(file_path : PathLike[str]) -> list[Path] | None:
     with open(file_path,'r', encoding="utf-8") as infile:
 
         # All M3U files start with #EXTM3U.
@@ -495,7 +495,7 @@ def get_m3u_paths(file_path : str | PathLike[str]) -> list[Path] | None:
                 # reset the song variable so it doesn't use the same EXTINF more than once
     return paths
 
-def parse_m3u(file_path : str | PathLike[str]) -> list[Mp3Entry] | None:
+def parse_m3u(file_path : PathLike[str]) -> list[Mp3Entry] | None:
     paths = get_m3u_paths(file_path)
     if paths is None:
         return None
@@ -539,3 +539,10 @@ class Mp3FileLoader(QThread):
     def stop(self):
         self.is_interrupted = True
         self.wait()
+
+def save_playlist(playlist_path, entries: list[Mp3Entry]) -> bool:
+    if entries and len(entries) > 0:
+        create_m3u(entries, playlist_path)
+        return True
+    else:
+        return False

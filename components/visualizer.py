@@ -8,6 +8,7 @@ from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPain
 from PySide6.QtWidgets import QWidget, QFrame
 
 from config.settings import AppSettings, SettingKeys
+from logic.audioengine import AudioEngine
 
 logger = logging.getLogger("main")
 
@@ -21,19 +22,19 @@ class Visualizer:
     video_frame = None
     visualizer = None
 
-    last_playing = None
+    last_playing: bool = None
     last_value = None
     last_track = None
     last_position = None
 
     playing = False
 
-    def __init__(self, engine=None):
-        self.engine = engine
+    def __init__(self, engine : AudioEngine=None):
+        self.engine: AudioEngine = engine
         self.playing = False
 
     @classmethod
-    def get_visualizer(cls, engine, visualizer=None):
+    def get_visualizer(cls, engine: AudioEngine, visualizer=None):
         vis = AppSettings.value(SettingKeys.VISUALIZER, "NONE", type=str)
         _visualizer = None
         if vis == "VLC":
@@ -52,7 +53,7 @@ class Visualizer:
                 _visualizer.load_mp3(visualizer.last_track)
         return _visualizer
 
-    def set_state(self, playing, value):
+    def set_state(self, playing: bool, value: int):
         self.last_playing = playing
         self.playing = playing
         self.last_value = value
@@ -61,15 +62,15 @@ class Visualizer:
         logger.debug("Set position to {0} promille", position_0_1000)
         self.last_position = position_0_1000
 
-    def load_mp3(self, track_path: str | PathLike[str]):
+    def load_mp3(self, track_path: PathLike[str]):
         logger.debug("File {0} loaded for visualizer", track_path)
         self.last_track = track_path
 
 class VisualizerFrame(QFrame, Visualizer):
     resized = Signal(QSize)
 
-    def __init__(self, engine=None):
-        super().__init__(engine =engine)
+    def __init__(self, engine: AudioEngine=None):
+        super().__init__(engine=engine)
         self.setAutoFillBackground(True)
         self.attach_video_frame()
 
@@ -86,14 +87,14 @@ class VisualizerFrame(QFrame, Visualizer):
         # specific, so we must give the ID of the QFrame (or similar object) to
         # vlc. Different platforms have different functions for this
         if platform.system() == "Linux":  # for Linux using the X Server
-            self.engine.media_player.set_xwindow(int(self.winId()))
+            self.engine.player.set_xwindow(int(self.winId()))
         elif platform.system() == "Windows":  # for Windows
-            self.engine.media_player.set_hwnd(int(self.winId()))
+            self.engine.player.set_hwnd(int(self.winId()))
         elif platform.system() == "Darwin":  # for MacOS
-            self.engine.media_player.set_nsobject(int(self.winId()))
+            self.engine.player.set_nsobject(int(self.winId()))
 
     def resize_visualizer(self, size: QSize):
-        self.engine.media_player.video_set_aspect_ratio(f"{size.width()}:{size.height()}")
+        self.engine.player.video_set_aspect_ratio(f"{size.width()}:{size.height()}")
 
 
 class EmptyVisualizerWidget(QWidget, Visualizer):
@@ -102,7 +103,7 @@ class EmptyVisualizerWidget(QWidget, Visualizer):
 
 class FakeVisualizerWidget(QWidget, Visualizer):
 
-    def __init__(self, engine):
+    def __init__(self, engine: AudioEngine):
         super().__init__(engine = engine)
         self.setMinimumHeight(40)
         self.setContentsMargins(4, 4, 4, 4)

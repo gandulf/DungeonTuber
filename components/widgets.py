@@ -1,8 +1,10 @@
 import math
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton
-from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, QPoint, QSortFilterProxyModel
-from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent, QColor
+from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, \
+    QPoint, QSortFilterProxyModel, QObject, QModelIndex, QPersistentModelIndex
+from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent, QColor, \
+    QPaintEvent
 
 PAINTING_SCALE_FACTOR = 20
 
@@ -28,7 +30,7 @@ class StarRating:
     def size_hint(self):
         return QSize(PAINTING_SCALE_FACTOR, PAINTING_SCALE_FACTOR)
 
-    def paint(self, painter, filled: bool, rect: QRect, palette: QPalette, brush: QBrush = None):
+    def paint(self, painter: QPainter, filled: bool, rect: QRect, palette: QPalette, brush: QBrush = None):
         """ Paint the stars (and/or diamonds if we're in editing mode). """
         with QPainterStateGuard(painter):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -59,7 +61,7 @@ class IconLabel(QWidget):
     clicked = Signal()
 
     def mousePressEvent(self, ev: QMouseEvent):
-        if (ev.button() == Qt.MouseButton.LeftButton):
+        if ev.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
 
     def __init__(self, icon: QIcon, text:str, final_stretch:bool=True, parent:QWidget= None):
@@ -107,8 +109,8 @@ class IconLabel(QWidget):
         elif isinstance(self.layout.itemAt(0), QSpacerItem):
             spacer = self.layout.takeAt(0)
 
-    def set_style_sheet(self, str):
-        self.text_label.setStyleSheet(str)
+    def set_style_sheet(self, stylesheet: str):
+        self.text_label.setStyleSheet(stylesheet)
 
     def set_text(self, text:str):
         self.text_label.setText(text)
@@ -122,11 +124,11 @@ class IconLabel(QWidget):
 
 
 class FeatureOverlay(QWidget):
-    def __init__(self, parent, steps):
+    def __init__(self, parent: QWidget | None, steps: list):
         super().__init__(parent)
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
         self.steps = steps
         self.current_step = 0
@@ -161,10 +163,10 @@ class FeatureOverlay(QWidget):
 
         # Animatable property
 
-    def get_highlight_rect(self):
+    def get_highlight_rect(self) -> QRect:
         return self._highlight_rect
 
-    def set_highlight_rect(self, rect):
+    def set_highlight_rect(self, rect: QRect):
         self._highlight_rect = rect
         self.update_label_button()
         self.update()
@@ -214,7 +216,7 @@ class FeatureOverlay(QWidget):
         self.next_button.move( self.label.geometry().right() - self.next_button.width(), self.label.geometry().bottom() + label_padding)
         self.close_button.move(self.label.geometry().left(), self.label.geometry().bottom() + label_padding)
 
-    def compute_highlight_rect(self, widget):
+    def compute_highlight_rect(self, widget: QWidget):
         """
         Returns the QRect of the widget relative to the overlay,
         accounting for window frame, DPI, and any layout offsets.
@@ -252,7 +254,7 @@ class FeatureOverlay(QWidget):
             # Animate highlight rectangle
             self.anim = QPropertyAnimation(self, b"highlight_rect")
             self.anim.setDuration(500)
-            self.anim.setEasingCurve(QEasingCurve.InOutCubic)
+            self.anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
             self.anim.setStartValue(self._highlight_rect)
             self.anim.setEndValue(target_rect)
             self.anim.start()
@@ -261,21 +263,21 @@ class FeatureOverlay(QWidget):
         self.current_step += 1
         self.show_step()
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         painter.fillRect(self.rect(), QColor(0, 0, 0, 150))
 
         # Clear highlight area
         painter.save()
-        painter.setCompositionMode(QPainter.CompositionMode_Clear)
-        painter.setBrush(QBrush(Qt.SolidPattern))
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+        painter.setBrush(QBrush(Qt.BrushStyle.SolidPattern))
         painter.drawRoundedRect(self._highlight_rect,8,8)
         painter.restore()
 
         # Rounded border around highlight
-        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         painter.setPen(QColor(255, 255, 255))
         painter.drawRoundedRect(self._highlight_rect, 8, 8)
 
@@ -283,23 +285,23 @@ class FeatureOverlay(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(self.label.geometry(), 8.0,8.0 )
 
-    def eventFilter(self, obj, event):
+    def eventFilter(self, obj: QObject, event: QEvent):
         # Update highlight if parent resizes or moves
-        if obj == self.parent() and event.type() in (QEvent.Resize, QEvent.Move):
+        if obj == self.parent() and event.type() in (QEvent.Type.Resize, QEvent.Type.Move):
             self.setGeometry(self.parent().geometry())
             self.show_step(initial=True)
         return super().eventFilter(obj, event)
 
 
 class FileFilterProxyModel(QSortFilterProxyModel):
-    def __init__(self, parent=None):
+    def __init__(self, parent : QObject=None):
         super().__init__(parent)
         self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.setSortCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         # 0 is usually the 'Name' column in QFileSystemModel
         self.setFilterKeyColumn(0)
 
-    def lessThan(self, left, right):
+    def lessThan(self, left: QModelIndex | QPersistentModelIndex, right: QModelIndex | QPersistentModelIndex):
         # 1. Get a reference to the source model (QFileSystemModel)
         source_model = self.sourceModel()
 
@@ -310,16 +312,16 @@ class FileFilterProxyModel(QSortFilterProxyModel):
         # 3. Logic: If one is a directory and the other isn't,
         # the directory is always "less than" (appears first)
         if is_left_dir and not is_right_dir:
-            return self.sortOrder() == Qt.AscendingOrder
+            return self.sortOrder() == Qt.SortOrder.AscendingOrder
 
         if not is_left_dir and is_right_dir:
-            return self.sortOrder() == Qt.DescendingOrder
+            return self.sortOrder() == Qt.SortOrder.DescendingOrder
 
         # 4. If both are the same type (both dirs or both files),
         # fall back to standard sorting (alphabetical, size, etc.)
         return super().lessThan(left, right)
 
-    def filterAcceptsRow(self, source_row, source_parent):
+    def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex):
         # This ensures that if a file matches, its parent folders remain visible
         # Otherwise, the file would be hidden because its parent is filtered out
         if super().filterAcceptsRow(source_row, source_parent):

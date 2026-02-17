@@ -21,7 +21,7 @@ class RussellEmotionWidget(QWidget):
     mousePressed = Signal()
     mouseReleased = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None=None):
         super().__init__(parent)
         self.valence = 5.0
         self.arousal = 5.0
@@ -40,7 +40,7 @@ class RussellEmotionWidget(QWidget):
 
         self.update_theme()
 
-    def sizeHint(self, /):
+    def sizeHint(self, /) -> QSize:
         return QSize(22 * app_theme.font_size, 22 * app_theme.font_size)
 
     def update_theme(self):
@@ -61,7 +61,7 @@ class RussellEmotionWidget(QWidget):
             self.ref_point_border_color = QColor("#2b2b2b")
         self.update()
 
-    def changeEvent(self, event):
+    def changeEvent(self, event: QEvent):
         if event.type() == QEvent.Type.PaletteChange:
             self.update_theme()
         elif event.type() == QEvent.Type.FontChange:
