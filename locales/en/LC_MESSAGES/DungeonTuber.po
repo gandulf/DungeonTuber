@@ -225,11 +225,8 @@ msgstr "New Category"
 msgid "New Tag"
 msgstr "New Tag"
 
-msgid "Set As Home"
-msgstr "Set As Home"
-
-msgid "Clear Home"
-msgstr "Clear Home"
+msgid "Go Into"
+msgstr "Go Into"
 
 msgid "Favorite"
 msgstr "Favorite"

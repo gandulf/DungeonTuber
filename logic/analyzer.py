@@ -17,7 +17,7 @@ from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
 
 from logic.mp3 import Mp3Entry, parse_mp3, update_categories_and_tags, print_mp3_tags, list_mp3s
 
-from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_music_tags, get_category_keys
+from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_category_keys
 
 logger = logging.getLogger("main")
 
@@ -60,7 +60,7 @@ def tags_to_string(data: dict[str, str]) -> str:
 
 
 class Analyzer(QObject):
-    error = Signal(object)
+    error = Signal(object, bool)
     result = Signal(Path)
     progress = Signal(str)
 
@@ -92,11 +92,10 @@ class Analyzer(QObject):
 
     def process(self, file_path: PathLike[str]) -> bool:
         try:
-
             logger.debug("Analyzing {0}", file_path)
 
             if Path(file_path).is_dir():
-                return self.process_directory(file_path)
+                return self._process_directory(file_path)
             else:
                 return self._process_file(file_path)
         except Exception as e:
@@ -130,7 +129,7 @@ class Analyzer(QObject):
             logger.error("An error occurred while fetching next worker: {0}", e)
             return False
 
-    def process_directory(self, directory_path: PathLike[str]) -> bool:
+    def _process_directory(self, directory_path: PathLike[str]) -> bool:
         logger.debug("Processing {0}...", directory_path)
         files = list_mp3s(directory_path)
 
@@ -147,8 +146,6 @@ class MockAnalyzer(Analyzer):
     def analyze_mp3(self, file_path: PathLike[str]) -> Any:
         logger.debug("--- MOCK MODE: Simulating analysis for {0} ---", file_path)
 
-        selected_tags = random.sample(sorted(get_music_tags().keys()), random.randint(0, len(get_music_tags())))
-
         mock_categories = []
         for category in get_category_keys():
             mock_categories.append({
@@ -158,8 +155,7 @@ class MockAnalyzer(Analyzer):
 
         mock_response = {
             "summary": "This is a mock summary.",
-            "categories": mock_categories,
-            "tags": selected_tags
+            "categories": mock_categories
         }
 
         return mock_response
@@ -180,28 +176,19 @@ class VoxalyzerAnalyzer(Analyzer):
 
         logger.debug(f"Sending request to {url} for file {file_path}")
 
-        try:
-            with open(file_path, 'rb') as f:
-                file_content = f.read()
+        with open(file_path, 'rb') as f:
+            file_content = f.read()
 
-            req = urllib.request.Request(url, data=file_content, method='POST')
-            req.add_header('Content-Type', 'application/octet-stream')
+        req = urllib.request.Request(url, data=file_content, method='POST')
+        req.add_header('Content-Type', 'application/octet-stream')
 
-            with urllib.request.urlopen(req) as response:
-                if response.status == 200:
-                    response_body = response.read()
-                    return json.loads(response_body)
-                else:
-                    logger.error(f"Error: {response.status} - {response.reason}")
-                    return None
-
-        except urllib.error.URLError as e:
-            logger.error(f"URLError: {e.reason}")
-            return None
-        except Exception as e:
-            logger.error(f"An error occurred: {e}")
-            return None
-
+        with urllib.request.urlopen(req) as response:
+            if response.status == 200:
+                response_body = response.read()
+                return json.loads(response_body)
+            else:
+                logger.error(f"Error: {response.status} - {response.reason}")
+                return None
 
 class Worker(QRunnable):
     analyzer: Analyzer
@@ -217,10 +204,9 @@ class Worker(QRunnable):
         logger.debug("Worker run")
         try:
             self.process_file(self.file_path)
-        except Exception:
-            traceback.print_exc()
-            exctype, value = sys.exc_info()[:2]
-            self.analyzer.error.emit(value)
+        except Exception as e:
+            logger.error("An error occurred while analyzing: {0}", traceback.format_exc())
+            self.analyzer.error.emit(str(e), False)
         else:
             self.analyzer.result.emit(self.file_path)  # Return the result of the processing
 

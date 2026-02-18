@@ -5,11 +5,11 @@ from os import PathLike
 
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
     Signal, QRect, QSize, QAbstractTableModel, \
-    QObject, QPoint, QItemSelection
+    QObject, QPoint, QItemSelection, QAbstractItemModel
 from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QFont, QFontMetrics, QPalette, QPen, QDropEvent, QKeyEvent, \
     QDragEnterEvent, QDragMoveEvent, QPaintEvent
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QAbstractScrollArea, QListView, QStyleOptionViewItem, QStyle, QWidget, \
-    QStyledItemDelegate, QHeaderView, QAbstractItemView, QTableView
+    QStyledItemDelegate, QHeaderView, QAbstractItemView, QTableView, QApplication
 
 from components.dialogs import EditSongDialog
 from logic.analyzer import Analyzer
@@ -739,12 +739,12 @@ class SongTable(QTableView):
 
 
 class DirectoryTree(QTreeView):
-    open = Signal(QModelIndex)
+    file_opened = Signal(QFileInfo)
 
-    def __init__(self, parent: QWidget | None, player, media_player):
+
+    def __init__(self, parent: QWidget | None, media_player):
         super().__init__(parent)
 
-        self.player = player
         self.media_player = media_player
         self.setMinimumWidth(150)
         self.setDragEnabled(True)
@@ -761,12 +761,8 @@ class DirectoryTree(QTreeView):
         self.go_parent_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoUp), _("Go to parent"), self)
         self.go_parent_action.triggered.connect(self.do_parent_action)
 
-        self.set_home_action = QAction(QIcon.fromTheme("house-user"), _("Set As Home"), self)
+        self.set_home_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoNext), _("Go Into"), self)
         self.set_home_action.triggered.connect(self.do_set_home_action)
-
-        self.clear_home_action = QAction(QIcon.fromTheme("house-clear"), _("Clear Home"), self)
-        self.clear_home_action.triggered.connect(self.do_clear_home_action)
-        self.clear_home_action.setVisible(False)
 
         self._source_root_index = QPersistentModelIndex()
 
@@ -782,7 +778,7 @@ class DirectoryTree(QTreeView):
 
         self.directory_model.directoryLoaded.connect(self.on_directories_loaded)
         self.setModel(self.proxy_model)
-        self.setIndentation(8)
+        self.setIndentation(16)
         self.setSortingEnabled(True)
         self.setHeaderHidden(True)
         self.setColumnHidden(1, True)
@@ -811,7 +807,6 @@ class DirectoryTree(QTreeView):
             index = self.directory_model.index(AppSettings.value(SettingKeys.ROOT_DIRECTORY))
             if index.isValid():
                 self.set_root_index_in_source(index)
-                self.clear_home_action.setVisible(True)
         else:
             music = os.path.join(Path.home(), "Music")
             if os.path.isdir(music):
@@ -821,9 +816,6 @@ class DirectoryTree(QTreeView):
 
             if index.isValid():
                 self.set_root_index_in_source(index)
-                self.clear_home_action.setVisible(True)
-
-        self.open.connect(self.tree_load_file)
 
     def changeEvent(self, event: QEvent, /):
         if event.type() == QEvent.Type.FontChange:
@@ -867,17 +859,6 @@ class DirectoryTree(QTreeView):
             self.setRootIndex(proxy_idx)
         else:
             self.setRootIndex(QModelIndex())
-
-    def tree_load_file(self, index: QModelIndex):
-        data = self.model().itemData(index)
-        file_info: QFileInfo = data[QFileSystemModel.Roles.FileInfoRole]
-        if file_info.isDir():
-            self.media_player.load_directory(file_info.filePath(), activate=True)
-        elif file_info.suffix() in ("m3u", "M3U"):
-            self.media_player.load_playlist(file_info.filePath(), activate=True)
-        else:
-            entry = parse_mp3(Path(file_info.filePath()))
-            self.player.play_track(QPersistentModelIndex(), entry)
 
     def mp3_data(self, index: QModelIndex):
         data = self.model().itemData(index)
@@ -927,7 +908,6 @@ class DirectoryTree(QTreeView):
         #
         menu.addAction(self.go_parent_action)
         menu.addAction(self.set_home_action)
-        menu.addAction(self.clear_home_action)
 
         #
         menu.show()
@@ -940,31 +920,28 @@ class DirectoryTree(QTreeView):
 
     def do_open_action(self):
         index = self.selectedIndexes()[0]
-        self.open.emit(index)
+        self.file_opened.emit(index.data(QFileSystemModel.Roles.FileInfoRole))
 
     def do_analyze_file(self):
         for index in self.selectedIndexes():
             source_index = self.proxy_model.mapToSource(index)
             file_path = self.directory_model.filePath(source_index)
-            self.media_player.analyze_file(file_path)
+            self.media_player.analyzer.process(file_path)
 
     def double_clicked_action(self, index: QModelIndex | QPersistentModelIndex):
-        source_index = self.proxy_model.mapToSource(index)
-        file_info = self.directory_model.fileInfo(source_index)
+        file_info = index.data(QFileSystemModel.Roles.FileInfoRole)
         if file_info.isFile():
-            self.open.emit(index)
+            self.file_opened.emit(file_info)
 
     def _set_root_index(self, root_index: QModelIndex | QPersistentModelIndex):
         if root_index.isValid():
             source_index = self.proxy_model.mapToSource(root_index)
             AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, self.directory_model.filePath(source_index))
             self.set_root_index_in_source(source_index)
-            self.clear_home_action.setVisible(True)
             self.go_parent_action.setVisible(True)
         else:
             AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, None)
             self.set_root_index_in_source(QModelIndex())
-            self.clear_home_action.setVisible(False)
             self.go_parent_action.setVisible(False)
 
     def do_set_home_action(self):
@@ -1006,17 +983,14 @@ class DirectoryTree(QTreeView):
 class EffectList(QListView):
     grid_threshold = 200
 
-    table_model = None
-
     def __init__(self, parent=None, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__(parent)
 
-        self.setItemDelegate(EffectList.EffectListItemDelegate(parent=self))
+        self.setItemDelegate(EffectListItemDelegate(parent=self))
 
         self.proxy_model = QSortFilterProxyModel(self)
         self.proxy_model.setDynamicSortFilter(True)
-        self.proxy_model.setSourceModel(self.table_model)
-        super().setModel(self.proxy_model)
+        self.setModel(self.proxy_model)
 
         self.auto_search_helper = AutoSearchHelper(self.proxy_model, self)
 
@@ -1025,16 +999,11 @@ class EffectList(QListView):
         else:
             self.set_grid_view()
 
-    def mp3_data(self, index: QModelIndex):
-        source_index = self.proxy_model.mapToSource(index)
-        return self.table_model._data[source_index.row()]
-
-    def setModel(self, model: QAbstractTableModel, /):
+    def setModel(self, model: QAbstractItemModel, /):
         if isinstance(model, QSortFilterProxyModel):
             super().setModel(model)
         else:
-            self.table_model = model
-            self.proxy_model.setSourceModel(self.table_model)
+            self.proxy_model.setSourceModel(model)
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.FontChange:
@@ -1094,139 +1063,139 @@ class EffectList(QListView):
         self.auto_search_helper.paintEvent(event)
 
 
-    class EffectListItemDelegate(QStyledItemDelegate):
-        padding = 2
-        view_mode: QListView.ViewMode
+class EffectListItemDelegate(QStyledItemDelegate):
+    padding = 2
+    view_mode: QListView.ViewMode
 
-        def __init__(self, parent: QWidget = None):
-            super().__init__(parent)
+    def __init__(self, parent: QWidget = None):
+        super().__init__(parent)
 
-        def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
-            super().initStyleOption(option, index)
-            # Remove the 'HasCheckIndicator' feature so Qt doesn't draw the box
-            option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+    def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+        super().initStyleOption(option, index)
+        # Remove the 'HasCheckIndicator' feature so Qt doesn't draw the box
+        option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
 
-        def is_list_mode(self):
-            return self.parent().viewMode() == QListView.ViewMode.ListMode
+    def is_list_mode(self):
+        return self.parent().viewMode() == QListView.ViewMode.ListMode
 
-        def is_grid_mode(self):
-            return self.parent().viewMode() == QListView.ViewMode.IconMode
+    def is_grid_mode(self):
+        return self.parent().viewMode() == QListView.ViewMode.IconMode
 
-        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
-            # 1. Initialize the style option
-            self.initStyleOption(option, index)
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+        # 1. Initialize the style option
+        self.initStyleOption(option, index)
 
-            painter.setClipRect(option.rect)
+        painter.setClipRect(option.rect)
 
+        effect_mp3 = index.data(Qt.ItemDataRole.UserRole)
+
+        check_state = index.data(Qt.ItemDataRole.CheckStateRole)
+        selected_state = option.state & QStyle.State_Selected
+
+        if self.is_list_mode() and check_state == Qt.CheckState.Checked:
+            # Change background for checked items
+            painter.save()
+            painter.setBrush(app_theme.get_green_brush(50))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRect(option.rect.adjusted(1, 1, -1, -1))
+            painter.restore()
+
+            # Make text bold for checked items
+            option.font.setBold(True)
+
+        if self.is_grid_mode() and effect_mp3 is not None and effect_mp3.cover is not None:
+            painter.save()
+
+            # 2. Draw the selection highlight/background
+            # option.widget.style().drawControl(
+            #     option.widget.style().ControlElement.CE_ItemViewItem,
+            #     option, painter, option.widget
+            # )
+
+            # 3. Define the drawing area (the icon rectangle)
+            # We use option.rect to get the full space for this item
+            rect = option.rect.adjusted(self.padding, self.padding, -self.padding, -self.padding)
+
+            # 4. Draw the Icon
+            icon = option.icon
+            if icon:
+                pixmap = icon.pixmap(rect.size())
+
+                if not pixmap.isNull():
+                    # Logic: Calculate how to scale the pixmap to fill the target_rect
+                    # while preserving aspect ratio (Aspect Ratio Fill/Crop)
+                    pix_size = pixmap.size()
+                    scaled_size = pix_size.scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+
+                    # Calculate the top-left to center the "crop"
+                    x = rect.x() + (rect.width() - scaled_size.width()) // 2
+                    y = rect.y() + (rect.height() - scaled_size.height()) // 2
+
+                    painter.setClipRect(rect)
+                    # Draw the scaled and centered pixmap
+                    # Painter's clipping (set at top of method) ensures the overflow is hidden
+                    painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
+
+                #icon.paint(painter, rect, Qt.AlignmentFlag.AlignCenter)
+
+            # 5. Draw the Text on top
+            text = index.data(Qt.ItemDataRole.DisplayRole)
+            if text:
+                # Optional: Add a subtle shadow or background for readability
+                # painter.fillRect(rect, QColor(0, 0, 0, 100))
+
+                label_height = painter.fontMetrics().height() + self.padding
+                label_rect = QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height+1)
+
+                mask_color = option.palette.color(QPalette.ColorRole.Highlight) if selected_state else option.palette.color(QPalette.ColorRole.Dark)
+                mask_color.setAlphaF(0.5)
+
+                painter.setBrush(mask_color)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawRect(label_rect)
+
+                painter.setPen(Qt.GlobalColor.white)  # Contrast color
+                painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
+
+            painter.restore()
+
+            painter.save()
+            if check_state == Qt.CheckState.Checked:
+                pen = QPen(option.palette.color(QPalette.ColorRole.Accent))
+                pen.setWidth(5)
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRect(rect)
+            elif selected_state:
+                highlight_color = option.palette.color(QPalette.ColorRole.Highlight)
+                highlight_color.setAlphaF(0.5)
+                pen = QPen(highlight_color)
+                pen.setWidth(3)
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRect(rect)
+            painter.restore()
+        else:
+            super().paint(painter, option, index)
+
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+        # IMPORTANT: You must increase the size hint,
+        # otherwise the bottom of your text will be cut off!
+        size = super().sizeHint(option, index)
+
+        if self.is_grid_mode():
             effect_mp3 = index.data(Qt.ItemDataRole.UserRole)
 
-            check_state = index.data(Qt.ItemDataRole.CheckStateRole)
-            selected_state = option.state & QStyle.State_Selected
-
-            if self.is_list_mode() and check_state == Qt.CheckState.Checked:
-                # Change background for checked items
-                painter.save()
-                painter.setBrush(app_theme.get_green_brush(50))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawRect(option.rect.adjusted(1, 1, -1, -1))
-                painter.restore()
-
-                # Make text bold for checked items
-                option.font.setBold(True)
-
-            if self.is_grid_mode() and effect_mp3 is not None and effect_mp3.cover is not None:
-                painter.save()
-
-                # 2. Draw the selection highlight/background
-                # option.widget.style().drawControl(
-                #     option.widget.style().ControlElement.CE_ItemViewItem,
-                #     option, painter, option.widget
-                # )
-
-                # 3. Define the drawing area (the icon rectangle)
-                # We use option.rect to get the full space for this item
-                rect = option.rect.adjusted(self.padding, self.padding, -self.padding, -self.padding)
-
-                # 4. Draw the Icon
-                icon = option.icon
-                if icon:
-                    pixmap = icon.pixmap(rect.size())
-
-                    if not pixmap.isNull():
-                        # Logic: Calculate how to scale the pixmap to fill the target_rect
-                        # while preserving aspect ratio (Aspect Ratio Fill/Crop)
-                        pix_size = pixmap.size()
-                        scaled_size = pix_size.scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
-
-                        # Calculate the top-left to center the "crop"
-                        x = rect.x() + (rect.width() - scaled_size.width()) // 2
-                        y = rect.y() + (rect.height() - scaled_size.height()) // 2
-
-                        painter.setClipRect(rect)
-                        # Draw the scaled and centered pixmap
-                        # Painter's clipping (set at top of method) ensures the overflow is hidden
-                        painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
-
-                    #icon.paint(painter, rect, Qt.AlignmentFlag.AlignCenter)
-
-                # 5. Draw the Text on top
-                text = index.data(Qt.ItemDataRole.DisplayRole)
-                if text:
-                    # Optional: Add a subtle shadow or background for readability
-                    # painter.fillRect(rect, QColor(0, 0, 0, 100))
-
-                    label_height = painter.fontMetrics().height() + self.padding
-                    label_rect = QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height+1)
-
-                    mask_color = option.palette.color(QPalette.ColorRole.Highlight) if selected_state else option.palette.color(QPalette.ColorRole.Dark)
-                    mask_color.setAlphaF(0.5)
-
-                    painter.setBrush(mask_color)
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.drawRect(label_rect)
-
-                    painter.setPen(Qt.GlobalColor.white)  # Contrast color
-                    painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
-
-                painter.restore()
-
-                painter.save()
-                if check_state == Qt.CheckState.Checked:
-                    pen = QPen(option.palette.color(QPalette.ColorRole.Accent))
-                    pen.setWidth(5)
-                    painter.setPen(pen)
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    painter.drawRect(rect)
-                elif selected_state:
-                    highlight_color = option.palette.color(QPalette.ColorRole.Highlight)
-                    highlight_color.setAlphaF(0.5)
-                    pen = QPen(highlight_color)
-                    pen.setWidth(3)
-                    painter.setPen(pen)
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    painter.drawRect(rect)
-                painter.restore()
+            if option.rect.width() < EffectList.grid_threshold:
+                new_width = option.rect.width()
             else:
-                super().paint(painter, option, index)
+                new_width = (option.rect.width() // 2)
+            size.setWidth(new_width)
 
-        def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
-            # IMPORTANT: You must increase the size hint,
-            # otherwise the bottom of your text will be cut off!
-            size = super().sizeHint(option, index)
-
-            if self.is_grid_mode():
-                effect_mp3 = index.data(Qt.ItemDataRole.UserRole)
-
-                if option.rect.width() < EffectList.grid_threshold:
-                    new_width = option.rect.width()
-                else:
-                    new_width = (option.rect.width() // 2)
-                size.setWidth(new_width)
-
-                if effect_mp3 is not None and effect_mp3.cover is not None:
-                    size.setHeight(size.height() + self.padding)
-                else:
-                    size.setHeight(48)
-            return size
+            if effect_mp3 is not None and effect_mp3.cover is not None:
+                size.setHeight(size.height() + self.padding)
+            else:
+                size.setHeight(48)
+        return size
 
 

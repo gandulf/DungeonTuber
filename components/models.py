@@ -13,7 +13,7 @@ from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp
     update_mp3_category
 
 from config.theme import app_theme
-from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_tags, get_music_categories, CAT_VALENCE, \
+from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_categories, CAT_VALENCE, \
     CAT_AROUSAL, FilterConfig
 
 logger = logging.getLogger("main")
@@ -58,7 +58,7 @@ class SongTableModel(QAbstractTableModel):
                         available_categories_keys.append(key)
 
     def _update_available_tags_and_categories(self, entries: list[Mp3Entry]):
-        self.available_tags = SortedSet(get_music_tags().keys())
+        self.available_tags.clear()
         self.available_genres.clear()
         self.available_categories = get_music_categories().copy()
         self._add_available_tags_and_categories(entries)

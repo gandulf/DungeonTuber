@@ -136,9 +136,6 @@ class Preset:
 
 _PRESETS: list[Preset] = []
 
-_TAGS = []
-_MUSIC_TAGS = None
-
 _DEFAULT_CATEGORIES = [CAT_VALENCE, CAT_AROUSAL, CAT_ENGAGEMENT, CAT_DARKNESS, CAT_AGGRESSIVE, CAT_HAPPY, CAT_PARTY, CAT_RELAXED, CAT_SAD]
 _MUSIC_CATEGORIES = None
 _CATEGORIES = None
@@ -163,25 +160,6 @@ def set_presets(presets: list[Preset]):
         presets = [preset for preset in presets if preset.name is not None]
         _PRESETS = presets
         AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
-
-
-def get_music_tags() -> dict[str, str]:
-    global _MUSIC_TAGS
-    if _MUSIC_TAGS is None:
-        _MUSIC_TAGS = {_("Tag " + key): _("Tag " + key + " Description") for key in _TAGS}
-
-    return _MUSIC_TAGS
-
-
-def set_music_tags(tags: dict[str, str] | None):
-    global _MUSIC_TAGS
-    if tags is None:
-        _MUSIC_TAGS = None
-        AppSettings.remove(SettingKeys.TAGS)
-    else:
-        _MUSIC_TAGS = tags
-        AppSettings.setValue(SettingKeys.TAGS, json.dumps(tags))
-
 
 def get_music_category(key: str) -> MusicCategory:
     cats = [cat for cat in get_music_categories() if cat.key == key]
@@ -266,7 +244,6 @@ class SettingKeys(StrEnum):
 
     TITLE_INSTEAD_OF_FILE_NAME = "titleInsteadOfFilename"
 
-    TAGS = "tags"
     CATEGORIES = "categories"
     PRESETS = "presets"
 
@@ -274,44 +251,6 @@ class SettingKeys(StrEnum):
 
 
 class SettingsDialog(QDialog):
-    class SettingsTableDelegate(QStyledItemDelegate):
-
-        def __init__(self, groups: set[str]):
-            super().__init__()
-            self.groups = groups
-
-        def createEditor(self, parent, option, index):
-            if index.column() == 1:
-                line_edit = QLineEdit(parent)
-                completer = QCompleter(sorted(list(self.groups)))
-                completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-                completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
-                line_edit.setCompleter(completer)
-                return line_edit
-            if index.column() == 2 or index.column() == 3:
-                text_edit = QTextEdit(parent)
-                return text_edit
-
-            return super(SettingsDialog.SettingsTableDelegate, self).createEditor(parent, option, index)
-
-        def setEditorData(self, editor, index):
-            if index.column() == 1:
-                editor.setText(index.data())
-                return None
-            if index.column() == 2 or index.column() == 3:
-                editor.setPlainText(index.data())
-                return None
-            return super(SettingsDialog.SettingsTableDelegate, self).setEditorData(editor, index)
-
-        def setModelData(self, editor, model, index):
-            if index.column() == 1:
-                model.setData(index, editor.text())
-                self.groups.add(editor.text())
-                return None
-            if index.column() == 2 or index.column() == 3:
-                model.setData(index, editor.toPlainText())
-                return None
-            return super(SettingsDialog.SettingsTableDelegate, self).setModelData(editor, model, index)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -334,29 +273,10 @@ class SettingsDialog(QDialog):
         self.init_categories_tab()
         self.tabs.addTab(self.categories_tab, _("Categories"))
 
-        # Tags Tab
-        self.tags_tab = QWidget()
-        self.init_tags_tab()
-        self.tabs.addTab(self.tags_tab, _("Tags"))
-
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
-
-    def ai_model_changed(self, text: str):
-        if "gemini" in text:
-            self.analyzer_layout.setRowVisible(self.gemini_api_key_input, True)
-            self.analyzer_layout.setRowVisible(self.openai_api_key_input, False)
-        elif "gpt" in text:
-            self.analyzer_layout.setRowVisible(self.gemini_api_key_input, False)
-            self.analyzer_layout.setRowVisible(self.openai_api_key_input, True)
-        elif "mock" == text:
-            self.analyzer_layout.setRowVisible(self.gemini_api_key_input, False)
-            self.analyzer_layout.setRowVisible(self.openai_api_key_input, False)
-        else:
-            self.analyzer_layout.setRowVisible(self.gemini_api_key_input, True)
-            self.analyzer_layout.setRowVisible(self.openai_api_key_input, True)
 
     def init_general_tab(self):
         layout = QVBoxLayout(self.general_tab)
@@ -438,7 +358,7 @@ class SettingsDialog(QDialog):
 
         layout = QVBoxLayout(self.categories_tab)
         self.categories_table = QTableWidget()
-        self.categories_table.setItemDelegate(SettingsDialog.SettingsTableDelegate(groups))
+        self.categories_table.setItemDelegate(SettingsTableDelegate(groups))
         self.categories_table.setColumnCount(5)
         self.categories_table.setHorizontalHeaderLabels([_("Key"),_("Name"), _("Group"), _("Description"), _("Levels (json)")])
         self.categories_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
@@ -471,39 +391,6 @@ class SettingsDialog(QDialog):
 
         self.categories_table.resizeRowsToContents()
 
-    def init_tags_tab(self):
-        layout = QVBoxLayout(self.tags_tab)
-        self.tags_table = QTableWidget()
-        self.tags_table.setColumnCount(2)
-        self.tags_table.setHorizontalHeaderLabels([_("Tag"), _("Description")])
-        self.tags_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-
-        self.fill_tags()
-
-        layout.addWidget(self.tags_table)
-
-        btn_layout = QHBoxLayout()
-        add_btn = QPushButton(_("Add"))
-        add_btn.clicked.connect(self.add_tag)
-        btn_layout.addWidget(add_btn)
-
-        remove_btn = QPushButton(_("Remove"))
-        remove_btn.clicked.connect(self.remove_tag)
-        btn_layout.addWidget(remove_btn)
-
-        reset_tags_btn = QPushButton(_("Reset All"))
-        reset_tags_btn.clicked.connect(self.reset_tags)
-        btn_layout.addWidget(reset_tags_btn)
-        layout.addLayout(btn_layout)
-
-    def fill_tags(self):
-        self.tags_table.setRowCount(len(get_music_tags()))
-        for row, (tag, desc) in enumerate(get_music_tags().items()):
-            self.tags_table.setItem(row, 0, QTableWidgetItem(tag))
-            self.tags_table.setItem(row, 1, QTableWidgetItem(desc))
-
-        self.tags_table.resizeRowsToContents()
-
     def add_category(self):
         row = self.categories_table.rowCount()
         self.categories_table.insertRow(row)
@@ -523,25 +410,10 @@ class SettingsDialog(QDialog):
 
         self.fill_categories()
 
-    def reset_tags(self):
-        set_music_tags(None)
-        self.fill_tags()
-
     def remove_category(self):
         row = self.categories_table.currentRow()
         if row >= 0:
             self.categories_table.removeRow(row)
-
-    def add_tag(self):
-        row = self.tags_table.rowCount()
-        self.tags_table.insertRow(row)
-        self.tags_table.setItem(row, 0, QTableWidgetItem(_("New Tag")))
-        self.tags_table.setItem(row, 1, QTableWidgetItem(_("Description")))
-
-    def remove_tag(self):
-        row = self.tags_table.currentRow()
-        if row >= 0:
-            self.tags_table.removeRow(row)
 
     def requires_restart(self):
         result = False
@@ -583,18 +455,6 @@ class SettingsDialog(QDialog):
                     _categories.append(MusicCategory(cat_name, cat_desc, cat_levels, group=cat_group, key = cat_key))
         set_music_categories(_categories)
 
-        _tags = {}
-        for row in range(self.tags_table.rowCount()):
-            tag_item = self.tags_table.item(row, 0)
-            desc_item = self.tags_table.item(row, 1)
-            if tag_item and desc_item:
-                tag = tag_item.text()
-                cat_desc = desc_item.text()
-                if tag:
-                    _tags[tag] = cat_desc
-
-        set_music_tags(_tags)
-
         if requires_restart:
 
             reply = QMessageBox.question(self, _("Restart Required"),
@@ -606,6 +466,44 @@ class SettingsDialog(QDialog):
 
         super().accept()
 
+class SettingsTableDelegate(QStyledItemDelegate):
+
+    def __init__(self, groups: set[str]):
+        super().__init__()
+        self.groups = groups
+
+    def createEditor(self, parent, option, index):
+        if index.column() == 1:
+            line_edit = QLineEdit(parent)
+            completer = QCompleter(sorted(list(self.groups)))
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
+            line_edit.setCompleter(completer)
+            return line_edit
+        if index.column() == 2 or index.column() == 3:
+            text_edit = QTextEdit(parent)
+            return text_edit
+
+        return super(SettingsDialog.SettingsTableDelegate, self).createEditor(parent, option, index)
+
+    def setEditorData(self, editor, index):
+        if index.column() == 1:
+            editor.setText(index.data())
+            return None
+        if index.column() == 2 or index.column() == 3:
+            editor.setPlainText(index.data())
+            return None
+        return super(SettingsDialog.SettingsTableDelegate, self).setEditorData(editor, index)
+
+    def setModelData(self, editor, model, index):
+        if index.column() == 1:
+            model.setData(index, editor.text())
+            self.groups.add(editor.text())
+            return None
+        if index.column() == 2 or index.column() == 3:
+            model.setData(index, editor.toPlainText())
+            return None
+        return super(SettingsDialog.SettingsTableDelegate, self).setModelData(editor, model, index)
 
 class FilterConfig:
     categories: dict[str, int] = {}

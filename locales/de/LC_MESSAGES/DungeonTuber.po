@@ -228,11 +228,8 @@ msgstr "Neue Kategorie"
 msgid "New Tag"
 msgstr "Neuer Tag"
 
-msgid "Set As Home"
-msgstr "Als Startverzeichnis setzen"
-
-msgid "Clear Home"
-msgstr "Startverzeichnis löschen"
+msgid "Go Into"
+msgstr "Hineingehen"
 
 msgid "Favorite"
 msgstr "Favorit"

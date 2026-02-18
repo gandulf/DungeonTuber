@@ -11,7 +11,7 @@ from components.sliders import ToggleSlider, CategoryWidget, BPMSlider
 from components.tables import SongTable
 
 from config.settings import CAT_VALENCE, get_music_category, CAT_AROUSAL, Preset, add_preset, remove_preset, \
-    reset_presets, SettingKeys, get_presets, AppSettings, MusicCategory, get_music_tags, CATEGORY_MIN, CATEGORY_MAX, \
+    reset_presets, SettingKeys, get_presets, AppSettings, MusicCategory, CATEGORY_MIN, CATEGORY_MAX, \
     FilterConfig
 from config.theme import app_theme
 from config.utils import children_layout, clear_layout
@@ -282,9 +282,6 @@ class FilterWidget(QWidget):
         for tag in available_tags:
             toggle = ToggleSlider(checked_text=tag, unchecked_text=tag)
             toggle.setProperty("tag", tag)
-
-            if tag in get_music_tags():
-                toggle.setToolTip(get_music_tags()[tag])
             toggle.stateChanged.connect(self.toggle_tag)
             toggle.setChecked(tag in self.filter_config.tags)
             self.tags_layout.addWidget(toggle)

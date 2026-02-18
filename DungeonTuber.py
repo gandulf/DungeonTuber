@@ -40,13 +40,13 @@ from PySide6.QtWidgets import (
     QSplitter, QSlider, QListView, QToolButton, QSizePolicy
 )
 from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QPersistentModelIndex, QEvent, QTimer, QKeyCombination, \
-    QPoint
+    QPoint, QFileInfo
 from PySide6.QtGui import QAction, QIcon, QPalette, QFontMetrics, QActionGroup, QResizeEvent
 
 from vlc import MediaPlayer
 
-from config.settings import AppSettings, FilterConfig, SettingKeys, SettingsDialog, Preset, MusicCategory, \
-    set_music_categories, set_music_tags, set_presets
+from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, \
+    set_music_categories,  set_presets
 from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, is_frozen
 
@@ -56,7 +56,7 @@ from components.visualizer import Visualizer, EmptyVisualizerWidget
 from components.dialogs import AboutDialog
 from components.tables import DirectoryTree, EffectList, SongTable
 from components.filter import FilterWidget
-from components.models import EffectTableModel, SongTableModel
+from components.models import EffectTableModel
 
 from logic.mp3 import Mp3Entry, parse_mp3, \
     create_m3u, list_mp3s, get_m3u_paths, update_mp3_cover, save_playlist
@@ -226,7 +226,7 @@ class EffectWidget(QWidget):
         file_path, ignore = QFileDialog.getOpenFileName(self, _("Select Image"),
                                                         filter=_("Image (*.png *.jpg *.jpeg *.gif *.bmp);;All (*)"))
         if file_path:
-            mp3_entry = self.list_widget.mp3_data(index)
+            mp3_entry = index.data(Qt.ItemDataRole.UserRole)
             update_mp3_cover(mp3_entry.path, file_path)
             self.refresh_directory()
 
@@ -532,12 +532,10 @@ class PlayerWidget(QWidget):
 
 class DirectoryWidget(QWidget):
 
-    def __init__(self, player: PlayerWidget, media_player: MediaPlayer, parent=None):
+    def __init__(self, media_player: MediaPlayer, parent=None):
         super(DirectoryWidget, self).__init__(parent)
 
-        self.player = player
-        self.media_player = media_player
-        self.directory_tree = DirectoryTree(self, self.player, self.media_player)
+        self.directory_tree = DirectoryTree(self, media_player)
 
         self.directory_layout = QVBoxLayout(self)
         self.directory_layout.setContentsMargins(0, 0, 0, 0)
@@ -552,22 +550,6 @@ class DirectoryWidget(QWidget):
         up_view_button.setProperty("cssClass", "mini")
         up_view_button.setDefaultAction(self.directory_tree.go_parent_action)
         self.headerLabel.insert_widget(0, up_view_button)
-
-        open_button = QToolButton()
-        open_button.setProperty("cssClass", "mini")
-        open_button.setDefaultAction(self.directory_tree.open_action)
-        self.headerLabel.insert_widget(1, open_button)
-
-        set_home_button = QToolButton()
-        set_home_button.setProperty("cssClass", "mini")
-        set_home_button.setDefaultAction(self.directory_tree.set_home_action)
-
-        clear_home_button = QToolButton()
-        clear_home_button.setProperty("cssClass", "mini")
-        clear_home_button.setDefaultAction(self.directory_tree.clear_home_action)
-
-        self.headerLabel.add_widget(set_home_button)
-        self.headerLabel.add_widget(clear_home_button)
 
         self.directory_layout.addWidget(self.headerLabel)
         self.directory_layout.addWidget(self.directory_tree)
@@ -613,14 +595,6 @@ class MusicPlayer(QMainWindow):
         except Exception as e:
             AppSettings.remove(SettingKeys.CATEGORIES)
             logger.error("Failed to load custom categories: {0}", e)
-
-        try:
-            custom_tags = AppSettings.value(SettingKeys.TAGS)
-            if custom_tags:
-                set_music_tags(json.loads(custom_tags))
-        except Exception as e:
-            AppSettings.remove(SettingKeys.TAGS)
-            logger.error("Failed to load custom tags: {0}", e)
 
         try:
             custom_presets = AppSettings.value(SettingKeys.PRESETS)
@@ -957,6 +931,15 @@ class MusicPlayer(QMainWindow):
                 self.toggle_effects_tree_action.setChecked(True)
                 self.effects_widget.setEnabled(True)
 
+    def tree_open_file(self, file_info: QFileInfo):
+        if file_info.isDir():
+            self.load_directory(file_info.filePath(), activate=True)
+        elif file_info.suffix() in ("m3u", "M3U"):
+            self.load_playlist(file_info.filePath(), activate=True)
+        else:
+            entry = parse_mp3(Path(file_info.filePath()))
+            self.player.play_track(QPersistentModelIndex(), entry)
+
     def init_ui(self):
 
         self.player = PlayerWidget(audio_engine=self.engine)
@@ -966,7 +949,8 @@ class MusicPlayer(QMainWindow):
         self.central_splitter.splitterMoved.connect(self.on_layout_splitter_moved)
         self.setCentralWidget(self.central_splitter)
 
-        self.directory_widget = DirectoryWidget(player = self.player, media_player=self)
+        self.directory_widget = DirectoryWidget(media_player=self)
+        self.directory_widget.directory_tree.file_opened.connect(self.tree_open_file)
         self.central_splitter.addWidget(self.directory_widget)
         self.central_splitter.setCollapsible(0, True)
 
@@ -1113,15 +1097,7 @@ class MusicPlayer(QMainWindow):
                                                         dir=self._get_default_directory(),
                                                         filter=_("Mp3 (*.mp3 *.MP3);;All (*)"))
         if file_path:
-            self.analyze_file(file_path)
-
-    def analyze_file(self, file_path: PathLike[str]):
-        try:
             self.analyzer.process(file_path)
-            self.current_table().refresh_item(file_path)
-        except Exception as e:
-            traceback.print_exc()
-            QMessageBox.critical(self, _("Analysis Error"), _("Failed to analyze file: {0}").format(e))
 
     def _get_default_directory(self) -> str:
         if AppSettings.value(SettingKeys.ROOT_DIRECTORY):
