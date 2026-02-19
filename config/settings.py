@@ -518,7 +518,8 @@ class FilterConfig:
         self.genres = genres
 
     def get_category(self, category_key: str, default: int = None) -> int:
-        return self.categories.get(category_key, default)
+        value = self.categories.get(category_key, default)
+        return value if value is not None and value >=0 else None
 
     def toggle_tag(self, tag:str, state:int):
         if state == 0 and tag in self.tags:
@@ -531,6 +532,12 @@ class FilterConfig:
             self.genres.remove(genre)
         elif genre not in self.genres:
             self.genres.append(genre)
+
+    def clear(self):
+        self.genres.clear()
+        self.tags.clear()
+        self.bpm = None
+        self.categories.clear()
 
     def empty(self) -> bool:
         empty = True

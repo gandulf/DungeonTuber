@@ -53,13 +53,12 @@ class SongTableModel(QAbstractTableModel):
                 self.available_genres.update(entry.genres)
             if entry.categories is not None:
                 for key in entry.categories.keys():
-                    if not key in available_categories_keys and key in available_categories_keys:
+                    if not key in available_categories_keys:
                         self.available_categories.append(MusicCategory.from_key(key))
                         available_categories_keys.append(key)
 
     def _update_available_tags_and_categories(self, entries: list[Mp3Entry]):
-        self.available_tags.clear()
-        self.available_genres.clear()
+        self.available_genres = SortedSet()
         self.available_categories = get_music_categories().copy()
         self._add_available_tags_and_categories(entries)
 
@@ -570,3 +569,44 @@ class EffectTableModel(QAbstractTableModel):
 
         return super().setData(index, value, role)
 
+class FileFilterProxyModel(QSortFilterProxyModel):
+    def __init__(self, parent : QObject=None):
+        super().__init__(parent)
+        self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.setSortCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        # 0 is usually the 'Name' column in QFileSystemModel
+        self.setFilterKeyColumn(0)
+
+    def lessThan(self, left: QModelIndex | QPersistentModelIndex, right: QModelIndex | QPersistentModelIndex):
+        # 1. Get a reference to the source model (QFileSystemModel)
+        source_model = self.sourceModel()
+
+        # 2. Check if the items are directories
+        is_left_dir = source_model.isDir(left)
+        is_right_dir = source_model.isDir(right)
+
+        # 3. Logic: If one is a directory and the other isn't,
+        # the directory is always "less than" (appears first)
+        if is_left_dir and not is_right_dir:
+            return self.sortOrder() == Qt.SortOrder.AscendingOrder
+
+        if not is_left_dir and is_right_dir:
+            return self.sortOrder() == Qt.SortOrder.DescendingOrder
+
+        # 4. If both are the same type (both dirs or both files),
+        # fall back to standard sorting (alphabetical, size, etc.)
+        return super().lessThan(left, right)
+
+    def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex):
+        # This ensures that if a file matches, its parent folders remain visible
+        # Otherwise, the file would be hidden because its parent is filtered out
+        if super().filterAcceptsRow(source_row, source_parent):
+            return True
+
+        # Check if any children match the filter
+        source_model = self.sourceModel()
+        source_index = source_model.index(source_row, 0, source_parent)
+        for i in range(source_model.rowCount(source_index)):
+            if self.filterAcceptsRow(i, source_index):
+                return True
+        return False

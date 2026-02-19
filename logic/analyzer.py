@@ -1,7 +1,6 @@
 import json
 import os
 import random
-import sys
 import traceback
 import logging
 import urllib.request
@@ -13,7 +12,7 @@ from typing import Any
 from os import PathLike
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
+from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QFileInfo
 
 from logic.mp3 import Mp3Entry, parse_mp3, update_categories_and_tags, print_mp3_tags, list_mp3s
 
@@ -90,8 +89,11 @@ class Analyzer(QObject):
     def analyze_mp3(self, file_path: PathLike[str]) -> Any:
         pass
 
-    def process(self, file_path: PathLike[str]) -> bool:
+    def process(self, file_path: PathLike[str]| QFileInfo) -> bool:
         try:
+            if isinstance(file_path, QFileInfo):
+                file_path = file_path.filePath()
+
             logger.debug("Analyzing {0}", file_path)
 
             if Path(file_path).is_dir():

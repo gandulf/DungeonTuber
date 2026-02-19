@@ -43,10 +43,8 @@ from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QPersistentModelIndex
     QPoint, QFileInfo
 from PySide6.QtGui import QAction, QIcon, QPalette, QFontMetrics, QActionGroup, QResizeEvent
 
-from vlc import MediaPlayer
-
 from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, \
-    set_music_categories,  set_presets
+    set_music_categories, set_presets
 from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, is_frozen
 
@@ -58,15 +56,13 @@ from components.tables import DirectoryTree, EffectList, SongTable
 from components.filter import FilterWidget
 from components.models import EffectTableModel
 
-from logic.mp3 import Mp3Entry, parse_mp3, \
-    create_m3u, list_mp3s, get_m3u_paths, update_mp3_cover, save_playlist
+from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, list_mp3s, get_m3u_paths, update_mp3_cover, save_playlist
 from logic.audioengine import AudioEngine, EngineState
 from logic.analyzer import Analyzer
 
 # --- Constants ---
 
 logger = logging.getLogger("main")
-
 
 class EffectWidget(QWidget):
     open_item: QPushButton = None
@@ -241,18 +237,18 @@ class PlayerWidget(QWidget):
     repeat_mode_changed = Signal(RepeatMode)
 
     current_index = QPersistentModelIndex()
-    current_data : Mp3Entry = None
+    current_data: Mp3Entry = None
 
     _update_progress_ticks: bool = True
 
-    def __init__(self, audio_engine: AudioEngine, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
 
         self.player_layout = QVBoxLayout(self)
         self.player_layout.setObjectName("player_layout")
         self.player_layout.setSpacing(app_theme.spacing)
 
-        self.engine = audio_engine
+        self.engine = AudioEngine()
         self.engine.state_changed.connect(self.on_playback_state_changed)
         self.engine.position_changed.connect(self.update_progress)
         self.engine.track_finished.connect(self.on_track_finished)
@@ -410,7 +406,7 @@ class PlayerWidget(QWidget):
         if self.progress_slider.isSliderDown():
             self.seek_position()
 
-    def set_enabled(self, enabled:bool):
+    def set_enabled(self, enabled: bool):
         self.btn_prev.setEnabled(enabled)
         self.btn_play.setEnabled(enabled)
         self.btn_next.setEnabled(enabled)
@@ -449,7 +445,7 @@ class PlayerWidget(QWidget):
             self.engine.stop()
             self.play_track(self.current_index, self.current_data)
         elif repeat_mode == RepeatMode.REPEAT_ALL:
-            next_index = self._increment_persistent_index(self.current_index , 1)
+            next_index = self._increment_persistent_index(self.current_index, 1)
             self.engine.stop()
             self.track_changed.emit(next_index, next_index.data(Qt.ItemDataRole.UserRole))
         elif repeat_mode == RepeatMode.NO_REPEAT:
@@ -467,7 +463,7 @@ class PlayerWidget(QWidget):
 
             self.play_action.setChecked(True)
 
-    def _increment_persistent_index(self, p_index: QPersistentModelIndex, change:int):
+    def _increment_persistent_index(self, p_index: QPersistentModelIndex, change: int):
         # 1. Safety check: is it pointing to anything?
         if not p_index.isValid():
             return p_index
@@ -532,10 +528,10 @@ class PlayerWidget(QWidget):
 
 class DirectoryWidget(QWidget):
 
-    def __init__(self, media_player: MediaPlayer, parent=None):
+    def __init__(self, parent=None):
         super(DirectoryWidget, self).__init__(parent)
 
-        self.directory_tree = DirectoryTree(self, media_player)
+        self.directory_tree = DirectoryTree(self)
 
         self.directory_layout = QVBoxLayout(self)
         self.directory_layout.setContentsMargins(0, 0, 0, 0)
@@ -565,10 +561,12 @@ class MusicPlayer(QMainWindow):
 
     toggle_directory_tree_action: QAction
     toggle_effects_tree_action: QAction
+
     light_theme_action: QAction
     dark_theme_action: QAction
 
-    table_tabs : QTabWidget = None
+    table_tabs: QTabWidget = None
+    old_table: SongTable|None = None
 
     def __init__(self, application: QApplication):
         super().__init__()
@@ -579,13 +577,25 @@ class MusicPlayer(QMainWindow):
 
         self.setWindowTitle(application.applicationName() + " " + application.applicationVersion())
 
-        windowSize = AppSettings.value(SettingKeys.WINDOW_SIZE, type=QSize,defaultValue=None)
-        if windowSize:
-            self.resize(windowSize)
+        window_size = AppSettings.value(SettingKeys.WINDOW_SIZE, type=QSize, defaultValue=None)
+        if window_size:
+            self.resize(window_size)
         else:
             self.resize(1200, 700)
 
+        self.load_settings()
+
         self.analyzer = Analyzer.get_analyzer()
+
+        self.init_ui()
+        self.load_initial_directory()
+
+        self.check_newer_version()
+
+        if AppSettings.value(SettingKeys.START_TOUR, True, type=bool):
+            QTimer.singleShot(500, lambda: self.start_tour())
+
+    def load_settings(self):
         # Load custom categories and tags
         try:
             custom_categories = AppSettings.value(SettingKeys.CATEGORIES)
@@ -604,17 +614,6 @@ class MusicPlayer(QMainWindow):
         except Exception as e:
             AppSettings.remove(SettingKeys.PRESETS)
             logger.error("Failed to load custom presets: {0}", e)
-
-        # Initialize Analyzer with settings
-        self.engine = AudioEngine()
-
-        self.init_ui()
-        self.load_initial_directory()
-
-        self.check_newer_version()
-
-        if AppSettings.value(SettingKeys.START_TOUR, True, type=bool):
-            QTimer.singleShot(500, lambda: self.start_tour())
 
     def check_newer_version(self):
         if not is_latest_version() and is_frozen():
@@ -909,7 +908,6 @@ class MusicPlayer(QMainWindow):
         dialog = SettingsDialog(self)
         if dialog.exec():
             self.filter_widget.update_sliders(self.get_available_categories())
-            self.filter_widget.update_tags(self.get_available_tags())
             if self.current_table() is not None:
                 self.current_table().update_category_column_visibility()
 
@@ -940,17 +938,32 @@ class MusicPlayer(QMainWindow):
             entry = parse_mp3(Path(file_info.filePath()))
             self.player.play_track(QPersistentModelIndex(), entry)
 
+    def populate_playlist_context_menu(self, menu: QMenu, datas: list[Mp3Entry]):
+        if len(datas) > 0:
+            add_to_playlist = QMenu(_("Add to playlist"), icon=QIcon.fromTheme(QIcon.ThemeIcon.ListAdd))
+            add_new_action = add_to_playlist.addAction(_("<New Playlist>"))
+            add_new_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
+            add_new_action.triggered.connect(functools.partial(self.pick_new_playlist, datas))
+            for playlist in self.get_playlists():
+                add_action = add_to_playlist.addAction(Path(playlist).name.removesuffix(".m3u").removesuffix(".M3U"))
+                add_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
+                add_action.triggered.connect(functools.partial(self.add_to_playlist, playlist, datas))
+
+            menu.addMenu(add_to_playlist)
+
     def init_ui(self):
 
-        self.player = PlayerWidget(audio_engine=self.engine)
+        self.player = PlayerWidget()
         self.player.track_changed.connect(self.play_track)
 
         self.central_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.central_splitter.splitterMoved.connect(self.on_layout_splitter_moved)
         self.setCentralWidget(self.central_splitter)
 
-        self.directory_widget = DirectoryWidget(media_player=self)
+        self.directory_widget = DirectoryWidget()
         self.directory_widget.directory_tree.file_opened.connect(self.tree_open_file)
+        self.directory_widget.directory_tree.file_analyzed.connect(self.analyzer.process)
+        self.directory_widget.directory_tree.open_context_menu.connect(self.populate_playlist_context_menu)
         self.central_splitter.addWidget(self.directory_widget)
         self.central_splitter.setCollapsible(0, True)
 
@@ -1008,7 +1021,7 @@ class MusicPlayer(QMainWindow):
 
         self.init_main_menu()
 
-    def resizeEvent(self,event:QResizeEvent):
+    def resizeEvent(self, event: QResizeEvent):
         AppSettings.setValue(SettingKeys.WINDOW_SIZE, event.size())
 
     def update_table_entry(self, path: PathLike[str]):
@@ -1025,7 +1038,8 @@ class MusicPlayer(QMainWindow):
         menu = QMenu(self)
 
         refresh_action = QAction(_("Refresh"), icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh))
-        refresh_action.triggered.connect(functools.partial(self.reload_table, tab_index))
+        refresh_action.setData(tab_index)
+        refresh_action.triggered.connect(self.reload_table)
         menu.addAction(refresh_action)
 
         close_tables_action = QAction(_("Close All"), icon=QIcon.fromTheme(QIcon.ThemeIcon.WindowClose))
@@ -1033,11 +1047,6 @@ class MusicPlayer(QMainWindow):
         menu.addAction(close_tables_action)
 
         menu.exec(self.table_tabs.tabBar().mapToGlobal(position))
-
-    def hide_status_label(self):
-        if self.analyzer.active_worker() == 0:
-            self.statusBar().setVisible(False)
-            self.status_progress.setVisible(False)
 
     def update_status_message(self, msg: str):
         if msg is None or msg == "":
@@ -1051,15 +1060,41 @@ class MusicPlayer(QMainWindow):
             self.statusBar().showMessage(msg, 5000)
             self.status_progress.setVisible(progress)
 
-    def add_table_tab(self, table: SongTable, name: str, icon: QIcon, activate: bool = True):
-        current_table = self.current_table()
-        if current_table is not None and current_table.playlist is None and current_table.directory is None:
-            self.table_tabs.removeTab(self.table_tabs.currentIndex())
+    def add_table_tab(self, file_path: PathLike[str] = None, lazy: bool = False, activate: bool = True):
+        if os.path.isfile(file_path):
+            mp3_files = get_m3u_paths(file_path)
+        elif os.path.isdir(file_path):
+            mp3_files = list(Path(file_path).rglob("*.mp3"))
+        else:
+            QMessageBox.warning("Invalid File Path")
+            return None
 
-        index = self.table_tabs.addTab(table, icon, name)
+        table = SongTable(self, file_path, mp3_files, lazy=lazy)
+        self.attach_song_table(table)
+        index = self.table_tabs.addTab(table, table.get_icon(), table.get_name())
 
         if activate:
             self.table_tabs.setCurrentIndex(index)
+
+        return table
+
+    def attach_song_table(self, table:SongTable):
+        table.item_double_clicked.connect(self.play_track)
+        table.content_changed.connect(self.on_table_content_changed)
+        table.open_context_menu.connect(self.populate_playlist_context_menu)
+        table.files_opened.connect(self.files_opened)
+        table.file_analyzed.connect(self.analyzer.process)
+
+    def detach_song_table(self, table: SongTable):
+        try:
+            table.item_double_clicked.disconnect(self.play_track)
+            table.content_changed.disconnect(self.on_table_content_changed)
+            table.open_context_menu.disconnect(self.populate_playlist_context_menu)
+            table.files_opened.disconnect(self.files_opened)
+            table.file_analyzed.disconnect(self.analyzer.process)
+        except Exception:
+            # in case of duplicate calls this throws an error if nothing is attached
+            pass
 
     def on_table_content_changed(self, table: SongTable = None):
         if table is None:
@@ -1070,20 +1105,30 @@ class MusicPlayer(QMainWindow):
             self.filter_widget.attach_song_table(table)
 
     def on_table_tab_changed(self, index: int):
+        if self.old_table:
+            self.detach_song_table(self.old_table)
+
         table: SongTable = self.table_tabs.widget(index)
 
         if table:
+            self.old_table = table
+            self.attach_song_table(table)
             if not table.is_loaded:
-                table.load()
+                table.start_lazy_loading()
 
             table.update_category_column_visibility()
             self.filter_widget.attach_song_table(table)
-            self.player.set_enabled(table.rowCount()>0)
+            self.player.set_enabled(table.rowCount() > 0)
         else:
+            self.old_table = None
             self.filter_widget.attach_song_table(None)
             self.player.set_enabled(False)
 
     def on_table_tab_close(self, index: int):
+        table: SongTable = self.table_tabs.widget(index)
+        if table:
+            self.detach_song_table(table)
+
         self.table_tabs.removeTab(index)
         self.table_tabs.tabBar().setVisible(self.table_tabs.count() > 1)
 
@@ -1143,41 +1188,23 @@ class MusicPlayer(QMainWindow):
         if directory:
             self.load_directory(directory)
 
-    def generate_table(self, playlist_path: PathLike[str] = None, directory: PathLike[str] = None, lazy: bool = False):
-        table = SongTable(self.analyzer, self)
-        table.item_double_clicked.connect(self.play_track)
-        table.content_changed.connect(self.on_table_content_changed)
-
-        if playlist_path is not None:
-            table.playlist = playlist_path
-            mp3_files = get_m3u_paths(playlist_path)
-
-            self.load_files(table, mp3_files, lazy=lazy)
-
-        elif directory is not None:
-            table.directory = directory
-
-            base_path = Path(directory)
-            mp3_files = list(base_path.rglob("*.mp3"))
-
-            self.load_files(table, mp3_files, lazy=lazy)
-
-        return table
+    def files_opened(self, file_infos: list[QFileInfo]):
+        for file_info in file_infos:
+            if file_info.isDir():
+                self.load_directory(file_info.filePath())
+            elif file_info.fileName().lower().endswith(".m3u"):
+                self.load_playlist(file_info.filePath())
 
     def load_playlist(self, playlist_path: PathLike[str], activate: bool = True, lazy: bool = False) -> SongTable | None:
         try:
-            if playlist_path in self.get_playlists():
+            if playlist_path in self.get_open_tables():
                 self.statusBar().showMessage(_("Playlist already opened"))
                 return None
 
             self.statusBar().showMessage(_("Loading playlist"), 2000)
             QApplication.processEvents()
 
-            name = Path(playlist_path).name.removesuffix(".m3u").removesuffix(".M3U")
-
-            table = self.generate_table(playlist_path=playlist_path, lazy=lazy)
-
-            self.add_table_tab(table, name, QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical), activate=activate)
+            table = self.add_table_tab(playlist_path, lazy=lazy, activate=activate)
 
             AppSettings.setValue(SettingKeys.OPEN_TABLES, self.get_open_tables())
 
@@ -1218,18 +1245,9 @@ class MusicPlayer(QMainWindow):
 
         return playlists
 
-    def get_directories(self) -> list[PathLike[str]]:
-        directories = []
-        for i in range(self.table_tabs.count()):
-            table = self.table_tabs.widget(i)
-            if table.directory is not None:
-                directories.append(table.directory)
-
-        return directories
-
     def load_directory(self, directory: PathLike[str], activate: bool = True, lazy: bool = False) -> SongTable | None:
         try:
-            if directory in self.get_directories():
+            if directory in self.get_open_tables():
                 self.statusBar().showMessage(_("Directory already opened"))
                 return None
 
@@ -1238,10 +1256,7 @@ class MusicPlayer(QMainWindow):
 
             AppSettings.setValue(SettingKeys.LAST_DIRECTORY, directory)
 
-            table = self.generate_table(directory=directory, lazy=lazy)
-
-            self.add_table_tab(table, Path(directory).name, QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen),
-                               activate=activate)
+            table = self.add_table_tab(directory, lazy=lazy, activate=activate)
 
             AppSettings.setValue(SettingKeys.OPEN_TABLES, self.get_open_tables())
 
@@ -1255,42 +1270,15 @@ class MusicPlayer(QMainWindow):
         table = self.current_table()
         return table.table_model.available_categories if table is not None else []
 
-    def get_available_tags(self) -> list[str]:
-        table = self.current_table()
-        return table.table_model.available_tags if table is not None else []
-
-    def get_available_genres(self) -> list[str]:
-        table = self.current_table()
-        return table.table_model.available_genres if table is not None else []
-
-    def load_files(self, table: SongTable, mp3_files: list[Path | Mp3Entry], lazy: bool = False):
-        if not mp3_files:
-            QMessageBox.information(self, _("Scan"), _("No MP3 files found."))
-            return
-
-        if isinstance(mp3_files[0], Path):
-            table.set_files(mp3_files)
-            if not lazy and table == self.current_table():
-                table.load()
-        else:
-            table.populate_table(mp3_files)
-            self.on_table_content_changed(table)
-
     def close_tables(self):
         self.table_tabs.clear()
-        self.add_table_tab(SongTable(_analyzer=self.analyzer, _music_player=self), "Welcome",
-                           QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
 
-    def reload_table(self, index: int):
+    def reload_table(self, index: int| None):
+        if index is None:
+            index = self.sender().data()
+
         table = self.table(index)
-
-        if table.playlist:
-            mp3_files = get_m3u_paths(table.playlist)
-            self.load_files(table, mp3_files)
-        else:
-            base_path = Path(table.directory)
-            mp3_files = list(base_path.rglob("*.mp3"))
-            self.load_files(table, mp3_files)
+        table.reload_files()
 
     def table(self, index: int) -> SongTable | None:
         return self.table_tabs.widget(index) if self.table_tabs is not None else None
@@ -1303,18 +1291,7 @@ class MusicPlayer(QMainWindow):
 
         if open_tables:
             for index, open_table in enumerate(open_tables):
-                self.load(open_table, lazy=True, activate=index == 0)
-        else:
-            last_dir = AppSettings.value(SettingKeys.LAST_DIRECTORY)
-            if last_dir:
-                self.load(last_dir, lazy=True)
-            else:
-                self.add_table_tab(SongTable(_analyzer=self.analyzer, _music_player=self), "Welcome",
-                                   QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
-
-        current_table = self.current_table()
-        if current_table is not None:
-            current_table.load()
+                self.load(open_table, lazy=index != 0, activate=index == 0)
 
     def load(self, path: PathLike[str], activate=True, lazy: bool = False):
         if Path(path).is_dir():
@@ -1328,13 +1305,13 @@ class MusicPlayer(QMainWindow):
         table = self.current_table()
         if table is None:
             if entry is not None:
-                self.player.play_track(index, entry )
+                self.player.play_track(index, entry)
                 return
             else:
                 return
 
         if index is None:
-            index = table.model().index(0,0)
+            index = table.model().index(0, 0)
 
         if not index.isValid() and entry is not None:
             # calc index of entry

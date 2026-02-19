@@ -342,7 +342,7 @@ class CategoryTooltip(QWidget):
 
 
 class CategoryWidget(QWidget):
-    valueChanged = Signal(object)  #actual int | None but not possible with c++ binding
+    value_changed = Signal(MusicCategory, object)  #actual int | None but not possible with c++ binding
     _block_signals = False
     _orig_value: int
     _visible_tooltip = False
@@ -400,14 +400,14 @@ class CategoryWidget(QWidget):
         self.tooltip.hide()
 
         if self._orig_value is None or self.value() != self._orig_value:
-            self.valueChanged.emit(self.value())
+            self.value_changed.emit(self.category, self.value())
 
 
     def _forward_value_changed(self, value: int | None):
         self.update_value_label(value)
 
         if not self._block_signals:
-            self.valueChanged.emit(value)
+            self.value_changed.emit(self.category, value)
 
 
     def blockSignals(self, block: bool = True):
@@ -650,9 +650,9 @@ class ToggleSlider(QCheckBox):
 
         painter.restore()
 
-    def setChecked(self, checked: bool, block_signals: bool = False):
+    def setChecked(self, checked: bool, signals: bool = False):
         original_blocked = self.signalsBlocked()
-        if block_signals:
+        if not signals:
             self.blockSignals(True)
 
         super().setChecked(checked)
@@ -663,7 +663,7 @@ class ToggleSlider(QCheckBox):
             self.update()
         self._update_text()
 
-        if block_signals:
+        if not signals:
             self.blockSignals(original_blocked)
 
     def setCheckedNoAnim(self, checked):

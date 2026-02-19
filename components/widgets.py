@@ -2,9 +2,12 @@ import math
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton
 from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, \
-    QPoint, QSortFilterProxyModel, QObject, QModelIndex, QPersistentModelIndex
+    QPoint,  QObject, QRectF
 from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent, QColor, \
-    QPaintEvent
+    QPaintEvent, QPen
+from config.settings import AppSettings, SettingKeys
+
+from config.theme import app_theme
 
 PAINTING_SCALE_FACTOR = 20
 
@@ -143,7 +146,6 @@ class FeatureOverlay(QWidget):
         self.label.setContentsMargins(8,8,8,8)
         self.label.setTextFormat(Qt.TextFormat.RichText)
         self.label.setMinimumWidth(300)
-
 
         # Next button
         self.next_button = QPushButton(_("Next"), self)
@@ -293,44 +295,247 @@ class FeatureOverlay(QWidget):
         return super().eventFilter(obj, event)
 
 
-class FileFilterProxyModel(QSortFilterProxyModel):
-    def __init__(self, parent : QObject=None):
+def _map_pt(plot_rect, val, aro):
+    x_pos = plot_rect.left() + (val / 10.0) * plot_rect.width()
+    y_pos = plot_rect.bottom() - (aro / 10.0) * plot_rect.height()
+    return QPointF(x_pos, y_pos)
+
+class RussellEmotionWidget(QWidget):
+    """
+    A widget that draws a Russell's Circumplex Model of Emotion diagram
+    using PySide6 QPainter, allowing users to pick a valence/arousal point.
+    """
+
+    value_changed = Signal(float, float, bool)  # valence, arousal, in_progress
+
+    def __init__(self, parent: QWidget | None=None):
         super().__init__(parent)
-        self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.setSortCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        # 0 is usually the 'Name' column in QFileSystemModel
-        self.setFilterKeyColumn(0)
+        self.valence = -1
+        self.arousal = -1
+        self.mouse_down = False
+        self.reference_points = []
 
-    def lessThan(self, left: QModelIndex | QPersistentModelIndex, right: QModelIndex | QPersistentModelIndex):
-        # 1. Get a reference to the source model (QFileSystemModel)
-        source_model = self.sourceModel()
+        self.setMinimumSize(20 * app_theme.font_size, 20 * app_theme.font_size)
+        self.setMouseTracking(True)
 
-        # 2. Check if the items are directories
-        is_left_dir = source_model.isDir(left)
-        is_right_dir = source_model.isDir(right)
+        self.bg_color = QColor("#FFFFFF")
+        self.fg_color = QColor("#000000")
+        self.grid_color = QColor("#CCCCCC")
+        self.point_color = QColor("#FF0000")
+        self.ref_point_color = QColor("#0000FF")
+        self.ref_point_border_color = QColor("#2b2b2b")
 
-        # 3. Logic: If one is a directory and the other isn't,
-        # the directory is always "less than" (appears first)
-        if is_left_dir and not is_right_dir:
-            return self.sortOrder() == Qt.SortOrder.AscendingOrder
+        self.update_theme()
 
-        if not is_left_dir and is_right_dir:
-            return self.sortOrder() == Qt.SortOrder.DescendingOrder
+    def sizeHint(self, /) -> QSize:
+        return QSize(22 * app_theme.font_size, 22 * app_theme.font_size)
 
-        # 4. If both are the same type (both dirs or both files),
-        # fall back to standard sorting (alphabetical, size, etc.)
-        return super().lessThan(left, right)
+    def update_theme(self):
+        is_dark = AppSettings.value(SettingKeys.THEME, "LIGHT", type=str) == "DARK"
+        if is_dark:
+            self.bg_color = QColor("#2b2b2b")
+            self.fg_color = QColor("#dddddd")
+            self.grid_color = QColor("#555555")
+            self.point_color = QColor("#00FF00")  # Neon Green
+            self.ref_point_color = QColor("#00FF00")
+            self.ref_point_border_color = QColor("#FFFFFF")
+        else:
+            self.bg_color = QColor("#FFFFFF")
+            self.fg_color = QColor("#555555")
+            self.grid_color = QColor("#CCCCCC")
+            self.point_color = QColor("#0000FF")  # Blue
+            self.ref_point_color = QColor("#0000FF")
+            self.ref_point_border_color = QColor("#2b2b2b")
+        self.update()
 
-    def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex):
-        # This ensures that if a file matches, its parent folders remain visible
-        # Otherwise, the file would be hidden because its parent is filtered out
-        if super().filterAcceptsRow(source_row, source_parent):
-            return True
+    def changeEvent(self, event: QEvent):
+        if event.type() == QEvent.Type.PaletteChange:
+            self.update_theme()
+        elif event.type() == QEvent.Type.FontChange:
+            self.setMinimumSize(20 * app_theme.font_size, 20 * app_theme.font_size)
 
-        # Check if any children match the filter
-        source_model = self.sourceModel()
-        source_index = source_model.index(source_row, 0, source_parent)
-        for i in range(source_model.rowCount(source_index)):
-            if self.filterAcceptsRow(i, source_index):
-                return True
-        return False
+        super().changeEvent(event)
+
+    def paintEvent(self, event: QPaintEvent):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        font = painter.font()
+        font.setPointSizeF(app_theme.font_size)
+        painter.setFont(font)
+
+        MARGIN_LEFT = self.contentsMargins().left() + painter.fontMetrics().height()
+        MARGIN_BOTTOM = self.contentsMargins().bottom() + painter.fontMetrics().height()
+        MARGIN_TOP = self.contentsMargins().top()
+        MARGIN_RIGHT = self.contentsMargins().right()
+
+        # Draw background
+        painter.fillRect(event.rect(), self.bg_color)
+
+        self.plot_rect = event.rect().adjusted(MARGIN_LEFT, MARGIN_TOP, -MARGIN_RIGHT,-MARGIN_BOTTOM)
+
+        # Draw Grid (Center lines)
+        painter.setPen(QPen(self.grid_color, 1))
+        center_x = self.plot_rect.center().x()
+        center_y = self.plot_rect.center().y()
+
+        painter.drawLine(QPointF(self.plot_rect.left(), center_y), QPointF(self.plot_rect.right(), center_y))
+        painter.drawLine(QPointF(center_x, self.plot_rect.top()), QPointF(center_x, self.plot_rect.bottom()))
+
+        # Draw dashed grid border
+        painter.setPen(QPen(self.grid_color, 1, Qt.PenStyle.DashLine))
+        painter.drawRect(self.plot_rect)
+
+        # Draw Labels inside
+        painter.setPen(self.fg_color)
+
+        if app_theme.font_size_small > 11:
+            labels = [
+                (7.5, 7.5, "Happy"),
+                (7.5, 2.5, "Peaceful"),
+                (2.5, 2.5, "Bored"),
+                (2.5, 7.5, "Angry")
+            ]
+        else:
+            labels = [
+                (6.5, 8.5, "Excited"), (7.5, 7.5, "Happy"), (8.5, 6.5, "Pleased"),
+                (8.5, 3.5, "Relaxed"), (7.5, 2.5, "Peaceful"), (6.5, 1.5, "Calm"),
+                (3.5, 1.5, "Sleepy"), (2.5, 2.5, "Bored"), (1.5, 3.5, "Sad"),
+                (1.5, 6.5, "Nervous"), (2.5, 7.5, "Angry"), (3.5, 8.5, "Annoying")
+            ]
+
+        for val, aro, text in labels:
+            self.draw_text_centered(painter, _map_pt(self.plot_rect, val, aro), text)
+
+        # Nuanced labels
+        self.draw_text_centered(painter, _map_pt(self.plot_rect, 5, 9.8), "Hopeful",
+                                align=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        self.draw_text_centered(painter, _map_pt(self.plot_rect, 0.1, 5), "Dark",
+                                align=Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        self.draw_text_centered(painter, _map_pt(self.plot_rect, 9.9, 5), "Dreamy",
+                                align=Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+        self.draw_text_centered(painter, _map_pt(self.plot_rect, 5, 0.1), "Tired",
+                                align=Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
+
+        # Axis Labels
+        x_label = _("unpleasant") + "→" + _("pleasant")
+        y_label = _("calm") + "→" + _("excited")
+
+        painter.drawText(QRectF(self.plot_rect.left(), self.plot_rect.bottom(), self.plot_rect.width(), MARGIN_BOTTOM),
+                         Qt.AlignmentFlag.AlignCenter, x_label)
+
+        bounding_rect = painter.fontMetrics().boundingRect(y_label).adjusted(-2, -2, 2, 2)
+        h = bounding_rect.height()
+
+        painter.save()
+        painter.translate(MARGIN_LEFT - h/2, self.plot_rect.center().y())
+        painter.rotate(-90)
+        painter.drawText(QRectF(-self.plot_rect.height() / 2, - h/2, self.plot_rect.height(), h),
+                         Qt.AlignmentFlag.AlignCenter, y_label)
+        painter.restore()
+
+        # Draw Reference Points
+        c = QColor(self.ref_point_color)
+        c.setAlpha(50)
+        painter.setBrush(QBrush(c))
+        painter.setPen(QPen(self.ref_point_border_color, 0.5))
+
+        for val, aro in self.reference_points:
+            if val is not None and aro is not None:
+                pt = _map_pt(self.plot_rect, val, aro)
+                painter.drawEllipse(pt, 3, 3)
+
+        # Draw Current Point
+        if self.valence is not None and self.arousal is not None and self.valence>=0 and self.arousal>=0:
+            pt = _map_pt(self.plot_rect, self.valence, self.arousal)
+            painter.setBrush(QBrush(self.point_color))
+            painter.setPen(QPen(self.ref_point_border_color, 1.5))
+            painter.drawEllipse(pt, 6, 6)
+
+
+        # draw clear X
+        self.clear_rect : QRect = self.rect().marginsAdded(self.contentsMargins())
+        self.clear_rect.setWidth(16)
+        self.clear_rect.setY(self.clear_rect.bottom()-16)
+        self.clear_rect.setHeight(16)
+        QIcon.fromTheme(QIcon.ThemeIcon.EditClear).paint(painter, self.clear_rect, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    def draw_text_centered(self, painter, pt, text, align=Qt.AlignmentFlag.AlignCenter):
+        bounding_rect = painter.fontMetrics().boundingRect(text).adjusted(-2, -2, 2, 2)
+        w = bounding_rect.width()
+        h = bounding_rect.height()
+
+        if align & Qt.AlignmentFlag.AlignLeft:
+            rect = QRectF(pt.x(), pt.y() - h / 2, w, h)
+        elif align & Qt.AlignmentFlag.AlignRight:
+            rect = QRectF(pt.x() - w, pt.y() - h / 2, w, h)
+        elif align & Qt.AlignmentFlag.AlignTop:
+            rect = QRectF(pt.x() - w / 2, pt.y(), w, h)
+        elif align & Qt.AlignmentFlag.AlignBottom:
+            rect = QRectF(pt.x() - w / 2, pt.y() - h, w, h)
+        else:
+            rect = QRectF(pt.x() - w / 2, pt.y() - h / 2, w, h)
+
+        painter.drawText(rect, align, text)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.clear_rect.contains(event.position().toPoint()):
+                self.reset(True)
+            else:
+                self.mouse_down = True
+                self.update_from_mouse(event.position())
+
+    def mouseMoveEvent(self, event):
+        if self.mouse_down:
+            self.update_from_mouse(event.position())
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.mouse_down = False
+            self.value_changed.emit(self.valence, self.arousal, False)
+
+    def update_from_mouse(self, pos):
+        x = pos.x() - self.plot_rect.left()
+        y = pos.y() - self.plot_rect.top()
+
+        val = (x / self.plot_rect.width()) * 10.0
+        aro = 10.0 - (y / self.plot_rect.height()) * 10.0
+
+        self.valence = round(max(0.0, min(10.0, val)), 2)
+        self.arousal = round(max(0.0, min(10.0, aro)), 2)
+
+        self.value_changed.emit(self.valence, self.arousal, True)
+        self.update()
+
+    def get_value(self):
+        return self.valence, self.arousal
+
+    def set_value(self, valence, arousal, notify=True):
+        self.valence = valence
+        self.arousal = arousal
+        if notify:
+            self.value_changed.emit(self.valence, self.arousal, False)
+        self.update()
+
+    def reset(self, notify=True):
+        self.set_value(-1, -1, notify)
+
+    def set_reference_points(self, points):
+        if isinstance(points,list):
+            self.reference_points = points
+        else:
+            self.reference_points = list(points)
+        self.update()
+
+    def add_reference_points(self, points):
+        self.reference_points.extend(points)
+        self.update()
+
+    def clear_scatter(self):
+        self.reference_points = []
+        self.update()
+
+    def update_plot_theme(self, is_dark=True):
+        # Kept for compatibility, though is_dark is ignored in favor of AppSettings
+        self.update_theme()
