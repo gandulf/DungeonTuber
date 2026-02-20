@@ -623,6 +623,28 @@ class MusicPlayer(QMainWindow):
     def exit(self):
         sys.exit(0)
 
+    def config_simple_mode(self):
+        self.toggle_directory_tree_action.setChecked(True)
+        self.toggle_effects_tree_action.setChecked(False)
+
+        self.presets_action.setChecked(False)
+        self.tags_action.setChecked(True)
+        self.genres_action.setChecked(True)
+        self.russel_action.setChecked(False)
+        self.bpm_action.setChecked(False)
+        self.categories_action.setChecked(False)
+
+    def config_complex_mode(self):
+        self.toggle_directory_tree_action.setChecked(True)
+        self.toggle_effects_tree_action.setChecked(True)
+
+        self.presets_action.setChecked(True)
+        self.tags_action.setChecked(True)
+        self.genres_action.setChecked(True)
+        self.russel_action.setChecked(True)
+        self.bpm_action.setChecked(True)
+        self.categories_action.setChecked(True)
+
     def init_main_menu(self):
 
         menu_bar = self.menuBar()
@@ -661,63 +683,68 @@ class MusicPlayer(QMainWindow):
 
         view_menu = menu_bar.addMenu(_("View"))
 
-        self.toggle_directory_tree_action = QAction(_("Directory Tree"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
-        self.toggle_directory_tree_action.setCheckable(True)
-        self.toggle_directory_tree_action.setChecked(AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
-        self.toggle_directory_tree_action.triggered.connect(self.toggle_directory_tree)
-        view_menu.addAction(self.toggle_directory_tree_action)
-
         filter_menu = QMenu(_("Filter"), self, icon=QIcon.fromTheme("filter"))
-
         view_menu.addMenu(filter_menu)
 
-        filter_action = QAction(_("Toggle Filter"), self, icon=QIcon.fromTheme("filter"))
-        filter_action.setCheckable(True)
-        filter_action.setChecked(AppSettings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
-        filter_action.triggered.connect(self.filter_widget.toggle)
-        filter_menu.addAction(filter_action)
+        config_simple_action = QAction(_("Simple Mode"), self, icon=QIcon.fromTheme("filter"))
+        config_simple_action.triggered.connect(self.config_simple_mode)
+        filter_menu.addAction(config_simple_action)
+
+        config_complex_action = QAction(_("Complex Mode"), self, icon=QIcon.fromTheme("filter"))
+        config_complex_action.triggered.connect(self.config_complex_mode)
+        filter_menu.addAction(config_complex_action)
+
+        filter_menu.addSeparator()
 
         self.presets_action = QAction(_("Presets"), self, icon=QIcon.fromTheme("russel"))
         self.presets_action.setCheckable(True)
         self.presets_action.setChecked(AppSettings.value(SettingKeys.PRESET_WIDGETS, True, type=bool))
-        self.presets_action.triggered.connect(self.filter_widget.toggle_presets)
+        self.presets_action.changed.connect(self.filter_widget.toggle_presets)
         filter_menu.addAction(self.presets_action)
 
         self.russel_action = QAction(_("Circumplex model of emotion"), self, icon=QIcon.fromTheme("russel"))
         self.russel_action.setCheckable(True)
         self.russel_action.setChecked(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
-        self.russel_action.triggered.connect(self.filter_widget.toggle_russel_widget)
+        self.russel_action.changed.connect(self.filter_widget.toggle_russel_widget)
         filter_menu.addAction(self.russel_action)
 
         self.categories_action = QAction(_("Category Sliders"), self, icon=QIcon.fromTheme("filter"))
         self.categories_action.setCheckable(True)
         self.categories_action.setChecked(AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool))
-        self.categories_action.triggered.connect(self.filter_widget.toggle_category_widgets)
+        self.categories_action.changed.connect(self.filter_widget.toggle_category_widgets)
         filter_menu.addAction(self.categories_action)
 
         self.bpm_action = QAction(_("Beats per Minute"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
         self.bpm_action.setCheckable(True)
         self.bpm_action.setChecked(AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
-        self.bpm_action.triggered.connect(self.filter_widget.toggle_bpm_widget)
+        self.bpm_action.changed.connect(self.filter_widget.toggle_bpm_widget)
         filter_menu.addAction(self.bpm_action)
 
         self.tags_action = QAction(_("Tags"), self, icon=QIcon.fromTheme("tags"))
         self.tags_action.setCheckable(True)
         self.tags_action.setChecked(AppSettings.value(SettingKeys.TAGS_WIDGET, True, type=bool))
-        self.tags_action.triggered.connect(self.filter_widget.toggle_tags_widget)
+        self.tags_action.changed.connect(self.filter_widget.toggle_tags_widget)
         filter_menu.addAction(self.tags_action)
 
         self.genres_action = QAction(_("Genres"), self, icon=QIcon.fromTheme("tags"))
         self.genres_action.setCheckable(True)
         self.genres_action.setChecked(AppSettings.value(SettingKeys.GENRES_WIDGET, True, type=bool))
-        self.genres_action.triggered.connect(self.filter_widget.toggle_genres_widget)
+        self.genres_action.changed.connect(self.filter_widget.toggle_genres_widget)
         filter_menu.addAction(self.genres_action)
+
+        self.toggle_directory_tree_action = QAction(_("Directory Tree"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
+        self.toggle_directory_tree_action.setCheckable(True)
+        self.toggle_directory_tree_action.setChecked(AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
+        self.toggle_directory_tree_action.changed.connect(self.toggle_directory_tree)
+        view_menu.addAction(self.toggle_directory_tree_action)
 
         self.toggle_effects_tree_action = QAction(_("Effects Tree"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.AudioCard))
         self.toggle_effects_tree_action.setCheckable(True)
         self.toggle_effects_tree_action.setChecked(AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool))
-        self.toggle_effects_tree_action.triggered.connect(self.toggle_effects_tree)
+        self.toggle_effects_tree_action.changed.connect(self.toggle_effects_tree)
         view_menu.addAction(self.toggle_effects_tree_action)
+
+        view_menu.addSeparator()
 
         font_size_small_action = QAction(_("Smaller"), self)
         font_size_small_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Minus))
@@ -932,7 +959,7 @@ class MusicPlayer(QMainWindow):
     def tree_open_file(self, file_info: QFileInfo):
         if file_info.isDir():
             self.load_directory(file_info.filePath(), activate=True)
-        elif file_info.suffix() in ("m3u", "M3U"):
+        elif file_info.suffix().lower() == "m3u":
             self.load_playlist(file_info.filePath(), activate=True)
         else:
             entry = parse_mp3(Path(file_info.filePath()))
@@ -945,7 +972,7 @@ class MusicPlayer(QMainWindow):
             add_new_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
             add_new_action.triggered.connect(functools.partial(self.pick_new_playlist, datas))
             for playlist in self.get_playlists():
-                add_action = add_to_playlist.addAction(Path(playlist).name.removesuffix(".m3u").removesuffix(".M3U"))
+                add_action = add_to_playlist.addAction(QFileInfo(playlist).baseName())
                 add_action.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical))
                 add_action.triggered.connect(functools.partial(self.add_to_playlist, playlist, datas))
 
@@ -983,7 +1010,6 @@ class MusicPlayer(QMainWindow):
         # Menu Bar
         self.filter_widget = FilterWidget(self)
         main_layout.addWidget(self.filter_widget)
-        self.filter_widget.setVisible(AppSettings.value(SettingKeys.FILTER_VISIBLE, True, type=bool))
 
         main_layout.addWidget(self.player, 0)
 

@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushBu
 from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, \
     QPoint,  QObject, QRectF
 from PySide6.QtGui import QIcon, QPolygonF, QPainterStateGuard, QBrush, QPainter, QPalette, QMouseEvent, QColor, \
-    QPaintEvent, QPen
+    QPaintEvent, QPen, QAction
 from config.settings import AppSettings, SettingKeys
 
 from config.theme import app_theme
@@ -127,6 +127,7 @@ class IconLabel(QWidget):
 
 
 class FeatureOverlay(QWidget):
+
     def __init__(self, parent: QWidget | None, steps: list):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
@@ -184,6 +185,7 @@ class FeatureOverlay(QWidget):
         self.label.setMinimumWidth(max(300, self._highlight_rect.width()))
 
 
+        button_group_right = QHBoxLayout()
         if self.current_step < len(self.steps):
             self.label.setText(self.steps[self.current_step]['message'])
             self.label.adjustSize()

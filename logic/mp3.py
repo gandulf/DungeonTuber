@@ -36,7 +36,7 @@ class Mp3Entry(object):
 
     def __init__(self, name: str = None, path :PathLike[str] = None, categories : dict[str,int] = None, tags: list[str] = [], artist: str = None, album:str = None, title:str = None, genre:list[str] | str = [], bpm: int = None):
         if name is not None:
-            self.name = name.removesuffix(".mp3").removesuffix(".MP3")
+            self.name = name.removesuffix(".mp3").removesuffix(".MP3").removesuffix(".Mp3")
         else:
             self.name = None
         self.path = path

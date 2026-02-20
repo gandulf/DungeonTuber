@@ -211,7 +211,6 @@ class SettingKeys(StrEnum):
     EFFECTS_DIRECTORY = "effectsDirectory"
     EFFECTS_TREE = "effectsTree"
     LAST_DIRECTORY = "lastDirectory"
-    FILTER_VISIBLE = "filterVisible"
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
     EXPANDED_DIRS = "expandedDirs"
     ROOT_DIRECTORY = "rootDirectory"

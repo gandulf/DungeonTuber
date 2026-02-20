@@ -223,7 +223,8 @@ class SongTable(QTableView):
         font_metrics = self.horizontalHeader().fontMetrics()
         self.horizontalHeader().contentsMargins().left()
         name = self.table_model.headerData(index, Qt.Orientation.Horizontal, role=Qt.ItemDataRole.DisplayRole)
-        return 12 + self.horizontalHeader().contentsMargins().left() + self.horizontalHeader().contentsMargins().right() + font_metrics.horizontalAdvance(name)
+        # padding + space for sort icon + text width
+        return 16 + 12 + self.horizontalHeader().contentsMargins().left() + self.horizontalHeader().contentsMargins().right() + font_metrics.horizontalAdvance(name)
 
     def _update_column_widths(self):
         self.setColumnWidth(SongTableModel.INDEX_COL, 28)
@@ -341,6 +342,13 @@ class SongTable(QTableView):
         menu.addAction(score_action)
 
         menu.addSeparator()
+
+        file_name_action = QAction(_("Use mp3 title instead of file name"), self)
+        file_name_action.setCheckable(True)
+        file_name_action.setChecked(AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, True, type=bool))
+        file_name_action.triggered.connect(
+            lambda checked: self._toggle_column_setting(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, checked))
+        menu.addAction(file_name_action)
 
         # Summary
         summary_action = QAction(_("Summary"), self)
@@ -869,7 +877,7 @@ class DirectoryTree(QTreeView):
     def mp3_data(self, index: QModelIndex):
         data = self.model().itemData(index)
         file_info: QFileInfo = data[QFileSystemModel.Roles.FileInfoRole]
-        if file_info.isDir() or file_info.suffix() in ("m3u", "M3U"):
+        if file_info.isDir() or file_info.suffix().lower() == "m3u":
             return None
         else:
             return parse_mp3(Path(file_info.filePath()))

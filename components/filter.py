@@ -199,26 +199,24 @@ class FilterWidget(QWidget):
             self.filter_config.categories.pop(category.key, 0)
         self.values_changed.emit(self.filter_config)
 
-    def toggle(self):
-        if self.isVisible():
-            self.hide()
-        else:
-            self.show()
+    def toggle_russel_widget(self, visible: bool=None):
+        if visible is None:
+            visible = not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool)
 
-        AppSettings.setValue(SettingKeys.FILTER_VISIBLE, self.isVisible())
+        AppSettings.setValue(SettingKeys.RUSSEL_WIDGET, visible)
 
-    def toggle_russel_widget(self):
-        AppSettings.setValue(SettingKeys.RUSSEL_WIDGET, not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
-
-        if not AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool):
+        if not visible:
             self.russel_widget.reset()
 
         self.refresh_slider_tabs_visibility()
 
-    def toggle_category_widgets(self):
-        AppSettings.setValue(SettingKeys.CATEGORY_WIDGETS, not AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool))
+    def toggle_category_widgets(self, visible: bool=None):
+        if visible is None:
+            visible = not AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool)
 
-        if not AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool):
+        AppSettings.setValue(SettingKeys.CATEGORY_WIDGETS, visible)
+
+        if not visible:
             for category, slider in self.sliders.items():
                 slider.reset(False)
 
@@ -226,32 +224,44 @@ class FilterWidget(QWidget):
 
         self.refresh_slider_tabs_visibility()
 
-    def toggle_presets(self):
-        AppSettings.setValue(SettingKeys.PRESET_WIDGETS, not AppSettings.value(SettingKeys.PRESET_WIDGETS, True, type=bool))
+    def toggle_presets(self, visible: bool = None):
+        if visible is None:
+            visible = not AppSettings.value(SettingKeys.PRESET_WIDGETS, True, type=bool)
+
+        AppSettings.setValue(SettingKeys.PRESET_WIDGETS, visible)
         self.update_presets()
 
-    def toggle_bpm_widget(self):
-        AppSettings.setValue(SettingKeys.BPM_WIDGET, not AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool))
+    def toggle_bpm_widget(self, visible: bool = None):
+        if visible is None:
+            visible = not AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool)
 
-        if not AppSettings.value(SettingKeys.BPM_WIDGET, True, type=bool):
+        AppSettings.setValue(SettingKeys.BPM_WIDGET, visible)
+
+        if not visible:
             self.bpm_widget.reset()
 
         self.refresh_slider_tabs_visibility()
 
-    def toggle_tags_widget(self):
-        AppSettings.setValue(SettingKeys.TAGS_WIDGET, not AppSettings.value(SettingKeys.TAGS_WIDGET, True, type=bool))
+    def toggle_tags_widget(self, visible: bool = None):
+        if visible is None:
+            visible = not AppSettings.value(SettingKeys.TAGS_WIDGET, True, type=bool)
 
-        if not AppSettings.value(SettingKeys.TAGS_WIDGET, True, type=bool):
+        AppSettings.setValue(SettingKeys.TAGS_WIDGET, visible)
+
+        if not visible:
             self.filter_config.tags.clear()
             for toggle in children_layout(self.tags_layout):
                 toggle.setChecked(False, False)
             self.values_changed.emit(self.filter_config)
         self.refresh_slider_tabs_visibility()
 
-    def toggle_genres_widget(self):
-        AppSettings.setValue(SettingKeys.GENRES_WIDGET, not AppSettings.value(SettingKeys.GENRES_WIDGET, True, type=bool))
+    def toggle_genres_widget(self, visible: bool = None):
+        if visible is None:
+            visible = not AppSettings.value(SettingKeys.GENRES_WIDGET, True, type=bool)
 
-        if not AppSettings.value(SettingKeys.GENRES_WIDGET, True, type=bool):
+        AppSettings.setValue(SettingKeys.GENRES_WIDGET, visible)
+
+        if not visible:
             self.filter_config.genres.clear()
             for toggle in children_layout(self.genres_layout):
                 toggle.setChecked(False, False)

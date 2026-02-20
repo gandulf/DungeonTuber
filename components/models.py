@@ -129,6 +129,8 @@ class SongTableModel(QAbstractTableModel):
                             new_value = float(value)
                         else:
                             new_value = int(value)
+
+                        new_value = min(max(0, new_value), 10)
                 except ValueError:
                     logger.error("Invalid value for category {0}: {1}", category_key, value)
                     return False
@@ -137,11 +139,11 @@ class SongTableModel(QAbstractTableModel):
                 has_changes = False
 
                 if new_value is None:
-                    if data.selected_categories is not None and category_key in data.selected_categories:
-                        data.selected_categories[category_key] = None
+                    if data.categories is not None and category_key in data.categories:
+                        data.categories[category_key] = None
                         has_changes = True
-                elif new_value != data.selected_categories.get(category_key, None):
-                    data.selected_categories[category_key] = new_value
+                elif new_value != data.categories.get(category_key, None):
+                    data.categories[category_key] = new_value
                     has_changes = True
                 else:
                     return False

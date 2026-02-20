@@ -140,7 +140,7 @@ class EditSongDialog(QDialog):
                 os.rename(old_path, new_path)
 
                 self.data.path = Path(new_path)
-                self.data.name = new_filename.removesuffix(".mp3").removesuffix(".MP3")
+                self.data.name = new_filename.removesuffix(".mp3").removesuffix(".MP3").removesuffix(".Mp3")
 
             except Exception as e:
                 logger.error("Failed to rename file: {0}", e)
