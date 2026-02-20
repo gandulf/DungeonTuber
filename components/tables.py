@@ -5,7 +5,7 @@ from os import PathLike
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
     Signal, QRect, QSize, QAbstractTableModel, QObject, QPoint, QItemSelection, QAbstractItemModel
 from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QFont, QFontMetrics, QPalette, QPen, QDropEvent, QKeyEvent, \
-    QDragEnterEvent, QDragMoveEvent, QPaintEvent
+    QDragEnterEvent, QDragMoveEvent, QPaintEvent, QLinearGradient
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QAbstractScrollArea, QListView, QStyleOptionViewItem, QStyle, QWidget, \
     QStyledItemDelegate, QHeaderView, QAbstractItemView, QTableView, QMessageBox
 
@@ -146,6 +146,8 @@ class SongTable(QTableView):
         self.verticalHeader().setVisible(False)
         self._update_font_sizes()
 
+
+
         self.horizontalHeader().setHighlightSections(False)
         self.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_context_menu)
@@ -153,6 +155,7 @@ class SongTable(QTableView):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
 
+        self.setItemDelegate(SongTable.CategoryDelegate(self))
         self.setItemDelegateForColumn(SongTableModel.FILE_COL, SongTable.LabelItemDelegate(self))
         self.setItemDelegateForColumn(SongTableModel.FAV_COL, SongTable.StarDelegate(self))
 
@@ -634,6 +637,12 @@ class SongTable(QTableView):
                 # Otherwise, use the standard behavior
                 super().setModelData(editor, model, index)
 
+        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+            self.initStyleOption(option, index)
+            padding = 3
+            option.rect = option.rect.adjusted(0, 0, 0, padding)
+            super().paint(painter,option,index)
+
     class StarDelegate(QStyledItemDelegate):
         star_rating = StarRating()
 
@@ -641,6 +650,14 @@ class SongTable(QTableView):
             super().__init__(parent)
 
         def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+            self.initStyleOption(option, index)
+
+            background = index.data(Qt.ItemDataRole.BackgroundRole)
+            if option.state & QStyle.StateFlag.State_MouseOver:
+                painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
+            elif background:
+                painter.fillRect(option.rect, background)
+
             fav_icon_color = app_theme.get_green_brush()
             self.star_rating.paint(painter, index.data(), option.rect, option.palette, fav_icon_color)
 
@@ -657,8 +674,16 @@ class SongTable(QTableView):
             return self._size
 
         def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex, /):
+            self.initStyleOption(option, index)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
-            data = index.model().data(index, Qt.ItemDataRole.UserRole)
+            data = index.data(Qt.ItemDataRole.UserRole)
+
+            background = index.data(Qt.ItemDataRole.BackgroundRole)
+
+            if option.state & QStyle.StateFlag.State_MouseOver:
+                painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
+            elif background:
+                painter.fillRect(option.rect, background)
 
             content_rect = option.rect.adjusted(6, 4, -6, -4)
             pen = painter.pen()

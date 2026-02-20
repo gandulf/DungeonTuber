@@ -6,7 +6,7 @@ from sortedcontainers import SortedSet
 
 from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMimeData, QByteArray, QDataStream, QIODevice, QPersistentModelIndex, \
     QAbstractTableModel, QSize, QObject
-from PySide6.QtGui import QColor, QBrush, QIcon
+from PySide6.QtGui import QColor, QBrush, QIcon, QLinearGradient, QGradient
 from PySide6.QtWidgets import QMessageBox
 
 from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, \
@@ -242,6 +242,20 @@ class SongTableModel(QAbstractTableModel):
                 value = index.data(Qt.ItemDataRole.DisplayRole)
                 category_key = self.get_category_key(index)
                 return self._get_category_background_brush(self.filter_config.get_category(category_key, None), value)
+            else:
+                data = index.data(Qt.ItemDataRole.UserRole)
+                if data.color:
+                    background = QColor(data.color)
+                    background.setAlphaF(0.5)
+                    gradient = QLinearGradient(0, 0, 0, 1)
+                    gradient.setCoordinateMode(QGradient.CoordinateMode.ObjectBoundingMode);
+                    gradient.setColorAt(0.0, Qt.GlobalColor.transparent)
+                    gradient.setColorAt(0.3, Qt.GlobalColor.transparent)
+                    gradient.setColorAt(1.0, background)
+                    return QBrush(gradient)
+                else:
+                    return None
+
         elif role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             data = index.data(Qt.ItemDataRole.UserRole)
             if data is None:

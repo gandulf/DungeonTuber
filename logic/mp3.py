@@ -8,14 +8,14 @@ from pathlib import Path
 from os import PathLike
 
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QColor
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType
 
 logger = logging.getLogger("main")
 
 class Mp3Entry(object):
-    __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover", "has_cover", "bpm","_moods"]
+    __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover", "has_cover", "bpm","_moods", "color"]
 
     index: int
     name: str
@@ -30,6 +30,7 @@ class Mp3Entry(object):
     _cover: QPixmap | None
     has_cover: bool
     bpm: int
+    color: QColor
 
     categories : dict[str,int]
     _tags: list[str]
@@ -67,6 +68,7 @@ class Mp3Entry(object):
         self.has_cover = None
         self.bpm = bpm
         self.index = None
+        self.color = None
 
     @property
     def tags(self):
@@ -177,6 +179,10 @@ def parse_mp3(file_path : PathLike[str]) -> Mp3Entry | None:
             if txxx_fav and txxx_fav.text:
                 entry.favorite = bool(txxx_fav.text)
 
+            color = audio.tags.get("TXXX:ai_color")
+            if color and color.text:
+                entry.color = QColor.fromString(color.text[0])
+
         return entry
     except Exception as e:
         logger.error("Error reading tags for {0}: {1}", file_path, e)
@@ -206,6 +212,7 @@ def update_mp3_data(path: PathLike[str], data: Mp3Entry):
     update_mp3_favorite(audio, data.favorite, False)
     update_mp3_categories(audio, data.categories, False)
     update_mp3_tags(audio, data.tags, False)
+    update_mp3_color(audio, data.color, False)
 
     audio.save()
 
@@ -342,6 +349,22 @@ def update_mp3_tags(path: str| PathLike[str] | MP3, tags : list[str], save : boo
     if save:
         audio.save()
         logger.debug("Updated tags to {0} for {1}", tags,path)
+
+def update_mp3_color(path: str| PathLike[str] | MP3, color:QColor, save : bool = True):
+    audio = _audio(path)
+
+    if color:
+        audio.tags.add(
+            TXXX(
+                Encoding.UTF8,
+                desc='ai_color',
+                text=[color.name()]
+            )
+        )
+
+    if save:
+        audio.save()
+        logger.debug("Updated color to {0} for {1}", color,path)
 
 def list_mp3s(path : PathLike[str]):
     return glob.glob("**/*.mp3", root_dir=path, recursive=True)
