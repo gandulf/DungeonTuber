@@ -18,6 +18,96 @@ from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_c
 
 logger = logging.getLogger("main")
 
+
+def _get_bpm_background_brush(desired_value: int | None, value: int) -> QBrush | Qt.GlobalColor | None:
+    if value is None or desired_value is None or desired_value == 0:
+        return Qt.GlobalColor.transparent
+
+    value_diff = abs(desired_value - value)
+
+    if value_diff <= 40:
+        return app_theme.get_green(51)
+    elif value_diff <= 80:
+        return app_theme.get_orange(51)
+    else:
+        return app_theme.get_red(51)
+
+def _get_entry_background_brush(data: Mp3Entry):
+    if data.color:
+        background = QColor(data.color)
+        background.setAlphaF(0.5)
+        gradient = QLinearGradient(0, 0, 0, 1)
+        gradient.setCoordinateMode(QGradient.CoordinateMode.ObjectBoundingMode);
+        gradient.setColorAt(0.0, Qt.GlobalColor.transparent)
+        gradient.setColorAt(0.3, Qt.GlobalColor.transparent)
+        gradient.setColorAt(1.0, background)
+        return QBrush(gradient)
+    else:
+        return None
+
+def _get_score_foreground_brush(score: int | None) -> QColor | Qt.GlobalColor | None:
+    return Qt.GlobalColor.black
+    # if score is not None:
+    #     if score < 50:
+    #         return _black
+    #     elif score < 100:
+    #         return _black
+    #     elif score < 150:
+    #         return _black
+    #     else:
+    #         return _black
+    # else:
+    #     return _black
+
+
+def _get_score_background_brush(score: int | None) -> QBrush | Qt.GlobalColor | None:
+    if score is not None:
+        if score < 50:
+            return app_theme.get_green(170)
+        elif score < 100:
+            return app_theme.get_yellow(170)
+        elif score < 150:
+            return app_theme.get_orange(170)
+        else:
+            return app_theme.get_red(170)
+    else:
+        return None
+
+
+def _get_category_background_brush(desired_value: int | None, value: int) -> QBrush | Qt.GlobalColor | None:
+    if value is None or desired_value is None:
+        return Qt.GlobalColor.transparent
+
+    value_diff = abs(desired_value - value)
+
+    if value_diff < 4:
+        return app_theme.get_green(51)
+    elif value_diff < 7:
+        return app_theme.get_orange(51)
+    else:
+        return app_theme.get_red(51)
+
+
+def _get_genre_background_brush(desired_values: list[str] | None, values: list[str]) -> QBrush | Qt.GlobalColor | None:
+    if values is None or desired_values is None:
+        return Qt.GlobalColor.transparent
+
+    if isinstance(values, str):
+        values = ", ".split(values)
+
+    found = 0
+    for desired_value in desired_values:
+        if desired_value in values:
+            found = found + 1
+
+    if found == len(desired_values):
+        return app_theme.get_green(51)
+    elif found > 0:
+        return app_theme.get_orange(51)
+    else:
+        return app_theme.get_red(51)
+
+
 class SongTableModel(QAbstractTableModel):
     INDEX_COL = 0
     FAV_COL = 1
@@ -231,30 +321,20 @@ class SongTableModel(QAbstractTableModel):
         elif role == Qt.ItemDataRole.BackgroundRole:
             if index.column() == SongTableModel.SCORE_COL:
                 score = index.data(Qt.ItemDataRole.DisplayRole)
-                return self._get_score_background_brush(score)
+                return _get_score_background_brush(score)
             elif index.column() == SongTableModel.GENRE_COL:
                 value = index.data(Qt.ItemDataRole.UserRole)
-                return self._get_genre_background_brush(self.filter_config.genres, value.genres)
+                return _get_genre_background_brush(self.filter_config.genres, value.genres)
             elif index.column() == SongTableModel.BPM_COL:
                 value = index.data(Qt.ItemDataRole.DisplayRole)
-                return self._get_bpm_background_brush(self.filter_config.bpm, value)
+                return _get_bpm_background_brush(self.filter_config.bpm, value)
             elif index.column() >= SongTableModel.CAT_COL:
                 value = index.data(Qt.ItemDataRole.DisplayRole)
                 category_key = self.get_category_key(index)
-                return self._get_category_background_brush(self.filter_config.get_category(category_key, None), value)
+                return _get_category_background_brush(self.filter_config.get_category(category_key, None), value)
             else:
                 data = index.data(Qt.ItemDataRole.UserRole)
-                if data.color:
-                    background = QColor(data.color)
-                    background.setAlphaF(0.5)
-                    gradient = QLinearGradient(0, 0, 0, 1)
-                    gradient.setCoordinateMode(QGradient.CoordinateMode.ObjectBoundingMode);
-                    gradient.setColorAt(0.0, Qt.GlobalColor.transparent)
-                    gradient.setColorAt(0.3, Qt.GlobalColor.transparent)
-                    gradient.setColorAt(1.0, background)
-                    return QBrush(gradient)
-                else:
-                    return None
+                return _get_entry_background_brush(data)
 
         elif role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             data = index.data(Qt.ItemDataRole.UserRole)
@@ -267,7 +347,7 @@ class SongTableModel(QAbstractTableModel):
             if index.column() == SongTableModel.FAV_COL:
                 return data.favorite
             elif index.column() == SongTableModel.FILE_COL:
-                name = data.title if AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False, type=bool) else data.name
+                name = data.title if AppSettings.value(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, False, type=bool) else data.name
                 if data.summary:
                     return name + " " + data.summary
                 else:
@@ -439,78 +519,6 @@ class SongTableModel(QAbstractTableModel):
 
         return round(score) if score is not None else None
 
-    def _get_genre_background_brush(self, desired_values: list[str] | None, values: list[str]) -> QBrush | Qt.GlobalColor | None:
-        if values is None or desired_values is None:
-            return Qt.GlobalColor.transparent
-
-        if isinstance(values, str):
-            values = ", ".split(values)
-
-        found = 0
-        for desired_value in desired_values:
-            if desired_value in values:
-                found = found + 1
-
-        if found == len(desired_values):
-            return app_theme.get_green(51)
-        elif found > 0:
-            return app_theme.get_orange(51)
-        else:
-            return app_theme.get_red(51)
-
-    def _get_category_background_brush(self, desired_value: int | None, value: int) -> QBrush | Qt.GlobalColor | None:
-        if value is None or desired_value is None:
-            return Qt.GlobalColor.transparent
-
-        value_diff = abs(desired_value - value)
-
-        if value_diff < 4:
-            return app_theme.get_green(51)
-        elif value_diff < 7:
-            return app_theme.get_orange(51)
-        else:
-            return app_theme.get_red(51)
-
-    def _get_bpm_background_brush(self, desired_value: int | None, value: int) -> QBrush | Qt.GlobalColor | None:
-        if value is None or desired_value is None or desired_value == 0:
-            return Qt.GlobalColor.transparent
-
-        value_diff = abs(desired_value - value)
-
-        if value_diff <= 40:
-            return app_theme.get_green(51)
-        elif value_diff <= 80:
-            return app_theme.get_orange(51)
-        else:
-            return app_theme.get_red(51)
-
-    def _get_score_foreground_brush(self, score: int | None) -> QColor | Qt.GlobalColor| None:
-        return Qt.GlobalColor.black
-        # if score is not None:
-        #     if score < 50:
-        #         return _black
-        #     elif score < 100:
-        #         return _black
-        #     elif score < 150:
-        #         return _black
-        #     else:
-        #         return _black
-        # else:
-        #     return _black
-
-    def _get_score_background_brush(self, score: int | None) -> QBrush | Qt.GlobalColor | None:
-        if score is not None:
-            if score < 50:
-                return app_theme.get_green(170)
-            elif score < 100:
-                return app_theme.get_yellow(170)
-            elif score < 150:
-                return app_theme.get_orange(170)
-            else:
-                return app_theme.get_red(170)
-        else:
-            return None
-
 
 class SongTableProxyModel(QSortFilterProxyModel):
     sort_changed = Signal(int, Qt.SortOrder)  # Custom signal
@@ -544,6 +552,9 @@ class EffectTableModel(QAbstractTableModel):
         super(EffectTableModel, self).__init__()
         self._data = data
 
+    def index_of(self, song: Mp3Entry):
+        return self._data.index(song)
+
     def rowCount(self, parent: QModelIndex = ...) -> int:
         return len(self._data)
 
@@ -567,9 +578,13 @@ class EffectTableModel(QAbstractTableModel):
             return QIcon(data.cover) if data.cover is not None else None
         elif role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             data = index.data(Qt.ItemDataRole.UserRole)
-            return data.name
+            name = data.title if AppSettings.value(SettingKeys.EFFECTS_TITLE_INSTEAD_OF_FILE_NAME, False, type=bool) else data.name
+            return name
         elif role == Qt.ItemDataRole.UserRole:
             return self._data[index.row()]
+        elif role == Qt.ItemDataRole.BackgroundRole:
+            data = index.data(Qt.ItemDataRole.UserRole)
+            return _get_entry_background_brush(data)
         else:
             return None
 

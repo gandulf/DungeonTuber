@@ -1,3 +1,4 @@
+import functools
 import os
 from pathlib import Path
 from os import PathLike
@@ -348,9 +349,9 @@ class SongTable(QTableView):
 
         file_name_action = QAction(_("Use mp3 title instead of file name"), self)
         file_name_action.setCheckable(True)
-        file_name_action.setChecked(AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, True, type=bool))
+        file_name_action.setChecked(AppSettings.value(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, True, type=bool))
         file_name_action.triggered.connect(
-            lambda checked: self._toggle_column_setting(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, checked))
+            lambda checked: self._toggle_column_setting(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, checked))
         menu.addAction(file_name_action)
 
         # Summary
@@ -496,20 +497,6 @@ class SongTable(QTableView):
     def columnCount(self) -> int:
         return 0 if self.model() is None else self.model().columnCount()
 
-    def analyze_files(self):
-        for model_index in self.selectionModel().selectedRows():
-            data = model_index.data(Qt.ItemDataRole.UserRole)
-            self.file_analyzed.emit(QFileInfo(data.path))
-
-    def edit_song(self):
-        data: Mp3Entry = self.selectionModel().currentIndex().data(Qt.ItemDataRole.UserRole)
-        dialog = EditSongDialog(data, self)
-        if dialog.exec():
-            index = self.index_of(data)
-            if index.isValid():
-                self.model().setData(index, data, Qt.ItemDataRole.UserRole)
-                self.update()
-
     def remove_items(self):
         datas = []
         for model_index in reversed(self.selectionModel().selectedRows()):
@@ -528,23 +515,16 @@ class SongTable(QTableView):
         # index = self.indexAt(point)
         menu = QMenu(self)
 
-        edit_name_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.EditPaste), _("Edit Song"))
-        edit_name_action.triggered.connect(self.edit_song)
-
-        if AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str) != "":
-            analyze_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.Scanner), _("Analyze"))
-            analyze_action.triggered.connect(self.analyze_files)
-
-        menu.addSeparator()
-
         datas = [model_index.data(Qt.ItemDataRole.UserRole) for model_index in self.selectionModel().selectedRows()]
         self.open_context_menu.emit(menu, datas)
 
-        remove_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Remove from playlist") if self.playlist else _("Remove"))
-        remove_action.triggered.connect(self.remove_items)
+        if len(datas)>0:
+            remove_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.EditDelete), _("Remove from playlist") if self.playlist else _("Remove"))
+            remove_action.triggered.connect(self.remove_items)
 
-        menu.show()
-        menu.exec(self.mapToGlobal(point))
+        if not menu.isEmpty():
+            menu.show()
+            menu.exec(self.mapToGlobal(point))
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -679,7 +659,6 @@ class SongTable(QTableView):
             data = index.data(Qt.ItemDataRole.UserRole)
 
             background = index.data(Qt.ItemDataRole.BackgroundRole)
-
             if option.state & QStyle.StateFlag.State_MouseOver:
                 painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
             elif background:
@@ -758,7 +737,7 @@ class SongTable(QTableView):
 
             painter.setFont(title_font)
 
-            title = data.title if AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False,
+            title = data.title if AppSettings.value(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, False,
                                                     type=bool) and data.title is not None and data.title != "" else data.name
             painter.drawText(title_rect, title)
 
@@ -916,27 +895,16 @@ class DirectoryTree(QTreeView):
 
     def show_context_menu(self, point: QPoint):
         # model_index = self.indexAt(point)
-
         menu = QMenu(self)
-
         menu.addAction(self.open_action)
-
         #
         datas = [self.mp3_data(model_index) for model_index in self.selectionModel().selectedRows()]
         datas = [data for data in datas if data is not None]
-        if len(datas) > 0:
-            menu.addAction(self.edit_song_action)
-            if AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str) != "":
-                menu.addAction(self.analyze_file_action)
-
         self.open_context_menu.emit(menu, datas)
-
         menu.addSeparator()
-
         #
         menu.addAction(self.go_parent_action)
         menu.addAction(self.set_home_action)
-
         #
         menu.show()
         menu.exec(self.mapToGlobal(point))
@@ -1011,14 +979,22 @@ class DirectoryTree(QTreeView):
 class EffectList(QListView):
     grid_threshold = 200
 
+    open_context_menu = Signal(QMenu, list)
+
     def __init__(self, parent=None, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__(parent)
 
+        self.table_model = None
+        self.setUniformItemSizes(True)
         self.setItemDelegate(EffectListItemDelegate(parent=self))
+        self.verticalScrollBar().setSingleStep(30)
 
         self.proxy_model = QSortFilterProxyModel(self)
         self.proxy_model.setDynamicSortFilter(True)
         self.setModel(self.proxy_model)
+
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
 
         self.auto_search_helper = AutoSearchHelper(self.proxy_model, self)
 
@@ -1027,10 +1003,34 @@ class EffectList(QListView):
         else:
             self.set_grid_view()
 
+    def get_raw_data(self) -> list[Mp3Entry]:
+        return self.table_model._data
+
+    def index_of(self, entry: Mp3Entry) -> QModelIndex:
+        try:
+            sourceRow = self.get_raw_data().index(entry)
+            sourceIndex = self.model().index(sourceRow, 0)
+            return self.proxy_model.mapFromSource(sourceIndex)
+        except ValueError:
+            return self.model().index(-1, 0)
+
+    def show_context_menu(self, point):
+        index = self.indexAt(self.mapFromGlobal(self.mapToGlobal(point)))
+        menu = QMenu(self)
+
+        datas = [model_index.data(Qt.ItemDataRole.UserRole) for model_index in self.selectionModel().selectedRows()]
+        self.open_context_menu.emit(menu, datas)
+
+        menu.addSeparator()
+
+        menu.show()
+        menu.exec(self.mapToGlobal(point))
+
     def setModel(self, model: QAbstractItemModel, /):
         if isinstance(model, QSortFilterProxyModel):
             super().setModel(model)
         else:
+            self.table_model = model
             self.proxy_model.setSourceModel(model)
 
     def changeEvent(self, event, /):
@@ -1055,11 +1055,11 @@ class EffectList(QListView):
             new_width = min(128 + 30, new_width)
             new_height = int(new_width * (3.0 / 4.0))
             self.setGridSize(QSize(new_width, new_height))
-            self.setIconSize(QSize(new_width - 10, new_height))  # Large covers
+            self.setIconSize(QSize(new_width, new_height))
             self.setSpacing(0)
         else:
             self.setGridSize(QSize())
-            self.setIconSize(QSize(32, 32))  # Large covers
+            self.setIconSize(QSize(32, 32))
             self.setSpacing(0)
 
     def set_list_view(self):
@@ -1067,6 +1067,7 @@ class EffectList(QListView):
         self.setFlow(QListView.Flow.TopToBottom)
         self.setMovement(QListView.Movement.Static)
         self.setResizeMode(QListView.ResizeMode.Fixed)
+        self.verticalScrollBar().setSingleStep(15)
 
         self.calculate_grid_size()
 
@@ -1077,6 +1078,7 @@ class EffectList(QListView):
         self.setFlow(QListView.Flow.LeftToRight)
         self.setMovement(QListView.Movement.Static)
         self.setResizeMode(QListView.ResizeMode.Adjust)
+        self.verticalScrollBar().setSingleStep(30)
 
         self.calculate_grid_size()
 
@@ -1120,7 +1122,14 @@ class EffectListItemDelegate(QStyledItemDelegate):
         check_state = index.data(Qt.ItemDataRole.CheckStateRole)
         selected_state = option.state & QStyle.State_Selected
 
+        background = index.data(Qt.ItemDataRole.BackgroundRole)
+        if option.state & QStyle.StateFlag.State_MouseOver:
+            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
+        elif background:
+            painter.fillRect(option.rect, background)
+
         if self.is_list_mode() and check_state == Qt.CheckState.Checked:
+
             # Change background for checked items
             painter.save()
             painter.setBrush(app_theme.get_green_brush(50))

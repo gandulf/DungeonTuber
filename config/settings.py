@@ -241,7 +241,9 @@ class SettingKeys(StrEnum):
     COLUMN_SUMMARY_VISIBLE = "columnSummaryVisible"
     COLUMN_TAGS_VISIBLE = "columnTagsVisible"
 
-    TITLE_INSTEAD_OF_FILE_NAME = "titleInsteadOfFilename"
+    SONGS_TITLE_INSTEAD_OF_FILE_NAME = "songsTitleInsteadOfFilename"
+
+    EFFECTS_TITLE_INSTEAD_OF_FILE_NAME = "effectsTitleInsteadOfFilename"
 
     CATEGORIES = "categories"
     PRESETS = "presets"
@@ -323,7 +325,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(table_group, 0)
 
         self.title_file_name_columns = QCheckBox(_("Use mp3 title instead of file name"))
-        self.title_file_name_columns.setChecked(AppSettings.value(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, False, type=bool))
+        self.title_file_name_columns.setChecked(AppSettings.value(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, False, type=bool))
         table_layout.addRow("", self.title_file_name_columns)
 
         self.dynamic_score_column = QCheckBox(_("Dynamic Score Column"))
@@ -425,7 +427,7 @@ class SettingsDialog(QDialog):
     def accept(self):
         requires_restart = self.requires_restart()
 
-        AppSettings.setValue(SettingKeys.TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
+        AppSettings.setValue(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_SCORE_COLUMN, self.dynamic_score_column.isChecked())
         AppSettings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())

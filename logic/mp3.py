@@ -106,6 +106,10 @@ class Mp3Entry(object):
         self._load_cover()
         return self._cover
 
+    def clear_cover(self):
+        self._cover = None
+        self.has_cover = None
+
     def _load_cover(self, audio: MP3 = None):
         if self.has_cover is None and self._cover is None:
             if audio is None:

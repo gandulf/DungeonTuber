@@ -6,11 +6,11 @@ from PySide6 import QtWidgets
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication, QDialogButtonBox, QLineEdit, QSpinBox, \
-    QTextEdit, QCheckBox, QFormLayout, QMessageBox, QColorDialog
+    QTextEdit, QCheckBox, QFormLayout, QMessageBox, QColorDialog, QFileDialog, QPushButton
 
 from config.theme import app_theme
 from config.utils import get_path, is_latest_version, get_latest_version, DOWNLOAD_LINK
-from logic.mp3 import Mp3Entry, update_mp3_data
+from logic.mp3 import Mp3Entry, update_mp3_data, update_mp3_cover
 
 logger = logging.getLogger("main")
 
@@ -66,6 +66,7 @@ class EditSongDialog(QDialog):
         self.resize(500, 400)
         self.data = data
 
+        self.new_cover_path = None
         layout = QFormLayout(self)
 
         self.name_edit = QLineEdit(data.name)
@@ -108,6 +109,10 @@ class EditSongDialog(QDialog):
         self.color_edit.setColor(self.data.color)
         layout.addRow(_("Color"), self.color_edit)
 
+        self.choose_cover = QPushButton(_("Select Image"))
+        self.choose_cover.clicked.connect(self.pick_image_file)
+        layout.addRow(_("Cover"), self.choose_cover)
+
         file_name = QLabel(os.path.abspath(data.path))
         file_name.setWordWrap(True)
         file_name.setStyleSheet(f"font-size:{app_theme.font_size_small}pt;")
@@ -117,6 +122,12 @@ class EditSongDialog(QDialog):
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
+
+    def pick_image_file(self):
+        file_path, ignore = QFileDialog.getOpenFileName(self, _("Select Image"),
+                                                        filter=_("Image (*.png *.jpg *.jpeg *.gif *.bmp);;All (*)"))
+        if file_path:
+            self.new_cover_path = file_path
 
     def accept(self, /):
 
@@ -132,6 +143,9 @@ class EditSongDialog(QDialog):
 
         new_name = self.name_edit.text()
 
+        if self.new_cover_path is not None:
+            update_mp3_cover(self.data.path, self.new_cover_path)
+            self.data.clear_cover()
         # Update Summary
         update_mp3_data(self.data.path, self.data)
 

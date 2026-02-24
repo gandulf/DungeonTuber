@@ -51,7 +51,7 @@ from config.utils import get_path, get_latest_version, is_latest_version, get_cu
 from components.sliders import VolumeSlider, RepeatMode, RepeatButton, JumpSlider
 from components.widgets import IconLabel, FeatureOverlay
 from components.visualizer import Visualizer, EmptyVisualizerWidget
-from components.dialogs import AboutDialog
+from components.dialogs import AboutDialog, EditSongDialog
 from components.tables import DirectoryTree, EffectList, SongTable
 from components.filter import FilterWidget
 from components.models import EffectTableModel
@@ -83,6 +83,7 @@ class EffectWidget(QWidget):
 
         self.list_widget = EffectList(self, list_mode=list_mode)
         self.list_widget.doubleClicked.connect(self.on_item_double_clicked)
+        self.list_widget.open_context_menu.connect(self.populate_effects_menu)
 
         self.player_layout = QHBoxLayout()
         self.player_layout.setContentsMargins(0, 0, 0, 0)
@@ -102,9 +103,6 @@ class EffectWidget(QWidget):
         self.volume_slider.slider_vol.setProperty("cssClass", "buttonSmall")
         self.player_layout.addWidget(self.btn_play, 0, Qt.AlignmentFlag.AlignBottom)
         self.player_layout.addLayout(self.volume_slider, 1)
-
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.customContextMenuRequested.connect(self.show_context_menu)
 
         self.headerLabel = IconLabel(QIcon.fromTheme("effects"), _("Effects"))
         self.headerLabel.set_icon_size(app_theme.icon_size_small)
@@ -136,31 +134,27 @@ class EffectWidget(QWidget):
 
         self.list_widget.calculate_grid_size()
 
-    def show_context_menu(self, point):
-        index = self.list_widget.indexAt(self.list_widget.mapFromGlobal(self.mapToGlobal(point)))
-        menu = QMenu(self)
-
+    def populate_effects_menu(self, menu:QMenu, datas: list[Mp3Entry]):
         open_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), text=_("Open Directory"), parent=self)
         open_dir.triggered.connect(self.pick_effects_directory)
         menu.addAction(open_dir)
 
-        effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
+        if AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str) is not None:
+            self.refresh_dir_action = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), text=_("Refresh"), parent=self)
+            self.refresh_dir_action.triggered.connect(self.refresh_directory)
+            menu.addAction(self.refresh_dir_action)
 
-        self.refresh_dir_action = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), text=_("Refresh"),
-                                          parent=self)
-        self.refresh_dir_action.triggered.connect(self.refresh_directory)
-        self.refresh_dir_action.setVisible(effects_dir is not None)
-        menu.addAction(self.refresh_dir_action)
+        file_name_action = QAction(_("Use mp3 title instead of file name"), self)
+        file_name_action.setCheckable(True)
+        file_name_action.setChecked(AppSettings.value(SettingKeys.EFFECTS_TITLE_INSTEAD_OF_FILE_NAME, True, type=bool))
+        file_name_action.triggered.connect(
+            lambda checked: self._toggle_column_setting(SettingKeys.EFFECTS_TITLE_INSTEAD_OF_FILE_NAME, checked))
+        menu.addAction(file_name_action)
 
         menu.addSeparator()
 
-        set_image_action = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentOpen), text=_("Select Image"),
-                                   parent=self)
-        set_image_action.triggered.connect(functools.partial(self.pick_image_file, index))
-        menu.addAction(set_image_action)
-
-        menu.show()
-        menu.exec(self.mapToGlobal(point))
+    def _toggle_column_setting(self, key, checked):
+        AppSettings.setValue(key, checked)
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.PaletteChange:
@@ -218,13 +212,7 @@ class EffectWidget(QWidget):
             self.refresh_dir_action.setVisible(True)
             self.load_directory(directory)
 
-    def pick_image_file(self, index: QModelIndex):
-        file_path, ignore = QFileDialog.getOpenFileName(self, _("Select Image"),
-                                                        filter=_("Image (*.png *.jpg *.jpeg *.gif *.bmp);;All (*)"))
-        if file_path:
-            mp3_entry = index.data(Qt.ItemDataRole.UserRole)
-            update_mp3_cover(mp3_entry.path, file_path)
-            self.refresh_directory()
+
 
 
 class PlayerWidget(QWidget):
@@ -965,6 +953,38 @@ class MusicPlayer(QMainWindow):
             entry = parse_mp3(Path(file_info.filePath()))
             self.player.play_track(QPersistentModelIndex(), entry)
 
+    def analyze_files(self, datas: list[Mp3Entry]):
+        for data in datas:
+            self.analyzer.process(data.path)
+
+    def edit_song(self, datas: list[Mp3Entry]):
+        dialog = EditSongDialog(datas[0], self)
+        if dialog.exec():
+            table: SongTable = self.current_table()
+            if table is not None:
+                index = table.index_of(datas[0])
+                if index.isValid():
+                    table.model().setData(index, datas[0], Qt.ItemDataRole.UserRole)
+                    table.update()
+            list : EffectList = self.effects_widget.list_widget
+            if list is not None:
+                index = list.index_of(datas[0])
+                if index.isValid():
+                    list.model().setData(index, datas[0], Qt.ItemDataRole.UserRole)
+                    list.update()
+
+
+    def populate_mp3_entry_context_menu(self, menu: QMenu, datas: list[Mp3Entry]):
+        if len(datas) > 0:
+            edit_name_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.EditPaste), _("Edit Song"))
+            edit_name_action.triggered.connect(functools.partial(self.edit_song, datas))
+
+            if AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str) != "":
+                analyze_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.Scanner), _("Analyze"))
+                analyze_action.triggered.connect(functools.partial(self.analyze_files, datas))
+
+            menu.addSeparator()
+
     def populate_playlist_context_menu(self, menu: QMenu, datas: list[Mp3Entry]):
         if len(datas) > 0:
             add_to_playlist = QMenu(_("Add to playlist"), icon=QIcon.fromTheme(QIcon.ThemeIcon.ListAdd))
@@ -990,6 +1010,7 @@ class MusicPlayer(QMainWindow):
         self.directory_widget = DirectoryWidget()
         self.directory_widget.directory_tree.file_opened.connect(self.tree_open_file)
         self.directory_widget.directory_tree.file_analyzed.connect(self.analyzer.process)
+        self.directory_widget.directory_tree.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         self.directory_widget.directory_tree.open_context_menu.connect(self.populate_playlist_context_menu)
         self.central_splitter.addWidget(self.directory_widget)
         self.central_splitter.setCollapsible(0, True)
@@ -1004,6 +1025,9 @@ class MusicPlayer(QMainWindow):
         self.central_splitter.setCollapsible(1, False)
 
         self.effects_widget = EffectWidget()
+        self.effects_widget.list_widget.open_context_menu.connect(self.populate_mp3_entry_context_menu)
+        self.effects_widget.list_widget.open_context_menu.connect(self.populate_playlist_context_menu)
+
         self.central_splitter.addWidget(self.effects_widget)
         self.central_splitter.setCollapsible(2, True)
 
@@ -1096,7 +1120,6 @@ class MusicPlayer(QMainWindow):
             return None
 
         table = SongTable(self, file_path, mp3_files, lazy=lazy)
-        self.attach_song_table(table)
         index = self.table_tabs.addTab(table, table.get_icon(), table.get_name())
 
         if activate:
@@ -1107,6 +1130,7 @@ class MusicPlayer(QMainWindow):
     def attach_song_table(self, table:SongTable):
         table.item_double_clicked.connect(self.play_track)
         table.content_changed.connect(self.on_table_content_changed)
+        table.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         table.open_context_menu.connect(self.populate_playlist_context_menu)
         table.files_opened.connect(self.files_opened)
         table.file_analyzed.connect(self.analyzer.process)
@@ -1115,10 +1139,14 @@ class MusicPlayer(QMainWindow):
         try:
             table.item_double_clicked.disconnect(self.play_track)
             table.content_changed.disconnect(self.on_table_content_changed)
+            table.open_context_menu.disconnect(self.populate_mp3_entry_context_menu)
             table.open_context_menu.disconnect(self.populate_playlist_context_menu)
             table.files_opened.disconnect(self.files_opened)
             table.file_analyzed.disconnect(self.analyzer.process)
         except Exception:
+            # in case of duplicate calls this throws an error if nothing is attached
+            pass
+        except RuntimeWarning:
             # in case of duplicate calls this throws an error if nothing is attached
             pass
 
@@ -1154,6 +1182,8 @@ class MusicPlayer(QMainWindow):
         table: SongTable = self.table_tabs.widget(index)
         if table:
             self.detach_song_table(table)
+            if self.old_table == table:
+                self.old_table = None
 
         self.table_tabs.removeTab(index)
         self.table_tabs.tabBar().setVisible(self.table_tabs.count() > 1)
