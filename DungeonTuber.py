@@ -864,7 +864,7 @@ class MusicPlayer(QMainWindow):
         else:
             QMessageBox.critical(self, _("Open Error"), _("Failed to load: {0}").format(path))
 
-    def play_track(self, index: QPersistentModelIndex, entry: Mp3Entry | None):
+    def play_track(self, index: QPersistentModelIndex | None, entry: Mp3Entry | None):
         table = self.current_table()
         if table is None:
             if entry is not None:
@@ -872,9 +872,6 @@ class MusicPlayer(QMainWindow):
                 return
             else:
                 return
-
-        if index is None:
-            index = table.model().index(0, 0)
 
         if not index.isValid() and entry is not None:
             # calc index of entry
@@ -887,11 +884,11 @@ class MusicPlayer(QMainWindow):
             table.clearSelection()
             table.selectRow(index.row())
             self.player.play_track(index, index.data(Qt.ItemDataRole.UserRole))
-
-
-app: QApplication
-window: QMainWindow
-
+        else:
+            index = table.model().index(0, 0)
+            table.clearSelection()
+            table.selectRow(index.row())
+            self.player.play_track(index, index.data(Qt.ItemDataRole.UserRole))
 
 def hide_splash(window: QMainWindow):
     if '_PYI_SPLASH_IPC' in os.environ and importlib.util.find_spec("pyi_splash"):
@@ -908,10 +905,7 @@ def hide_splash(window: QMainWindow):
     else:
         window.show()
 
-
 def main():
-    global app, window
-
     if "DEBUG" in os.environ:
         logger.setLevel(logging.DEBUG)
 
@@ -940,7 +934,6 @@ def main():
     hide_splash(window)
 
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     try:

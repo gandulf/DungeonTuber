@@ -197,6 +197,7 @@ class SongTableModel(QAbstractTableModel):
 
     def _update_available_tags_and_categories(self, entries: list[Mp3Entry]):
         self.available_genres = SortedSet()
+        self.available_tags = SortedSet()
         self.available_categories = get_music_categories().copy()
         self._add_available_tags_and_categories(entries)
 

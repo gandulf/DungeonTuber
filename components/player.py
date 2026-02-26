@@ -25,41 +25,43 @@ class Visualizer:
     video_frame = None
     visualizer = None
 
-    last_playing: bool = None
+    last_state: EngineState = None
     last_value = None
     last_track = None
     last_position = None
 
-    playing = False
+    state: EngineState = EngineState.STOP
 
     def __init__(self, engine : AudioEngine=None):
         self.engine: AudioEngine = engine
-        self.playing = False
+        self.state = EngineState.STOP
 
     @classmethod
     def get_visualizer(cls, engine: AudioEngine, visualizer=None):
         vis = AppSettings.value(SettingKeys.VISUALIZER, "NONE", type=str)
         _visualizer = None
         if vis == "VLC":
-            _visualizer = VisualizerFrame(engine)
+            _visualizer = VlcVisualizerFrame(engine)
         elif vis == "FAKE":
             _visualizer= FakeVisualizerWidget(engine)
         else:
             _visualizer= EmptyVisualizerWidget(engine)
 
         if visualizer is not None:
-            if visualizer.last_playing is not None:
-                _visualizer.set_state(visualizer.last_playing, visualizer.last_value)
+            if visualizer.last_state is not None:
+                _visualizer.set_state(visualizer.last_state, visualizer.last_value)
             if visualizer.last_position is not None:
                 _visualizer.set_position(visualizer.last_position)
             if visualizer.last_track is not None:
                 _visualizer.load_mp3(visualizer.last_track)
         return _visualizer
 
-    def set_state(self, playing: bool, value: int):
-        self.last_playing = playing
-        self.playing = playing
-        self.last_value = value
+    def set_state(self, state: EngineState | None, value: int | None):
+        if state is not None:
+            self.last_state = state
+            self.state = state
+        if value is not None:
+            self.last_value = value
 
     def set_position(self, position_0_1000: int):
         logger.debug("Set position to {0} promille", position_0_1000)
@@ -69,7 +71,7 @@ class Visualizer:
         logger.debug("File {0} loaded for visualizer", track_path)
         self.last_track = track_path
 
-class VisualizerFrame(QFrame, Visualizer):
+class VlcVisualizerFrame(QFrame, Visualizer):
     resized = Signal(QSize)
 
     def __init__(self, engine: AudioEngine=None):
@@ -82,27 +84,19 @@ class VisualizerFrame(QFrame, Visualizer):
         super().resizeEvent(event)
 
     def attach_video_frame(self):
-        self.resized.connect(self.resize_visualizer)
-        self.resize_visualizer(self.size())
+        self.resized.connect(self.engine.set_aspect_ratio)
+        self.engine.set_aspect_ratio(self.size())
 
         # The media player has to be 'connected' to the QFrame (otherwise the
         # video would be displayed in it's own window). This is platform
         # specific, so we must give the ID of the QFrame (or similar object) to
         # vlc. Different platforms have different functions for this
-        if platform.system() == "Linux":  # for Linux using the X Server
-            self.engine.player.set_xwindow(int(self.winId()))
-        elif platform.system() == "Windows":  # for Windows
-            self.engine.player.set_hwnd(int(self.winId()))
-        elif platform.system() == "Darwin":  # for MacOS
-            self.engine.player.set_nsobject(int(self.winId()))
-
-    def resize_visualizer(self, size: QSize):
-        self.engine.player.video_set_aspect_ratio(f"{size.width()}:{size.height()}")
-
+        self.engine.attach_window(int(self.winId()))
 
 class EmptyVisualizerWidget(QWidget, Visualizer):
     def __init__(self, engine=None):
         super().__init__(engine = engine)
+        self.engine.attach_window(None)
 
 class FakeVisualizerWidget(QWidget, Visualizer):
 
@@ -118,14 +112,26 @@ class FakeVisualizerWidget(QWidget, Visualizer):
         self.hop_length_secs = 1 / 30
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_fake_visualization)
-        self.timer.start(int(self.hop_length_secs * 1000))
 
-    def set_state(self, is_playing, volume):
-        super().set_state(is_playing, volume)
-        self.amplitude = volume / 100.0
+        self.engine.attach_window(None)
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.ParentChange:
+            if self.parent() is None:
+                self.timer.stop()
+            else:
+                self.timer.start(int(self.hop_length_secs * 1000))
+
+        # Always call the super class event to ensure normal behavior
+        super().changeEvent(event)
+
+    def set_state(self, state: EngineState | None, volume: int | None = None):
+        super().set_state(state, volume)
+        if volume is not None:
+            self.amplitude = volume / 100.0
 
     def update_fake_visualization(self):
-        if self.playing:
+        if self.state == EngineState.PLAY:
             # Simulate spectrum data
             for i in range(self.bars):
                 # Random noise smoothed by amplitude
@@ -230,7 +236,8 @@ class PlayerWidget(QWidget):
 
         controls_widget = QWidget()
         self.controls_layout = QHBoxLayout(controls_widget)
-        self.controls_layout.setSpacing(app_theme.spacing)
+        self.controls_layout.setSpacing(0)
+        self.controls_layout.setContentsMargins(0,0,0,0)
 
         prev_action = QAction(self.icon_prev, _("Previous"), self)
         prev_action.setShortcut("Ctrl+B")
@@ -268,8 +275,10 @@ class PlayerWidget(QWidget):
         self.volume_changed = self.slider_vol.volume_changed
 
         self.controls_layout.addWidget(self.btn_play)
+        self.controls_layout.addSpacing(app_theme.spacing)
         self.controls_layout.addWidget(self.btn_prev, alignment=Qt.AlignmentFlag.AlignBottom)
         self.controls_layout.addWidget(self.btn_next, alignment=Qt.AlignmentFlag.AlignBottom)
+        self.controls_layout.addSpacing(app_theme.spacing)
 
         self.visualizer = Visualizer.get_visualizer(self.engine)
         if isinstance(self.visualizer, EmptyVisualizerWidget):
@@ -278,7 +287,9 @@ class PlayerWidget(QWidget):
             self.player_layout.insertLayout(0, self.seeker_layout)
             self.controls_layout.addWidget(self.visualizer, 2)
 
+        self.controls_layout.addSpacing(app_theme.spacing)
         self.controls_layout.addLayout(self.slider_vol)
+        self.controls_layout.addSpacing(app_theme.spacing)
         self.controls_layout.addWidget(self.btn_repeat)
         self.setBackgroundRole(QPalette.ColorRole.Midlight)
         self.setAutoFillBackground(True)
@@ -297,6 +308,7 @@ class PlayerWidget(QWidget):
             self.controls_layout.takeAt(index)
             self.visualizer.setParent(None)
 
+        self.engine.init_vlc()
         self.visualizer = Visualizer.get_visualizer(self.engine, self.visualizer)
         if isinstance(self.visualizer, EmptyVisualizerWidget):
             self.seeker_layout.setParent(None)
@@ -333,7 +345,7 @@ class PlayerWidget(QWidget):
 
     def adjust_volume(self, value: int):
         self.engine.set_user_volume(value)
-        self.visualizer.set_state(self.engine.player.is_playing(), value)
+        self.visualizer.set_state(None, value)
         AppSettings.setValue(SettingKeys.VOLUME, value)
 
     def seek_position(self, pos: int = None):
@@ -395,12 +407,12 @@ class PlayerWidget(QWidget):
             self.engine.stop()
 
     def toggle_play(self):
-        if self.engine.player.is_playing():
+        if self.engine.is_playing():
             self.engine.pause_toggle()
             self.play_action.setChecked(False)
         else:
-            if self.engine.player.get_media() is None:
-                self.track_changed.emit(None, None)
+            if self.engine.get_media() is None:
+                self.track_changed.emit(QPersistentModelIndex(), None)
             else:
                 self.engine.pause_toggle()
 
@@ -457,12 +469,11 @@ class PlayerWidget(QWidget):
             track_path = data.path
             self.current_index = index
             try:
-                self.engine.load_media(track_path)
                 self.visualizer.load_mp3(track_path)
-                self.visualizer.set_state(True, self.slider_vol.volume)
+                self.visualizer.set_state(EngineState.PLAY, self.slider_vol.volume)
                 self.elide_text(self.track_label, data.name)
 
-                self.engine.play()
+                self.engine.play(track_path)
 
             except Exception as e:
                 self.track_label.setText(_("Error loading file"))
