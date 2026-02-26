@@ -980,7 +980,7 @@ class SongTable(QTableView):
     def index_of(self, entry: Mp3Entry) -> QModelIndex:
         try:
             sourceRow = self.get_raw_data().index(entry)
-            sourceIndex = self.model().index(sourceRow, 0)
+            sourceIndex = self.table_model.index(sourceRow, 0)
             return self.proxy_model.mapFromSource(sourceIndex)
         except ValueError:
             return self.model().index(-1, 0)

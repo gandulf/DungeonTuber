@@ -410,7 +410,6 @@ def update_mp3_categories(path: PathLike[str] | MP3, categories: dict[str, int],
         audio.tags.add(TXXX(Encoding.UTF8, desc='ai_categories', text=[json.dumps(categories, ensure_ascii=False)]))
     else:
         audio.tags.add(TXXX(Encoding.UTF8, desc='ai_categories', text=""))
-    # audio.tags.add(TXXX(Encoding.UTF8, desc='ai_tags', text=calculate_tags_from_categories(categories)))
 
     if save:
         audio.save()
