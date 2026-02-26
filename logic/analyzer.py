@@ -18,8 +18,7 @@ from logic.mp3 import Mp3Entry, parse_mp3, update_categories_and_tags, print_mp3
 
 from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_category_keys
 
-logger = logging.getLogger("main")
-
+logger = logging.getLogger(__file__)
 
 def is_analyzed(file_path: PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):

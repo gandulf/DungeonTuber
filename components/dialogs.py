@@ -2,17 +2,17 @@ import logging
 import os
 from pathlib import Path
 
-from PySide6 import QtWidgets
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap, QColor
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication, QDialogButtonBox, QLineEdit, QSpinBox, \
-    QTextEdit, QCheckBox, QFormLayout, QMessageBox, QColorDialog, QFileDialog, QPushButton
+    QTextEdit, QCheckBox, QFormLayout, QMessageBox, QFileDialog, QPushButton
 
 from config.theme import app_theme
 from config.utils import get_path, is_latest_version, get_latest_version, DOWNLOAD_LINK
 from logic.mp3 import Mp3Entry, update_mp3_data, update_mp3_cover
+from components.widgets import ColorButton
 
-logger = logging.getLogger("main")
+logger = logging.getLogger(__file__)
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
@@ -168,58 +168,3 @@ class EditSongDialog(QDialog):
                 QMessageBox.warning(self, _("Update Error"), _("Failed to rename file: {0}").format(e))
 
         super().accept()
-
-
-
-
-class ColorButton(QtWidgets.QPushButton):
-    '''
-    Custom Qt Widget to show a chosen color.
-
-    Left-clicking the button shows the color-chooser, while
-    right-clicking resets the color to None (no-color).
-    '''
-    colorChanged = Signal(object)
-
-    def __init__(self, *args, color: QColor=None, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._color: QColor = None
-        self._default: QColor = color
-        self.pressed.connect(self.onColorPicker)
-
-        # Set the initial/default state.
-        self.setColor(self._default)
-
-    def setColor(self, color: QColor):
-        if color != self._color:
-            self._color = color
-            self.colorChanged.emit(color)
-
-        if self._color:
-            self.setStyleSheet("background-color: %s;" % self._color.name())
-        else:
-            self.setStyleSheet("")
-
-    def color(self):
-        return self._color
-
-    def onColorPicker(self):
-        '''
-        Show color-picker dialog to select color.
-
-        Qt will use the native dialog by default.
-
-        '''
-        dlg = QColorDialog()
-        if self._color:
-            dlg.setCurrentColor(self._color)
-
-        if dlg.exec_():
-            self.setColor(dlg.currentColor())
-
-    def mousePressEvent(self, e):
-        if e.button() == Qt.RightButton:
-            self.setColor(self._default)
-
-        return super().mousePressEvent(e)

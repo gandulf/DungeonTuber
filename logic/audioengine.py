@@ -9,22 +9,28 @@ from config.settings import AppSettings, SettingKeys
 
 DEFAULT_VOLUME = 70
 
+def format_time(ms: int):
+    """Converts milliseconds to MM:SS string."""
+    if ms < 0:
+        return "00:00"
+    seconds = ms // 1000
+    mins = seconds // 60
+    secs = seconds % 60
+    return f"{mins:02d}:{secs:02d}"
+
+
 class EngineState(Enum):
     PAUSE = 1
     PLAY = 2
     STOP = 3
 
 class AudioEngine(QObject):
-
-
-
     """
     Manages VLC instance, volume control, and playback state.
     Inherits QObject to use Signals for thread-safe communication.
     """
     # Signals to update UI
     track_finished = Signal()
-    volume_changed = Signal(int)
     state_changed = Signal(EngineState)  # True if playing, False if stopped/paused
     position_changed = Signal(int, str, str)  # position (0-1000), current_time, total_time
 
@@ -172,11 +178,3 @@ class AudioEngine(QObject):
             format_time(current_time_ms),
             format_time(total_time_ms)
         )
-def format_time(ms: int):
-    """Converts milliseconds to MM:SS string."""
-    if ms < 0:
-        return "00:00"
-    seconds = ms // 1000
-    mins = seconds // 60
-    secs = seconds % 60
-    return f"{mins:02d}:{secs:02d}"

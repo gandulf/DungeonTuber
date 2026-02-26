@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLa
 
 from config.utils import get_available_locales, restart_application
 
-logger = logging.getLogger("main")
+logger = logging.getLogger(__file__)
 
 # --- Configuration ---
 CATEGORY_MIN = 0

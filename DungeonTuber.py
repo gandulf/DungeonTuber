@@ -19,12 +19,10 @@ import functools
 import importlib
 import json
 import locale
-
-import sys
-import os
-
-import traceback
 import logging
+import os
+import sys
+import traceback
 
 from config import log
 
@@ -34,516 +32,26 @@ import gettext
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QPushButton, QLabel, QFileDialog, QMessageBox, QMenu, QStatusBar, QProgressBar,
-    QSplitter, QSlider, QListView, QToolButton, QSizePolicy
-)
-from PySide6.QtCore import Qt, QSize, Signal, QModelIndex, QPersistentModelIndex, QEvent, QTimer, QKeyCombination, \
-    QPoint, QFileInfo
-from PySide6.QtGui import QAction, QIcon, QPalette, QFontMetrics, QActionGroup, QResizeEvent
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, QMenu, QStatusBar, QProgressBar, QSplitter
+from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo
+from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent
 
-from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, \
-    set_music_categories, set_presets
+from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, set_presets
 from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, is_frozen
 
-from components.sliders import VolumeSlider, RepeatMode, RepeatButton, JumpSlider
-from components.widgets import IconLabel, FeatureOverlay
-from components.visualizer import Visualizer, EmptyVisualizerWidget
+from components.effects import EffectList, EffectWidget
+from components.widgets import FeatureOverlay
+from components.player import PlayerWidget
 from components.dialogs import AboutDialog, EditSongDialog
-from components.tables import DirectoryTree, EffectList, SongTable
 from components.filter import FilterWidget
-from components.models import EffectTableModel
+from components.songs import SongTable
+from components.files import DirectoryWidget
 
-from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, list_mp3s, get_m3u_paths, update_mp3_cover, save_playlist
-from logic.audioengine import AudioEngine, EngineState
+from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, get_m3u_paths, save_playlist
 from logic.analyzer import Analyzer
 
-# --- Constants ---
-
-logger = logging.getLogger("main")
-
-class EffectWidget(QWidget):
-    open_item: QPushButton = None
-
-    last_index: QPersistentModelIndex = None
-
-    icon_size = QSize(16, 16)
-
-    def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
-        super().__init__()
-
-        effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
-
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-
-        self.engine = AudioEngine(False)
-
-        self.list_widget = EffectList(self, list_mode=list_mode)
-        self.list_widget.doubleClicked.connect(self.on_item_double_clicked)
-        self.list_widget.open_context_menu.connect(self.populate_effects_menu)
-
-        self.player_layout = QHBoxLayout()
-        self.player_layout.setContentsMargins(0, 0, 0, 0)
-        self.player_layout.setSpacing(0)
-
-        self.btn_play = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
-        self.btn_play.setProperty("cssClass", "play small")
-        self.btn_play.setCheckable(True)
-        self.btn_play.setEnabled(False)
-        self.btn_play.setIcon(app_theme.create_play_pause_icon())
-        self.btn_play.clicked.connect(self.toogle_play)
-        self.btn_play.setShortcut("Ctrl+E")
-
-        self.volume_slider = VolumeSlider()
-        self.volume_slider.volume_changed.connect(self.on_volume_changed)
-        self.volume_slider.btn_volume.setProperty("cssClass", "mini")
-        self.volume_slider.slider_vol.setProperty("cssClass", "buttonSmall")
-        self.player_layout.addWidget(self.btn_play, 0, Qt.AlignmentFlag.AlignBottom)
-        self.player_layout.addLayout(self.volume_slider, 1)
-
-        self.headerLabel = IconLabel(QIcon.fromTheme("effects"), _("Effects"))
-        self.headerLabel.set_icon_size(app_theme.icon_size_small)
-        self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
-        self.headerLabel.text_label.setProperty("cssClass", "header")
-
-        list_view = QToolButton(icon=QIcon.fromTheme("list"))
-        list_view.setProperty("cssClass", "mini")
-        list_view.clicked.connect(self.list_widget.set_list_view)
-
-        grid_view = QToolButton(icon=QIcon.fromTheme("grid"))
-        grid_view.setProperty("cssClass", "mini")
-        grid_view.clicked.connect(self.list_widget.set_grid_view)
-
-        self.headerLabel.add_widget(list_view)
-        self.headerLabel.add_widget(grid_view)
-
-        self.layout.addWidget(self.headerLabel, 0)
-
-        if effects_dir is None or effects_dir == '':
-            self.open_item = QPushButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentOpen), text=_("Open Directory"))
-            self.open_item.clicked.connect(self.pick_effects_directory)
-            self.layout.addWidget(self.open_item, 0)
-        else:
-            self.load_directory(effects_dir)
-
-        self.layout.addLayout(self.player_layout, 0)
-        self.layout.addWidget(self.list_widget, 1)
-
-        self.list_widget.calculate_grid_size()
-
-    def populate_effects_menu(self, menu:QMenu, datas: list[Mp3Entry]):
-        open_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), text=_("Open Directory"), parent=self)
-        open_dir.triggered.connect(self.pick_effects_directory)
-        menu.addAction(open_dir)
-
-        if AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str) is not None:
-            self.refresh_dir_action = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), text=_("Refresh"), parent=self)
-            self.refresh_dir_action.triggered.connect(self.refresh_directory)
-            menu.addAction(self.refresh_dir_action)
-
-        file_name_action = QAction(_("Use mp3 title instead of file name"), self)
-        file_name_action.setCheckable(True)
-        file_name_action.setChecked(AppSettings.value(SettingKeys.EFFECTS_TITLE_INSTEAD_OF_FILE_NAME, True, type=bool))
-        file_name_action.triggered.connect(
-            lambda checked: self._toggle_column_setting(SettingKeys.EFFECTS_TITLE_INSTEAD_OF_FILE_NAME, checked))
-        menu.addAction(file_name_action)
-
-        menu.addSeparator()
-
-    def _toggle_column_setting(self, key, checked):
-        AppSettings.setValue(key, checked)
-
-    def changeEvent(self, event, /):
-        if event.type() == QEvent.Type.PaletteChange:
-            self.headerLabel.set_icon(QIcon.fromTheme("effects"))
-            self.btn_play.setIcon(app_theme.create_play_pause_icon())
-        elif event.type() == QEvent.Type.FontChange:
-            self.headerLabel.set_icon_size(app_theme.icon_size_small)
-
-            # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
-
-    def toogle_play(self):
-        if self.engine.pause_toggle():
-            self.btn_play.setChecked(True)
-        else:
-            self.btn_play.setChecked(False)
-
-    def on_volume_changed(self, volume: int = 70):
-        self.engine.set_user_volume(volume)
-
-    def on_item_double_clicked(self, index: QModelIndex):
-        data = index.data(Qt.ItemDataRole.UserRole)
-        if isinstance(data, Mp3Entry):
-            self.play_effect(data)
-
-            if self.last_index is not None:
-                self.list_widget.model().setData(self.last_index, Qt.CheckState.Unchecked,
-                                                 Qt.ItemDataRole.CheckStateRole)
-            self.list_widget.model().setData(index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
-            self.last_index = QPersistentModelIndex(index)
-
-    def play_effect(self, effect: Mp3Entry):
-        self.engine.loop_media(effect.path)
-        self.btn_play.setChecked(True)
-        self.btn_play.setEnabled(True)
-
-    def refresh_directory(self):
-        effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
-        self.load_directory(effects_dir)
-
-    def load_directory(self, dir_path):
-        if self.open_item is not None:
-            self.layout.removeWidget(self.open_item)
-            self.open_item.setParent(None)
-
-        effect_files = list_mp3s(dir_path)
-        effects = [parse_mp3(os.path.join(dir_path, file_path)) for file_path in effect_files]
-
-        self.list_widget.setModel(EffectTableModel(effects))
-
-    def pick_effects_directory(self):
-        directory = QFileDialog.getExistingDirectory(self, _("Select Effects Directory"),
-                                                     dir=AppSettings.value(SettingKeys.EFFECTS_DIRECTORY))
-        if directory:
-            AppSettings.setValue(SettingKeys.EFFECTS_DIRECTORY, directory)
-            self.refresh_dir_action.setVisible(True)
-            self.load_directory(directory)
-
-
-
-
-class PlayerWidget(QWidget):
-    icon_prev: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipBackward)
-    icon_next: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipForward)
-    icon_open: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen)
-
-    volume_changed = Signal(int)
-    track_changed = Signal(QPersistentModelIndex, Mp3Entry)
-    repeat_mode_changed = Signal(RepeatMode)
-
-    current_index = QPersistentModelIndex()
-    current_data: Mp3Entry = None
-
-    _update_progress_ticks: bool = True
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        self.player_layout = QVBoxLayout(self)
-        self.player_layout.setObjectName("player_layout")
-        self.player_layout.setSpacing(app_theme.spacing)
-
-        self.engine = AudioEngine()
-        self.engine.state_changed.connect(self.on_playback_state_changed)
-        self.engine.position_changed.connect(self.update_progress)
-        self.engine.track_finished.connect(self.on_track_finished)
-
-        self.seeker_layout = QVBoxLayout()
-        self.seeker_layout.setObjectName("seeker_layout")
-
-        self.track_label = QLabel(_("No Track Selected"))
-        self.track_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.track_label.setMinimumWidth(100)
-        self.track_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        self.track_label.setObjectName("trackLabel")
-        self.seeker_layout.addWidget(self.track_label)
-
-        # --- Progress Bar and Time Labels ---
-        self.progress_layout = QHBoxLayout()
-        self.progress_layout.setObjectName("progress_layout")
-        self.progress_layout.setSpacing(app_theme.spacing)
-        self.time_label = QLabel("00:00")
-        self.progress_slider = JumpSlider(Qt.Orientation.Horizontal)
-        self.progress_slider.setRange(0, 1000)
-        self.progress_slider.setMinimumWidth(100)
-        self.duration_label = QLabel("00:00")
-        self.progress_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
-        self.progress_slider.setTickInterval(50)
-        self.progress_slider.sliderReleased.connect(self.seek_position)
-        self.progress_slider.valueChanged.connect(self.jump_to_position)
-
-        self.progress_layout.addWidget(self.time_label)
-        self.progress_layout.addWidget(self.progress_slider)
-        self.progress_layout.addWidget(self.duration_label)
-
-        self.seeker_layout.addLayout(self.progress_layout)
-
-        # --- End Progress Bar ---
-
-        controls_widget = QWidget()
-        self.controls_layout = QHBoxLayout(controls_widget)
-        self.controls_layout.setSpacing(app_theme.spacing)
-
-        prev_action = QAction(self.icon_prev, _("Previous"), self)
-        prev_action.setShortcut("Ctrl+B")
-        prev_action.triggered.connect(self.prev_track)
-
-        self.play_action = QAction(app_theme.create_play_pause_icon(), _("Play"), self)
-        self.play_action.setShortcut("Ctrl+P")
-        self.play_action.setCheckable(True)
-        self.play_action.triggered.connect(self.toggle_play)
-
-        next_action = QAction(self.icon_next, _("Next"), self)
-        next_action.setShortcut("Ctrl+N")
-        next_action.triggered.connect(self.next_track)
-
-        self.btn_prev = QToolButton()
-        self.btn_prev.setProperty("cssClass", "small")
-        self.btn_prev.setDefaultAction(prev_action)
-        self.btn_play = QToolButton()
-        self.btn_play.setProperty("cssClass", "play")
-        self.btn_play.setDefaultAction(self.play_action)
-        self.btn_next = QToolButton()
-        self.btn_next.setProperty("cssClass", "small")
-        self.btn_next.setDefaultAction(next_action)
-
-        self.btn_repeat = RepeatButton(AppSettings.value(SettingKeys.REPEAT_MODE, 0, type=int))
-        self.btn_repeat.value_changed.connect(self.on_repeat_mode_changed)
-
-        self.repeat_mode_changed = self.btn_repeat.value_changed
-
-        self.slider_vol = VolumeSlider(AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
-        self.slider_vol.btn_volume.setProperty("cssClass", "small")
-        self.slider_vol.slider_vol.setMinimumWidth(200)
-
-        self.slider_vol.volume_changed.connect(self.adjust_volume)
-        self.volume_changed = self.slider_vol.volume_changed
-
-        self.controls_layout.addWidget(self.btn_play)
-        self.controls_layout.addWidget(self.btn_prev, alignment=Qt.AlignmentFlag.AlignBottom)
-        self.controls_layout.addWidget(self.btn_next, alignment=Qt.AlignmentFlag.AlignBottom)
-
-        self.visualizer = Visualizer.get_visualizer(self.engine)
-        if isinstance(self.visualizer, EmptyVisualizerWidget):
-            self.controls_layout.addLayout(self.seeker_layout, 2)
-        else:
-            self.player_layout.insertLayout(0, self.seeker_layout)
-            self.controls_layout.addWidget(self.visualizer, 2)
-
-        self.controls_layout.addLayout(self.slider_vol)
-        self.controls_layout.addWidget(self.btn_repeat)
-        self.setBackgroundRole(QPalette.ColorRole.Midlight)
-        self.setAutoFillBackground(True)
-
-        self.player_layout.addWidget(controls_widget, 1)
-
-        self.adjust_volume(self.slider_vol.volume)
-
-    def refresh_visualizer(self):
-        index = self.controls_layout.indexOf(self.visualizer)
-        if index is None or index == -1:
-            index = self.controls_layout.indexOf(self.seeker_layout)
-            self.controls_layout.takeAt(index)
-            self.seeker_layout.setParent(None)
-        else:
-            self.controls_layout.takeAt(index)
-            self.visualizer.setParent(None)
-
-        self.visualizer = Visualizer.get_visualizer(self.engine, self.visualizer)
-        if isinstance(self.visualizer, EmptyVisualizerWidget):
-            self.seeker_layout.setParent(None)
-            self.controls_layout.insertLayout(index, self.seeker_layout, 2)
-        else:
-            self.player_layout.insertLayout(0, self.seeker_layout)
-            self.controls_layout.insertWidget(index, self.visualizer, 2)
-
-    def changeEvent(self, event, /):
-        if event.type() == QEvent.Type.ApplicationFontChange:
-            self.player_layout.setSpacing(app_theme.spacing)
-            self.progress_layout.setSpacing(app_theme.spacing)
-            self.controls_layout.setSpacing(app_theme.spacing)
-
-        if event.type() == QEvent.Type.PaletteChange:
-            self._reload_icons()
-            # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
-
-    def _reload_icons(self):
-        self.icon_prev = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipBackward)
-        self.icon_next = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipForward)
-        self.icon_open = QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen)
-
-        for icon in [self.icon_prev, self.icon_next, self.icon_open]:
-            icon.setFallbackThemeName(app_theme.theme())
-
-        self.play_action.setIcon(app_theme.create_play_pause_icon())
-
-    def on_repeat_mode_changed(self, mode: RepeatMode):
-        AppSettings.setValue(SettingKeys.REPEAT_MODE, self.btn_repeat.REPEAT_MODES.index(mode))
-
-    def repeat_mode(self):
-        return self.btn_repeat.repeat_mode()
-
-    def adjust_volume(self, value: int):
-        self.engine.set_user_volume(value)
-        self.visualizer.set_state(self.engine.player.is_playing(), value)
-        AppSettings.setValue(SettingKeys.VOLUME, value)
-
-    def seek_position(self, pos: int = None):
-        if pos is None:
-            pos = self.progress_slider.value()
-        else:
-            self.progress_slider.setValue(pos)
-
-        self.engine.set_position(pos)
-        self.visualizer.set_position(pos)
-
-    def jump_to_position(self):
-        if self.progress_slider.isSliderDown():
-            self.seek_position()
-
-    def set_enabled(self, enabled: bool):
-        self.btn_prev.setEnabled(enabled)
-        self.btn_play.setEnabled(enabled)
-        self.btn_next.setEnabled(enabled)
-
-    def update_progress(self, position, current_time, total_time):
-        if not self.progress_slider.isSliderDown():
-            self.progress_slider.setValue(position)
-        self.time_label.setText(current_time)
-        self.duration_label.setText(total_time)
-
-        if self._update_progress_ticks:
-            total_ms = self.engine.get_total_time()
-            if total_ms > 0:
-                single_step = max(1, round((1000.0 / total_ms) * 1000))
-                self.progress_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
-                self.progress_slider.setSingleStep(single_step)
-                self.progress_slider.setTickInterval(max(10, round(((1000.0 / total_ms) * 1000) * 10)))
-                self._update_progress_ticks = False
-
-    def on_playback_state_changed(self, engine_state: EngineState):
-        self.visualizer.set_state(engine_state, self.slider_vol.volume)
-
-        if engine_state == EngineState.STOP:
-            self.play_action.setChecked(False)
-            self.progress_slider.setValue(0)
-            self.time_label.setText("00:00")
-        elif engine_state == EngineState.PLAY:
-            self.play_action.setChecked(True)
-        elif engine_state == EngineState.PAUSE:
-            self.play_action.setChecked(False)
-
-    def on_track_finished(self):
-        repeat_mode = self.btn_repeat.repeat_mode()
-
-        if repeat_mode == RepeatMode.REPEAT_SINGLE:
-            self.engine.stop()
-            self.play_track(self.current_index, self.current_data)
-        elif repeat_mode == RepeatMode.REPEAT_ALL:
-            next_index = self._increment_persistent_index(self.current_index, 1)
-            self.engine.stop()
-            self.track_changed.emit(next_index, next_index.data(Qt.ItemDataRole.UserRole))
-        elif repeat_mode == RepeatMode.NO_REPEAT:
-            self.engine.stop()
-
-    def toggle_play(self):
-        if self.engine.player.is_playing():
-            self.engine.pause_toggle()
-            self.play_action.setChecked(False)
-        else:
-            if self.engine.player.get_media() is None:
-                self.track_changed.emit(None, None)
-            else:
-                self.engine.pause_toggle()
-
-            self.play_action.setChecked(True)
-
-    def _increment_persistent_index(self, p_index: QPersistentModelIndex, change: int):
-        # 1. Safety check: is it pointing to anything?
-        if not p_index.isValid():
-            return p_index
-
-        model = p_index.model()
-        current_row = p_index.row()
-        current_col = p_index.column()
-        parent = p_index.parent()
-
-        # 2. Check if the next row exists
-        if 0 <= current_row + change < model.rowCount(parent):
-            # 3. Create a new standard index for the next row
-            next_idx = model.index(current_row + change, current_col, parent)
-
-            # 4. Return a new persistent index (or overwrite your variable)
-            return QPersistentModelIndex(next_idx)
-
-        return p_index
-
-    def next_track(self):
-        next_index = self._increment_persistent_index(self.current_index, 1)
-        self.engine.stop()
-        self.track_changed.emit(next_index, None)
-
-    def prev_track(self):
-        next_index = self._increment_persistent_index(self.current_index, -1)
-        self.engine.stop()
-        self.track_changed.emit(next_index, None)
-
-    def reset(self):
-        self.time_label.setText("00:00")
-        self.duration_label.setText("00:00")
-        self.progress_slider.setValue(0)
-        self._update_progress_ticks = True
-
-    def elide_text(self, label: QLabel, text: str):
-        metrics = QFontMetrics(label.font())
-        elided = metrics.elidedText(text, Qt.TextElideMode.ElideMiddle, label.width())
-        label.setText(elided)
-        if elided != text:
-            label.setToolTip(text)
-        else:
-            label.setToolTip(None)
-
-    def play_track(self, index: QPersistentModelIndex, data: Mp3Entry):
-        self.current_data = data
-        if data:
-            track_path = data.path
-            self.current_index = index
-            try:
-                self.engine.load_media(track_path)
-                self.visualizer.load_mp3(track_path)
-                self.visualizer.set_state(True, self.slider_vol.volume)
-                self.elide_text(self.track_label, data.name)
-
-                self.engine.play()
-
-            except Exception as e:
-                self.track_label.setText(_("Error loading file"))
-                logger.error("File error: {0}", e)
-
-
-class DirectoryWidget(QWidget):
-
-    def __init__(self, parent=None):
-        super(DirectoryWidget, self).__init__(parent)
-
-        self.directory_tree = DirectoryTree(self)
-
-        self.directory_layout = QVBoxLayout(self)
-        self.directory_layout.setContentsMargins(0, 0, 0, 0)
-        self.directory_layout.setSpacing(0)
-
-        self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent=self)
-        self.headerLabel.set_icon_size(app_theme.icon_size_small)
-        self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
-        self.headerLabel.text_label.setProperty("cssClass", "header")
-
-        up_view_button = QToolButton()
-        up_view_button.setProperty("cssClass", "mini")
-        up_view_button.setDefaultAction(self.directory_tree.go_parent_action)
-        self.headerLabel.insert_widget(0, up_view_button)
-
-        self.directory_layout.addWidget(self.headerLabel)
-        self.directory_layout.addWidget(self.directory_tree)
-
-    def changeEvent(self, event, /):
-        if event.type() == QEvent.Type.PaletteChange:
-            self.headerLabel.set_icon(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
-        elif event.type() == QEvent.Type.FontChange:
-            self.headerLabel.set_icon_size(app_theme.icon_size_small)
-
+logger = logging.getLogger(__file__)
 
 class MusicPlayer(QMainWindow):
 
@@ -554,7 +62,7 @@ class MusicPlayer(QMainWindow):
     dark_theme_action: QAction
 
     table_tabs: QTabWidget = None
-    old_table: SongTable|None = None
+    old_table: SongTable | None = None
 
     def __init__(self, application: QApplication):
         super().__init__()
@@ -966,13 +474,12 @@ class MusicPlayer(QMainWindow):
                 if index.isValid():
                     table.model().setData(index, datas[0], Qt.ItemDataRole.UserRole)
                     table.update()
-            list : EffectList = self.effects_widget.list_widget
+            list: EffectList = self.effects_widget.list_widget
             if list is not None:
                 index = list.index_of(datas[0])
                 if index.isValid():
                     list.model().setData(index, datas[0], Qt.ItemDataRole.UserRole)
                     list.update()
-
 
     def populate_mp3_entry_context_menu(self, menu: QMenu, datas: list[Mp3Entry]):
         if len(datas) > 0:
@@ -1127,7 +634,7 @@ class MusicPlayer(QMainWindow):
 
         return table
 
-    def attach_song_table(self, table:SongTable):
+    def attach_song_table(self, table: SongTable):
         table.item_double_clicked.connect(self.play_track)
         table.content_changed.connect(self.on_table_content_changed)
         table.open_context_menu.connect(self.populate_mp3_entry_context_menu)
@@ -1329,7 +836,7 @@ class MusicPlayer(QMainWindow):
     def close_tables(self):
         self.table_tabs.clear()
 
-    def reload_table(self, index: int| None):
+    def reload_table(self, index: int | None):
         if index is None:
             index = self.sender().data()
 

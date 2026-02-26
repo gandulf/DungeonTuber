@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 from PySide6.QtWidgets import QApplication
 from packaging import version
 
-logger = logging.getLogger("main")
+logger = logging.getLogger(__file__)
 
 DOWNLOAD_LINK = "https://github.com/gandulf/DungeonTuber/releases/latest"
 
