@@ -78,11 +78,8 @@ class RussellEmotionWidget(QWidget):
 
     def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        font = painter.font()
-        font.setPointSizeF(app_theme.font_size)
-        painter.setFont(font)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        painter.setFont(app_theme.font())
 
         MARGIN_LEFT = self.contentsMargins().left() + painter.fontMetrics().height()
         MARGIN_BOTTOM = self.contentsMargins().bottom() + painter.fontMetrics().height()
@@ -109,20 +106,12 @@ class RussellEmotionWidget(QWidget):
         # Draw Labels inside
         painter.setPen(self.fg_color)
 
-        if app_theme.font_size_small > 11:
-            labels = [
-                (7.5, 7.5, "Happy"),
-                (7.5, 2.5, "Peaceful"),
-                (2.5, 2.5, "Bored"),
-                (2.5, 7.5, "Angry")
-            ]
-        else:
-            labels = [
-                (6.5, 8.5, "Excited"), (7.5, 7.5, "Happy"), (8.5, 6.5, "Pleased"),
-                (8.5, 3.5, "Relaxed"), (7.5, 2.5, "Peaceful"), (6.5, 1.5, "Calm"),
-                (3.5, 1.5, "Sleepy"), (2.5, 2.5, "Bored"), (1.5, 3.5, "Sad"),
-                (1.5, 6.5, "Nervous"), (2.5, 7.5, "Angry"), (3.5, 8.5, "Annoying")
-            ]
+        labels = [
+            (6.5, 8.5, "Excited"), (7.5, 7.5, "Happy"), (8.5, 6.5, "Pleased"),
+            (8.5, 3.5, "Relaxed"), (7.5, 2.5, "Peaceful"), (6.5, 1.5, "Calm"),
+            (3.5, 1.5, "Sleepy"), (2.5, 2.5, "Bored"), (1.5, 3.5, "Sad"),
+            (1.5, 6.5, "Nervous"), (2.5, 7.5, "Angry"), (3.5, 8.5, "Annoying")
+        ]
 
         for val, aro, text in labels:
             self.draw_text_centered(painter, _map_pt(self.plot_rect, val, aro), text)
@@ -318,8 +307,7 @@ class FilterWidget(QWidget):
         self.tags_layout = FlowLayout()
         self.tags_layout.setObjectName("tags_layout")
 
-        label_font = QFont()
-        label_font.setBold(True)
+        label_font = app_theme.font(True)
         tags_label = QLabel(_("Tags"))
         tags_label.setFont(label_font)
         tags_label.setProperty("cssClass", "mini")

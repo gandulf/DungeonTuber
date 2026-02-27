@@ -10,7 +10,8 @@ from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMime
     QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QPointF
 from PySide6.QtGui import QColor, QBrush, QIcon, QLinearGradient, QGradient, QAction, QKeyEvent, QDragMoveEvent, QDragEnterEvent, QPainter, QPalette, \
     QFontMetrics, QFont, QDropEvent, QPolygonF, QPainterStateGuard
-from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView
+from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView, \
+    QApplication
 from sortedcontainers import SortedSet
 
 from components.widgets import AutoSearchHelper
@@ -353,7 +354,9 @@ class SongTableModel(QAbstractTableModel):
         if not index.isValid():
             return None
 
-        if role == Qt.ItemDataRole.TextAlignmentRole:
+        if role == Qt.ItemDataRole.FontRole:
+            return app_theme.font()
+        elif role == Qt.ItemDataRole.TextAlignmentRole:
             if index.column() >= SongTableModel.SCORE_COL or index.column() in [SongTableModel.BPM_COL, SongTableModel.INDEX_COL, SongTableModel.FAV_COL]:
                 return Qt.AlignmentFlag.AlignCenter
         elif role == Qt.ItemDataRole.BackgroundRole:
@@ -657,6 +660,7 @@ class SongTable(QTableView):
         self.horizontalHeader().setHighlightSections(False)
         self.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_context_menu)
+        self.horizontalHeader().setFont(app_theme.font())
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
@@ -1242,9 +1246,7 @@ class LabelItemDelegate(QStyledItemDelegate):
         tag_left = content_rect.right()
 
         if AppSettings.value(SettingKeys.COLUMN_TAGS_VISIBLE, True, type=bool):
-            tags_font = QFont(option.font)
-            tags_font.setBold(False)
-            tags_font.setPointSizeF(app_theme.font_size_small)
+            tags_font = app_theme.font(False, small=True)
 
             fm = QFontMetrics(tags_font)
             painter.setFont(tags_font)
@@ -1296,9 +1298,9 @@ class LabelItemDelegate(QStyledItemDelegate):
         pen.setColor(color)
         painter.setPen(pen)
 
-        title_font = QFont(option.font)
-        if AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool) and AppSettings.value(SettingKeys.SONGS_ROW_STYLE, "MEDIUM",
-                                                                                                        type=str) != "SMALL":
+        title_font = app_theme.font()
+        if (AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool)
+                and AppSettings.value(SettingKeys.SONGS_ROW_STYLE, "MEDIUM", type=str) != "SMALL"):
             title_font.setBold(True)
         title_font.setPointSizeF(app_theme.font_size)
 
@@ -1317,9 +1319,7 @@ class LabelItemDelegate(QStyledItemDelegate):
         painter.drawText(title_rect, title)
 
         if data.summary and AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
-            summary_font = QFont(option.font)
-            summary_font.setBold(False)
-            summary_font.setPointSizeF(app_theme.font_size_small)
+            summary_font = app_theme.font(bold=False,small=True)
             painter.setFont(summary_font)
 
             summary_rect = QRect(content_rect)

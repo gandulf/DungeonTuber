@@ -6,6 +6,7 @@ import subprocess
 import sys
 from ctypes import wintypes
 from os import PathLike
+from pathlib import Path
 
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -40,7 +41,7 @@ def get_path(path:str) -> PathLike[str]:
     else:
         # Running as Python script
         icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), path)
-    return icon_path
+    return Path(icon_path).as_posix()
 
 
 class VS_FIXEDFILEINFO(ctypes.Structure):

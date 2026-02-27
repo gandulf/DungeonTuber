@@ -133,7 +133,7 @@ class Mp3Entry(object):
 
 
 class EffectEntry(object):
-    __slots__ = ["intensities", "intensity", "name", "cover"]
+    __slots__ = ["intensities", "intensity", "name", "_cover"]
 
     intensities: list[Mp3Entry]
     intensity: int
@@ -145,7 +145,7 @@ class EffectEntry(object):
         datas.sort(key=lambda x: x.name, reverse=False)
         self.intensities = datas
         self.name = name
-        self.cover = cover
+        self._cover = cover
         self.intensity = 0
 
     def __hash__(self):
@@ -157,6 +157,13 @@ class EffectEntry(object):
         elif not isinstance(other, EffectEntry):
             return False
         return self.intensities == other.intensities
+
+    @property
+    def cover(self):
+        if self.mp3_entry is not None and self.mp3_entry.cover is not None:
+            return self.mp3_entry.cover
+        else:
+            return self._cover
 
     @property
     def mp3_entry(self):

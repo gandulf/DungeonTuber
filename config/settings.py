@@ -210,6 +210,7 @@ class SettingKeys(StrEnum):
     NORMALIZE_VOLUME = "normalizeVolume"
     EFFECTS_DIRECTORY = "effectsDirectory"
     EFFECTS_TREE = "effectsTree"
+    EFFECTS_LIST_VIEW_MODE ="effectsListViewMode"
     LAST_DIRECTORY = "lastDirectory"
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
     EXPANDED_DIRS = "expandedDirs"

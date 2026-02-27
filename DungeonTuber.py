@@ -32,9 +32,10 @@ import gettext
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, QMenu, QStatusBar, QProgressBar, QSplitter
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, QMenu, QStatusBar, QProgressBar, QSplitter, \
+    QListView
 from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent
-from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent
+from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, set_presets
 from config.theme import app_theme
@@ -144,6 +145,9 @@ class MusicPlayer(QMainWindow):
     def init_main_menu(self):
 
         menu_bar = self.menuBar()
+        menu_bar.setNativeMenuBar(False)
+        menu_bar.setFont(app_theme.font())
+
         file_menu = menu_bar.addMenu(_("File"))
         file_menu.setContentsMargins(0, 0, 0, 0)
 
@@ -242,28 +246,28 @@ class MusicPlayer(QMainWindow):
 
         view_menu.addSeparator()
 
-        font_size_small_action = QAction(_("Smaller"), self)
-        font_size_small_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Minus))
-        font_size_small_action.triggered.connect(lambda: setattr(app_theme, 'font_size', app_theme.font_size - 1.0))
+        font_size_smaller_action = QAction(_("Smaller"), self)
+        font_size_smaller_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Minus))
+        font_size_smaller_action.triggered.connect(lambda: setattr(app_theme, 'font_size', app_theme.font_size - 1.0))
 
         font_size_medium_action = QAction(_("Medium"), self)
         font_size_medium_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_0))
         font_size_medium_action.triggered.connect(lambda: setattr(app_theme, 'font_size', 10.5))
 
-        font_size_large_action = QAction(_("Larger"), self)
-        font_size_large_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Plus))
-        font_size_large_action.triggered.connect(lambda: setattr(app_theme, 'font_size', app_theme.font_size + 1.0))
+        font_size_larger_action = QAction(_("Larger"), self)
+        font_size_larger_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Plus))
+        font_size_larger_action.triggered.connect(lambda: setattr(app_theme, 'font_size', app_theme.font_size + 1.0))
 
         font_size_group = QActionGroup(self, exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
-        font_size_group.addAction(font_size_small_action)
+        font_size_group.addAction(font_size_smaller_action)
         font_size_group.addAction(font_size_medium_action)
-        font_size_group.addAction(font_size_large_action)
+        font_size_group.addAction(font_size_larger_action)
 
         font_size_menu = QMenu(_("Font Size"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.FormatTextBold))
 
-        font_size_menu.addAction(font_size_small_action)
+        font_size_menu.addAction(font_size_smaller_action)
         font_size_menu.addAction(font_size_medium_action)
-        font_size_menu.addAction(font_size_large_action)
+        font_size_menu.addAction(font_size_larger_action)
         view_menu.addMenu(font_size_menu)
 
         visualizer_menu = QMenu(_("Visualizer"), self, icon=QIcon.fromTheme("spectrum"))
@@ -537,7 +541,8 @@ class MusicPlayer(QMainWindow):
         self.central_splitter.addWidget(main_widget)
         self.central_splitter.setCollapsible(1, False)
 
-        self.effects_widget = EffectWidget()
+        view_mode = QListView.ViewMode[AppSettings.value(SettingKeys.EFFECTS_LIST_VIEW_MODE,"IconMode", type=str)]
+        self.effects_widget = EffectWidget(list_mode=view_mode)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_playlist_context_menu)
 
@@ -917,7 +922,9 @@ def main():
 
     app = QApplication(sys.argv)
 
-    # Set up Gettext
+
+
+
 
     language = AppSettings.value(SettingKeys.LOCALE, type=str)
     if language is None or language == "":
@@ -934,6 +941,14 @@ def main():
     app.setApplicationVersion(get_current_version())
 
     app_theme.application = app
+
+    #font_id = QFontDatabase.addApplicationFont(get_path("assets/InterVariable.ttf"))
+    # if font_id >= 0:
+    #     app_theme.font_families = QFontDatabase.applicationFontFamilies(font_id)
+    # else:
+    #     app_theme.font_families = ["Verdana"]
+    # print(app_theme.font_families)
+
     app_theme.apply_stylesheet()
 
     window = MusicPlayer(app)

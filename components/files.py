@@ -74,6 +74,7 @@ class DirectoryTree(QTreeView):
         self.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self.setDropIndicatorShown(True)
+        self.setFont(app_theme.font())
 
         self.open_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Open"), self)
         self.open_action.triggered.connect(self.do_open_action)
@@ -314,3 +315,4 @@ class DirectoryWidget(QWidget):
             self.headerLabel.set_icon(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
         elif event.type() == QEvent.Type.FontChange:
             self.headerLabel.set_icon_size(app_theme.icon_size)
+            self.directory_tree.setFont(app_theme.font())

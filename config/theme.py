@@ -1,11 +1,12 @@
 import string
 
 from PySide6.QtCore import QObject, Property, Qt, QSize
-from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon, QFont
+from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon, QFont, QFontDatabase
 from PySide6.QtWidgets import QApplication
 
 from config.settings import AppSettings, SettingKeys
 from config.utils import get_path
+
 
 def _alpha(color: QColor, alpha: int = None):
     if alpha is None:
@@ -15,10 +16,13 @@ def _alpha(color: QColor, alpha: int = None):
     new_color.setAlpha(alpha)
     return new_color
 
+
 def _pt_to_px(pt):
     return int(pt * (96 / 72))
 
+
 QIcon.setThemeSearchPaths([get_path("assets/icons")] + QIcon.themeSearchPaths())
+
 
 class AppTheme(QObject):
     light_palette: QPalette = None
@@ -29,56 +33,68 @@ class AppTheme(QObject):
     _orange = QColor("#FFC145")
     _red = QColor("#FB4141")
 
+    font_families = None
+
     application: QApplication
 
-    _color_cache : dict[string,QColor] = {}
-    _brush_cache : dict[string,QBrush] = {}
+    _color_cache: dict[string, QColor] = {}
+    _brush_cache: dict[string, QBrush] = {}
 
     _small_factor = 0.6
 
     def __init__(self):
         super().__init__()
-        self._font_size : float = AppSettings.value(SettingKeys.FONT_SIZE, 10.5, type=int) # Default size
-        self._font_size_small : float = self._font_size * 0.8  # Small size
-        self._calculate_sizes()
+        self._calculate_sizes(AppSettings.value(SettingKeys.FONT_SIZE, 10.5, type=int))
 
         self.light_palette = self.get_light_mode_palette()
         self.dark_palette = self.get_dark_mode_palette()
 
-    def _calculate_sizes(self):
+    def _calculate_sizes(self, base_font_size: float):
+        self._font_size = base_font_size
         self._font_size_small = self._font_size * 0.8  # Small size
 
         self._spacing = int(self._font_size * 0.8)
+        self._padding = int(self._font_size * 0.5)
+
         self._icon_width = _pt_to_px(self._font_size * 1.5)
         self._icon_height = _pt_to_px(self._font_size * 1.5)
+
         self._icon_size = QSize(self._icon_width, self._icon_height)
 
         self._icon_width_small = int(self._icon_width * self._small_factor)
-        self._icon_height_small =  int(self._icon_height * self._small_factor)
+        self._icon_height_small = int(self._icon_height * self._small_factor)
+
         self._icon_size_small = QSize(self._icon_width_small, self._icon_height_small)
 
         self._button_width = _pt_to_px(self._font_size * 4)
         self._button_height = _pt_to_px(self._font_size * 4)
         self._button_size = QSize(self._button_width, self._button_height)
+
         self._button_height_small = int(self._button_height * self._small_factor)
         self._button_width_small = int(self._button_width * self._small_factor)
         self._button_size_small = QSize(self._button_width_small, self._button_height_small)
+
+    def font(self, bold: bool = False, small: bool = False):
+        font = self.application.font()
+        font.setBold(bold)
+        if small:
+            font.setPointSizeF(self._font_size_small)
+        else:
+            font.setPointSizeF(self._font_size)
+
+        return font
 
     @Property(int)
     def spacing(self) -> int:
         return self._spacing
 
+    @Property(int)
+    def padding(self) -> int:
+        return self._padding
+
     @Property(QSize)
     def icon_size(self) -> QSize:
         return self._icon_size
-
-    @Property(int)
-    def icon_height(self) -> int:
-        return self._icon_height
-
-    @Property(int)
-    def icon_width(self) -> int:
-        return self._icon_width
 
     @Property(QSize)
     def button_size(self) -> QSize:
@@ -88,14 +104,6 @@ class AppTheme(QObject):
     def icon_size_small(self) -> QSize:
         return self._icon_size_small
 
-    @Property(int)
-    def button_height_small(self) -> int:
-        return self._button_height_small
-
-    @Property(int)
-    def button_width_small(self) -> int:
-        return self._button_width_small
-
     @Property(QSize)
     def button_size_small(self) -> QSize:
         return self._button_size_small
@@ -104,16 +112,14 @@ class AppTheme(QObject):
     def font_size(self) -> float:
         return self._font_size
 
-    @Property(float)
-    def font_size_small(self) -> float:
-        return self._font_size_small
+    @Property(int)
+    def font_size_px(self) -> int:
+        return _pt_to_px(self._font_size)
 
     @font_size.setter
     def font_size(self, size):
         AppSettings.setValue(SettingKeys.FONT_SIZE, size)
-        self._font_size = size
-
-        self._calculate_sizes()
+        self._calculate_sizes(size)
 
         # Re-apply the stylesheet to trigger a global update
         self.apply_stylesheet()
@@ -138,10 +144,13 @@ class AppTheme(QObject):
 
     def get_green_brush(self, alpha: int = None):
         return self._brush_cache.setdefault(f"green{alpha}", self.get_green(alpha))
+
     def get_red_brush(self, alpha: int = None):
         return self._brush_cache.setdefault(f"red{alpha}", self.get_red(alpha))
+
     def get_yellow_brush(self, alpha: int = None):
         return self._brush_cache.setdefault(f"yellow{alpha}", self.get_yellow(alpha))
+
     def get_orange_brush(self, alpha: int = None):
         return self._brush_cache.setdefault(f"orange{alpha}", self.get_orange(alpha))
 
@@ -160,12 +169,12 @@ class AppTheme(QObject):
     def get_dark_mode_palette(self) -> QPalette:
         if self.dark_palette is None:
             palette = QPalette()
-            palette.setColor(QPalette.ColorRole.Accent,QColor(0,80,203))
+            palette.setColor(QPalette.ColorRole.Accent, QColor(0, 80, 203))
             palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
             palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, QColor(127, 127, 127))
             palette.setColor(QPalette.ColorRole.Base, QColor(42, 42, 42))
-            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(66, 66, 66))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(66, 66, 66, 50))
             palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(53, 53, 53))
             palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
@@ -175,7 +184,7 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
             palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(127, 127, 127))
-            palette.setColor(QPalette.ColorRole.BrightText, palette.color(QPalette.ColorRole.Accent))
+            palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.lightGray)
             palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
             palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 102, 255))
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(80, 80, 80))
@@ -192,7 +201,7 @@ class AppTheme(QObject):
     def get_light_mode_palette(self) -> QPalette:
         if self.light_palette is None:
             palette = QPalette()
-            palette.setColor(QPalette.ColorRole.Accent,  QColor(0,80,203))
+            palette.setColor(QPalette.ColorRole.Accent, QColor(0, 80, 203))
             # darkPalette.setColor(QPalette.Window, QColor(53, 53, 53))
             # darkPalette.setColor(QPalette.WindowText, Qt.white)
             # darkPalette.setColor(QPalette.Disabled, QPalette.WindowText, QColor(127, 127, 127))
@@ -260,25 +269,42 @@ class AppTheme(QObject):
         theme = self.theme()
 
         global_font = QFont()
+        if self.font_families is not None:
+            font_family = self.font_families[0]
+            global_font.setFamily(font_family)
+        else:
+            font_family = global_font.family()
+
         global_font.setPointSizeF(self.font_size)
         self.application.setFont(global_font)
 
-        style = f"""
+        style = f"""        
+                    QMenu {{
+                        font-family: '{font_family}';                        
+                    }}
+                    QMenuBar, QMenuBar::item {{
+                        font-family: '{font_family}';                        
+                    }}
+                    
+                    QHeaderView {{
+                        font-family: '{font_family}';        
+                    }}
+                    
                     QPushButton[cssClass~="play"]::checked, QToolButton[cssClass~="play"]::checked {{
                         background-color: rgb(0, 102, 255);                        
                     }}
                     
                     QLabel[cssClass~="header"] {{
-                        font-size: {app_theme._font_size}pt;
+                        font-size: {self._font_size}pt;
                         font-weight: bold;
                     }}
                     
                     QLabel[cssClass~="small"] {{
-                        font-size: {app_theme._font_size_small}pt;                    
+                        font-size: {self._font_size_small}pt;                    
                     }}
                     
                     QLabel[cssClass~="mini"] {{
-                        font-size: {app_theme._font_size_small * 0.8}pt;                    
+                        font-size: {self._font_size_small * 0.8}pt;                    
                     }}
                     
                     QSlider[cssClass="button"] {{                                                                        
@@ -373,5 +399,6 @@ class AppTheme(QObject):
         """
 
         self.application.setStyleSheet(style)
+
 
 app_theme: AppTheme = AppTheme()

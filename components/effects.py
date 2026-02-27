@@ -1,18 +1,28 @@
-
 import os
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, \
-    Signal, QRect, QSize, QAbstractTableModel, QAbstractItemModel
+    Signal, QRect, QSize, QAbstractTableModel, QAbstractItemModel, QPoint, QSizeF
 from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QPalette, QPen, QKeyEvent, \
-    QPaintEvent, QLinearGradient, QBrush, QGradient, QPainterStateGuard
+    QPaintEvent, QLinearGradient, QBrush, QGradient, QPainterStateGuard, QPixmap, QResizeEvent
 from PySide6.QtWidgets import QMenu, QListView, QStyleOptionViewItem, QStyle, QWidget, \
-    QStyledItemDelegate, QFileDialog, QToolButton, QPushButton, QVBoxLayout, QHBoxLayout
+    QStyledItemDelegate, QFileDialog, QToolButton, QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView
 
 from components.widgets import IconLabel, AutoSearchHelper, VolumeSlider
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
 from logic.audioengine import AudioEngine
 from logic.mp3 import EffectEntry, Mp3Entry
+
+
+def _get_grid_width(total_width: int):
+    if total_width < EffectList.grid_threshold:
+        new_width = total_width -1
+    elif total_width < EffectList.grid_threshold * 2:
+        new_width = int(total_width / 2)
+    else:
+        new_width = int(total_width / 3)
+
+    return new_width
 
 
 def _get_entry_background_brush(data: Mp3Entry):
@@ -27,6 +37,7 @@ def _get_entry_background_brush(data: Mp3Entry):
         return QBrush(gradient)
     else:
         return None
+
 
 class EffectTableModel(QAbstractTableModel):
     _checked: QPersistentModelIndex = QPersistentModelIndex()
@@ -57,11 +68,13 @@ class EffectTableModel(QAbstractTableModel):
         if not index.isValid():
             return None
 
+        if role == Qt.ItemDataRole.FontRole:
+            return app_theme.font()
         if role == Qt.ItemDataRole.CheckStateRole:
             return Qt.CheckState.Checked if self._checked == index else Qt.CheckState.Unchecked
         elif role == Qt.ItemDataRole.DecorationRole:
             data = index.data(Qt.ItemDataRole.UserRole)
-            return QIcon(data.cover) if data.cover is not None else None
+            return data.cover if data.cover is not None else None
         elif role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             data = index.data(Qt.ItemDataRole.UserRole)
             return data.title if AppSettings.value(SettingKeys.EFFECTS_TITLE_INSTEAD_OF_FILE_NAME, False, type=bool) else data.name
@@ -98,8 +111,14 @@ class EffectList(QListView):
         self.table_model = None
         self.setUniformItemSizes(True)
         self.setItemDelegate(EffectListItemDelegate(parent=self))
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setViewportMargins(0, 0, 0, 0)
+        self.setSpacing(0)
         self.verticalScrollBar().setSingleStep(30)
+        self.verticalScrollBar().setBackgroundRole(QPalette.ColorRole.Accent)
+        #self.verticalScrollBar().setMaximumWidth(app_theme.application.style().pixelMetric(QStyle.PM_ScrollBarExtent))
         self.setMouseTracking(True)
+        self.setFont(app_theme.font())
 
         self.doubleClicked.connect(self.on_item_double_clicked)
 
@@ -155,34 +174,25 @@ class EffectList(QListView):
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.FontChange:
-            list_font = self.font()
-            list_font.setPointSizeF(app_theme.font_size)
-            self.setFont(list_font)
+            self.setFont(app_theme.font())
+            self.setIconSize(app_theme.icon_size)
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
         self.calculate_grid_size()
 
     def calculate_grid_size(self):
         if self.viewMode() == QListView.ViewMode.IconMode:
-            if self.width() < self.grid_threshold:
-                new_width = self.width()
-            elif self.width() < self.grid_threshold * 2:
-                new_width = (self.width() // 2) - 10
-            else:
-                new_width = (self.width() // 3) - 10
-
-            new_width = min(128 + 30, new_width)
-            new_height = int(new_width * (3.0 / 4.0))
+            new_width = _get_grid_width(self.viewport().width() - self.verticalScrollBar().width())
+            new_height = int(new_width * (3 / 4))
             self.setGridSize(QSize(new_width, new_height))
-            self.setIconSize(QSize(new_width, new_height))
-            self.setSpacing(0)
+            self.setIconSize(QSize())
         else:
             self.setGridSize(QSize())
-            self.setIconSize(QSize(32, 32))
-            self.setSpacing(0)
+            self.setIconSize(QSize(app_theme.font_size_px * 2, app_theme.font_size_px * 2))
 
     def set_list_view(self):
+        AppSettings.setValue(SettingKeys.EFFECTS_LIST_VIEW_MODE, "ListMode")
         self.setViewMode(QListView.ViewMode.ListMode)
         self.setFlow(QListView.Flow.TopToBottom)
         self.setMovement(QListView.Movement.Static)
@@ -194,6 +204,7 @@ class EffectList(QListView):
         self.update()
 
     def set_grid_view(self):
+        AppSettings.setValue(SettingKeys.EFFECTS_LIST_VIEW_MODE, "IconMode")
         self.setViewMode(QListView.ViewMode.IconMode)
         self.setFlow(QListView.Flow.LeftToRight)
         self.setMovement(QListView.Movement.Static)
@@ -209,6 +220,7 @@ class EffectList(QListView):
         if isinstance(data, Mp3Entry):
             self.file_opened.emit(data)
             self.model().setData(index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
+            self.update()
 
     def on_item_intensity_changed(self, index: QModelIndex, intensity: int):
         effect_entry = index.data(Qt.ItemDataRole.UserRole)
@@ -231,7 +243,7 @@ class EffectList(QListView):
 
 
 class EffectListItemDelegate(QStyledItemDelegate):
-    padding = 2
+    MAX_BUTTONS = 5
 
     hover_intensity = None
     hover_index = None
@@ -280,110 +292,147 @@ class EffectListItemDelegate(QStyledItemDelegate):
             intensity = effect_entry.intensity
 
         btn_padding_x = 4
-        btn_size:int
+        btn_size: QSize
         if self.is_grid_mode():
-            btn_size =round(app_theme.font_size*2.5)
+            btn_size = QSize(app_theme.font_size_px * 2, app_theme.font_size_px * 2)
             btn_padding_y = btn_padding_x
         else:
-            btn_size = round(app_theme.font_size_small*2.5)
-            btn_padding_y = (parent.height() - btn_size) // 2
+            btn_size = QSize(app_theme.font_size_px * 1.5, app_theme.font_size_px * 1.5)
+            btn_padding_y = (parent.height() - btn_size.height()) // 2
 
-        if (btn_size + btn_padding_x) * 5 +btn_padding_x > parent.width():
-            btn_size = (parent.width() - btn_padding_x * 6) // 5
+        if (btn_size.width() + btn_padding_x) * self.MAX_BUTTONS + btn_padding_x > parent.width():
+            new_size = (parent.width() - btn_padding_x * self.MAX_BUTTONS + 1) // self.MAX_BUTTONS
+            btn_size.scale(new_size, new_size, Qt.AspectRatioMode.KeepAspectRatio)
 
-        rect = QRect(parent.right() - (cnt - intensity) * (btn_size + btn_padding_x), parent.top() + btn_padding_y, btn_size, btn_size)
+        rect = QRect(parent.right() - (cnt - intensity) * (btn_size.width() + btn_padding_x), parent.top() + btn_padding_y, btn_size.width(), btn_size.height())
         return rect
 
-    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
-        # 1. Initialize the style option
-        self.initStyleOption(option, index)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
-        painter.setClipRect(option.rect)
-
-        effect_entry = index.data(Qt.ItemDataRole.UserRole)
-
+    def _paint_list_item(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         check_state = index.data(Qt.ItemDataRole.CheckStateRole)
         selected_state = option.state & QStyle.State_Selected
+
+        padding = app_theme.padding
+
+        if check_state == Qt.CheckState.Checked:
+            with QPainterStateGuard(painter):
+                # Change background for checked items
+                painter.setBrush(option.palette.brush(QPalette.ColorRole.Highlight))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawRect(option.rect)
+
+        rect: QRect = option.rect.adjusted(padding * 2, padding, -padding, -padding)
+
+        if option.icon:
+            pixmap = option.icon.pixmap(rect.size())
+            if not pixmap.isNull():
+                with QPainterStateGuard(painter):
+                    # Logic: Calculate how to scale the pixmap to fill the target_rect
+                    # while preserving aspect ratio (Aspect Ratio Fill/Crop)
+                    pix_size = pixmap.size()
+                    scaled_size: QSize = pix_size.scaled(rect.height(), rect.height(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+
+                    # Calculate the top-left to center the "crop"
+                    x = rect.x()
+                    y = rect.y() + (rect.height() - scaled_size.height()) // 2
+
+                    icon_rect = QRect(x, y, scaled_size.width(), scaled_size.height())
+                    painter.setClipRect(icon_rect)
+                    # Draw the scaled and centered pixmap
+                    # Painter's clipping (set at top of method) ensures the overflow is hidden
+                    painter.drawPixmap(icon_rect, pixmap)
+
+                    rect.setLeft(icon_rect.right() + padding)
+
+        if option.text:
+            with QPainterStateGuard(painter):
+                label_rect = QRect(rect.left(), rect.top(), rect.width(), rect.height())
+
+
+                if check_state == Qt.CheckState.Checked:
+                    painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText))
+                else:
+                    painter.setPen(option.palette.color(QPalette.ColorRole.Text))
+
+                painter.drawText(label_rect, Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap, option.text)
+
+        with QPainterStateGuard(painter):
+            if selected_state:
+                highlight_color = option.palette.color(QPalette.ColorRole.Accent)
+                pen = QPen(highlight_color)
+                pen.setWidth(2)
+                painter.setPen(pen)
+
+                p1: QPoint = option.rect.topLeft()
+                p1.setX(p1.x() + padding)
+                p1.setY(p1.y() + option.rect.height() * 0.25)
+                p2: QPoint = option.rect.bottomLeft()
+                p2.setX(p2.x() + padding)
+                p2.setY(p2.y() - option.rect.height() * 0.25)
+                painter.drawLine(p1, p2)
+
+    def _paint_grid_item(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+        check_state = index.data(Qt.ItemDataRole.CheckStateRole)
+        selected_state = option.state & QStyle.State_Selected
+
+        padding = 1
+        # We use option.rect to get the full space for this item
+        rect = option.rect.adjusted(padding, padding, -padding, -padding)
+
+        # Draw the Icon
+        icon = option.icon
+        if icon:
+            pixmap = icon.pixmap(rect.size())
+            if not pixmap.isNull():
+                with QPainterStateGuard(painter):
+                    # Logic: Calculate how to scale the pixmap to fill the target_rect
+                    # while preserving aspect ratio (Aspect Ratio Fill/Crop)
+                    pix_size = pixmap.size()
+                    scaled_size: QSize = pix_size.scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+
+                    # Calculate the top-left to center the "crop"
+                    x = rect.x() + (rect.width() - scaled_size.width()) // 2
+                    y = rect.y() + (rect.height() - scaled_size.height()) // 2
+
+                    painter.setClipRect(rect)
+                    # Draw the scaled and centered pixmap
+                    # Painter's clipping (set at top of method) ensures the overflow is hidden
+                    painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
+
+        if option.text:
+            with QPainterStateGuard(painter):
+                label_height = painter.fontMetrics().height() + app_theme.padding
+                label_rect = QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height + 1)
+
+                if check_state == Qt.CheckState.Checked:
+                    mask_color = option.palette.color(QPalette.ColorRole.Highlight)
+                elif selected_state:
+                    mask_color = option.palette.color(QPalette.ColorRole.Highlight)
+                    mask_color.setAlphaF(0.5)
+                else:
+                    mask_color = option.palette.color(QPalette.ColorRole.Dark)
+                    mask_color.setAlphaF(0.5)
+
+                painter.setBrush(mask_color)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawRect(label_rect)
+
+                painter.setPen(Qt.GlobalColor.white)  # Contrast color
+                painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, option.text)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+        self.initStyleOption(option, index)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
 
         background = index.data(Qt.ItemDataRole.BackgroundRole)
         if background:
             painter.fillRect(option.rect, background)
 
-        if self.is_list_mode() and check_state == Qt.CheckState.Checked:
-            with QPainterStateGuard(painter):
-                # Change background for checked items
-                painter.setBrush(app_theme.get_green_brush(50))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawRect(option.rect.adjusted(1, 1, -1, -1))
-
-
-            # Make text bold for checked items
-            option.font.setBold(True)
-
         if self.is_grid_mode():
-            # We use option.rect to get the full space for this item
-            rect = option.rect.adjusted(self.padding, self.padding, -self.padding, -self.padding)
-
-            # Draw the Icon
-            icon = option.icon
-            if icon:
-                pixmap = icon.pixmap(rect.size())
-                if not pixmap.isNull():
-                    with QPainterStateGuard(painter):
-                        # Logic: Calculate how to scale the pixmap to fill the target_rect
-                        # while preserving aspect ratio (Aspect Ratio Fill/Crop)
-                        pix_size = pixmap.size()
-                        scaled_size = pix_size.scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
-
-                        # Calculate the top-left to center the "crop"
-                        x = rect.x() + (rect.width() - scaled_size.width()) // 2
-                        y = rect.y() + (rect.height() - scaled_size.height()) // 2
-
-                        painter.setClipRect(rect)
-                        # Draw the scaled and centered pixmap
-                        # Painter's clipping (set at top of method) ensures the overflow is hidden
-                        painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
-
-
-                # icon.paint(painter, rect, Qt.AlignmentFlag.AlignCenter)
-
-            # Draw the Text on top
-            text = index.data(Qt.ItemDataRole.DisplayRole)
-            if text:
-                # Optional: Add a subtle shadow or background for readability
-                # painter.fillRect(rect, QColor(0, 0, 0, 100))
-                with QPainterStateGuard(painter):
-                    label_height = painter.fontMetrics().height() + self.padding
-                    label_rect = QRect(rect.left(), rect.bottom() - label_height, rect.width(), label_height + 1)
-
-                    mask_color = option.palette.color(QPalette.ColorRole.Highlight) if selected_state else option.palette.color(QPalette.ColorRole.Dark)
-                    mask_color.setAlphaF(0.5)
-
-                    painter.setBrush(mask_color)
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.drawRect(label_rect)
-
-                    painter.setPen(Qt.GlobalColor.white)  # Contrast color
-                    painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
-
-            with QPainterStateGuard(painter):
-                if check_state == Qt.CheckState.Checked:
-                    pen = QPen(option.palette.color(QPalette.ColorRole.Accent))
-                    pen.setWidth(5)
-                    painter.setPen(pen)
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    painter.drawRect(rect)
-                elif selected_state:
-                    highlight_color = option.palette.color(QPalette.ColorRole.Highlight)
-                    highlight_color.setAlphaF(0.5)
-                    pen = QPen(highlight_color)
-                    pen.setWidth(3)
-                    painter.setPen(pen)
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    painter.drawRect(rect)
+            self._paint_grid_item(painter, option, index)
         else:
-            super().paint(painter, option, index)
+            self._paint_list_item(painter, option, index)
 
+        effect_entry = index.data(Qt.ItemDataRole.UserRole)
         cnt = len(effect_entry.intensities)
         if cnt > 1:
             with QPainterStateGuard(painter):
@@ -406,30 +455,21 @@ class EffectListItemDelegate(QStyledItemDelegate):
                     else:
                         painter.setPen(QPen(option.palette.color(QPalette.ColorRole.Text)))
 
-                    rect.adjust(0,0,-1,-1)
-                    painter.drawText(rect, str(idx+1), Qt.AlignmentFlag.AlignCenter)
-
+                    rect.adjust(0, 0, -1, -1)
+                    painter.drawText(rect, str(idx + 1), Qt.AlignmentFlag.AlignCenter)
 
         if option.state & QStyle.StateFlag.State_MouseOver:
             painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         if self.is_grid_mode():
-            if option.rect.width() < EffectList.grid_threshold:
-                new_width = option.rect.width()
-            else:
-                new_width = (option.rect.width() // 2)
-            size = QSize()
-            size.setWidth(new_width)
-            size.setHeight(new_width * (3.0 / 4.0) + self.padding)
-            return size
+            return QSize(option.rect.width(), option.rect.height())
         else:
-            return super().sizeHint(option, index)
+            return QSize(0, app_theme.font_size_px * 2)
+
 
 class EffectWidget(QWidget):
     open_item: QPushButton = None
-
-    icon_size = QSize(16, 16)
 
     def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__()
@@ -494,7 +534,7 @@ class EffectWidget(QWidget):
 
         self.list_widget.calculate_grid_size()
 
-    def populate_effects_menu(self, menu:QMenu, datas: list[Mp3Entry]):
+    def populate_effects_menu(self, menu: QMenu, datas: list[Mp3Entry]):
         open_dir = QAction(icon=QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), text=_("Open Directory"), parent=self)
         open_dir.triggered.connect(self.pick_effects_directory)
         menu.addAction(open_dir)
@@ -523,8 +563,7 @@ class EffectWidget(QWidget):
             self.btn_play.setIcon(app_theme.create_play_pause_icon())
         elif event.type() == QEvent.Type.FontChange:
             self.headerLabel.set_icon_size(app_theme.icon_size)
-
-            # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
+            self.list_widget.setFont(app_theme.font())
 
     def toogle_play(self):
         if self.engine.pause_toggle():
@@ -565,5 +604,3 @@ class EffectWidget(QWidget):
             AppSettings.setValue(SettingKeys.EFFECTS_DIRECTORY, directory)
             self.refresh_dir_action.setVisible(True)
             self.load_directory(directory)
-
-
