@@ -147,12 +147,14 @@ class AudioEngine(QObject):
     def loop_media(self, file_path: PathLike[str]):
         if self.list_player is None:
             self.list_player = self.instance.media_list_player_new()
+            self.list_player.set_playback_mode(PlaybackMode.loop)
 
         self.player = self.list_player.get_media_player()
+        self.player.audio_set_volume(self.current_volume)
+
         # 2. Create a Media List and add your song
         media_list = self.instance.media_list_new([file_path])
 
-        self.list_player.set_playback_mode(PlaybackMode.loop)
         self.list_player.stop()
         self.list_player.set_media_list(media_list)
         self.list_player.play()
@@ -215,8 +217,6 @@ class AudioEngine(QObject):
         self._manual_stop = False
         self.player.play()
         self.state_changed.emit(EngineState.PLAY)
-
-
 
     def stop(self):
         self._manual_stop = True

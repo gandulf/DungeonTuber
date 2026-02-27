@@ -72,6 +72,7 @@ class DirectoryTree(QTreeView):
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self.setDropIndicatorShown(True)
 
         self.open_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Open"), self)
@@ -147,6 +148,7 @@ class DirectoryTree(QTreeView):
             list_font = self.font()
             list_font.setPointSizeF(app_theme.font_size)
             self.setFont(list_font)
+            self.setIconSize(app_theme.icon_size)
 
     def on_directories_loaded(self):
         self.proxy_model.beginFilterChange()
@@ -295,7 +297,7 @@ class DirectoryWidget(QWidget):
         self.directory_layout.setSpacing(0)
 
         self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent=self)
-        self.headerLabel.set_icon_size(app_theme.icon_size_small)
+        self.headerLabel.set_icon_size(app_theme.icon_size)
         self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         self.headerLabel.text_label.setProperty("cssClass", "header")
 
@@ -311,4 +313,4 @@ class DirectoryWidget(QWidget):
         if event.type() == QEvent.Type.PaletteChange:
             self.headerLabel.set_icon(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
         elif event.type() == QEvent.Type.FontChange:
-            self.headerLabel.set_icon_size(app_theme.icon_size_small)
+            self.headerLabel.set_icon_size(app_theme.icon_size)

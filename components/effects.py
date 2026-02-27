@@ -306,9 +306,7 @@ class EffectListItemDelegate(QStyledItemDelegate):
         selected_state = option.state & QStyle.State_Selected
 
         background = index.data(Qt.ItemDataRole.BackgroundRole)
-        if option.state & QStyle.StateFlag.State_MouseOver:
-            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
-        elif background:
+        if background:
             painter.fillRect(option.rect, background)
 
         if self.is_list_mode() and check_state == Qt.CheckState.Checked:
@@ -412,6 +410,9 @@ class EffectListItemDelegate(QStyledItemDelegate):
                     painter.drawText(rect, str(idx+1), Qt.AlignmentFlag.AlignCenter)
 
 
+        if option.state & QStyle.StateFlag.State_MouseOver:
+            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
+
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         if self.is_grid_mode():
             if option.rect.width() < EffectList.grid_threshold:
@@ -464,7 +465,7 @@ class EffectWidget(QWidget):
         self.player_layout.addLayout(self.volume_slider, 1)
 
         self.headerLabel = IconLabel(QIcon.fromTheme("effects"), _("Effects"))
-        self.headerLabel.set_icon_size(app_theme.icon_size_small)
+        self.headerLabel.set_icon_size(app_theme.icon_size)
         self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         self.headerLabel.text_label.setProperty("cssClass", "header")
 
@@ -521,7 +522,7 @@ class EffectWidget(QWidget):
             self.headerLabel.set_icon(QIcon.fromTheme("effects"))
             self.btn_play.setIcon(app_theme.create_play_pause_icon())
         elif event.type() == QEvent.Type.FontChange:
-            self.headerLabel.set_icon_size(app_theme.icon_size_small)
+            self.headerLabel.set_icon_size(app_theme.icon_size)
 
             # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
 

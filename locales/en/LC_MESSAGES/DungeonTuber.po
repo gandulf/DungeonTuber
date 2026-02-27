@@ -621,3 +621,15 @@ msgstr "All songs will be played at a normalized volume."
 
 msgid "Select Image"
 msgstr "Select Image"
+
+msgid "Row Style"
+msgstr "Row Style"
+
+msgid "SMALL"
+msgstr "Compact"
+
+msgid "MEDIUM"
+msgstr "Default"
+
+msgid "LARGE"
+msgstr "Large"

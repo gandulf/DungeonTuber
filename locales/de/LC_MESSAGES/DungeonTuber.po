@@ -625,3 +625,15 @@ msgstr "Aus Playlist entfernen"
 
 msgid "Select Image"
 msgstr "Bild auswählen"
+
+msgid "Row Style"
+msgstr "Reihenstil"
+
+msgid "SMALL"
+msgstr "Kompakt"
+
+msgid "MEDIUM"
+msgstr "Normal"
+
+msgid "LARGE"
+msgstr "Breit"

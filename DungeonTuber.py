@@ -33,7 +33,7 @@ from pathlib import Path
 from os import PathLike
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, QMenu, QStatusBar, QProgressBar, QSplitter
-from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo
+from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent
 from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, set_presets
@@ -334,6 +334,12 @@ class MusicPlayer(QMainWindow):
         about_action = QAction(_("About"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.HelpAbout))
         about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(about_action)
+
+    def changeEvent(self, event, /):
+        if event.type() == QEvent.Type.ApplicationFontChange or event.type() == QEvent.Type.FontChange:
+            self.table_tabs.setIconSize(app_theme.icon_size)
+
+            # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
 
     def _get_first_slider(self):
         if len(self.filter_widget.sliders.values()) > 0:

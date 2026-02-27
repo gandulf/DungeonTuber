@@ -49,8 +49,8 @@ class AppTheme(QObject):
         self._font_size_small = self._font_size * 0.8  # Small size
 
         self._spacing = int(self._font_size * 0.8)
-        self._icon_width = _pt_to_px(self._font_size * 2)
-        self._icon_height = _pt_to_px(self._font_size * 2)
+        self._icon_width = _pt_to_px(self._font_size * 1.5)
+        self._icon_height = _pt_to_px(self._font_size * 1.5)
         self._icon_size = QSize(self._icon_width, self._icon_height)
 
         self._icon_width_small = int(self._icon_width * self._small_factor)

@@ -232,6 +232,7 @@ class SettingKeys(StrEnum):
     DYNAMIC_SCORE_COLUMN = "dynamicScoreColumn"
     COLUMN_INDEX_VISIBLE = "columnIndexVisible"
     COLUMN_FAVORITE_VISIBLE = "columnFavoriteVisible"
+    COLUMN_COVER_VISIBLE = "columnCoverVisible"
     COLUMN_SCORE_VISIBLE = "columnScoreVisible"
     COLUMN_TITLE_VISIBLE = "columnTitleVisible"
     COLUMN_ALBUM_VISIBLE = "columnAlbumVisible"
@@ -240,6 +241,7 @@ class SettingKeys(StrEnum):
     COLUMN_BPM_VISIBLE = "columnBPMVisible"
     COLUMN_SUMMARY_VISIBLE = "columnSummaryVisible"
     COLUMN_TAGS_VISIBLE = "columnTagsVisible"
+    SONGS_ROW_STYLE = "songsRowStyle"
 
     SONGS_TITLE_INSTEAD_OF_FILE_NAME = "songsTitleInsteadOfFilename"
 
