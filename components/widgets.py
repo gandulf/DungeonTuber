@@ -1182,9 +1182,9 @@ class VolumeSliderStyle(QProxyStyle):
 
 
 class VolumeSlider(QHBoxLayout):
-    icon_volume_off: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.AudioVolumeMuted)
-    icon_volume_down: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.AudioVolumeLow)
-    icon_volume_up: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.AudioVolumeHigh)
+    icon_volume_off: QIcon = QIcon.fromTheme("volume-xmark")
+    icon_volume_down: QIcon = QIcon.fromTheme("volume-low")
+    icon_volume_up: QIcon = QIcon.fromTheme("volume-high")
 
     # icon_volume_off = MaterialIcon('volume_off', size=materialIconSize)
     # icon_volume_down = MaterialIcon('volume_down', size=materialIconSize)
@@ -1192,8 +1192,8 @@ class VolumeSlider(QHBoxLayout):
     last_volume: int = None
     volume_changed = Signal(int)
 
-    def __init__(self, value: int = 70, shortcut: QKeySequence | QKeyCombination | QKeySequence.StandardKey | str | int = None):
-        super(VolumeSlider, self).__init__()
+    def __init__(self,parent, value: int = 70, shortcut: QKeySequence | QKeyCombination | QKeySequence.StandardKey | str | int = None):
+        super(VolumeSlider, self).__init__(parent)
 
         toggle_mute_action = QAction(_("Mute"), self)
         if shortcut is not None:

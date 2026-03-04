@@ -6,13 +6,14 @@ from PySide6.QtWidgets import QDialogButtonBox, QFormLayout, QLineEdit, QDialog,
     QWidget, QVBoxLayout, QMenu, QLabel, QTabWidget
 
 from components.widgets import FlowLayout, ToggleSlider, CategoryWidget, BPMSlider
+from components.songs import SongTable
 from config.settings import CAT_VALENCE, get_music_category, CAT_AROUSAL, Preset, add_preset, remove_preset, \
     reset_presets, SettingKeys, get_presets, AppSettings, MusicCategory, CATEGORY_MIN, CATEGORY_MAX, \
     FilterConfig, get_music_categories
 from config.theme import app_theme
 from config.utils import children_layout, clear_layout
 from logic.mp3 import Mp3Entry
-from songs import SongTable
+
 
 
 def _map_pt(plot_rect, val, aro):
@@ -569,12 +570,19 @@ class FilterWidget(QWidget):
                 slider.setVisible(False)
 
         self.russel_widget.setVisible(AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool))
+
+        cat_arousal = get_music_category(CAT_AROUSAL)
+        cat_valence = get_music_category(CAT_VALENCE)
         if AppSettings.value(SettingKeys.RUSSEL_WIDGET, True, type=bool):
-            self.sliders[get_music_category(CAT_AROUSAL)].setVisible(False)
-            self.sliders[get_music_category(CAT_VALENCE)].setVisible(False)
+            if cat_arousal in self.sliders:
+                self.sliders[cat_arousal].setVisible(False)
+            if cat_valence in self.sliders:
+                self.sliders[cat_valence].setVisible(False)
         else:
-            self.sliders[get_music_category(CAT_AROUSAL)].setVisible(AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool))
-            self.sliders[get_music_category(CAT_VALENCE)].setVisible(AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool))
+            if cat_arousal in self.sliders:
+                self.sliders[cat_arousal].setVisible(AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool))
+            if cat_valence in self.sliders:
+                self.sliders[cat_valence].setVisible(AppSettings.value(SettingKeys.CATEGORY_WIDGETS, True, type=bool))
 
         if AppSettings.value(SettingKeys.TAGS_WIDGET, True, type=bool):
             self.tags_genres_widget.setVisible(True)

@@ -37,7 +37,8 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, Q
 from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent
 from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase
 
-from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, set_presets
+from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, \
+    set_presets, get_music_categories
 from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, is_frozen
 
@@ -842,7 +843,7 @@ class MusicPlayer(QMainWindow):
 
     def get_available_categories(self) -> list[MusicCategory]:
         table = self.current_table()
-        return table.table_model.available_categories if table is not None else []
+        return table.table_model.available_categories if table is not None else get_music_categories()
 
     def close_tables(self):
         self.table_tabs.clear()
@@ -866,6 +867,10 @@ class MusicPlayer(QMainWindow):
         if open_tables:
             for index, open_table in enumerate(open_tables):
                 self.load(open_table, lazy=index != 0, activate=index == 0)
+
+        # in case we could not load anything reset player and filter
+        if self.current_table() is None:
+            self.on_table_tab_changed(-1)
 
     def load(self, path: PathLike[str], activate=True, lazy: bool = False):
         if Path(path).is_dir():

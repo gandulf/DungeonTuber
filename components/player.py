@@ -267,9 +267,10 @@ class PlayerWidget(QWidget):
 
         self.repeat_mode_changed = self.btn_repeat.value_changed
 
-        self.slider_vol = VolumeSlider(AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
+        self.slider_vol = VolumeSlider(self, AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
         self.slider_vol.btn_volume.setProperty("cssClass", "small")
         self.slider_vol.slider_vol.setMinimumWidth(200)
+        self.slider_vol.set_icon_size(app_theme.icon_size)
 
         self.slider_vol.volume_changed.connect(self.adjust_volume)
         self.volume_changed = self.slider_vol.volume_changed

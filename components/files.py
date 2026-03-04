@@ -9,11 +9,11 @@ from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeV
     QVBoxLayout, QToolButton, QAbstractItemView
 
 from components.dialogs import EditSongDialog
-from components.widgets import IconLabel
+from components.widgets import IconLabel, AutoSearchHelper
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
 from logic.mp3 import parse_mp3, Mp3Entry
-from widgets import AutoSearchHelper
+
 
 
 class FileFilterProxyModel(QSortFilterProxyModel):

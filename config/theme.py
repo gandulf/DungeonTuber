@@ -324,11 +324,11 @@ class AppTheme(QObject):
                     QToolButton[cssClass~="small"]  {{                        
                         width: {self._button_width_small}px;                        
                         height: {self._button_height_small}px;
-                        qproperty-iconSize: {self._icon_width_small}px;
+                        qproperty-iconSize: {self._icon_width}px;
                     }}
                     QPushButton[cssClass~="small"]  {{                                                                                                                        
                         height: {self._button_height_small}px;
-                        qproperty-iconSize: {self._icon_width_small}px;
+                        qproperty-iconSize: {self._icon_width}px;
                     }}                    
                     
                     QToolButton[cssClass~="mini"] {{                                                                        

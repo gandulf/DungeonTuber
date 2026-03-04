@@ -497,7 +497,7 @@ class EffectWidget(QWidget):
         self.btn_play.clicked.connect(self.toogle_play)
         self.btn_play.setShortcut("Ctrl+E")
 
-        self.volume_slider = VolumeSlider()
+        self.volume_slider = VolumeSlider(self)
         self.volume_slider.volume_changed.connect(self.on_volume_changed)
         self.volume_slider.btn_volume.setProperty("cssClass", "mini")
         self.volume_slider.slider_vol.setProperty("cssClass", "buttonSmall")
@@ -590,10 +590,11 @@ class EffectWidget(QWidget):
         if self.open_item is not None:
             self.layout.removeWidget(self.open_item)
             self.open_item.setParent(None)
-
-        with os.scandir(dir_path) as entries:
-            effects: list[EffectEntry] = [EffectEntry.from_file(entry) for entry in entries if entry.is_dir() or entry.name.lower().endswith(".mp3")]
-
+        try:
+            with os.scandir(dir_path) as entries:
+                effects: list[EffectEntry] = [EffectEntry.from_file(entry) for entry in entries if entry.is_dir() or entry.name.lower().endswith(".mp3")]
+        except OSError:
+            effects = []
         effects = [effect for effect in effects if effect is not None]
         self.list_widget.setModel(EffectTableModel(effects))
 
