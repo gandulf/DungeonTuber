@@ -9,9 +9,8 @@ from pathlib import Path
 from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMimeData, QByteArray, QDataStream, QIODevice, QPersistentModelIndex, \
     QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QPointF
 from PySide6.QtGui import QColor, QBrush, QIcon, QLinearGradient, QGradient, QAction, QKeyEvent, QDragMoveEvent, QDragEnterEvent, QPainter, QPalette, \
-    QFontMetrics, QFont, QDropEvent, QPolygonF, QPainterStateGuard
-from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView, \
-    QApplication
+    QFontMetrics, QDropEvent, QPolygonF, QPainterStateGuard
+from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView
 from sortedcontainers import SortedSet
 
 from components.widgets import AutoSearchHelper
@@ -212,15 +211,25 @@ class SongTableModel(QAbstractTableModel):
 
     def get_category_key(self, index: QModelIndex | int):
         if isinstance(index, int):
-            return self.available_categories[index - SongTableModel.CAT_COL].key
+            cat_index = index - SongTableModel.CAT_COL
         else:
-            return self.available_categories[index.column() - SongTableModel.CAT_COL].key
+            cat_index = index.column() - SongTableModel.CAT_COL
+
+        if 0 <= cat_index < len(self.available_categories):
+            return self.available_categories[cat_index].key
+        else:
+            return None
 
     def get_category_name(self, index: QModelIndex | int):
         if isinstance(index, int):
-            return self.available_categories[index - SongTableModel.CAT_COL].name
+            cat_index = index - SongTableModel.CAT_COL
         else:
-            return self.available_categories[index.column() - SongTableModel.CAT_COL].name
+            cat_index = index.column() - SongTableModel.CAT_COL
+
+        if 0 <= cat_index < len(self.available_categories):
+            return self.available_categories[cat_index].name
+        else:
+            return None
 
     def set_filter_config(self, _config: FilterConfig):
         self.beginResetModel()
@@ -306,6 +315,13 @@ class SongTableModel(QAbstractTableModel):
                 return has_changes
 
         return False
+
+    def clear(self):
+        self.beginResetModel()
+        self._data.clear()
+        self.endResetModel()
+
+        self._update_available_tags_and_categories(self._data)
 
     def addRows(self, data: list[Mp3Entry]):
         row_position = self.rowCount()
@@ -611,8 +627,8 @@ class SongTable(QTableView):
     item_double_clicked = Signal(QPersistentModelIndex, Mp3Entry)
     content_changed = Signal()
 
-    file_analyzed = Signal(QFileInfo)
-    files_opened = Signal(list[QFileInfo])
+    analyze_file = Signal(QFileInfo)
+    open_files = Signal(list[QFileInfo])
     open_context_menu = Signal(QMenu, list)
 
     playlist: PathLike[str] = None
@@ -660,7 +676,7 @@ class SongTable(QTableView):
         self.horizontalHeader().setHighlightSections(False)
         self.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_context_menu)
-        self.horizontalHeader().setFont(app_theme.font())
+        self.horizontalHeader().setFont(app_theme.font(small=True))
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
@@ -697,6 +713,7 @@ class SongTable(QTableView):
             return
 
         if isinstance(mp3_files[0], Path):
+            self.table_model.clear()
             self.source_files = mp3_files
             self.is_loaded = False
             if not lazy:
@@ -736,7 +753,7 @@ class SongTable(QTableView):
 
         name = self.table_model.headerData(index, Qt.Orientation.Horizontal, role=Qt.ItemDataRole.DisplayRole)
         # padding + space for sort icon + text width
-        return (app_theme.font_size *2 + 12 +
+        return (app_theme.font_size *2 + 8 +
                 + self.horizontalHeader().contentsMargins().left()
                 + self.horizontalHeader().contentsMargins().right() + font_metrics.horizontalAdvance(name))
 
@@ -871,6 +888,23 @@ class SongTable(QTableView):
             lambda checked: self._toggle_column_setting(SettingKeys.COLUMN_SCORE_VISIBLE, checked))
         menu.addAction(score_action)
 
+        columns_menu = QMenu(_("Categories"))
+        for category in self.table_model.available_categories:
+            column_action = QAction(category.name, self)
+            column_action.setCheckable(True)
+            column_action.setChecked(AppSettings.value(SettingKeys.TABLE_COLUMNS + category.key, True, type=bool))
+            column_action.triggered.connect(
+                lambda checked, _cat=category: self._toggle_column_setting(SettingKeys.TABLE_COLUMNS + _cat.key, checked))
+            columns_menu.addAction(column_action)
+        menu.addMenu(columns_menu)
+        # Dynamic Columns
+        dynamic_action = QAction(_("Dynamic Columns"), self)
+        dynamic_action.setCheckable(True)
+        dynamic_action.setChecked(AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
+        dynamic_action.triggered.connect(
+            lambda checked: self._toggle_column_setting(SettingKeys.DYNAMIC_TABLE_COLUMNS, checked))
+        menu.addAction(dynamic_action)
+
         menu.addSeparator()
 
         file_name_action = QAction(_("Use mp3 title instead of file name"), self)
@@ -905,15 +939,6 @@ class SongTable(QTableView):
                 lambda checked, s=style: self._toggle_column_setting(SettingKeys.SONGS_ROW_STYLE, s))
             row_style_menu.addAction(row_style_size_action)
 
-        menu.addSeparator()
-
-        # Dynamic Columns
-        dynamic_action = QAction(_("Dynamic Columns"), self)
-        dynamic_action.setCheckable(True)
-        dynamic_action.setChecked(AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool))
-        dynamic_action.triggered.connect(
-            lambda checked: self._toggle_column_setting(SettingKeys.DYNAMIC_TABLE_COLUMNS, checked))
-        menu.addAction(dynamic_action)
 
         menu.exec(self.horizontalHeader().mapToGlobal(point))
 
@@ -980,12 +1005,19 @@ class SongTable(QTableView):
         if self.playlist is not None:
             save_playlist(self.playlist, self.mp3_datas())
 
-    def is_column_visible(self, category: str):
+    def is_column_visible(self, category_key: str):
         if AppSettings.value(SettingKeys.DYNAMIC_TABLE_COLUMNS, False, type=bool):
-            value = self.table_model.filter_config.get_category(category, None)
+            if category_key == "bpm":
+                value = self.table_model.filter_config.bpm if self.table_model.filter_config.bpm else None
+            else:
+                value = self.table_model.filter_config.get_category(category_key, None)
+
             return value is not None
         else:
-            return True
+            if category_key == "bpm":
+                return AppSettings.value(SettingKeys.COLUMN_BPM_VISIBLE, False, type=bool)
+            else:
+                return AppSettings.value(SettingKeys.TABLE_COLUMNS + category_key, True, type=bool)
 
     def update_category_column_visibility(self):
         self.setColumnHidden(SongTableModel.INDEX_COL, self.playlist is None or not AppSettings.value(SettingKeys.COLUMN_INDEX_VISIBLE, True, type=bool))
@@ -1001,7 +1033,7 @@ class SongTable(QTableView):
         self.setColumnHidden(SongTableModel.ARTIST_COL, not AppSettings.value(SettingKeys.COLUMN_ARTIST_VISIBLE, False, type=bool))
         self.setColumnHidden(SongTableModel.ALBUM_COL, not AppSettings.value(SettingKeys.COLUMN_ALBUM_VISIBLE, False, type=bool))
         self.setColumnHidden(SongTableModel.GENRE_COL, not AppSettings.value(SettingKeys.COLUMN_GENRE_VISIBLE, False, type=bool))
-        self.setColumnHidden(SongTableModel.BPM_COL, not AppSettings.value(SettingKeys.COLUMN_BPM_VISIBLE, False, type=bool))
+        self.setColumnHidden(SongTableModel.BPM_COL, not self.is_column_visible('bpm'))
 
         if AppSettings.value(SettingKeys.DYNAMIC_SCORE_COLUMN, True, type=bool) and (
                 self.table_model.filter_config is None or self.table_model.filter_config.empty()):

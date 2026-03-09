@@ -1,17 +1,18 @@
 import logging
-import platform
 import random
 from os import PathLike
 
-from PySide6.QtCore import Signal, QSize, QTimer, QPersistentModelIndex, Qt, QEvent
-from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent, QFontMetrics, QIcon, QPalette, QAction
-from PySide6.QtWidgets import QWidget, QFrame, QLabel, QSlider, QToolButton, QSizePolicy, QVBoxLayout, QHBoxLayout
+from PySide6.QtCore import Signal, QSize, QTimer, QPersistentModelIndex, Qt, QEvent, QPoint
+from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent, QFontMetrics, QIcon, QPalette, QAction, QPen, QMouseEvent
+from PySide6.QtWidgets import QWidget, QFrame, QLabel, QSlider, QToolButton, QSizePolicy, QVBoxLayout, QHBoxLayout, QToolTip, QStyleOptionSlider, QStyle, QMenu
 
-from config.settings import AppSettings, SettingKeys
 from logic.audioengine import AudioEngine, EngineState
-from logic.mp3 import Mp3Entry
+from logic.mp3 import Mp3Entry, update_mp3_chapters
+from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
+from config.utils import  ms_to_promille, format_time
 from components.widgets import RepeatMode, RepeatButton, JumpSlider, VolumeSlider
+from components.dialogs import NameDialog
 
 logger = logging.getLogger(__file__)
 
@@ -20,8 +21,8 @@ _yellow = QColor("#ECE852")
 _orange = QColor("#FFC145")
 _red = QColor("#FB4141")
 
-class Visualizer:
 
+class Visualizer:
     video_frame = None
     visualizer = None
 
@@ -32,7 +33,7 @@ class Visualizer:
 
     state: EngineState = EngineState.STOP
 
-    def __init__(self, engine : AudioEngine=None):
+    def __init__(self, engine: AudioEngine = None):
         self.engine: AudioEngine = engine
         self.state = EngineState.STOP
 
@@ -43,9 +44,9 @@ class Visualizer:
         if vis == "VLC":
             _visualizer = VlcVisualizerFrame(engine)
         elif vis == "FAKE":
-            _visualizer= FakeVisualizerWidget(engine)
+            _visualizer = FakeVisualizerWidget(engine)
         else:
-            _visualizer= EmptyVisualizerWidget(engine)
+            _visualizer = EmptyVisualizerWidget(engine)
 
         if visualizer is not None:
             if visualizer.last_state is not None:
@@ -71,10 +72,11 @@ class Visualizer:
         logger.debug("File {0} loaded for visualizer", track_path)
         self.last_track = track_path
 
+
 class VlcVisualizerFrame(QFrame, Visualizer):
     resized = Signal(QSize)
 
-    def __init__(self, engine: AudioEngine=None):
+    def __init__(self, engine: AudioEngine = None):
         super().__init__(engine=engine)
         self.setAutoFillBackground(True)
         self.attach_video_frame()
@@ -93,15 +95,17 @@ class VlcVisualizerFrame(QFrame, Visualizer):
         # vlc. Different platforms have different functions for this
         self.engine.attach_window(int(self.winId()))
 
+
 class EmptyVisualizerWidget(QWidget, Visualizer):
     def __init__(self, engine=None):
-        super().__init__(engine = engine)
+        super().__init__(engine=engine)
         self.engine.attach_window(None)
+
 
 class FakeVisualizerWidget(QWidget, Visualizer):
 
     def __init__(self, engine: AudioEngine):
-        super().__init__(engine = engine)
+        super().__init__(engine=engine)
         self.setMinimumHeight(40)
         self.setContentsMargins(4, 4, 4, 4)
         self.sleeping = True
@@ -217,14 +221,15 @@ class PlayerWidget(QWidget):
         self.progress_layout.setObjectName("progress_layout")
         self.progress_layout.setSpacing(app_theme.spacing)
         self.time_label = QLabel("00:00")
-        self.progress_slider = JumpSlider(Qt.Orientation.Horizontal)
-        self.progress_slider.setRange(0, 1000)
+        self.progress_slider = PlayerSlider(self)
+        self.progress_slider.setRange(0, 0)
         self.progress_slider.setMinimumWidth(100)
         self.duration_label = QLabel("00:00")
-        self.progress_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
-        self.progress_slider.setTickInterval(50)
+
         self.progress_slider.sliderReleased.connect(self.seek_position)
         self.progress_slider.valueChanged.connect(self.jump_to_position)
+        self.progress_slider.add_chapter.connect(self.add_chapter)
+        self.progress_slider.remove_chapter.connect(self.remove_chapter)
 
         self.progress_layout.addWidget(self.time_label)
         self.progress_layout.addWidget(self.progress_slider)
@@ -237,7 +242,7 @@ class PlayerWidget(QWidget):
         controls_widget = QWidget()
         self.controls_layout = QHBoxLayout(controls_widget)
         self.controls_layout.setSpacing(0)
-        self.controls_layout.setContentsMargins(0,0,0,0)
+        self.controls_layout.setContentsMargins(0, 0, 0, 0)
 
         prev_action = QAction(self.icon_prev, _("Previous"), self)
         prev_action.setShortcut("Ctrl+B")
@@ -299,6 +304,14 @@ class PlayerWidget(QWidget):
 
         self.adjust_volume(self.slider_vol.volume)
 
+    def add_chapter(self, timestamp: int, title: str):
+        self.current_data.chapters.append({"time": timestamp, "title": title})
+        update_mp3_chapters(self.current_data.path, self.current_data.chapters)
+
+    def remove_chapter(self, index: int):
+        del self.current_data.chapters[index]
+        update_mp3_chapters(self.current_data.path, self.current_data.chapters)
+
     def refresh_visualizer(self):
         index = self.controls_layout.indexOf(self.visualizer)
         if index is None or index == -1:
@@ -355,8 +368,9 @@ class PlayerWidget(QWidget):
         else:
             self.progress_slider.setValue(pos)
 
-        self.engine.set_position(pos)
-        self.visualizer.set_position(pos)
+        pos_0_1000 = ms_to_promille(pos, self.current_data.length_in_ms)
+        self.engine.set_position(pos_0_1000)
+        self.visualizer.set_position(pos_0_1000)
 
     def jump_to_position(self):
         if self.progress_slider.isSliderDown():
@@ -367,19 +381,20 @@ class PlayerWidget(QWidget):
         self.btn_play.setEnabled(enabled)
         self.btn_next.setEnabled(enabled)
 
-    def update_progress(self, position, current_time, total_time):
+    def update_progress(self, current_time_ms:int, total_time_ms:int):
         if not self.progress_slider.isSliderDown():
-            self.progress_slider.setValue(position)
-        self.time_label.setText(current_time)
-        self.duration_label.setText(total_time)
+            self.progress_slider.setValue(current_time_ms)
+        self.time_label.setText(format_time(current_time_ms))
+        self.duration_label.setText(format_time(total_time_ms))
 
         if self._update_progress_ticks:
-            total_ms = self.engine.get_total_time()
-            if total_ms > 0:
-                single_step = max(1, round((1000.0 / total_ms) * 1000))
-                self.progress_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
-                self.progress_slider.setSingleStep(single_step)
-                self.progress_slider.setTickInterval(max(10, round(((1000.0 / total_ms) * 1000) * 10)))
+            if total_time_ms > 0:
+                self.progress_slider.set_chapters(self.current_data.chapters, total_time_ms)
+
+                #single_step = max(1, round((1000.0 / total_ms) * 1000))
+
+                #self.progress_slider.setSingleStep(1000)
+                #self.progress_slider.setTickInterval(max(10, round(((1000.0 / total_ms) * 1000) * 10)))
                 self._update_progress_ticks = False
 
     def on_playback_state_changed(self, engine_state: EngineState):
@@ -475,7 +490,128 @@ class PlayerWidget(QWidget):
                 self.elide_text(self.track_label, data.name)
 
                 self.engine.play(track_path)
+                self.progress_slider.setMaximum(data.length_in_ms)
 
             except Exception as e:
                 self.track_label.setText(_("Error loading file"))
                 logger.error("File error: {0}", e)
+
+
+class PlayerSlider(JumpSlider):
+    add_chapter = Signal(int, str)
+    remove_chapter = Signal(int)
+
+    def __init__(self, parent=None):
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self.setMouseTracking(True)  # Required for hover detection
+        self.chapters = []  # List of dicts: {"time": ms, "title": str}
+        self.setSingleStep(1000)
+        self.setTickPosition(QSlider.TickPosition.TicksAbove)
+        self.setTickInterval(10000)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
+
+    def show_context_menu(self, pos: QPoint):
+        if self.maximum()>0:
+            menu = QMenu(self)
+
+            # Add actions
+            add_action = QAction(_("Add chapter"), self)
+            add_action.setData(pos.x())
+            add_action.triggered.connect(self.fire_add_chapter)
+
+            remove_action = QAction(_("Remove chapter"), self)
+            remove_action.setData(pos.x())
+            remove_action.triggered.connect(self.fire_remove_chapter)
+            remove_action.setEnabled(self._find_chapter_for_position(pos.x()) is not None)
+
+            menu.addAction(add_action)
+            menu.addAction(remove_action)
+
+            menu.exec(self.mapToGlobal(pos))
+
+    def fire_add_chapter(self):
+        pos_x = self.sender().data()
+
+        timestamp = self._get_value_from_position(pos_x)
+        add_chapter_dialog = NameDialog()
+        add_chapter_dialog.setWindowTitle(_("Add Chapter"))
+
+        if add_chapter_dialog.exec():
+            title = add_chapter_dialog.get_name()
+            self.add_chapter.emit(timestamp, title)
+            self.chapters.append({'time': timestamp, 'title': title})
+
+    def fire_remove_chapter(self):
+        pos_x = self.sender().data()
+
+        chapter = self._find_chapter_for_position(pos_x)
+        if chapter:
+            index = self.chapters.index(chapter)
+            self.remove_chapter.emit(index)
+            del self.chapters[index]
+
+    def set_chapters(self, chapter_data: list[dict], total_duration: int):
+        """Pass a list of dicts: [{'time': 0, 'title': 'Intro'}, ...]"""
+        self.chapters = chapter_data.copy()
+        self.update()
+
+    def mousePressEvent(self, event: QMouseEvent):
+        self.mouse_pressed.emit(event)
+
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Jump to click position
+            self.setSliderDown(True)
+
+            found_chapter = self._find_chapter_for_position(event.pos().x())
+
+            if found_chapter:
+                self.setValue(found_chapter['time'])
+            else:
+                self.setValue(self._get_value_from_position(event.pos()))
+
+    def paintEvent(self, event: QPaintEvent):
+
+        if self.chapters and self.maximum() > 0:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            pen = QPen(self.palette().color(QPalette.ColorRole.Dark))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(self.palette().brush(QPalette.ColorRole.Base))
+
+            opt = QStyleOptionSlider()
+            self.initStyleOption(opt)
+            gr = self.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderGroove, self)
+
+            groove_width = 3  # thickness of groove line width
+            tick_width = 4  # width of chapter tick
+
+            for ch in self.chapters:
+                x = self._get_position_from_value(ch['time'])
+                painter.drawRoundedRect(x - tick_width // 2, gr.center().y() + groove_width, tick_width, gr.height() // 2 - groove_width, 2.0, 2.0)
+            painter.end()
+
+        super().paintEvent(event)
+
+    def _find_chapter_for_position(self, mouse_x: int):
+        threshold = 5  # Pixels of 'forgiveness' for the mouse cursor
+        found_chapter = None
+        for ch in self.chapters:
+            line_x = self._get_position_from_value(ch['time'])
+            if abs(mouse_x - line_x) < threshold:
+                found_chapter = ch
+                break
+
+        return found_chapter
+
+    def mouseMoveEvent(self, event):
+        # Logic to check if mouse is near a chapter line
+        found_chapter = self._find_chapter_for_position(event.pos().x())
+
+        if found_chapter:
+            QToolTip.showText(event.globalPosition().toPoint(), found_chapter['title'], self)
+        else:
+            QToolTip.hideText()
+
+        super().mouseMoveEvent(event)

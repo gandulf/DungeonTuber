@@ -1,10 +1,12 @@
 import json
 import os
 import random
+import re
 import traceback
 import logging
 import urllib.request
 import urllib.error
+from _winapi import CREATE_NO_WINDOW
 from abc import abstractmethod
 
 from queue import Queue
@@ -16,9 +18,41 @@ from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QFileInfo
 
 from logic.mp3 import Mp3Entry, parse_mp3, update_categories_and_tags, print_mp3_tags, list_mp3s
 
-from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_category_keys
+from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_category_keys, has_local_voxalyzer, has_voxalyzer
+from config.utils import get_path
 
 logger = logging.getLogger(__file__)
+
+voxalyzer_port: int|None = None
+
+def start_voxalyzer() -> str | None:
+    global voxalyzer_port
+    has_local_voxalyzer = os.path.isfile(get_path("voxalyzer.exe"))
+
+    if has_local_voxalyzer and voxalyzer_port is None:
+        import subprocess
+
+        process = subprocess.Popen([get_path("voxalyzer.exe"), "--port", "0"],
+                                   creationflags=CREATE_NO_WINDOW,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
+                                   text=True
+                                   )
+
+        # Read line by line as the app prints
+        for line in process.stdout:
+            # print(f"[App Log]: {line.strip()}")
+            match = re.search(r"http://0.0.0.0:(\d+) ", line)
+            if match:
+                voxalyzer_port = match.group(1)
+                break
+
+        logger.info(f"Voxalyzer is running on port {voxalyzer_port}")
+
+    if voxalyzer_port:
+        return f"http://localhost:{voxalyzer_port}"
+    else:
+        return None
 
 def is_analyzed(file_path: PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
@@ -66,12 +100,12 @@ class Analyzer(QObject):
 
     @classmethod
     def get_analyzer(cls):
-        baseUrl = AppSettings.value(SettingKeys.VOXALYZER_URL, None, type=str)
-
-        if baseUrl is None or baseUrl == "":
-            return MockAnalyzer()
-        else:
+        if has_local_voxalyzer() and AppSettings.value(SettingKeys.VOXALYZER_LOCAL,True, type=bool):
+            return LocalVoxalyzerAnalyzer()
+        elif has_voxalyzer():
             return VoxalyzerAnalyzer()
+        else:
+            return MockAnalyzer()
 
     def __init__(self):
         super().__init__()
@@ -161,19 +195,70 @@ class MockAnalyzer(Analyzer):
 
         return mock_response
 
+class LocalVoxalyzerAnalyzer(Analyzer):
+    def _lazy_startup(self) -> str | None:
+        self.url = AppSettings.value(SettingKeys.VOXALYZER_URL, type=str, defaultValue='None')
 
-class VoxalyzerAnalyzer(Analyzer):
+        if self.url == 'None':
+            self.url = start_voxalyzer()
+
+        if self.url is not None and self.url !='None' and self.url !='':
+            if self.url.endswith("/"):
+                self.url = f"{self.url}analyze"
+            else:
+                self.url = f"{self.url}/analyze"
+        else:
+            self.url = None
+
+        return self.url
 
     def analyze_mp3(self, file_path: PathLike[str]) -> Any:
-        baseUrl: str = AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str)
-        if not baseUrl or baseUrl == "":
+        url = self._lazy_startup()
+
+        if not url:
             logger.error("Voxalyzer URL not set.")
             return None
 
-        if baseUrl.endswith("/"):
-            url = f"{baseUrl}analyze"
+        logger.debug(f"Sending request to {url} for file {file_path}")
+
+
+        request_data = json.dumps({"file": os.path.abspath(file_path)})
+
+        req = urllib.request.Request(url, data=request_data.encode("utf-8"), method='POST')
+        req.add_header('Content-Type', 'application/json')
+
+        with urllib.request.urlopen(req) as response:
+            if response.status == 200:
+                response_body = response.read()
+                return json.loads(response_body)
+            else:
+                logger.error(f"Error: {response.status} - {response.reason}")
+                return None
+
+
+class VoxalyzerAnalyzer(Analyzer):
+
+    url:str=None
+
+    def _lazy_startup(self) -> str | None:
+        self.url = AppSettings.value(SettingKeys.VOXALYZER_URL, type=str, defaultValue='')
+
+        if self.url is not None and self.url !='':
+            if self.url.endswith("/"):
+                self.url = f"{self.url}analyze"
+            else:
+                self.url = f"{self.url}/analyze"
         else:
-            url = f"{baseUrl}/analyze"
+            self.url = None
+
+        return self.url
+
+    def analyze_mp3(self, file_path: PathLike[str]) -> Any:
+        url = self._lazy_startup()
+
+        if not url:
+            logger.error("Voxalyzer URL not set.")
+            return None
 
         logger.debug(f"Sending request to {url} for file {file_path}")
 

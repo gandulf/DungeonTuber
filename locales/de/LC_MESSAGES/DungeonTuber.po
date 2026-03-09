@@ -190,7 +190,7 @@ msgid "Song Table"
 msgstr "Song-Tabelle"
 
 msgid "Use mp3 title instead of file name"
-msgstr "MP3-Titel statt Dateinamen verwenden"
+msgstr "Titel statt Dateinamen verwenden"
 
 msgid "Dynamic Category Columns"
 msgstr "Dynamische Kategoriespalten"
@@ -637,3 +637,15 @@ msgstr "Normal"
 
 msgid "LARGE"
 msgstr "Breit"
+
+msgid "Columns"
+msgstr "Spalten"
+
+msgid "Separate multiple tags with comma"
+msgstr "Mehrere Tags mit Beistrich trennen"
+
+msgid "Add chapter"
+msgstr "Marker hinzufügen"
+
+msgid "Remove chapter"
+msgstr "Marker löschen "

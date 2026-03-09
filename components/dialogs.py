@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication, QDialogButtonBox, QLineEdit, QSpinBox, \
     QTextEdit, QCheckBox, QFormLayout, QMessageBox, QFileDialog, QPushButton
 
@@ -13,6 +13,27 @@ from logic.mp3 import Mp3Entry, update_mp3_data, update_mp3_cover
 from components.widgets import ColorButton
 
 logger = logging.getLogger(__file__)
+
+class NameDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle(_("Save as Preset"))
+        self.setWindowIcon(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
+        self.setModal(True)
+
+        layout = QFormLayout(self)
+        layout.setObjectName("save_name_layout")
+        self.name_edit = QLineEdit()
+        layout.addRow("Name", self.name_edit)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def get_name(self):
+        return self.name_edit.text()
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
@@ -82,6 +103,7 @@ class EditSongDialog(QDialog):
         layout.addRow(_("Artist") + ":", self.artist_edit)
 
         self.genre_edit = QLineEdit(", ".join(data.genres))
+        self.genre_edit.setToolTip(_("Separate multiple tags with comma"))
         layout.addRow(_("Genre") + ":", self.genre_edit)
 
         self.bpm_edit = QSpinBox()
@@ -92,6 +114,7 @@ class EditSongDialog(QDialog):
         layout.addRow(_("BPM") + ":", self.bpm_edit)
 
         self.tags_edit = QLineEdit(", ".join(data.tags))
+        self.tags_edit.setToolTip(_("Separate multiple tags with comma"))
         layout.addRow(_("Tags") + ":", self.tags_edit)
 
         self.summary_edit = QTextEdit()

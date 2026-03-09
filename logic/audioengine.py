@@ -5,26 +5,18 @@ from enum import Enum
 from os import PathLike
 
 from PySide6.QtCore import QTimer, Signal, QObject, QSize
-from vlc import MediaListPlayer, Media, Instance, PlaybackMode, State, MediaPlayer
+from vlc import MediaListPlayer, Instance, PlaybackMode, State, MediaPlayer
 
 from config.settings import AppSettings, SettingKeys
 
 DEFAULT_VOLUME = 70
-
-def format_time(ms: int):
-    """Converts milliseconds to MM:SS string."""
-    if ms < 0:
-        return "00:00"
-    seconds = ms // 1000
-    mins = seconds // 60
-    secs = seconds % 60
-    return f"{mins:02d}:{secs:02d}"
 
 
 class EngineState(Enum):
     PAUSE = 1
     PLAY = 2
     STOP = 3
+
 
 class AudioEngine(QObject):
     """
@@ -34,16 +26,16 @@ class AudioEngine(QObject):
     # Signals to update UI
     track_finished = Signal()
     state_changed = Signal(EngineState)  # True if playing, False if stopped/paused
-    position_changed = Signal(int, str, str)  # position (0-1000), current_time, total_time
+    position_changed = Signal(int, int)  # position (0-1000), current_time_ms, total_time_ms
 
-    instance:Instance = None
+    instance: Instance = None
     list_player: MediaListPlayer | None = None
     player: MediaPlayer | None = None
     player_fade: MediaPlayer | None = None
 
     cross_fade = True
 
-    def __init__(self, visualizer : bool = True):
+    def __init__(self, visualizer: bool = True):
         super().__init__()
 
         self.current_volume = DEFAULT_VOLUME
@@ -57,7 +49,7 @@ class AudioEngine(QObject):
         self._manual_stop = False
 
     def attach_window(self, window_id: int | None):
-        self.cross_fade= window_id is None
+        self.cross_fade = window_id is None
 
         if window_id is not None:
             if platform.system() == "Linux":  # for Linux using the X Server
@@ -67,10 +59,10 @@ class AudioEngine(QObject):
             elif platform.system() == "Darwin":  # for MacOS
                 self.player.set_nsobject(window_id)
 
-    def set_aspect_ratio(self, size:QSize):
+    def set_aspect_ratio(self, size: QSize):
         self.player.video_set_aspect_ratio(f"{size.width()}:{size.height()}")
 
-    def init_vlc(self, visualizer : bool = True):
+    def init_vlc(self, visualizer: bool = True):
         player_media = None
         player_fade_media = None
 
@@ -159,10 +151,10 @@ class AudioEngine(QObject):
         self.list_player.set_media_list(media_list)
         self.list_player.play()
 
-    def is_playing(self)->bool:
+    def is_playing(self) -> bool:
         return self.player.is_playing()
 
-    def pause_toggle(self)-> bool:
+    def pause_toggle(self) -> bool:
         if self.player.is_playing():
             self.pause()
             return False
@@ -177,19 +169,19 @@ class AudioEngine(QObject):
     def _crossfade_thread(self, player_out, player_in, duration_ms=1000, steps=50):
         """Thread function to handle volume crossfade."""
         step_duration = duration_ms / steps / 1000.0  # in seconds
-        
+
         # Get the initial volume of the outgoing player
         initial_volume_out = player_out.audio_get_volume()
 
         for i in range(steps + 1):
             progress = i / steps
-            
+
             # Fade out the old player
             player_out.audio_set_volume(int(initial_volume_out * (1 - progress)))
-            
+
             # Fade in the new player
             player_in.audio_set_volume(int(self.current_volume * progress))
-            
+
             time.sleep(step_duration)
 
         player_out.stop()
@@ -197,8 +189,10 @@ class AudioEngine(QObject):
         player_in.audio_set_volume(self.current_volume)
 
     def play(self, file_path: PathLike[str] = None):
+
         if file_path is not None:
             media = self.instance.media_new(file_path)
+
             if self.player.is_playing() and self.cross_fade:
                 # Swap players for crossfade
                 self.player, self.player_fade = self.player_fade, self.player
@@ -261,12 +255,6 @@ class AudioEngine(QObject):
             self._emit_position_changed()
 
     def _emit_position_changed(self):
-        pos = self.player.get_position()
         current_time_ms = self.player.get_time()
         total_time_ms = self.player.get_length()
-
-        self.position_changed.emit(
-            int(pos * 1000),
-            format_time(current_time_ms),
-            format_time(total_time_ms)
-        )
+        self.position_changed.emit(current_time_ms, total_time_ms)

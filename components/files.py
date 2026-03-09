@@ -61,7 +61,7 @@ class FileFilterProxyModel(QSortFilterProxyModel):
 
 class DirectoryTree(QTreeView):
     file_opened = Signal(QFileInfo)
-    file_analyzed = Signal(QFileInfo)
+    analyze_file = Signal(QFileInfo)
     open_context_menu = Signal(QMenu, list)
 
     def __init__(self, parent: QWidget | None):
@@ -232,7 +232,7 @@ class DirectoryTree(QTreeView):
         for index in self.selectedIndexes():
             source_index = self.proxy_model.mapToSource(index)
             file_info = self.directory_model.fileInfo(source_index)
-            self.file_analyzed.emit(file_info)
+            self.analyze_file.emit(file_info)
 
     def double_clicked_action(self, index: QModelIndex | QPersistentModelIndex):
         file_info = index.data(QFileSystemModel.Roles.FileInfoRole)

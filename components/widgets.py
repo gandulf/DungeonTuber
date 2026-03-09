@@ -5,7 +5,7 @@ from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation
 from PySide6.QtGui import QIcon, QBrush, QPainter, QMouseEvent, QColor, \
     QPaintEvent, QFontMetrics, QFont, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton, QAbstractScrollArea, QLayout, QSizePolicy, QSlider, QVBoxLayout, QStyle, \
-    QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog
+    QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QStyleOptionSlider
 
 from config.settings import MusicCategory
 from config.theme import app_theme
@@ -488,8 +488,8 @@ class JumpSlider(QSlider):
     mouse_pressed = Signal(QMouseEvent)
     mouse_released = Signal(QMouseEvent)
 
-    def __init__(self, parent=None):
-        super(JumpSlider, self).__init__(parent)
+    def __init__(self, orientation: Qt.Orientation = Qt.Orientation.Horizontal, parent=None):
+        super(JumpSlider, self).__init__(orientation, parent)
         # Animation
         self.setMouseTracking(True)
         self._glow_size = 0
@@ -536,15 +536,50 @@ class JumpSlider(QSlider):
         if event.button() == Qt.MouseButton.LeftButton:
             # Jump to click position
             self.setSliderDown(True)
-            if self.orientation() == Qt.Orientation.Vertical:
-                value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().y(), self.height(),
-                                                       not self.invertedAppearance())
-            else:
-                value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().x(), self.width(),
-                                                       self.invertedAppearance())
+            self.setValue(self._get_value_from_position(event.pos()))
 
-            value = self._roundStep(value, self.singleStep())
-            self.setValue(value)
+    def _get_value_from_position(self, position: QPoint | QPointF | int) -> int:
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
+        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
+
+        if self.orientation() == Qt.Orientation.Vertical:
+            pos_y = position.y() if isinstance(position, (QPoint, QPointF)) else position
+            slider_pos = pos_y - handle_rect.height() // 2
+
+            value = QStyle.sliderValueFromPosition(
+                self.minimum(), self.maximum(), slider_pos, groove_rect.height() - handle_rect.height(), not self.invertedAppearance()
+            )
+        else:  # Horizontal
+            pos_x = position.x() if isinstance(position, (QPoint, QPointF)) else position
+            slider_pos = pos_x - handle_rect.width() // 2
+
+            value = QStyle.sliderValueFromPosition(
+                self.minimum(), self.maximum(), slider_pos, groove_rect.width() - handle_rect.width(), self.invertedAppearance()
+            )
+
+        return value
+
+    def _get_position_from_value(self, ms: int) -> int:
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
+        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
+
+        if self.orientation() == Qt.Orientation.Vertical:
+            pos_in_groove = QStyle.sliderPositionFromValue(
+                self.minimum(), self.maximum(), ms, groove_rect.height() - handle_rect.height(), not self.invertedAppearance()
+            )
+            # The returned position is relative to the groove, so add the groove's top.
+            return groove_rect.top() + pos_in_groove + handle_rect.height() // 2
+        else:  # Horizontal
+            pos_in_groove = QStyle.sliderPositionFromValue(
+                self.minimum(), self.maximum(), ms, groove_rect.width() - handle_rect.width(), self.invertedAppearance()
+            )
+            # The returned position is relative to the groove, so add the groove's left.
+            # Add half handle width to get center.
+            return groove_rect.left() + pos_in_groove + handle_rect.width() // 2
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         self.mouse_released.emit(event)
@@ -561,23 +596,14 @@ class JumpSlider(QSlider):
         progress = (self.sliderPosition() - low) / (high - low) if high > low else 0
         progress_x = self.width() * progress
 
-        if abs(progress_x - event.position().x()) < 6:
+        if abs(progress_x - event.pos().x()) < 6:
             self.animate_glow(self.max_glow_size)
         else:
             self.animate_glow(0)
 
         if self.isSliderDown():
             # Jump to pointer position while moving
-
-            if self.orientation() == Qt.Orientation.Vertical:
-                value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().y(),
-                                                       self.height(), not self.invertedAppearance())
-            else:
-                value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().x(),
-                                                       self.width(), self.invertedAppearance())
-
-            self.setValue(self._roundStep(value, self.singleStep()))
-
+            self.setValue(self._get_value_from_position(event.pos()))
 
 class CategoryTooltip(QWidget):
     __parent: QWidget

@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap, QColor
 
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType
+from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType, CHAP, CTOC
 
 from config.settings import AppSettings, SettingKeys
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__file__)
 
 class Mp3Entry(object):
     __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover", "has_cover",
-                 "bpm", "_moods", "color"]
+                 "bpm", "_moods", "color","chapters"]
 
     index: int
     name: str
@@ -36,9 +36,12 @@ class Mp3Entry(object):
     has_cover: bool
     bpm: int
     color: QColor
+    duration:int
 
     categories: dict[str, int]
     _tags: list[str]
+
+    chapters: list[dict[str, str]]
 
     def __init__(self, name: str = None, path: PathLike[str] = None, categories: dict[str, int] = None, tags: list[str] = [], artist: str = None,
                  album: str = None, title: str = None, genre: list[str] | str = [], bpm: int = None):
@@ -76,6 +79,14 @@ class Mp3Entry(object):
         self.index = None
         self.color = None
 
+        self.chapters = []
+
+    @property
+    def length_in_ms(self):
+        if self.length:
+            return int(self.length * 1000)
+        else:
+            return None
     @property
     def tags(self):
         return self._tags
@@ -228,6 +239,7 @@ def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
 
         entry.length = int(audio.info.length)
 
+
         if audio.tags:
 
             if "TIT2" in audio.tags:
@@ -281,6 +293,18 @@ def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
             color = audio.tags.get("TXXX:ai_color")
             if color and color.text:
                 entry.color = QColor.fromString(color.text[0])
+
+            chapter_list = []
+            for key in audio.keys():
+                if key.startswith("CHAP"):
+                    frame = audio[key]
+                    # sub_frames contains TIT2 (Title)
+                    title = frame.sub_frames.get("TIT2", ["Unknown"])[0]
+                    chapter_list.append({
+                        "time": frame.start_time,
+                        "title": str(title)
+                    })
+            entry.chapters = chapter_list
 
         return entry
     except Exception as e:
@@ -479,6 +503,37 @@ def update_mp3_color(path: str | PathLike[str] | MP3, color: QColor, save: bool 
         logger.debug("Updated color to {0} for {1}", color, path)
 
 
+def update_mp3_chapters(path: str | PathLike[str] | MP3, chapters: list[dict], save: bool = True):
+    audio = _audio(path)
+
+    if chapters:
+
+        chapters.sort(key=lambda x: x["time"])
+
+        total_chapters = len(chapters)
+        for index, chapter in enumerate(chapters):
+            if index < total_chapters - 1:
+                end_time = chapters[index+1]["time"]
+            else:
+                end_time = int(audio.info.length * 1000)
+
+            audio.tags.add(CHAP(
+                element_id=f"ch{index}",
+                start_time=chapter["time"],
+                end_time=end_time,
+                sub_frames=[TIT2(text=[chapter["title"]])]
+            ))
+
+        # 3. Create the Table of Contents (Required for navigation)
+        audio.tags.add(CTOC(
+            element_id="toc",
+            flags=0x03,  # Top-level & ordered
+            child_element_ids=[f"ch{i}" for i in range(len(chapters))]
+        ))
+
+    if save:
+        audio.save()
+        logger.debug("Updated chapters to {0} for {1}", chapters, path)
 def list_mp3s(path: PathLike[str], recursive: bool = True):
     if isinstance(path, os.DirEntry):
         path = path.path

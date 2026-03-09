@@ -24,6 +24,7 @@ import os
 import sys
 import traceback
 
+
 from config import log
 
 log.setup_logging()
@@ -51,12 +52,12 @@ from components.songs import SongTable
 from components.files import DirectoryWidget
 
 from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, get_m3u_paths, save_playlist
-from logic.analyzer import Analyzer
+from logic.analyzer import Analyzer, has_voxalyzer
 
 logger = logging.getLogger(__file__)
 
-class MusicPlayer(QMainWindow):
 
+class MusicPlayer(QMainWindow):
     toggle_directory_tree_action: QAction
     toggle_effects_tree_action: QAction
 
@@ -65,6 +66,8 @@ class MusicPlayer(QMainWindow):
 
     table_tabs: QTabWidget = None
     old_table: SongTable | None = None
+
+    analyzer: Analyzer = None
 
     def __init__(self, application: QApplication):
         super().__init__()
@@ -83,7 +86,7 @@ class MusicPlayer(QMainWindow):
 
         self.load_settings()
 
-        self.analyzer = Analyzer.get_analyzer()
+        self.init_analyzer()
 
         self.init_ui()
         self.load_initial_directory()
@@ -92,6 +95,17 @@ class MusicPlayer(QMainWindow):
 
         if AppSettings.value(SettingKeys.START_TOUR, True, type=bool):
             QTimer.singleShot(500, lambda: self.start_tour())
+
+    def init_analyzer(self):
+        if self.analyzer is not None:
+            self.analyzer.progress.diconnect(self.update_status_label)
+            self.analyzer.error.diconnect(self.update_status_label)
+            self.analyzer.result.disconnect(self.update_table_entry)
+
+        self.analyzer = Analyzer.get_analyzer()
+        self.analyzer.progress.connect(self.update_status_label)
+        self.analyzer.error.connect(self.update_status_label)
+        self.analyzer.result.connect(self.update_table_entry)
 
     def load_settings(self):
         # Load custom categories and tags
@@ -168,7 +182,7 @@ class MusicPlayer(QMainWindow):
 
         self.analyze_file_action = QAction(_("Analyze File"), self, icon=QIcon.fromTheme(QIcon.ThemeIcon.Scanner))
         self.analyze_file_action.triggered.connect(self.pick_analyze_file)
-        self.analyze_file_action.setVisible(AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str) != "")
+        self.analyze_file_action.setVisible(has_voxalyzer())
         file_menu.addAction(self.analyze_file_action)
 
         file_menu.addSeparator()
@@ -445,7 +459,8 @@ class MusicPlayer(QMainWindow):
             if self.current_table() is not None:
                 self.current_table().update_category_column_visibility()
 
-            self.analyze_file_action.setVisible(AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str) != "")
+            self.init_analyzer()
+            self.analyze_file_action.setVisible(has_voxalyzer())
 
     def on_layout_splitter_moved(self, pos_x: int, index: int):
         if index == 1:
@@ -497,7 +512,7 @@ class MusicPlayer(QMainWindow):
             edit_name_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.EditPaste), _("Edit Song"))
             edit_name_action.triggered.connect(functools.partial(self.edit_song, datas))
 
-            if AppSettings.value(SettingKeys.VOXALYZER_URL, "", type=str) != "":
+            if has_voxalyzer():
                 analyze_action = menu.addAction(QIcon.fromTheme(QIcon.ThemeIcon.Scanner), _("Analyze"))
                 analyze_action.triggered.connect(functools.partial(self.analyze_files, datas))
 
@@ -527,7 +542,7 @@ class MusicPlayer(QMainWindow):
 
         self.directory_widget = DirectoryWidget()
         self.directory_widget.directory_tree.file_opened.connect(self.tree_open_file)
-        self.directory_widget.directory_tree.file_analyzed.connect(self.analyzer.process)
+        self.directory_widget.directory_tree.analyze_file.connect(self.analyzer.process)
         self.directory_widget.directory_tree.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         self.directory_widget.directory_tree.open_context_menu.connect(self.populate_playlist_context_menu)
         self.central_splitter.addWidget(self.directory_widget)
@@ -542,7 +557,7 @@ class MusicPlayer(QMainWindow):
         self.central_splitter.addWidget(main_widget)
         self.central_splitter.setCollapsible(1, False)
 
-        view_mode = QListView.ViewMode[AppSettings.value(SettingKeys.EFFECTS_LIST_VIEW_MODE,"IconMode", type=str)]
+        view_mode = QListView.ViewMode[AppSettings.value(SettingKeys.EFFECTS_LIST_VIEW_MODE, "IconMode", type=str)]
         self.effects_widget = EffectWidget(list_mode=view_mode)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_playlist_context_menu)
@@ -583,10 +598,6 @@ class MusicPlayer(QMainWindow):
         self.statusBar().addPermanentWidget(self.status_progress)
 
         self.statusBar().setVisible(False)
-
-        self.analyzer.progress.connect(self.update_status_label)
-        self.analyzer.error.connect(self.update_status_label)
-        self.analyzer.result.connect(self.update_table_entry)
 
         self.init_main_menu()
 
@@ -651,8 +662,8 @@ class MusicPlayer(QMainWindow):
         table.content_changed.connect(self.on_table_content_changed)
         table.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         table.open_context_menu.connect(self.populate_playlist_context_menu)
-        table.files_opened.connect(self.files_opened)
-        table.file_analyzed.connect(self.analyzer.process)
+        table.open_files.connect(self.open_files)
+        table.analyze_file.connect(self.analyzer.process)
 
     def detach_song_table(self, table: SongTable):
         try:
@@ -660,8 +671,8 @@ class MusicPlayer(QMainWindow):
             table.content_changed.disconnect(self.on_table_content_changed)
             table.open_context_menu.disconnect(self.populate_mp3_entry_context_menu)
             table.open_context_menu.disconnect(self.populate_playlist_context_menu)
-            table.files_opened.disconnect(self.files_opened)
-            table.file_analyzed.disconnect(self.analyzer.process)
+            table.open_files.disconnect(self.open_files)
+            table.analyze_file.disconnect(self.analyzer.process)
         except Exception:
             # in case of duplicate calls this throws an error if nothing is attached
             pass
@@ -763,7 +774,7 @@ class MusicPlayer(QMainWindow):
         if directory:
             self.load_directory(directory)
 
-    def files_opened(self, file_infos: list[QFileInfo]):
+    def open_files(self, file_infos: list[QFileInfo]):
         for file_info in file_infos:
             if file_info.isDir():
                 self.load_directory(file_info.filePath())
@@ -848,7 +859,7 @@ class MusicPlayer(QMainWindow):
     def close_tables(self):
         self.table_tabs.clear()
 
-    def reload_table(self, index: int | None):
+    def reload_table(self, checked:bool = False, index: int = None):
         if index is None:
             index = self.sender().data()
 
@@ -906,6 +917,7 @@ class MusicPlayer(QMainWindow):
             table.selectRow(index.row())
             self.player.play_track(index, index.data(Qt.ItemDataRole.UserRole))
 
+
 def hide_splash(window: QMainWindow):
     if '_PYI_SPLASH_IPC' in os.environ and importlib.util.find_spec("pyi_splash"):
         import pyi_splash
@@ -921,15 +933,12 @@ def hide_splash(window: QMainWindow):
     else:
         window.show()
 
+
 def main():
     if "DEBUG" in os.environ:
         logger.setLevel(logging.DEBUG)
 
     app = QApplication(sys.argv)
-
-
-
-
 
     language = AppSettings.value(SettingKeys.LOCALE, type=str)
     if language is None or language == "":
@@ -947,7 +956,7 @@ def main():
 
     app_theme.application = app
 
-    #font_id = QFontDatabase.addApplicationFont(get_path("assets/InterVariable.ttf"))
+    # font_id = QFontDatabase.addApplicationFont(get_path("assets/InterVariable.ttf"))
     # if font_id >= 0:
     #     app_theme.font_families = QFontDatabase.applicationFontFamilies(font_id)
     # else:
@@ -960,6 +969,7 @@ def main():
     hide_splash(window)
 
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     try:

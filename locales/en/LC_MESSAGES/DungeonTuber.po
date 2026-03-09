@@ -187,7 +187,7 @@ msgid "Song Table"
 msgstr "Song Table"
 
 msgid "Use mp3 title instead of file name"
-msgstr "Use mp3 title instead of file name"
+msgstr "Use title instead of file name"
 
 msgid "Dynamic Category Columns"
 msgstr "Dynamic Category Columns"
@@ -605,7 +605,7 @@ msgstr "Feeling a bit overwhelmed? Tailor the app to your screen size or DMing s
 "to create a clean, distraction-free interface."
 
 msgid "<New Playlist>"
-msgstr "<Neue Playlist>"
+msgstr "<New Playlist>"
 
 msgid "Add to playlist"
 msgstr "Add to playlist"
@@ -633,3 +633,15 @@ msgstr "Default"
 
 msgid "LARGE"
 msgstr "Large"
+
+msgid "Columns"
+msgstr "Columns"
+
+msgid "Separate multiple tags with comma"
+msgstr "Separate multiple tags with comma"
+
+msgid "Add chapter"
+msgstr "Add Marker"
+
+msgid "Remove chapter"
+msgstr "Remove Marker"

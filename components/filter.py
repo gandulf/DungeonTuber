@@ -7,11 +7,14 @@ from PySide6.QtWidgets import QDialogButtonBox, QFormLayout, QLineEdit, QDialog,
 
 from components.widgets import FlowLayout, ToggleSlider, CategoryWidget, BPMSlider
 from components.songs import SongTable
+from components.dialogs import NameDialog
+
 from config.settings import CAT_VALENCE, get_music_category, CAT_AROUSAL, Preset, add_preset, remove_preset, \
     reset_presets, SettingKeys, get_presets, AppSettings, MusicCategory, CATEGORY_MIN, CATEGORY_MAX, \
     FilterConfig, get_music_categories
 from config.theme import app_theme
 from config.utils import children_layout, clear_layout
+
 from logic.mp3 import Mp3Entry
 
 
@@ -727,23 +730,11 @@ class FilterWidget(QWidget):
         self.values_changed.emit(self.filter_config)
 
     def save_preset_action(self):
-        save_preset_dialog = QDialog()
+        save_preset_dialog = NameDialog()
         save_preset_dialog.setWindowTitle(_("Save as Preset"))
-        save_preset_dialog.setWindowIcon(QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
-        save_preset_dialog.setModal(True)
-
-        layout = QFormLayout(save_preset_dialog)
-        layout.setObjectName("save_preset_layout")
-        name_edit = QLineEdit()
-        layout.addRow("Name", name_edit)
-
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        button_box.accepted.connect(save_preset_dialog.accept)
-        button_box.rejected.connect(save_preset_dialog.reject)
-        layout.addWidget(button_box)
 
         if save_preset_dialog.exec():
-            preset = Preset(name_edit.text(), self.filter_config.categories, self.filter_config.tags, self.filter_config.genres, self.filter_config.bpm)
+            preset = Preset(save_preset_dialog.get_name(), self.filter_config.categories, self.filter_config.tags, self.filter_config.genres, self.filter_config.bpm)
             add_preset(preset)
             self.update_presets()
 

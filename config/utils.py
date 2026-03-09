@@ -174,3 +174,52 @@ def restart_application():
 def is_frozen() -> bool:
     # Returns True if running as a PyInstaller bundle
     return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
+
+def ms_to_promille(current_ms: int, total_ms: int) -> int:
+    """
+    Converts a timestamp and total duration into a promille value (0-1000).
+    """
+    # Prevent division by zero
+    if total_ms <= 0:
+        return 0
+
+    # Calculate the ratio
+    ratio = current_ms / total_ms
+
+    # Calculate promille and clamp it between 0 and 1000
+    promille = int(ratio * 1000)
+
+    return max(0, min(1000, promille))
+
+def promille_to_ms(promille: int, total_ms: int) -> int:
+    return int(total_ms / 1000.0  * promille)
+
+def timestamp_to_ms(timestamp: str) -> int:
+    """
+    Converts 'mm:ss' or 'hh:mm:ss' string to total milliseconds.
+    Example: '01:30' -> 90000
+    """
+    try:
+        # Split by colon and reverse so [0] is always seconds, [1] is minutes, etc.
+        parts = list(map(int, timestamp.split(':')))[::-1]
+
+        seconds = parts[0]
+        minutes = parts[1] if len(parts) > 1 else 0
+        hours = parts[2] if len(parts) > 2 else 0
+
+        total_seconds = seconds + (minutes * 60) + (hours * 3600)
+        return total_seconds * 1000
+
+    except (ValueError, IndexError):
+        # Return 0 or handle malformed strings (like "abc:def")
+        return 0
+
+def format_time(ms: int):
+    """Converts milliseconds to MM:SS string."""
+    if ms < 0:
+        return "00:00"
+    seconds = round(ms / 1000)
+    mins = seconds // 60
+    secs = seconds % 60
+    return f"{mins:02d}:{secs:02d}"

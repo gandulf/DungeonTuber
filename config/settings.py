@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from dataclasses import dataclass, asdict
 from enum import StrEnum
 from functools import total_ordering
@@ -9,7 +10,7 @@ from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLa
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
     QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox, QLabel
 
-from config.utils import get_available_locales, restart_application
+from config.utils import get_available_locales, restart_application, get_path
 
 logger = logging.getLogger(__file__)
 
@@ -29,6 +30,11 @@ CAT_PARTY = "Party"
 CAT_RELAXED = "Relaxed"
 CAT_SAD = "Sad"
 
+def has_voxalyzer():
+    return has_local_voxalyzer() or AppSettings.value(SettingKeys.VOXALYZER_URL, type=str, defaultValue='') != ''
+
+def has_local_voxalyzer():
+    return os.path.isfile(get_path("voxalyzer.exe")) and AppSettings.value(SettingKeys.VOXALYZER_LOCAL, True, type=bool)
 
 @total_ordering
 @dataclass
@@ -229,6 +235,7 @@ class SettingKeys(StrEnum):
     START_TOUR = "startTour"
     OPEN_TABLES = "openTables"
 
+    TABLE_COLUMNS ="tableColumns"
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
     DYNAMIC_SCORE_COLUMN = "dynamicScoreColumn"
     COLUMN_INDEX_VISIBLE = "columnIndexVisible"
@@ -252,6 +259,7 @@ class SettingKeys(StrEnum):
     PRESETS = "presets"
 
     VOXALYZER_URL ="voxalyzerUrl"
+    VOXALYZER_LOCAL = "voxalyzerLocal"
 
 
 class SettingsDialog(QDialog):
@@ -307,6 +315,14 @@ class SettingsDialog(QDialog):
         self.voxalyzerUrl.setText(AppSettings.value(SettingKeys.VOXALYZER_URL, type=str))
         self.analyzer_layout.addRow(_("Voxalyzer BaseUrl") , self.voxalyzerUrl)
 
+        self.local_voxalyzer = QCheckBox(_("Use Local Voxalyzer"))
+        self.local_voxalyzer.setEnabled(has_local_voxalyzer())
+        self.local_voxalyzer.setChecked(has_local_voxalyzer() and AppSettings.value(SettingKeys.VOXALYZER_LOCAL,True, type=bool))
+        self.local_voxalyzer.clicked.connect(self._local_voxalyzer_changed)
+        self.analyzer_layout.addRow("", self.local_voxalyzer)
+
+        self.voxalyzerUrl.setEnabled(not self.local_voxalyzer.isEnabled() or not self.local_voxalyzer.isChecked())
+
         #
         player_group = QGroupBox(_("Player"))
         self.player_layout = QFormLayout(player_group)
@@ -352,6 +368,9 @@ class SettingsDialog(QDialog):
         table_layout.addRow("", self.summary_column)
 
         layout.addStretch()
+
+    def _local_voxalyzer_changed(self, checked:bool=False):
+        self.voxalyzerUrl.setEnabled(not checked)
 
     def init_categories_tab(self):
 
