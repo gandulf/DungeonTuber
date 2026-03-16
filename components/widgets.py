@@ -3,7 +3,7 @@ from enum import StrEnum
 from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, \
     QPoint, QObject, QSortFilterProxyModel, QTimer, QKeyCombination, QMimeData, QByteArray
 from PySide6.QtGui import QIcon, QBrush, QPainter, QMouseEvent, QColor, \
-    QPaintEvent, QFontMetrics, QFont, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap
+    QPaintEvent, QFontMetrics, QFont, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap, QPainterStateGuard
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton, QAbstractScrollArea, QLayout, QSizePolicy, QSlider, QVBoxLayout, QStyle, \
     QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QStyleOptionSlider
 
@@ -536,50 +536,15 @@ class JumpSlider(QSlider):
         if event.button() == Qt.MouseButton.LeftButton:
             # Jump to click position
             self.setSliderDown(True)
-            self.setValue(self._get_value_from_position(event.pos()))
+            if self.orientation() == Qt.Orientation.Vertical:
+                value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().y(), self.height(),
+                                                       not self.invertedAppearance())
+            else:
+                value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().x(), self.width(),
+                                                       self.invertedAppearance())
 
-    def _get_value_from_position(self, position: QPoint | QPointF | int) -> int:
-        opt = QStyleOptionSlider()
-        self.initStyleOption(opt)
-        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
-        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
-
-        if self.orientation() == Qt.Orientation.Vertical:
-            pos_y = position.y() if isinstance(position, (QPoint, QPointF)) else position
-            slider_pos = pos_y - handle_rect.height() // 2
-
-            value = QStyle.sliderValueFromPosition(
-                self.minimum(), self.maximum(), slider_pos, groove_rect.height() - handle_rect.height(), not self.invertedAppearance()
-            )
-        else:  # Horizontal
-            pos_x = position.x() if isinstance(position, (QPoint, QPointF)) else position
-            slider_pos = pos_x - handle_rect.width() // 2
-
-            value = QStyle.sliderValueFromPosition(
-                self.minimum(), self.maximum(), slider_pos, groove_rect.width() - handle_rect.width(), self.invertedAppearance()
-            )
-
-        return value
-
-    def _get_position_from_value(self, ms: int) -> int:
-        opt = QStyleOptionSlider()
-        self.initStyleOption(opt)
-        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
-        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
-
-        if self.orientation() == Qt.Orientation.Vertical:
-            pos_in_groove = QStyle.sliderPositionFromValue(
-                self.minimum(), self.maximum(), ms, groove_rect.height() - handle_rect.height(), not self.invertedAppearance()
-            )
-            # The returned position is relative to the groove, so add the groove's top.
-            return groove_rect.top() + pos_in_groove + handle_rect.height() // 2
-        else:  # Horizontal
-            pos_in_groove = QStyle.sliderPositionFromValue(
-                self.minimum(), self.maximum(), ms, groove_rect.width() - handle_rect.width(), self.invertedAppearance()
-            )
-            # The returned position is relative to the groove, so add the groove's left.
-            # Add half handle width to get center.
-            return groove_rect.left() + pos_in_groove + handle_rect.width() // 2
+            value = self._roundStep(value, self.singleStep())
+            self.setValue(value)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         self.mouse_released.emit(event)
@@ -603,7 +568,15 @@ class JumpSlider(QSlider):
 
         if self.isSliderDown():
             # Jump to pointer position while moving
-            self.setValue(self._get_value_from_position(event.pos()))
+
+            if self.orientation() == Qt.Orientation.Vertical:
+                value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().y(),
+                                                       self.height(), not self.invertedAppearance())
+            else:
+                value = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.position().x(),
+                                                       self.width(), self.invertedAppearance())
+
+            self.setValue(self._roundStep(value, self.singleStep()))
 
 class CategoryTooltip(QWidget):
     __parent: QWidget
@@ -1112,96 +1085,97 @@ class ToggleSlider(QCheckBox):
 
 
 class VolumeSliderStyle(QProxyStyle):
+
+    # 1. Define WHERE the sub-parts live within the main rect
+    def subControlRect(self, cc, option, sc, widget):
+        return super().subControlRect(cc, option, sc, widget)
     def drawComplexControl(self, control, option, painter: QPainter, widget: JumpSlider = None):
         if control == QStyle.ComplexControl.CC_Slider:
 
-            painter.save()
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            with QPainterStateGuard(painter):
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-            rect = option.rect
-            glow_size = widget.property("glow_size") if widget else 0
+                rect = option.rect
+                glow_size = widget.property("glow_size") if widget else 0
 
-            # Adjust for margins
-            margin = 2
-            w = rect.width() - (margin * 2)
-            h = rect.height() - (margin * 2)
+                # Adjust for margins
+                margin = 2
+                w = rect.width() - (margin * 2)
+                h = rect.height() - (margin * 2)
 
-            # 1. Define the Triangle Geometry
-            p1 = QPoint(rect.left() + margin, rect.bottom() - margin)
-            p2 = QPoint(rect.right() - margin, rect.top() + margin)
-            p3 = QPoint(rect.right() - margin, rect.bottom() - margin)
-            triangle = QPolygon([p1, p2, p3])
+                # 1. Define the Triangle Geometry
+                p1 = QPoint(rect.left() + margin, rect.bottom() - margin)
+                p2 = QPoint(rect.right() - margin, rect.top() + margin)
+                p3 = QPoint(rect.right() - margin, rect.bottom() - margin)
+                triangle = QPolygon([p1, p2, p3])
 
-            # 2. Draw Background (Hollow/Empty part)
-            base = QColor(option.palette.base().color())
-            base.setAlpha(50)
+                # 2. Draw Background (Hollow/Empty part)
+                base = QColor(option.palette.base().color())
+                base.setAlpha(50)
 
-            border = QColor(option.palette.text().color())
-            border.setAlpha(50)
+                border = QColor(option.palette.text().color())
+                border.setAlpha(50)
 
-            painter.save()
+            with QPainterStateGuard(painter):
+                painter.setPen(QPen(border))
+                painter.setBrush(QBrush(base))
+                painter.drawPolygon(triangle)
 
-            painter.setPen(QPen(border))
-            painter.setBrush(QBrush(base))
-            painter.drawPolygon(triangle)
 
-            painter.restore()
+            with QPainterStateGuard(painter):
+                # 3. Calculate Fill based on Slider Position
+                # QStyleOptionSlider gives us the current position accurately
+                low = option.minimum
+                high = option.maximum
+                progress = (option.sliderPosition - low) / (high - low) if high > low else 0
 
-            # 3. Calculate Fill based on Slider Position
-            # QStyleOptionSlider gives us the current position accurately
-            low = option.minimum
-            high = option.maximum
-            progress = (option.sliderPosition - low) / (high - low) if high > low else 0
+                fill_width = int(w * progress)
+                fill_height = int(h * progress)
+                painter.drawText(0, 20, f"{round(progress * widget.maximum(), 0)}%")
 
-            fill_width = int(w * progress)
-            fill_height = int(h * progress)
+                # 4. Draw the Filled Part (Clipped)
 
-            painter.drawText(0, 20, f"{round(progress * widget.maximum(), 0)}%")
+                clip_rect = QRect(rect.left(), rect.top(), fill_width + margin, rect.height())
+                painter.setClipRect(clip_rect)
 
-            # 4. Draw the Filled Part (Clipped)
-            painter.save()
-            clip_rect = QRect(rect.left(), rect.top(), fill_width + margin, rect.height())
-            painter.setClipRect(clip_rect)
+                # Use a gradient for a professional "Volume" look
+                gradient = QLinearGradient(0, 0, w, 0)
+                gradient.setColorAt(0.0, app_theme.get_green())  # Green
+                gradient.setColorAt(0.5, app_theme.get_green())  # Green
+                gradient.setColorAt(0.7, app_theme.get_yellow())  # Orange
+                gradient.setColorAt(0.8, app_theme.get_orange())  # Orange
+                gradient.setColorAt(1.0, app_theme.get_red())  # Red
 
-            # Use a gradient for a professional "Volume" look
-            gradient = QLinearGradient(0, 0, w, 0)
-            gradient.setColorAt(0.0, app_theme.get_green())  # Green
-            gradient.setColorAt(0.5, app_theme.get_green())  # Green
-            gradient.setColorAt(0.7, app_theme.get_yellow())  # Orange
-            gradient.setColorAt(0.8, app_theme.get_orange())  # Orange
-            gradient.setColorAt(1.0, app_theme.get_red())  # Red
+                painter.setBrush(gradient)  # gradient fill
+                painter.drawPolygon(triangle)
 
-            painter.setBrush(gradient)  # gradient fill
-            painter.drawPolygon(triangle)
-            painter.restore()
+            with QPainterStateGuard(painter):
 
-            # 5. Draw the Handle (The vertical line or knob)
-            know_width = 14
+                # 5. Draw the Handle (The vertical line or knob)
+                know_width = 14
 
-            handle_x = max(0, rect.left() + margin + fill_width - (know_width / 2))
-            if handle_x + know_width > rect.width():
-                handle_x = rect.width() - know_width
+                handle_x = max(0, rect.left() + margin + fill_width - (know_width / 2))
+                if handle_x + know_width > rect.width():
+                    handle_x = rect.width() - know_width
 
-            handle_y = max(0, rect.top() + (h - fill_height) - 2)
+                handle_y = max(0, rect.top() + (h - fill_height) - 2)
 
-            handle_rect = QRect(handle_x, handle_y, know_width, fill_height + 4)
+                handle_rect = QRect(handle_x, handle_y, know_width, fill_height + 4)
 
-            painter.setBrush(option.palette.base())
-            painter.drawRoundedRect(handle_rect, 4.0, 4.0)
+                painter.setBrush(option.palette.base())
+                painter.drawRoundedRect(handle_rect, 4.0, 4.0)
 
-            bump = 5 - glow_size
+                bump = 5 - glow_size
 
-            handle_rect.adjust(bump, bump, -bump, -bump)
-            if handle_rect.width() < 0:
-                handle_rect.setWidth(0)
-            if handle_rect.height() < 0:
-                handle_rect.setHeight(0)
+                handle_rect.adjust(bump, bump, -bump, -bump)
+                if handle_rect.width() < 0:
+                    handle_rect.setWidth(0)
+                if handle_rect.height() < 0:
+                    handle_rect.setHeight(0)
 
-            painter.setBrush(option.palette.accent())
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(handle_rect, 4.0, 4.0)
-
-            painter.restore()
+                painter.setBrush(option.palette.accent())
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawRoundedRect(handle_rect, 4.0, 4.0)
 
         else:
             super().drawComplexControl(control, option, painter, widget)

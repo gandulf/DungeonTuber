@@ -2,7 +2,7 @@ import logging
 import random
 from os import PathLike
 
-from PySide6.QtCore import Signal, QSize, QTimer, QPersistentModelIndex, Qt, QEvent, QPoint
+from PySide6.QtCore import Signal, QSize, QTimer, QPersistentModelIndex, Qt, QEvent, QPoint, QPointF
 from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent, QFontMetrics, QIcon, QPalette, QAction, QPen, QMouseEvent
 from PySide6.QtWidgets import QWidget, QFrame, QLabel, QSlider, QToolButton, QSizePolicy, QVBoxLayout, QHBoxLayout, QToolTip, QStyleOptionSlider, QStyle, QMenu
 
@@ -615,3 +615,46 @@ class PlayerSlider(JumpSlider):
             QToolTip.hideText()
 
         super().mouseMoveEvent(event)
+
+    def _get_value_from_position(self, position: QPoint | QPointF | int) -> int:
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
+        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
+
+        if self.orientation() == Qt.Orientation.Vertical:
+            pos_y = position.y() if isinstance(position, (QPoint, QPointF)) else position
+            slider_pos = pos_y - handle_rect.height() // 2
+
+            value = QStyle.sliderValueFromPosition(
+                self.minimum(), self.maximum(), slider_pos, groove_rect.height() - handle_rect.height(), not self.invertedAppearance()
+            )
+        else:  # Horizontal
+            pos_x = position.x() if isinstance(position, (QPoint, QPointF)) else position
+            slider_pos = pos_x - handle_rect.width() // 2
+
+            value = QStyle.sliderValueFromPosition(
+                self.minimum(), self.maximum(), slider_pos, groove_rect.width() - handle_rect.width(), self.invertedAppearance()
+            )
+
+        return value
+
+    def _get_position_from_value(self, ms: int) -> int:
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
+        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
+
+        if self.orientation() == Qt.Orientation.Vertical:
+            pos_in_groove = QStyle.sliderPositionFromValue(
+                self.minimum(), self.maximum(), ms, groove_rect.height() - handle_rect.height(), not self.invertedAppearance()
+            )
+            # The returned position is relative to the groove, so add the groove's top.
+            return groove_rect.top() + pos_in_groove + handle_rect.height() // 2
+        else:  # Horizontal
+            pos_in_groove = QStyle.sliderPositionFromValue(
+                self.minimum(), self.maximum(), ms, groove_rect.width() - handle_rect.width(), self.invertedAppearance()
+            )
+            # The returned position is relative to the groove, so add the groove's left.
+            # Add half handle width to get center.
+            return groove_rect.left() + pos_in_groove + handle_rect.width() // 2
