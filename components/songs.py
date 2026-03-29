@@ -787,7 +787,7 @@ class SongTable(QTableView):
             self.setColumnWidth(index, self._calc_header_width(index))
 
         self.horizontalHeader().setSectionResizeMode(SongTableModel.FAV_COL, QHeaderView.ResizeMode.Fixed)
-        self.horizontalHeader().setSectionResizeMode(SongTableModel.FILE_COL, QHeaderView.ResizeMode.Stretch)
+        #self.horizontalHeader().setSectionResizeMode(SongTableModel.FILE_COL, QHeaderView.ResizeMode.Interactive)
         # self.horizontalHeader().setStretchLastSection(True)
 
     def start_lazy_loading(self):

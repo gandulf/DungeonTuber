@@ -191,8 +191,8 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, QColor(127, 127, 127), )
 
-            palette.setBrush(QPalette.ColorRole.Mid, QBrush(QGradient.Preset.PremiumDark))
-            palette.setBrush(QPalette.ColorRole.Midlight, QBrush(QGradient.Preset.EternalConstance))
+            palette.setBrush(QPalette.ColorRole.Mid, QBrush(QColor(53, 53, 53)))
+            palette.setBrush(QPalette.ColorRole.Midlight, QBrush(QColor(53, 53, 53)))
 
             self.dark_palette = palette
 
@@ -223,8 +223,8 @@ class AppTheme(QObject):
             # darkPalette.setColor(QPalette.HighlightedText, Qt.white)
             # darkPalette.setColor(QPalette.Disabled, QPalette.HighlightedText, QColor(127, 127, 127), )
 
-            palette.setBrush(QPalette.ColorRole.Mid, QBrush(QGradient.Preset.SaintPetersburg))
-            palette.setBrush(QPalette.ColorRole.Midlight, QBrush(QGradient.Preset.HeavyRain))
+            palette.setBrush(QPalette.ColorRole.Mid, QBrush(QColor(250, 250, 250)))
+            palette.setBrush(QPalette.ColorRole.Midlight, QBrush(QColor(250, 250, 250)))
             # palette.setBrush(QPalette.ColorRole.Button, QBrush(QGradient.Preset.EverlastingSky))
 
             self.light_palette = palette

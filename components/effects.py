@@ -182,8 +182,10 @@ class EffectList(QListView):
         self.calculate_grid_size()
 
     def calculate_grid_size(self):
+
         if self.viewMode() == QListView.ViewMode.IconMode:
-            new_width = _get_grid_width(self.viewport().width() - self.verticalScrollBar().width())
+            scrollbar_width = self.style().pixelMetric(QStyle.PM_ScrollBarExtent) +1
+            new_width = _get_grid_width(self.viewport().width() - scrollbar_width)
             new_height = int(new_width * (3 / 4))
             self.setGridSize(QSize(new_width, new_height))
             self.setIconSize(QSize())

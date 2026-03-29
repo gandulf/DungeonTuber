@@ -98,8 +98,8 @@ class MusicPlayer(QMainWindow):
 
     def init_analyzer(self):
         if self.analyzer is not None:
-            self.analyzer.progress.diconnect(self.update_status_label)
-            self.analyzer.error.diconnect(self.update_status_label)
+            self.analyzer.progress.disconnect(self.update_status_label)
+            self.analyzer.error.disconnect(self.update_status_label)
             self.analyzer.result.disconnect(self.update_table_entry)
 
         self.analyzer = Analyzer.get_analyzer()
