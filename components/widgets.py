@@ -1091,9 +1091,8 @@ class VolumeSliderStyle(QProxyStyle):
         return super().subControlRect(cc, option, sc, widget)
     def drawComplexControl(self, control, option, painter: QPainter, widget: JumpSlider = None):
         if control == QStyle.ComplexControl.CC_Slider:
-
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             with QPainterStateGuard(painter):
-                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
                 rect = option.rect
                 glow_size = widget.property("glow_size") if widget else 0

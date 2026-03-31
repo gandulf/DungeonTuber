@@ -578,6 +578,7 @@ class MusicPlayer(QMainWindow):
         # Table Widget for Playlist
 
         self.table_tabs = QTabWidget()
+
         self.table_tabs.tabBar().setMovable(True)
         self.table_tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table_tabs.tabBar().customContextMenuRequested.connect(self.show_tabs_context_menu)
@@ -586,6 +587,8 @@ class MusicPlayer(QMainWindow):
         self.table_tabs.currentChanged.connect(self.on_table_tab_changed)
         self.table_tabs.tabCloseRequested.connect(self.on_table_tab_close)
         self.table_tabs.tabBar().tabMoved.connect(self.on_table_tab_moved)
+
+        main_layout.addSpacing(app_theme.spacing)
 
         main_layout.addWidget(self.table_tabs, 2)
 

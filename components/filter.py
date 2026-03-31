@@ -294,9 +294,9 @@ class FilterWidget(QWidget):
         # --------------------------------------
 
         self.tags_genres_widget = QWidget()
-        self.tags_genres_widget.setBackgroundRole(QPalette.ColorRole.Mid)
+        self.tags_genres_widget.setBackgroundRole(QPalette.ColorRole.Midlight)
         self.tags_genres_widget.setAutoFillBackground(True)
-        self.tags_genres_widget.setContentsMargins(4, 4, 4, 4)
+        self.tags_genres_widget.setContentsMargins(app_theme.spacing, app_theme.spacing, app_theme.spacing, app_theme.spacing)
         self.filter_layout.addWidget(self.tags_genres_widget)
 
         tags_genres_layout = QVBoxLayout(self.tags_genres_widget)

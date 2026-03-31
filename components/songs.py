@@ -434,6 +434,9 @@ class SongTableModel(QAbstractTableModel):
 
         elif role == Qt.ItemDataRole.UserRole:
             return self._data[index.row()]
+        elif role == Qt.ItemDataRole.SizeHintRole:
+            if index.column() == SongTableModel.FILE_COL:
+                return QSize(400,0)
         return None
 
     def rowCount(self, /, parent: QModelIndex | QPersistentModelIndex = ...) -> int:
@@ -1296,7 +1299,7 @@ class LabelItemDelegate(QStyledItemDelegate):
                 tag_padding_y = 3
 
                 # check if enough space for tag is left
-                if tag_left < bounding_rect.width() + tag_padding_x * 2:
+                if content_rect.left() > tag_left - bounding_rect.width() - tag_padding_x * 2:
                     break
 
                 tags_rect = QRect(tag_left - bounding_rect.width() - tag_padding_x, tag_top + tag_padding_y, bounding_rect.width(),
@@ -1324,7 +1327,7 @@ class LabelItemDelegate(QStyledItemDelegate):
         # draw rest
 
         color = option.palette.color(
-            QPalette.ColorRole.BrightText) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(
+            QPalette.ColorRole.Text) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(
             QPalette.ColorRole.WindowText)
 
         pen.setColor(color)
