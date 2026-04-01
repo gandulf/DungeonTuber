@@ -192,8 +192,6 @@ class PlayerWidget(QWidget):
     current_index = QPersistentModelIndex()
     current_data: Mp3Entry = None
 
-    _update_progress_ticks: bool = True
-
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -368,7 +366,10 @@ class PlayerWidget(QWidget):
         else:
             self.progress_slider.setValue(pos)
 
-        pos_0_1000 = ms_to_promille(pos, self.current_data.length_in_ms)
+        if self.current_data:
+            pos_0_1000 = ms_to_promille(pos, self.current_data.length_in_ms)
+        else:
+            pos_0_1000 = 0
         self.engine.set_position(pos_0_1000)
         self.visualizer.set_position(pos_0_1000)
 
@@ -386,16 +387,6 @@ class PlayerWidget(QWidget):
             self.progress_slider.setValue(current_time_ms)
         self.time_label.setText(format_time(current_time_ms))
         self.duration_label.setText(format_time(total_time_ms))
-
-        if self._update_progress_ticks:
-            if total_time_ms > 0:
-                self.progress_slider.set_chapters(self.current_data.chapters, total_time_ms)
-
-                #single_step = max(1, round((1000.0 / total_ms) * 1000))
-
-                #self.progress_slider.setSingleStep(1000)
-                #self.progress_slider.setTickInterval(max(10, round(((1000.0 / total_ms) * 1000) * 10)))
-                self._update_progress_ticks = False
 
     def on_playback_state_changed(self, engine_state: EngineState):
         self.visualizer.set_state(engine_state, self.slider_vol.volume)
@@ -468,7 +459,7 @@ class PlayerWidget(QWidget):
         self.time_label.setText("00:00")
         self.duration_label.setText("00:00")
         self.progress_slider.setValue(0)
-        self._update_progress_ticks = True
+        self.progress_slider.set_chapters(None)
 
     def elide_text(self, label: QLabel, text: str):
         metrics = QFontMetrics(label.font())
@@ -491,6 +482,7 @@ class PlayerWidget(QWidget):
 
                 self.engine.play(track_path)
                 self.progress_slider.setMaximum(data.length_in_ms)
+                self.progress_slider.set_chapters(data.chapters)
 
             except Exception as e:
                 self.track_label.setText(_("Error loading file"))
@@ -551,9 +543,12 @@ class PlayerSlider(JumpSlider):
             self.remove_chapter.emit(index)
             del self.chapters[index]
 
-    def set_chapters(self, chapter_data: list[dict], total_duration: int):
+    def set_chapters(self, chapter_data: list[dict] |None):
         """Pass a list of dicts: [{'time': 0, 'title': 'Intro'}, ...]"""
-        self.chapters = chapter_data.copy()
+        if chapter_data:
+            self.chapters = chapter_data.copy()
+        else:
+            self.chapters =[]
         self.update()
 
     def mousePressEvent(self, event: QMouseEvent):

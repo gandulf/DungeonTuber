@@ -1095,7 +1095,7 @@ class VolumeSliderStyle(QProxyStyle):
             with QPainterStateGuard(painter):
 
                 rect = option.rect
-                glow_size = widget.property("glow_size") if widget else 0
+
 
                 # Adjust for margins
                 margin = 2
@@ -1115,11 +1115,9 @@ class VolumeSliderStyle(QProxyStyle):
                 border = QColor(option.palette.text().color())
                 border.setAlpha(50)
 
-            with QPainterStateGuard(painter):
                 painter.setPen(QPen(border))
                 painter.setBrush(QBrush(base))
                 painter.drawPolygon(triangle)
-
 
             with QPainterStateGuard(painter):
                 # 3. Calculate Fill based on Slider Position
@@ -1150,23 +1148,35 @@ class VolumeSliderStyle(QProxyStyle):
 
             with QPainterStateGuard(painter):
 
-                # 5. Draw the Handle (The vertical line or knob)
-                know_width = 14
+                glow_size = widget.property("glow_size") if widget else 0
+                max_glow_size = widget.max_glow_size if widget else 0
 
-                handle_x = max(0, rect.left() + margin + fill_width - (know_width / 2))
-                if handle_x + know_width > rect.width():
-                    handle_x = rect.width() - know_width
+                # 5. Draw the Handle (The vertical line or knob)
+                knob_width = 14
+
+                handle_x = max(0, rect.left() + margin + fill_width - (knob_width / 2))
+                if handle_x + knob_width > rect.width():
+                    handle_x = rect.width() - knob_width
 
                 handle_y = max(0, rect.top() + (h - fill_height) - 2)
 
-                handle_rect = QRect(handle_x, handle_y, know_width, fill_height + 4)
+                handle_rect = QRect(handle_x, handle_y, knob_width, fill_height + 4)
 
-                painter.setBrush(option.palette.base())
+                painter.setBrush(option.palette.text())
                 painter.drawRoundedRect(handle_rect, 4.0, 4.0)
 
-                bump = 5 - glow_size
+                bump = max_glow_size - glow_size
 
-                handle_rect.adjust(bump, bump, -bump, -bump)
+                handle_rect.adjust(2, 2, -2, -2)
+
+                grow_size = handle_rect.height() - 10
+
+                if grow_size > 0:
+                    adjust_y = (grow_size *  (1/5 * bump)) // 2
+                else:
+                    adjust_y = 0
+
+                handle_rect.adjust(0, adjust_y, -0, -adjust_y)
                 if handle_rect.width() < 0:
                     handle_rect.setWidth(0)
                 if handle_rect.height() < 0:
@@ -1174,7 +1184,7 @@ class VolumeSliderStyle(QProxyStyle):
 
                 painter.setBrush(option.palette.accent())
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawRoundedRect(handle_rect, 4.0, 4.0)
+                painter.drawRoundedRect(handle_rect, 5.0, 5.0)
 
         else:
             super().drawComplexControl(control, option, painter, widget)
@@ -1210,7 +1220,7 @@ class VolumeSlider(QHBoxLayout):
         self.slider_vol.setValue(value)
         self.slider_vol.setMinimumWidth(100)
         self.slider_vol.setProperty("cssClass", "button")
-        self.slider_vol.max_glow_size = 2
+        self.slider_vol.max_glow_size = 5
         self.slider_vol.valueChanged.connect(self._on_value_changed)
         self.slider_vol.setStyle(VolumeSliderStyle())
         self.slider_vol.setSingleStep(5)
