@@ -5,13 +5,13 @@ from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation
 from PySide6.QtGui import QIcon, QBrush, QPainter, QMouseEvent, QColor, \
     QPaintEvent, QFontMetrics, QFont, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap, QPainterStateGuard
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton, QAbstractScrollArea, QLayout, QSizePolicy, QSlider, QVBoxLayout, QStyle, \
-    QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QStyleOptionSlider
+    QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QStyleOptionSlider, QFrame
 
 from config.settings import MusicCategory
 from config.theme import app_theme
 
 
-class IconLabel(QWidget):
+class IconLabel(QFrame):
     icon_size = QSize(16, 16)
     horizontal_spacing = 2
 
@@ -24,6 +24,7 @@ class IconLabel(QWidget):
     def __init__(self, icon: QIcon, text: str, final_stretch: bool = True, parent: QWidget = None):
         super(IconLabel, self).__init__(parent)
 
+        self.setAutoFillBackground(True)
         self.layout = QHBoxLayout(self)
         self.layout.setObjectName("IconLabel_layout")
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -65,12 +66,6 @@ class IconLabel(QWidget):
                 self.layout.insertStretch(0)
         elif isinstance(self.layout.itemAt(0), QSpacerItem):
             spacer = self.layout.takeAt(0)
-
-    def set_style_sheet(self, stylesheet: str):
-        self.text_label.setStyleSheet(stylesheet)
-
-    def set_text(self, text: str):
-        self.text_label.setText(text)
 
     def set_icon(self, icon: QIcon):
         if icon is not None:
@@ -1162,7 +1157,7 @@ class VolumeSliderStyle(QProxyStyle):
 
                 handle_rect = QRect(handle_x, handle_y, knob_width, fill_height + 4)
 
-                painter.setBrush(option.palette.text())
+                painter.setBrush(QBrush(Qt.GlobalColor.white))
                 painter.drawRoundedRect(handle_rect, 4.0, 4.0)
 
                 bump = max_glow_size - glow_size

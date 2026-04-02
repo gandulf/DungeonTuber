@@ -167,8 +167,9 @@ def set_presets(presets: list[Preset]):
         _PRESETS = presets
         AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
 
-def get_music_category(key: str) -> MusicCategory:
-    cats = [cat for cat in get_music_categories() if cat.key == key]
+def get_music_category(key: str, additional_categories: list[MusicCategory] = [] ) -> MusicCategory:
+    cats = [cat for cat in get_music_categories() + additional_categories if cat.key == key]
+
     return cats[0] if cats and len(cats) > 0 else None
 
 

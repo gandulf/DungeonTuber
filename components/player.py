@@ -180,7 +180,7 @@ class FakeVisualizerWidget(QWidget, Visualizer):
             painter.fillRect(int(x), int(y), int(bar_width - 2), int(bar_h), gradient)
 
 
-class PlayerWidget(QWidget):
+class PlayerWidget(QFrame):
     icon_prev: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipBackward)
     icon_next: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.MediaSkipForward)
     icon_open: QIcon = QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen)
@@ -295,8 +295,6 @@ class PlayerWidget(QWidget):
         self.controls_layout.addLayout(self.slider_vol)
         self.controls_layout.addSpacing(app_theme.spacing)
         self.controls_layout.addWidget(self.btn_repeat)
-        self.setBackgroundRole(QPalette.ColorRole.Midlight)
-        self.setAutoFillBackground(True)
 
         self.player_layout.addWidget(controls_widget, 1)
 

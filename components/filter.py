@@ -294,9 +294,7 @@ class FilterWidget(QWidget):
         # --------------------------------------
 
         self.tags_genres_widget = QWidget()
-        self.tags_genres_widget.setBackgroundRole(QPalette.ColorRole.Midlight)
-        self.tags_genres_widget.setAutoFillBackground(True)
-        self.tags_genres_widget.setContentsMargins(app_theme.spacing, app_theme.spacing, app_theme.spacing, app_theme.spacing)
+        self.tags_genres_widget.setContentsMargins(app_theme.margin)
         self.filter_layout.addWidget(self.tags_genres_widget)
 
         tags_genres_layout = QVBoxLayout(self.tags_genres_widget)
@@ -600,6 +598,7 @@ class FilterWidget(QWidget):
     def update_sliders(self, available_categories: list[MusicCategory]):
         self.russel_widget.setParent(None)
         self.bpm_widget.setParent(None)
+        self.categories = available_categories
 
         self.slider_tabs.clear()
         self.sliders = {}
@@ -692,7 +691,7 @@ class FilterWidget(QWidget):
 
         self.filter_config.categories.clear()
         for cat, scale in preset.categories.items():
-            category = get_music_category(cat)
+            category = get_music_category(cat, self.categories)
             self.filter_config.categories[cat] = scale
             if category in self.sliders:
                 self.sliders[category].set_value(scale, False)

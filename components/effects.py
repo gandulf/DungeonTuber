@@ -5,7 +5,7 @@ from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QEvent, QSortFilt
 from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QPalette, QPen, QKeyEvent, \
     QPaintEvent, QLinearGradient, QBrush, QGradient, QPainterStateGuard, QPixmap, QResizeEvent
 from PySide6.QtWidgets import QMenu, QListView, QStyleOptionViewItem, QStyle, QWidget, \
-    QStyledItemDelegate, QFileDialog, QToolButton, QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView
+    QStyledItemDelegate, QFileDialog, QToolButton, QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView, QFrame, QGraphicsDropShadowEffect
 
 from components.widgets import IconLabel, AutoSearchHelper, VolumeSlider
 from config.settings import AppSettings, SettingKeys
@@ -470,16 +470,21 @@ class EffectListItemDelegate(QStyledItemDelegate):
             return QSize(0, app_theme.font_size_px * 2)
 
 
-class EffectWidget(QWidget):
+class EffectWidget(QFrame):
     open_item: QPushButton = None
 
     def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__()
 
+        self.setGraphicsEffect(app_theme.drop_shadow(self))
+        self.setAutoFillBackground(True)
+        self.setContentsMargins(app_theme.margin)
+
+
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
 
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setContentsMargins(app_theme.padding, 0, 0, 0)
 
         self.engine = AudioEngine(False)
 

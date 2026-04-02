@@ -34,9 +34,9 @@ from pathlib import Path
 from os import PathLike
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, QMenu, QStatusBar, QProgressBar, QSplitter, \
-    QListView
-from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent
-from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase
+    QListView, QGraphicsDropShadowEffect
+from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent, QPointF
+from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase, QColor
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, \
     set_presets, get_music_categories
@@ -547,11 +547,21 @@ class MusicPlayer(QMainWindow):
         self.directory_widget.directory_tree.open_context_menu.connect(self.populate_playlist_context_menu)
         self.central_splitter.addWidget(self.directory_widget)
         self.central_splitter.setCollapsible(0, True)
+        self.central_splitter.setAutoFillBackground(True)
+        self.central_splitter.setHandleWidth(0)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(100)
+        shadow.setXOffset(0)
+        shadow.setYOffset(0)
+        shadow.setColor(QColor(0, 0, 0, 160))
+
+        self.central_splitter.setGraphicsEffect(shadow)
 
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
         main_layout.setObjectName("main_layout")
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setContentsMargins(app_theme.margin)
         main_layout.setSpacing(0)
 
         self.central_splitter.addWidget(main_widget)

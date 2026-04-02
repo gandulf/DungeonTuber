@@ -1,8 +1,8 @@
 import string
 
-from PySide6.QtCore import QObject, Property, Qt, QSize
+from PySide6.QtCore import QObject, Property, Qt, QSize, QMargins
 from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon, QFont, QFontDatabase
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect
 
 from config.settings import AppSettings, SettingKeys
 from config.utils import get_path
@@ -87,6 +87,18 @@ class AppTheme(QObject):
     @Property(int)
     def spacing(self) -> int:
         return self._spacing
+
+    def drop_shadow(self,parent):
+        shadow = QGraphicsDropShadowEffect(parent)
+        shadow.setBlurRadius(100)
+        shadow.setXOffset(0)
+        shadow.setYOffset(0)
+        shadow.setColor(QColor(0, 0, 0, 160))
+        return shadow
+
+    @Property(QMargins)
+    def margin(self) -> QMargins:
+        return QMargins(self._padding, self._padding, self._padding, self._padding)
 
     @Property(int)
     def padding(self) -> int:
@@ -191,7 +203,7 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, QColor(127, 127, 127))
 
-            palette.setColor(QPalette.ColorRole.Mid, QColor(53, 53, 53))
+            palette.setColor(QPalette.ColorRole.Mid, QColor(63, 63, 63))
             palette.setColor(QPalette.ColorRole.Midlight, QColor(43, 43, 43))
 
             self.dark_palette = palette
@@ -307,8 +319,13 @@ class AppTheme(QObject):
         _button_color = palette.color(QPalette.ColorRole.Button).name(QColor.HexArgb)
         _button_hover_color =palette.color(QPalette.ColorRole.Button).lighter(120).name(QColor.HexArgb)
 
-        style = f"""
-                                    
+        style = f"""                                                  
+                    .IconLabel {{
+                        border:none;
+                        border-bottom:3px solid {_border_color};
+                        padding-bottom:3px;
+                    }}
+                               
                     QMenu {{
                         font-family: '{font_family}';                        
                     }}
@@ -321,7 +338,7 @@ class AppTheme(QObject):
                     }}
                     
                     QTableView {{
-                        border:none
+                        border:none                        
                     }}
                     
                     QHeaderView {{                        
@@ -401,8 +418,7 @@ class AppTheme(QObject):
                     QPushButton[cssClass~="mini"] {{                                                                                                                        
                         height: {int(self._button_height_small * 0.7)}px;
                         qproperty-iconSize: {int(self._icon_width_small)}px;
-                    }}
-                    
+                    }}                
                     
                     QComboBox {{
                         background-color: {_base_color};
@@ -429,11 +445,11 @@ class AppTheme(QObject):
         }}
         
         QMenu::item {{
-            padding:5px;                     
+            padding:8px;                     
         }}
         
         QMenu::icon {{
-            padding:5px;         
+            padding:8px;         
         }}
         
         QMenu::item:selected {{           

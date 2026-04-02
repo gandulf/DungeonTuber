@@ -4,9 +4,9 @@ from pathlib import Path
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
     Signal, QObject, QPoint, QItemSelection
 from PySide6.QtGui import QIcon, QAction, QKeyEvent, \
-    QPaintEvent
+    QPaintEvent, QColor, QPalette
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QWidget, \
-    QVBoxLayout, QToolButton, QAbstractItemView
+    QVBoxLayout, QToolButton, QAbstractItemView, QFrame, QGraphicsDropShadowEffect
 
 from components.dialogs import EditSongDialog
 from components.widgets import IconLabel, AutoSearchHelper
@@ -286,21 +286,27 @@ class DirectoryTree(QTreeView):
             AppSettings.setValue(SettingKeys.EXPANDED_DIRS, expanded_dirs)
 
 
-class DirectoryWidget(QWidget):
+class DirectoryWidget(QFrame):
 
     def __init__(self, parent=None):
         super(DirectoryWidget, self).__init__(parent)
 
-        self.directory_tree = DirectoryTree(self)
+        self.setGraphicsEffect(app_theme.drop_shadow(self))
+        self.setAutoFillBackground(True)
+        self.setContentsMargins(app_theme.margin)
 
         self.directory_layout = QVBoxLayout(self)
-        self.directory_layout.setContentsMargins(0, 0, 0, 0)
+        self.directory_layout.setContentsMargins(0, 0, app_theme.padding, 0)
         self.directory_layout.setSpacing(0)
 
         self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent=self)
         self.headerLabel.set_icon_size(app_theme.icon_size)
         self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         self.headerLabel.text_label.setProperty("cssClass", "header")
+
+        self.directory_tree = DirectoryTree(self)
+        self.directory_tree.setContentsMargins(0,0,0,0)
+
 
         up_view_button = QToolButton()
         up_view_button.setProperty("cssClass", "mini")
