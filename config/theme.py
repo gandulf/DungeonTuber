@@ -1,4 +1,6 @@
 import string
+from enum import Enum
+from tkinter import font
 
 from PySide6.QtCore import QObject, Property, Qt, QSize, QMargins
 from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon, QFont, QFontDatabase
@@ -22,6 +24,12 @@ def _pt_to_px(pt):
 
 
 QIcon.setThemeSearchPaths([get_path("assets/icons")] + QIcon.themeSearchPaths())
+
+
+class FontSize(Enum):
+    SMALL = 0
+    MEDIUM = 1
+    LARGE = 2
 
 
 class AppTheme(QObject):
@@ -52,6 +60,7 @@ class AppTheme(QObject):
     def _calculate_sizes(self, base_font_size: float):
         self._font_size = base_font_size
         self._font_size_small = self._font_size * 0.8  # Small size
+        self._font_size_large = self._font_size * 1.1  # Large size
 
         self._spacing = int(self._font_size * 0.8)
         self._padding = int(self._font_size * 0.5)
@@ -74,13 +83,21 @@ class AppTheme(QObject):
         self._button_width_small = int(self._button_width * self._small_factor)
         self._button_size_small = QSize(self._button_width_small, self._button_height_small)
 
-    def font(self, bold: bool = False, small: bool = False):
+    def font_small(self, bold: bool = False) -> QFont:
+        return self.font(bold, FontSize.SMALL)
+
+    def font_large(self, bold: bool = False) -> QFont:
+        return self.font(bold, FontSize.LARGE)
+
+    def font(self, bold: bool = False, size: FontSize = FontSize.MEDIUM) -> QFont:
         font = self.application.font()
         font.setBold(bold)
-        if small:
+        if size == FontSize.SMALL:
             font.setPointSizeF(self._font_size_small)
-        else:
+        elif size == FontSize.MEDIUM:
             font.setPointSizeF(self._font_size)
+        else:
+            font.setPointSizeF(self._font_size * 1.2)
 
         return font
 
@@ -88,9 +105,9 @@ class AppTheme(QObject):
     def spacing(self) -> int:
         return self._spacing
 
-    def drop_shadow(self,parent):
+    def drop_shadow(self, parent):
         shadow = QGraphicsDropShadowEffect(parent)
-        shadow.setBlurRadius(100)
+        shadow.setBlurRadius(20)
         shadow.setXOffset(0)
         shadow.setYOffset(0)
         shadow.setColor(QColor(0, 0, 0, 160))
@@ -98,7 +115,7 @@ class AppTheme(QObject):
 
     @Property(QMargins)
     def margin(self) -> QMargins:
-        return QMargins(self._padding, self._padding, self._padding, self._padding)
+        return QMargins(self._spacing, self._spacing, self._spacing, self._spacing)
 
     @Property(int)
     def padding(self) -> int:
@@ -167,16 +184,22 @@ class AppTheme(QObject):
         return self._brush_cache.setdefault(f"orange{alpha}", self.get_orange(alpha))
 
     def get_green(self, alpha: int = None):
-        return self._color_cache.setdefault(f"green{alpha}", _alpha(self._green if self.is_light() else self._green.darker(170), alpha))
+        return self._color_cache.setdefault(f"green{alpha}",
+                                            _alpha(self._green if self.is_light() else self._green.darker(170), alpha))
 
     def get_red(self, alpha: int = None):
-        return self._color_cache.setdefault(f"red{alpha}", _alpha(self._red if self.is_light() else self._red.darker(170), alpha))
+        return self._color_cache.setdefault(f"red{alpha}",
+                                            _alpha(self._red if self.is_light() else self._red.darker(170), alpha))
 
     def get_orange(self, alpha: int = None):
-        return self._color_cache.setdefault(f"orange{alpha}", _alpha(self._orange if self.is_light() else self._orange.darker(170), alpha))
+        return self._color_cache.setdefault(f"orange{alpha}",
+                                            _alpha(self._orange if self.is_light() else self._orange.darker(170),
+                                                   alpha))
 
     def get_yellow(self, alpha: int = None):
-        return self._color_cache.setdefault(f"yellow{alpha}", _alpha(self._yellow if self.is_light() else self._yellow.darker(170), alpha))
+        return self._color_cache.setdefault(f"yellow{alpha}",
+                                            _alpha(self._yellow if self.is_light() else self._yellow.darker(170),
+                                                   alpha))
 
     def get_dark_mode_palette(self) -> QPalette:
         if self.dark_palette is None:
@@ -226,7 +249,7 @@ class AppTheme(QObject):
             # Window is the main background; Base is for text inputs/lists
             palette.setColor(QPalette.ColorRole.Window, QColor(245, 245, 247))
             palette.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorRole.AlternateBase, _alpha(QColor(235, 235, 240),50))
+            palette.setColor(QPalette.ColorRole.AlternateBase, _alpha(QColor(235, 235, 240), 50))
             palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
 
             # --- TEXT ---
@@ -255,7 +278,6 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_grey)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(200, 200, 200))
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
-
 
             self.light_palette = palette
 
@@ -317,7 +339,8 @@ class AppTheme(QObject):
         _text_color = palette.color(QPalette.ColorRole.Text).name()
 
         _button_color = palette.color(QPalette.ColorRole.Button).name(QColor.HexArgb)
-        _button_hover_color =palette.color(QPalette.ColorRole.Button).lighter(120).name(QColor.HexArgb)
+        _button_text_color = palette.color(QPalette.ColorRole.ButtonText).name()
+        _button_hover_color = palette.color(QPalette.ColorRole.Button).lighter(120).name(QColor.HexArgb)
 
         style = f"""                                                  
                     .IconLabel {{
@@ -337,8 +360,33 @@ class AppTheme(QObject):
                         border:none
                     }}
                     
+                    QFrame#tabs_widget {{
+                        border:none;
+                        border-top:3px solid {_border_color};
+                    }}
+                    
+                    QTabView {{
+                        margin:12px;
+                    }}
+                    
+                    QTabBar::tab:!selected {{
+                        height: 30px;                                                  
+                        font-size:{self._font_size_large}pt;
+                    }}
+                    
+                    QTabBar::tab:selected {{
+                        height: 30px;                                                  
+                        font-size:{self._font_size_large}pt;
+                        font-weight:bold;
+                    }}
+                    
                     QTableView {{
-                        border:none                        
+                        border:none;
+                        outline: 0;                        
+                    }}
+                    QTableView::item:hover {{
+                        background-color: transparent;
+                        border: none;
                     }}
                     
                     QHeaderView {{                        
@@ -349,7 +397,8 @@ class AppTheme(QObject):
                     QHeaderView::section {{
                         font-family: '{font_family}';
                         background-color: {_base_alt_color};
-                        border:none
+                        border:none;
+                        border-right:1px solid {_border_color};
                     }}
                     
                     QLineEdit[text=""] {{
@@ -456,9 +505,6 @@ class AppTheme(QObject):
             background: rgba(100, 100, 100, 150);            
         }}        
         """
-
-
-
 
         self.application.setStyleSheet(style)
 

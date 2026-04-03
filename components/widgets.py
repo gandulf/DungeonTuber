@@ -281,7 +281,7 @@ class AutoSearchHelper():
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
             # Style settings
-            font = app_theme.font(False, small=True)
+            font = app_theme.font_small()
             painter.setFont(font)
             metrics = QFontMetrics(font)
 
@@ -605,7 +605,7 @@ class CategoryTooltip(QWidget):
 
         self.__text_widget = QLabel(self)
         self.__text_widget.setText("")
-        self.__text_widget.setFont(app_theme.font(small=True))
+        self.__text_widget.setFont(app_theme.font_small())
         self.__text_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.__fade_in_animation = QPropertyAnimation(self.__opacity_effect, b'opacity')
@@ -682,7 +682,7 @@ class CategoryTooltip(QWidget):
         painter.drawRoundedRect(self.rect(), 4.0, 4.0)
 
     def set_text(self, text: str):
-        self.__text_widget.setFont(app_theme.font(small=True))
+        self.__text_widget.setFont(app_theme.font_small())
         self.__text_widget.setText(text)
         self._update_ui()
 

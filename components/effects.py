@@ -118,6 +118,7 @@ class EffectList(QListView):
         self.verticalScrollBar().setBackgroundRole(QPalette.ColorRole.Accent)
         #self.verticalScrollBar().setMaximumWidth(app_theme.application.style().pixelMetric(QStyle.PM_ScrollBarExtent))
         self.setMouseTracking(True)
+        self.setAlternatingRowColors(True)
         self.setFont(app_theme.font())
 
         self.doubleClicked.connect(self.on_item_double_clicked)
@@ -315,12 +316,14 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
         padding = app_theme.padding
 
+        if index.row() % 2 == 0:
+            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorRole.Base))
+        else:
+            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorRole.AlternateBase))
+
         if check_state == Qt.CheckState.Checked:
-            with QPainterStateGuard(painter):
-                # Change background for checked items
-                painter.setBrush(option.palette.brush(QPalette.ColorRole.Highlight))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawRect(option.rect)
+            # Change background for checked items
+            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorRole.Highlight))
 
         rect: QRect = option.rect.adjusted(padding * 2, padding, -padding, -padding)
 
@@ -429,6 +432,8 @@ class EffectListItemDelegate(QStyledItemDelegate):
         if background:
             painter.fillRect(option.rect, background)
 
+
+
         if self.is_grid_mode():
             self._paint_grid_item(painter, option, index)
         else:
@@ -476,15 +481,12 @@ class EffectWidget(QFrame):
     def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__()
 
-        self.setGraphicsEffect(app_theme.drop_shadow(self))
-        self.setAutoFillBackground(True)
         self.setContentsMargins(app_theme.margin)
-
 
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
 
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(app_theme.padding, 0, 0, 0)
+        self.layout.setContentsMargins(0,0,0,0)
 
         self.engine = AudioEngine(False)
 
@@ -493,7 +495,7 @@ class EffectWidget(QFrame):
         self.list_widget.open_context_menu.connect(self.populate_effects_menu)
 
         self.player_layout = QHBoxLayout()
-        self.player_layout.setContentsMargins(0, 0, 0, 0)
+        self.player_layout.setContentsMargins(0, 0, 0, app_theme.spacing)
         self.player_layout.setSpacing(0)
 
         self.btn_play = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
@@ -538,6 +540,7 @@ class EffectWidget(QFrame):
 
         self.layout.addLayout(self.player_layout, 0)
         self.layout.addWidget(self.list_widget, 1)
+
 
         self.list_widget.calculate_grid_size()
 

@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
-    Signal, QObject, QPoint, QItemSelection
+    Signal, QObject, QPoint, QItemSelection, QSize
 from PySide6.QtGui import QIcon, QAction, QKeyEvent, \
     QPaintEvent, QColor, QPalette
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QWidget, \
@@ -15,6 +15,34 @@ from config.theme import app_theme
 from logic.mp3 import parse_mp3, Mp3Entry
 
 
+class CustomIconProvider(QFileIconProvider):
+    def __init__(self):
+        super().__init__()
+        # Pre-load icons to save memory/processing
+        self.music_icon = QIcon.fromTheme("file-mp3")
+        folder_open_icon = QIcon.fromTheme("folder-open")
+        folder_icon = QIcon.fromTheme("folder-closed")
+
+        self.folder_icon = QIcon()
+        self.folder_icon.addPixmap(folder_icon.pixmap(app_theme.icon_size), QIcon.Normal, QIcon.Off)  # State: Off (Closed)
+        self.folder_icon.addPixmap(folder_open_icon.pixmap(app_theme.icon_size), QIcon.Normal, QIcon.On)  # State: On (Open)
+
+        self.playlist_icon = QIcon.fromTheme("list-music")
+
+    def icon(self, info: QFileInfo):
+        # 1. Check if it's a directory
+        if info.isDir():
+            return self.folder_icon
+
+        # 2. Check extension for specific files
+        if info.suffix().lower() == "mp3":
+            return self.music_icon
+        elif info.suffix().lower() == "m3u":
+            return self.playlist_icon
+
+        # 3. Fallback to the system default icon for everything else
+        return super().icon(info)
+
 
 class FileFilterProxyModel(QSortFilterProxyModel):
     def __init__(self, parent: QObject = None):
@@ -23,6 +51,23 @@ class FileFilterProxyModel(QSortFilterProxyModel):
         self.setSortCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         # 0 is usually the 'Name' column in QFileSystemModel
         self.setFilterKeyColumn(0)
+
+    def data(self, index, role=Qt.DisplayRole):
+        # 1. Check if we are looking at the 'Name' column and the DisplayRole
+        if role == Qt.DisplayRole and index.column() == 0:
+            # Get the original text (the filename with extension)
+            source_data = super().data(index, role)
+
+            # Use QFileInfo to determine if it's a file
+            # Note: index.data(QFileSystemModel.FilePathRole) is a handy way to get the path
+            file_info = QFileInfo(source_data)
+
+            # Only strip extension if it's a file, not a folder
+            # .completeBaseName() returns everything before the LAST dot
+            return file_info.completeBaseName()
+
+        # 2. Fall back to default behavior for everything else
+        return super().data(index, role)
 
     def lessThan(self, left: QModelIndex | QPersistentModelIndex, right: QModelIndex | QPersistentModelIndex):
         # 1. Get a reference to the source model (QFileSystemModel)
@@ -95,7 +140,7 @@ class DirectoryTree(QTreeView):
 
         self.directory_model = QFileSystemModel()
         self.directory_model.setReadOnly(False)
-        self.directory_model.setIconProvider(QFileIconProvider())
+        self.directory_model.setIconProvider(CustomIconProvider())
         self.directory_model.setRootPath(QDir.rootPath())
         self.directory_model.setNameFilters(["*.mp3", "*.m3u"])
         self.directory_model.setNameFilterDisables(False)
@@ -112,6 +157,8 @@ class DirectoryTree(QTreeView):
         self.setColumnHidden(2, True)
         self.setColumnHidden(3, True)
         self.setAnimated(True)
+        self.setIconSize(app_theme.icon_size)
+        self.setFont(app_theme.font())
         self.sortByColumn(0, Qt.SortOrder.AscendingOrder)
         self.setExpandsOnDoubleClick(True)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -146,9 +193,7 @@ class DirectoryTree(QTreeView):
 
     def changeEvent(self, event: QEvent, /):
         if event.type() == QEvent.Type.FontChange:
-            list_font = self.font()
-            list_font.setPointSizeF(app_theme.font_size)
-            self.setFont(list_font)
+            self.setFont(app_theme.font())
             self.setIconSize(app_theme.icon_size)
 
     def on_directories_loaded(self):
@@ -291,13 +336,10 @@ class DirectoryWidget(QFrame):
     def __init__(self, parent=None):
         super(DirectoryWidget, self).__init__(parent)
 
-        self.setGraphicsEffect(app_theme.drop_shadow(self))
-        self.setAutoFillBackground(True)
         self.setContentsMargins(app_theme.margin)
 
         self.directory_layout = QVBoxLayout(self)
-        self.directory_layout.setContentsMargins(0, 0, app_theme.padding, 0)
-        self.directory_layout.setSpacing(0)
+        self.directory_layout.setContentsMargins(0, 0, 0, 0)
 
         self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent=self)
         self.headerLabel.set_icon_size(app_theme.icon_size)
@@ -305,8 +347,7 @@ class DirectoryWidget(QFrame):
         self.headerLabel.text_label.setProperty("cssClass", "header")
 
         self.directory_tree = DirectoryTree(self)
-        self.directory_tree.setContentsMargins(0,0,0,0)
-
+        self.directory_tree.setContentsMargins(0, 0, 0, 0)
 
         up_view_button = QToolButton()
         up_view_button.setProperty("cssClass", "mini")

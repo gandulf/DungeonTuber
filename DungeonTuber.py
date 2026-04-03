@@ -33,8 +33,9 @@ import gettext
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, QMenu, QStatusBar, QProgressBar, QSplitter, \
-    QListView, QGraphicsDropShadowEffect
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, \
+    QMenu, QStatusBar, QProgressBar, QSplitter, \
+    QListView, QGraphicsDropShadowEffect, QTabBar, QFrame
 from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent, QPointF
 from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase, QColor
 
@@ -534,6 +535,8 @@ class MusicPlayer(QMainWindow):
     def init_ui(self):
 
         self.player = PlayerWidget()
+        self.player.setContentsMargins(app_theme.margin)
+        self.player.setGraphicsEffect(app_theme.drop_shadow(self))
         self.player.track_changed.connect(self.play_track)
 
         self.central_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -549,20 +552,47 @@ class MusicPlayer(QMainWindow):
         self.central_splitter.setCollapsible(0, True)
         self.central_splitter.setAutoFillBackground(True)
         self.central_splitter.setHandleWidth(0)
+        self.central_splitter.setGraphicsEffect(app_theme.drop_shadow(self))
 
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(100)
-        shadow.setXOffset(0)
-        shadow.setYOffset(0)
-        shadow.setColor(QColor(0, 0, 0, 160))
-
-        self.central_splitter.setGraphicsEffect(shadow)
-
-        main_widget = QWidget()
+        main_widget = QFrame()
+        main_widget.setAutoFillBackground(True)
+        main_widget.setGraphicsEffect(app_theme.drop_shadow(self))
         main_layout = QVBoxLayout(main_widget)
         main_layout.setObjectName("main_layout")
-        main_layout.setContentsMargins(app_theme.margin)
+
+        main_layout.setContentsMargins(0,0,0,0)
         main_layout.setSpacing(0)
+
+        # Main Layout
+        self.filter_widget = FilterWidget(self)
+        main_layout.addWidget(self.filter_widget)
+
+        # Table Widget for Playlist
+        tabs_widget = QFrame(self)
+        tabs_widget.setObjectName("tabs_widget")
+        tabs_widget.setAutoFillBackground(True)
+
+        tabs_layout = QVBoxLayout(tabs_widget)
+        tabs_layout.setContentsMargins(app_theme.margin)  # Padding so the table doesn't hit the curve
+
+        self.table_tabs = QTabWidget(tabs_widget)
+        self.table_tabs.tabBar().setMovable(True)
+        self.table_tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table_tabs.tabBar().customContextMenuRequested.connect(self.show_tabs_context_menu)
+        self.table_tabs.tabBar().setAutoHide(True)
+        self.table_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideMiddle)
+        self.table_tabs.tabBar().setFont(app_theme.font_large())
+        self.table_tabs.setTabsClosable(True)
+        self.table_tabs.currentChanged.connect(self.on_table_tab_changed)
+        self.table_tabs.tabCloseRequested.connect(self.on_table_tab_close)
+        self.table_tabs.tabBar().tabMoved.connect(self.on_table_tab_moved)
+        tabs_layout.addWidget(self.table_tabs)
+
+
+        main_layout.addSpacing(app_theme.spacing)
+        main_layout.addWidget(tabs_widget, 2)
+        main_layout.addSpacing(app_theme.spacing)
+        main_layout.addWidget(self.player, 0)
 
         self.central_splitter.addWidget(main_widget)
         self.central_splitter.setCollapsible(1, False)
@@ -575,33 +605,7 @@ class MusicPlayer(QMainWindow):
         self.central_splitter.addWidget(self.effects_widget)
         self.central_splitter.setCollapsible(2, True)
 
-        # Menu Bar
-        self.filter_widget = FilterWidget(self)
-        main_layout.addWidget(self.filter_widget)
-
-        main_layout.addWidget(self.player, 0)
-
-        self.toggle_directory_tree(AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
-        self.toggle_effects_tree(AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool))
-        # -------------------------------------
-
-        # Table Widget for Playlist
-
-        self.table_tabs = QTabWidget()
-
-        self.table_tabs.tabBar().setMovable(True)
-        self.table_tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.table_tabs.tabBar().customContextMenuRequested.connect(self.show_tabs_context_menu)
-        self.table_tabs.tabBar().setAutoHide(True)
-        self.table_tabs.setTabsClosable(True)
-        self.table_tabs.currentChanged.connect(self.on_table_tab_changed)
-        self.table_tabs.tabCloseRequested.connect(self.on_table_tab_close)
-        self.table_tabs.tabBar().tabMoved.connect(self.on_table_tab_moved)
-
-        main_layout.addSpacing(app_theme.spacing)
-
-        main_layout.addWidget(self.table_tabs, 2)
-
+        # Statusbar bottom
         self.setStatusBar(QStatusBar())
         self.statusBar().messageChanged.connect(self.update_status_message)
 
@@ -610,7 +614,12 @@ class MusicPlayer(QMainWindow):
         self.status_progress.setRange(0, 0)
         self.statusBar().addPermanentWidget(self.status_progress)
 
+
+        # Visibility
         self.statusBar().setVisible(False)
+
+        self.toggle_directory_tree(AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool))
+        self.toggle_effects_tree(AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool))
 
         self.init_main_menu()
 

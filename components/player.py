@@ -195,6 +195,7 @@ class PlayerWidget(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
 
+        self.setAutoFillBackground(True)
         self.player_layout = QVBoxLayout(self)
         self.player_layout.setObjectName("player_layout")
         self.player_layout.setSpacing(app_theme.spacing)

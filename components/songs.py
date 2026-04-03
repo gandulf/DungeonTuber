@@ -392,10 +392,6 @@ class SongTableModel(QAbstractTableModel):
                 return _get_category_background_brush(self.filter_config.get_category(category_key, None), value, data)
             else:
                 return _get_entry_background_brush(data)
-        elif role == Qt.ItemDataRole.DecorationRole:
-            if index.column() == SongTableModel.COVER_COL:
-                data = index.data(Qt.ItemDataRole.UserRole)
-                return data.cover
         elif role in [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]:
             data = index.data(Qt.ItemDataRole.UserRole)
             if data is None:
@@ -643,12 +639,20 @@ class SongTable(QTableView):
     def __init__(self, parent: QWidget | None = None, source: PathLike[str] = None, mp3_files: list[Path | Mp3Entry] = [], lazy: bool = False):
         super().__init__(parent)
 
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 0, 0, 10))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
+        self.setPalette(palette)
+
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.setDropIndicatorShown(True)
         self.setSortingEnabled(True)
+        self.setAlternatingRowColors(True)
+        #self.setShowGrid(False)
+        self.setGridStyle(Qt.PenStyle.NoPen)
+
 
         if os.path.isfile(source):
             self.playlist = source
@@ -679,7 +683,7 @@ class SongTable(QTableView):
         self.horizontalHeader().setHighlightSections(False)
         self.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_context_menu)
-        self.horizontalHeader().setFont(app_theme.font(small=True))
+        self.horizontalHeader().setFont(app_theme.font_small())
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
@@ -706,9 +710,9 @@ class SongTable(QTableView):
 
     def get_icon(self) -> QIcon:
         if self.directory:
-            return QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen)
+            return QIcon.fromTheme("folder")
         else:
-            return QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical)
+            return QIcon.fromTheme("list-music")
 
     def _load_files(self, mp3_files: list[Path | Mp3Entry], lazy: bool = False):
         if not mp3_files:
@@ -1196,7 +1200,15 @@ def get_full_pixmap(icon_path):
     return pixmap
 
 
-class CategoryDelegate(QStyledItemDelegate):
+class BaseStyledItemDelegate(QStyledItemDelegate):
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+
+        if option.state & QStyle.State_MouseOver:
+            option.state &= ~QStyle.State_MouseOver
+
+        super().paint(painter, option, index)
+
+class CategoryDelegate(BaseStyledItemDelegate):
 
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
@@ -1214,14 +1226,17 @@ class CategoryDelegate(QStyledItemDelegate):
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         self.initStyleOption(option, index)
 
+        super().paint(painter, option, index)
         #padding = _get_table_padding()
         #option.rect = option.rect.adjusted(0, 0, 0, -padding)
-
         if index.column() == SongTableModel.COVER_COL:
+
+            data = index.data(Qt.ItemDataRole.UserRole)
+
             rect = option.rect
-            if option.icon:
+            if data.cover:
                 with QPainterStateGuard(painter):
-                    pixmap = get_full_pixmap(option.icon)
+                    pixmap = get_full_pixmap(data.cover)
                     scaled_size = pixmap.size().scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
                     # Calculate the top-left to center the "crop"
                     x = rect.x() + (rect.width() - scaled_size.width()) // 2
@@ -1231,15 +1246,10 @@ class CategoryDelegate(QStyledItemDelegate):
                     # Draw the scaled and centered pixmap
                     # Painter's clipping (set at top of method) ensures the overflow is hidden
                     painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
-        else:
-            super().paint(painter, option, index)
 
 
-        if option.state & QStyle.StateFlag.State_MouseOver:
-            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
 
-
-class StarDelegate(QStyledItemDelegate):
+class StarDelegate(BaseStyledItemDelegate):
 
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
@@ -1255,14 +1265,11 @@ class StarDelegate(QStyledItemDelegate):
 
         super().paint(painter,option,index)
 
-        if option.state & QStyle.StateFlag.State_MouseOver:
-            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
-
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         return self.star_rating.size_hint()
 
 
-class LabelItemDelegate(QStyledItemDelegate):
+class LabelItemDelegate(BaseStyledItemDelegate):
 
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
@@ -1281,7 +1288,7 @@ class LabelItemDelegate(QStyledItemDelegate):
         tag_left = content_rect.right()
 
         if AppSettings.value(SettingKeys.COLUMN_TAGS_VISIBLE, True, type=bool):
-            tags_font = app_theme.font(False, small=True)
+            tags_font = app_theme.font_small()
 
             fm = QFontMetrics(tags_font)
             painter.setFont(tags_font)
@@ -1309,7 +1316,7 @@ class LabelItemDelegate(QStyledItemDelegate):
                 if tag in self.parent().filter_config.tags:
                     painter.setBrush(app_theme.get_green_brush())
                 else:
-                    painter.setBrush(option.palette.highlight())
+                    painter.setBrush(option.palette.accent())
 
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.drawRoundedRect(tags_rect, 6.0, 6.0)
@@ -1354,7 +1361,7 @@ class LabelItemDelegate(QStyledItemDelegate):
         painter.drawText(title_rect, title)
 
         if data.summary and AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
-            summary_font = app_theme.font(bold=False,small=True)
+            summary_font = app_theme.font_small()
             painter.setFont(summary_font)
 
             summary_rect = QRect(content_rect)
@@ -1366,6 +1373,3 @@ class LabelItemDelegate(QStyledItemDelegate):
         painter.restore()
 
         super().paint(painter, option, index)
-
-        if option.state & QStyle.StateFlag.State_MouseOver:
-            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
