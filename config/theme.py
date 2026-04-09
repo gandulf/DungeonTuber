@@ -249,7 +249,7 @@ class AppTheme(QObject):
             # Window is the main background; Base is for text inputs/lists
             palette.setColor(QPalette.ColorRole.Window, QColor(245, 245, 247))
             palette.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorRole.AlternateBase, _alpha(QColor(235, 235, 240), 50))
+            palette.setColor(QPalette.ColorRole.AlternateBase, _alpha(QColor(235, 235, 240), 150))
             palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
 
             # --- TEXT ---
@@ -258,7 +258,7 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.WindowText, dark_text)
             palette.setColor(QPalette.ColorRole.Text, dark_text)
             palette.setColor(QPalette.ColorRole.ToolTipText, dark_text)
-            palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.white)
+            palette.setColor(QPalette.ColorRole.BrightText, QColor(105, 105, 110))
 
             # --- BUTTONS ---
             palette.setColor(QPalette.ColorRole.Button, QColor(240, 240, 240))
@@ -440,6 +440,10 @@ class AppTheme(QObject):
                     
                     QSlider[cssClass="buttonSmall"] {{                                                                       
                         height: {self._button_height_small + 4}px;
+                    }}
+
+                    RoundButton {{
+                        border:1px solid {_border_color};
                     }}
                     
                     QToolButton {{                                                 

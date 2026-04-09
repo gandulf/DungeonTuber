@@ -265,6 +265,7 @@ class FilterWidget(QWidget):
         super().__init__(parent)
 
         self.setAutoFillBackground(True)
+        self.setContentsMargins(app_theme.margin)
         self.russel_widget = RussellEmotionWidget()
         self.russel_widget.value_changed.connect(self.on_russel_changed)
 

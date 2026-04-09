@@ -10,6 +10,14 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushBu
 from config.settings import MusicCategory
 from config.theme import app_theme
 
+class RoundButton(QToolButton):
+
+    def resizeEvent(self, event):
+        # Dynamically update radius to half of the smallest dimension
+        radius = min(self.width(), self.height()) // 2
+        self.setStyleSheet(f"border-radius: {radius}px")
+        super().resizeEvent(event)
+
 
 class IconLabel(QFrame):
     icon_size = QSize(16, 16)
@@ -961,7 +969,7 @@ class ToggleSlider(QCheckBox):
             self._animation.setEndValue(0)
         self._animation.start()
 
-    def paintEvent(self, _):
+    def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -992,7 +1000,7 @@ class ToggleSlider(QCheckBox):
             handle_brush = self._get_unchecked_handle_brush()
 
         # Draw the toggle's body.
-        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setPen(QPen(body_brush.color().darker(110)))
         painter.setBrush(body_brush)
         painter.drawRoundedRect(content_rect, radius, radius)
         painter.setPen(QPen(handle_brush.color().darker(110)))
@@ -1055,28 +1063,36 @@ class ToggleSlider(QCheckBox):
         self._animation.setDuration(self._ANIMATION_DURATION)
 
     def _get_checked_handle_brush(self):
+        darkerRatio = 125 if self.underMouse() else 130
+
         if isinstance(self.palette().highlight(), QBrush):
-            return QBrush(self.palette().highlight().color().darker(130))
+            return QBrush(self.palette().highlight().color().darker(darkerRatio))
         else:
-            return QBrush(self.palette().highlight().darker(130))
+            return QBrush(self.palette().highlight().darker(darkerRatio))
 
     def _get_checked_body_brush(self):
+        darkerRatio = 95 if self.underMouse() else 100
+
         if isinstance(self.palette().highlight(), QBrush):
-            return self.palette().highlight()
+            return QBrush(self.palette().highlight().color().darker(darkerRatio))
         else:
-            return QBrush(self.palette().highlight())
+            return QBrush(self.palette().highlight().darker(darkerRatio))
 
     def _get_unchecked_handle_brush(self):
+        darkerRatio = 105 if self.underMouse() else 110
+
         if isinstance(self.palette().button(), QBrush):
-            return QBrush(self.palette().button().color().darker(110))
+            return QBrush(self.palette().button().color().darker(darkerRatio))
         else:
-            return QBrush(self.palette().button().darker(110))
+            return QBrush(self.palette().button().darker(darkerRatio))
 
     def _get_unchecked_body_brush(self):
+        darkerRatio = 95 if self.underMouse() else 100
+
         if isinstance(self.palette().button(), QBrush):
-            return self.palette().button()
+            return QBrush(self.palette().button().color().darker(darkerRatio))
         else:
-            return QBrush(self.palette().button())
+            return QBrush(self.palette().button().darker(darkerRatio))
 
 
 class VolumeSliderStyle(QProxyStyle):
@@ -1084,13 +1100,12 @@ class VolumeSliderStyle(QProxyStyle):
     # 1. Define WHERE the sub-parts live within the main rect
     def subControlRect(self, cc, option, sc, widget):
         return super().subControlRect(cc, option, sc, widget)
+
     def drawComplexControl(self, control, option, painter: QPainter, widget: JumpSlider = None):
         if control == QStyle.ComplexControl.CC_Slider:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             with QPainterStateGuard(painter):
-
                 rect = option.rect
-
 
                 # Adjust for margins
                 margin = 2
@@ -1162,7 +1177,7 @@ class VolumeSliderStyle(QProxyStyle):
 
                 bump = max_glow_size - glow_size
 
-                handle_rect.adjust(2, 2, -2, -2)
+                handle_rect.adjust(2, 3, -2, -3)
 
                 grow_size = handle_rect.height() - 10
 
@@ -1204,13 +1219,15 @@ class VolumeSlider(QHBoxLayout):
             toggle_mute_action.setShortcut(shortcut)
         toggle_mute_action.triggered.connect(self.toggle_mute)
 
-        self.btn_volume = QToolButton()
+        self.btn_volume = RoundButton()
         self.btn_volume.setDefaultAction(toggle_mute_action)
         self.btn_volume.setShortcutEnabled(True)
         self._update_volume_icon(value)
-        self.addWidget(self.btn_volume, 0, alignment=Qt.AlignmentFlag.AlignBottom)
+        self.addWidget(self.btn_volume, 0)
+        self.addSpacing(app_theme.spacing)
 
         self.slider_vol = JumpSlider(Qt.Orientation.Horizontal)
+        self.slider_vol.setFixedHeight(app_theme._button_height_small)
         self.slider_vol.setRange(0, 150)
         self.slider_vol.setValue(value)
         self.slider_vol.setMinimumWidth(100)
@@ -1284,7 +1301,7 @@ class RepeatMode(StrEnum):
     REPEAT_ALL = "Repeat All"
 
 
-class RepeatButton(QToolButton):
+class RepeatButton(RoundButton):
     icon_no_repeat: QIcon = QIcon.fromTheme("no-repeat")
     icon_repeat_1: QIcon = QIcon.fromTheme("repeat")
     icon_repeat_all: QIcon = QIcon.fromTheme("all-repeat")
@@ -1387,3 +1404,5 @@ class ColorButton(QPushButton):
             self.setColor(self._default)
 
         return super().mousePressEvent(e)
+
+

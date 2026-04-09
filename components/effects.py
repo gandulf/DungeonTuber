@@ -7,7 +7,7 @@ from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QPalette, QPen, QKey
 from PySide6.QtWidgets import QMenu, QListView, QStyleOptionViewItem, QStyle, QWidget, \
     QStyledItemDelegate, QFileDialog, QToolButton, QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView, QFrame, QGraphicsDropShadowEffect
 
-from components.widgets import IconLabel, AutoSearchHelper, VolumeSlider
+from components.widgets import IconLabel, AutoSearchHelper, VolumeSlider, RoundButton
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
 from logic.audioengine import AudioEngine
@@ -481,12 +481,13 @@ class EffectWidget(QFrame):
     def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__()
 
+        self.setAutoFillBackground(True)
         self.setContentsMargins(app_theme.margin)
 
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
 
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0,0,0,0)
+        self.layout.setContentsMargins(app_theme.spacing,0,0,0)
 
         self.engine = AudioEngine(False)
 
@@ -498,7 +499,7 @@ class EffectWidget(QFrame):
         self.player_layout.setContentsMargins(0, 0, 0, app_theme.spacing)
         self.player_layout.setSpacing(0)
 
-        self.btn_play = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
+        self.btn_play = RoundButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
         self.btn_play.setProperty("cssClass", "play small")
         self.btn_play.setCheckable(True)
         self.btn_play.setEnabled(False)
@@ -510,7 +511,8 @@ class EffectWidget(QFrame):
         self.volume_slider.volume_changed.connect(self.on_volume_changed)
         self.volume_slider.btn_volume.setProperty("cssClass", "mini")
         self.volume_slider.slider_vol.setProperty("cssClass", "buttonSmall")
-        self.player_layout.addWidget(self.btn_play, 0, Qt.AlignmentFlag.AlignBottom)
+        self.player_layout.addWidget(self.btn_play, 0)
+        self.player_layout.addSpacing(app_theme.spacing)
         self.player_layout.addLayout(self.volume_slider, 1)
 
         self.headerLabel = IconLabel(QIcon.fromTheme("effects"), _("Effects"))

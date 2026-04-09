@@ -9,14 +9,14 @@ from pathlib import Path
 from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMimeData, QByteArray, QDataStream, QIODevice, QPersistentModelIndex, \
     QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QPointF
 from PySide6.QtGui import QColor, QBrush, QIcon, QLinearGradient, QGradient, QAction, QKeyEvent, QDragMoveEvent, QDragEnterEvent, QPainter, QPalette, \
-    QFontMetrics, QDropEvent, QPolygonF, QPainterStateGuard
+    QFontMetrics, QDropEvent, QPolygonF, QPainterStateGuard, QPen
 from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView
 from sortedcontainers import SortedSet
 
 from components.widgets import AutoSearchHelper
 from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_categories, CAT_VALENCE, \
     CAT_AROUSAL, FilterConfig
-from config.theme import app_theme
+from config.theme import app_theme, _alpha
 from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, \
     update_mp3_category, Mp3FileLoader, save_playlist, remove_m3u, append_m3u, parse_mp3, update_mp3_tags, get_m3u_paths
 
@@ -650,7 +650,7 @@ class SongTable(QTableView):
         self.setDropIndicatorShown(True)
         self.setSortingEnabled(True)
         self.setAlternatingRowColors(True)
-        #self.setShowGrid(False)
+        self.setShowGrid(False)
         self.setGridStyle(Qt.PenStyle.NoPen)
 
 
@@ -1226,11 +1226,19 @@ class CategoryDelegate(BaseStyledItemDelegate):
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         self.initStyleOption(option, index)
 
+        if index.column() >= SongTableModel.CAT_COL:
+            score = index.data(Qt.ItemDataRole.DisplayRole)
+            if score:
+                rect: QRect = option.rect
+                rect = rect.adjusted(4,10,-4,-10)
+                bg = index.data(Qt.ItemDataRole.BackgroundRole)
+                bg = bg if isinstance(bg, QColor) else _alpha(option.palette.color(QPalette.ColorRole.Accent),40)
+                painter.fillRect(rect.x(), rect.y(), rect.width() * 1 / 10 * score, rect.height(), bg)
+
         super().paint(painter, option, index)
         #padding = _get_table_padding()
         #option.rect = option.rect.adjusted(0, 0, 0, -padding)
         if index.column() == SongTableModel.COVER_COL:
-
             data = index.data(Qt.ItemDataRole.UserRole)
 
             rect = option.rect
@@ -1246,6 +1254,7 @@ class CategoryDelegate(BaseStyledItemDelegate):
                     # Draw the scaled and centered pixmap
                     # Painter's clipping (set at top of method) ensures the overflow is hidden
                     painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
+
 
 
 
@@ -1333,8 +1342,7 @@ class LabelItemDelegate(BaseStyledItemDelegate):
 
         # draw rest
 
-        color = option.palette.color(
-            QPalette.ColorRole.Text) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(
+        color = option.palette.color(QPalette.ColorRole.Text) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(
             QPalette.ColorRole.WindowText)
 
         pen.setColor(color)
@@ -1363,6 +1371,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         if data.summary and AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool):
             summary_font = app_theme.font_small()
             painter.setFont(summary_font)
+            pen.setColor(option.palette.color(QPalette.ColorRole.BrightText))
+            painter.setPen(pen)
 
             summary_rect = QRect(content_rect)
             summary_rect.setTop(title_rect.bottom())

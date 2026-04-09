@@ -37,7 +37,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, Q
     QMenu, QStatusBar, QProgressBar, QSplitter, \
     QListView, QGraphicsDropShadowEffect, QTabBar, QFrame
 from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent, QPointF
-from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase, QColor
+from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase, QColor, QPalette
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, \
     set_presets, get_music_categories
@@ -535,6 +535,7 @@ class MusicPlayer(QMainWindow):
     def init_ui(self):
 
         self.player = PlayerWidget()
+        self.player.setBackgroundRole(QPalette.ColorRole.Mid)
         self.player.setContentsMargins(app_theme.margin)
         self.player.setGraphicsEffect(app_theme.drop_shadow(self))
         self.player.track_changed.connect(self.play_track)
@@ -544,6 +545,7 @@ class MusicPlayer(QMainWindow):
         self.setCentralWidget(self.central_splitter)
 
         self.directory_widget = DirectoryWidget()
+        self.directory_widget.setBackgroundRole(QPalette.ColorRole.Midlight)
         self.directory_widget.directory_tree.file_opened.connect(self.tree_open_file)
         self.directory_widget.directory_tree.analyze_file.connect(self.analyzer.process)
         self.directory_widget.directory_tree.open_context_menu.connect(self.populate_mp3_entry_context_menu)
@@ -598,7 +600,10 @@ class MusicPlayer(QMainWindow):
         self.central_splitter.setCollapsible(1, False)
 
         view_mode = QListView.ViewMode[AppSettings.value(SettingKeys.EFFECTS_LIST_VIEW_MODE, "IconMode", type=str)]
+
+
         self.effects_widget = EffectWidget(list_mode=view_mode)
+        self.effects_widget.setBackgroundRole(QPalette.ColorRole.Midlight)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_playlist_context_menu)
 

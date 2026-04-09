@@ -11,7 +11,7 @@ from logic.mp3 import Mp3Entry, update_mp3_chapters
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
 from config.utils import  ms_to_promille, format_time
-from components.widgets import RepeatMode, RepeatButton, JumpSlider, VolumeSlider
+from components.widgets import RepeatMode, RepeatButton, JumpSlider, VolumeSlider, RoundButton
 from components.dialogs import NameDialog
 
 logger = logging.getLogger(__file__)
@@ -234,7 +234,10 @@ class PlayerWidget(QFrame):
         self.progress_layout.addWidget(self.progress_slider)
         self.progress_layout.addWidget(self.duration_label)
 
+
         self.seeker_layout.addLayout(self.progress_layout)
+        self.seeker_layout.setContentsMargins(0, 0, 0, 0)
+        self.seeker_layout.addWidget(QLabel(""))
 
         # --- End Progress Bar ---
 
@@ -256,13 +259,13 @@ class PlayerWidget(QFrame):
         next_action.setShortcut("Ctrl+N")
         next_action.triggered.connect(self.next_track)
 
-        self.btn_prev = QToolButton()
+        self.btn_prev = RoundButton()
         self.btn_prev.setProperty("cssClass", "small")
         self.btn_prev.setDefaultAction(prev_action)
-        self.btn_play = QToolButton()
+        self.btn_play = RoundButton()
         self.btn_play.setProperty("cssClass", "play")
         self.btn_play.setDefaultAction(self.play_action)
-        self.btn_next = QToolButton()
+        self.btn_next = RoundButton()
         self.btn_next.setProperty("cssClass", "small")
         self.btn_next.setDefaultAction(next_action)
 
@@ -276,13 +279,15 @@ class PlayerWidget(QFrame):
         self.slider_vol.slider_vol.setMinimumWidth(200)
         self.slider_vol.set_icon_size(app_theme.icon_size)
 
+
         self.slider_vol.volume_changed.connect(self.adjust_volume)
         self.volume_changed = self.slider_vol.volume_changed
 
+        self.controls_layout.addWidget(self.btn_prev)
+        self.controls_layout.addSpacing(app_theme.spacing)
         self.controls_layout.addWidget(self.btn_play)
         self.controls_layout.addSpacing(app_theme.spacing)
-        self.controls_layout.addWidget(self.btn_prev, alignment=Qt.AlignmentFlag.AlignBottom)
-        self.controls_layout.addWidget(self.btn_next, alignment=Qt.AlignmentFlag.AlignBottom)
+        self.controls_layout.addWidget(self.btn_next)
         self.controls_layout.addSpacing(app_theme.spacing)
 
         self.visualizer = Visualizer.get_visualizer(self.engine)
@@ -565,28 +570,24 @@ class PlayerSlider(JumpSlider):
                 self.setValue(self._get_value_from_position(event.pos()))
 
     def paintEvent(self, event: QPaintEvent):
+        super().paintEvent(event)
 
         if self.chapters and self.maximum() > 0:
             painter = QPainter(self)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            pen = QPen(self.palette().color(QPalette.ColorRole.Dark))
-            pen.setWidth(2)
-            painter.setPen(pen)
-            painter.setBrush(self.palette().brush(QPalette.ColorRole.Base))
 
             opt = QStyleOptionSlider()
             self.initStyleOption(opt)
             gr = self.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderGroove, self)
 
-            groove_width = 3  # thickness of groove line width
-            tick_width = 4  # width of chapter tick
+            groove_width = 4  # thickness of groove line width
+            tick_width = 3  # width of chapter tick
 
             for ch in self.chapters:
                 x = self._get_position_from_value(ch['time'])
-                painter.drawRoundedRect(x - tick_width // 2, gr.center().y() + groove_width, tick_width, gr.height() // 2 - groove_width, 2.0, 2.0)
+                painter.fillRect(x - tick_width // 2, gr.center().y() - (groove_width+2) //2, tick_width, groove_width+2, self.palette().brush(QPalette.ColorRole.Base))
             painter.end()
 
-        super().paintEvent(event)
+
 
     def _find_chapter_for_position(self, mouse_x: int):
         threshold = 5  # Pixels of 'forgiveness' for the mouse cursor

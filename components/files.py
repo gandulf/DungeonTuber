@@ -64,7 +64,10 @@ class FileFilterProxyModel(QSortFilterProxyModel):
 
             # Only strip extension if it's a file, not a folder
             # .completeBaseName() returns everything before the LAST dot
-            return file_info.completeBaseName()
+            if len(file_info.completeBaseName()) >0:
+                return file_info.completeBaseName()
+            else:
+                return file_info.fileName()
 
         # 2. Fall back to default behavior for everything else
         return super().data(index, role)
@@ -156,7 +159,6 @@ class DirectoryTree(QTreeView):
         self.setColumnHidden(1, True)
         self.setColumnHidden(2, True)
         self.setColumnHidden(3, True)
-        self.setAnimated(True)
         self.setIconSize(app_theme.icon_size)
         self.setFont(app_theme.font())
         self.sortByColumn(0, Qt.SortOrder.AscendingOrder)
@@ -336,10 +338,12 @@ class DirectoryWidget(QFrame):
     def __init__(self, parent=None):
         super(DirectoryWidget, self).__init__(parent)
 
+        self.setAutoFillBackground(True)
+        self.setGraphicsEffect(app_theme.drop_shadow(self))
         self.setContentsMargins(app_theme.margin)
 
         self.directory_layout = QVBoxLayout(self)
-        self.directory_layout.setContentsMargins(0, 0, 0, 0)
+        self.directory_layout.setContentsMargins(0, 0, app_theme.spacing, 0)
 
         self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent=self)
         self.headerLabel.set_icon_size(app_theme.icon_size)
@@ -353,6 +357,11 @@ class DirectoryWidget(QFrame):
         up_view_button.setProperty("cssClass", "mini")
         up_view_button.setDefaultAction(self.directory_tree.go_parent_action)
         self.headerLabel.insert_widget(0, up_view_button)
+
+        into_view_button = QToolButton()
+        into_view_button.setProperty("cssClass", "mini")
+        into_view_button.setDefaultAction(self.directory_tree.set_home_action)
+        self.headerLabel.insert_widget(1, into_view_button)
 
         self.directory_layout.addWidget(self.headerLabel)
         self.directory_layout.addWidget(self.directory_tree)
