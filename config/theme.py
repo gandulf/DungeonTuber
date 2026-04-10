@@ -50,6 +50,8 @@ class AppTheme(QObject):
 
     _small_factor = 0.6
 
+
+
     def __init__(self):
         super().__init__()
         self._calculate_sizes(AppSettings.value(SettingKeys.FONT_SIZE, 10.5, type=int))
@@ -70,8 +72,11 @@ class AppTheme(QObject):
 
         self._icon_size = QSize(self._icon_width, self._icon_height)
 
-        self._icon_width_small = int(self._icon_width * self._small_factor)
-        self._icon_height_small = int(self._icon_height * self._small_factor)
+        self._icon_width_small = int(self._icon_width * 0.8)
+        self._icon_height_small = int(self._icon_height * 0.8)
+
+        self._icon_width_mini = int(self._icon_width * self._small_factor)
+        self._icon_height_mini = int(self._icon_height * self._small_factor)
 
         self._icon_size_small = QSize(self._icon_width_small, self._icon_height_small)
 
@@ -128,10 +133,6 @@ class AppTheme(QObject):
     @Property(QSize)
     def button_size(self) -> QSize:
         return self._button_size
-
-    @Property(QSize)
-    def icon_size_small(self) -> QSize:
-        return self._icon_size_small
 
     @Property(QSize)
     def button_size_small(self) -> QSize:
@@ -214,7 +215,6 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(127, 127, 127))
-            palette.setColor(QPalette.ColorRole.Dark, QColor(35, 35, 35))
             palette.setColor(QPalette.ColorRole.Shadow, QColor(20, 20, 20))
             palette.setColor(QPalette.ColorRole.Button, QColor(63, 63, 63))
             palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
@@ -226,8 +226,10 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, QColor(127, 127, 127))
 
+            palette.setColor(QPalette.ColorRole.Dark, QColor(35, 35, 35))
             palette.setColor(QPalette.ColorRole.Mid, QColor(63, 63, 63))
             palette.setColor(QPalette.ColorRole.Midlight, QColor(43, 43, 43))
+            palette.setColor(QPalette.ColorRole.Light, QColor(33, 33, 33))
 
             self.dark_palette = palette
 
@@ -265,8 +267,10 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.ButtonText, dark_text)
 
             # --- BORDERS & SHADOWS ---
-            palette.setColor(QPalette.ColorRole.Mid, QColor(200, 200, 200))
+
+            palette.setColor(QPalette.ColorRole.Light, QColor(240, 240, 240))
             palette.setColor(QPalette.ColorRole.Midlight, QColor(225, 225, 225))
+            palette.setColor(QPalette.ColorRole.Mid, QColor(200, 200, 200))
             palette.setColor(QPalette.ColorRole.Dark, QColor(180, 180, 180))
             palette.setColor(QPalette.ColorRole.Shadow, QColor(140, 140, 140))
 
@@ -369,13 +373,15 @@ class AppTheme(QObject):
                         margin:12px;
                     }}
                     
-                    QTabBar::tab:!selected {{
-                        height: 30px;                                                  
+                    QTabBar::tab:top, QTabBar::tab:bottom {{
+                        height: 30px;
+                    }}
+                    
+                    QTabBar::tab:!selected {{                                                                          
                         font-size:{self._font_size_large}pt;
                     }}
                     
-                    QTabBar::tab:selected {{
-                        height: 30px;                                                  
+                    QTabBar::tab:selected {{                                                                        
                         font-size:{self._font_size_large}pt;
                         font-weight:bold;
                     }}
@@ -455,22 +461,22 @@ class AppTheme(QObject):
                     QToolButton[cssClass~="small"]  {{                        
                         width: {self._button_width_small}px;                        
                         height: {self._button_height_small}px;
-                        qproperty-iconSize: {self._icon_width}px;
+                        qproperty-iconSize: {self._icon_width_small}px;
                     }}
                     QPushButton[cssClass~="small"]  {{                                                                                                                        
                         height: {self._button_height_small}px;
-                        qproperty-iconSize: {self._icon_width}px;
+                        qproperty-iconSize: {self._icon_width_mini}px;
                     }}                    
                     
                     QToolButton[cssClass~="mini"] {{                                                                        
                         width: {int(self._button_width_small * 0.7)}px;                        
                         height: {int(self._button_height_small * 0.7)}px;
-                        qproperty-iconSize: {int(self._icon_width_small)}px;
+                        qproperty-iconSize: {int(self._icon_width_mini)}px;
                     }}                    
                     
                     QPushButton[cssClass~="mini"] {{                                                                                                                        
                         height: {int(self._button_height_small * 0.7)}px;
-                        qproperty-iconSize: {int(self._icon_width_small)}px;
+                        qproperty-iconSize: {int(self._icon_width_mini)}px;
                     }}                
                     
                     QComboBox {{

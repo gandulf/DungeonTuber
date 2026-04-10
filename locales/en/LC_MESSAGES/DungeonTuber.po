@@ -195,8 +195,8 @@ msgstr "Dynamic Category Columns"
 msgid "Dynamic Score Column"
 msgstr "Dynamic Score Column"
 
-msgid "Summary Visible"
-msgstr "Summary Visible"
+msgid "Display summary next to title"
+msgstr "Display summary next to title"
 
 msgid "Category"
 msgstr "Category"
@@ -645,3 +645,30 @@ msgstr "Add Marker"
 
 msgid "Remove chapter"
 msgstr "Remove Marker"
+
+msgid "Use Local Voxalyzer"
+msgstr "Use Local Voxalyzer"
+
+msgid "Voxalyzer BaseUrl"
+msgstr "Voxalyzer BaseUrl"
+
+msgid "Key"
+msgstr "Key"
+
+msgid "Files"
+msgstr "Files"
+
+msgid "Simple Mode"
+msgstr "Simple Mode"
+
+msgid "Complex Mode"
+msgstr "Complex Mode"
+
+msgid "Category Sliders"
+msgstr "Category Sliders"
+
+msgid "Cover"
+msgstr "Cover"
+
+msgid "Index"
+msgstr "Index"

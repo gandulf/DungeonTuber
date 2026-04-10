@@ -325,18 +325,10 @@ class AutoSearchHelper():
 
 
 class FlowLayout(QLayout):
-    def __init__(self, parent=None, margin=0, spacing=-1):
+    def __init__(self, parent=None, spacing=5):
         super(FlowLayout, self).__init__(parent)
 
-        if parent is not None:
-            self.setContentsMargins(margin, margin, margin, margin)
-
         self.setSpacing(spacing)
-        self.margin = margin
-
-        # spaces between each item
-        self.spaceX = 5
-        self.spaceY = 5
 
         self.item_list: list[QWidget] = []
 
@@ -344,6 +336,14 @@ class FlowLayout(QLayout):
         item = self.takeAt(0)
         while item:
             item = self.takeAt(0)
+
+    def setSpacing(self, spacing, /):
+        if isinstance(spacing, int):
+            self.spaceX = spacing
+            self.spaceY = spacing
+        elif isinstance(spacing, QPoint):
+            self.spaceX: spacing.x()
+            self.spaceY: spacing.y()
 
     def addItem(self, item: QWidget):
         self.item_list.append(item)
@@ -382,14 +382,15 @@ class FlowLayout(QLayout):
 
     def minimumSize(self) -> QSize:
         size = QSize()
+        size = size.grownBy(self.contentsMargins())
 
         for item in self.item_list:
             size = size.expandedTo(item.minimumSize())
 
-        size += QSize(2 * self.margin, 2 * self.margin)
         return size
 
     def doLayout(self, rect: QRect, test_only: bool) -> int:
+        rect = rect.marginsRemoved(self.contentsMargins())
         x = rect.x()
         y = rect.y()
         line_height = 0

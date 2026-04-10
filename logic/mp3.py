@@ -138,7 +138,7 @@ class Mp3Entry(object):
                     data = audio.tags[key].data
                     pixmap = QPixmap()
                     pixmap.loadFromData(data)
-                    icon_pixmap = pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                    icon_pixmap = pixmap
                     self._cover = icon_pixmap
                     self.has_cover = True
 

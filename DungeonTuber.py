@@ -37,7 +37,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, Q
     QMenu, QStatusBar, QProgressBar, QSplitter, \
     QListView, QGraphicsDropShadowEffect, QTabBar, QFrame
 from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent, QPointF
-from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase, QColor, QPalette
+from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase, QColor, QPalette, QShortcut, QKeySequence
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, \
     set_presets, get_music_categories
@@ -85,6 +85,14 @@ class MusicPlayer(QMainWindow):
         else:
             self.resize(1200, 700)
 
+
+        # 2. Setup Fullscreen Shortcut (Press F11 or Esc)
+        self.fs_shortcut = QShortcut(QKeySequence("F11"), self)
+        self.fs_shortcut.activated.connect(self.toggle_fullscreen)
+
+        self.esc_shortcut = QShortcut(QKeySequence("Esc"), self)
+        self.esc_shortcut.activated.connect(self.exit_fullscreen)
+
         self.load_settings()
 
         self.init_analyzer()
@@ -96,6 +104,16 @@ class MusicPlayer(QMainWindow):
 
         if AppSettings.value(SettingKeys.START_TOUR, True, type=bool):
             QTimer.singleShot(500, lambda: self.start_tour())
+
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def exit_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
 
     def init_analyzer(self):
         if self.analyzer is not None:
@@ -535,7 +553,6 @@ class MusicPlayer(QMainWindow):
     def init_ui(self):
 
         self.player = PlayerWidget()
-        self.player.setBackgroundRole(QPalette.ColorRole.Mid)
         self.player.setContentsMargins(app_theme.margin)
         self.player.setGraphicsEffect(app_theme.drop_shadow(self))
         self.player.track_changed.connect(self.play_track)

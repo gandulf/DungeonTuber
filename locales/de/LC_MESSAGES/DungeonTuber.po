@@ -198,8 +198,8 @@ msgstr "Dynamische Kategoriespalten"
 msgid "Dynamic Score Column"
 msgstr "Dynamische Bewertungsspalte"
 
-msgid "Summary Visible"
-msgstr "Zusammenfassung sichtbar"
+msgid "Display summary next to title"
+msgstr "Zusammenfassung beim Title anzeigen"
 
 msgid "Category"
 msgstr "Kategorie"
@@ -623,6 +623,12 @@ msgstr "Zur Playlist hinzufügen"
 msgid "Remove from playlist"
 msgstr "Aus Playlist entfernen"
 
+msgid "Normalize Volume"
+msgstr "Lautstärke normalisieren"
+
+msgid "All songs will be played at a normalized volume."
+msgstr "Alle Lieder werden mit einer einheitlichen Lautstärke abgespielt."
+
 msgid "Select Image"
 msgstr "Bild auswählen"
 
@@ -648,4 +654,31 @@ msgid "Add chapter"
 msgstr "Marker hinzufügen"
 
 msgid "Remove chapter"
-msgstr "Marker löschen "
+msgstr "Marker löschen"
+
+msgid "Use Local Voxalyzer"
+msgstr "Lokalen Voxalyzer verwenden"
+
+msgid "Voxalyzer BaseUrl"
+msgstr "Voxalyzer Basis-URL"
+
+msgid "Key"
+msgstr "Schlüssel"
+
+msgid "Files"
+msgstr "Dateien"
+
+msgid "Simple Mode"
+msgstr "Einfacher Modus"
+
+msgid "Complex Mode"
+msgstr "Komplexer Modus"
+
+msgid "Category Sliders"
+msgstr "Kategorien Regler"
+
+msgid "Cover"
+msgstr "Cover"
+
+msgid "Index"
+msgstr "Index"

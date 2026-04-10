@@ -244,11 +244,12 @@ class SettingKeys(StrEnum):
     COLUMN_COVER_VISIBLE = "columnCoverVisible"
     COLUMN_SCORE_VISIBLE = "columnScoreVisible"
     COLUMN_TITLE_VISIBLE = "columnTitleVisible"
+    COLUMN_SUMMARY_VISIBLE = "columnSummaryVisible"
     COLUMN_ALBUM_VISIBLE = "columnAlbumVisible"
     COLUMN_GENRE_VISIBLE = "columnGenreVisible"
     COLUMN_ARTIST_VISIBLE = "columnArtistVisible"
     COLUMN_BPM_VISIBLE = "columnBPMVisible"
-    COLUMN_SUMMARY_VISIBLE = "columnSummaryVisible"
+    COLUMN_TITLE_SUMMARY_VISIBLE = "columnTitleSummaryVisible"
     COLUMN_TAGS_VISIBLE = "columnTagsVisible"
     SONGS_ROW_STYLE = "songsRowStyle"
 
@@ -364,8 +365,8 @@ class SettingsDialog(QDialog):
         dynamic_colomns_description.setContentsMargins(28, 0, 0, 0)
         table_layout.addRow("", dynamic_colomns_description)
 
-        self.summary_column = QCheckBox(_("Summary Visible"))
-        self.summary_column.setChecked(AppSettings.value(SettingKeys.COLUMN_SUMMARY_VISIBLE, True, type=bool))
+        self.summary_column = QCheckBox(_("Display summary next to title"))
+        self.summary_column.setChecked(AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool))
         table_layout.addRow("", self.summary_column)
 
         layout.addStretch()
@@ -453,7 +454,7 @@ class SettingsDialog(QDialog):
         AppSettings.setValue(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
         AppSettings.setValue(SettingKeys.DYNAMIC_SCORE_COLUMN, self.dynamic_score_column.isChecked())
-        AppSettings.setValue(SettingKeys.COLUMN_SUMMARY_VISIBLE, self.summary_column.isChecked())
+        AppSettings.setValue(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, self.summary_column.isChecked())
         AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
         if self.voxalyzerUrl.text() == '' or self.voxalyzerUrl.text() is None:
             AppSettings.remove(SettingKeys.VOXALYZER_URL)

@@ -306,6 +306,12 @@ class PlayerWidget(QFrame):
 
         self.adjust_volume(self.slider_vol.volume)
 
+        self.setBackgroundRole(QPalette.ColorRole.Mid)
+
+    def setBackgroundRole(self, role, /):
+        super().setBackgroundRole(role)
+        self.progress_slider.setBackgroundRole(role)
+
     def add_chapter(self, timestamp: int, title: str):
         self.current_data.chapters.append({"time": timestamp, "title": title})
         update_mp3_chapters(self.current_data.path, self.current_data.chapters)
@@ -351,7 +357,8 @@ class PlayerWidget(QFrame):
         for icon in [self.icon_prev, self.icon_next, self.icon_open]:
             icon.setFallbackThemeName(app_theme.theme())
 
-        self.play_action.setIcon(app_theme.create_play_pause_icon())
+        if self.play_action is not None:
+            self.play_action.setIcon(app_theme.create_play_pause_icon())
 
     def on_repeat_mode_changed(self, mode: RepeatMode):
         AppSettings.setValue(SettingKeys.REPEAT_MODE, self.btn_repeat.REPEAT_MODES.index(mode))
@@ -584,7 +591,7 @@ class PlayerSlider(JumpSlider):
 
             for ch in self.chapters:
                 x = self._get_position_from_value(ch['time'])
-                painter.fillRect(x - tick_width // 2, gr.center().y() - (groove_width+2) //2, tick_width, groove_width+2, self.palette().brush(QPalette.ColorRole.Base))
+                painter.fillRect(x - tick_width // 2, gr.center().y() - (groove_width+2) //2, tick_width, groove_width+2, self.palette().brush(self.backgroundRole()))
             painter.end()
 
 

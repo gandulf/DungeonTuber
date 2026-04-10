@@ -3,9 +3,9 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QIcon
+from PySide6.QtGui import QPixmap, QIcon, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication, QDialogButtonBox, QLineEdit, QSpinBox, \
-    QTextEdit, QCheckBox, QFormLayout, QMessageBox, QFileDialog, QPushButton
+    QTextEdit, QCheckBox, QFormLayout, QMessageBox, QFileDialog, QPushButton, QScrollArea
 
 from config.theme import app_theme
 from config.utils import get_path, is_latest_version, get_latest_version, DOWNLOAD_LINK
@@ -191,3 +191,88 @@ class EditSongDialog(QDialog):
                 QMessageBox.warning(self, _("Update Error"), _("Failed to rename file: {0}").format(e))
 
         super().accept()
+
+
+class ImagePopup(QDialog):
+    def __init__(self, title: str, image: QPixmap | os.PathLike[str], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(800, 600)
+
+        # 1. Enable Maximize and Minimize buttons
+        # We combine the default Dialog flags with the Maximize hint
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowMaximizeButtonHint)
+
+        # 2. Setup Fullscreen Shortcut (Press F11 or Esc)
+        self.fs_shortcut = QShortcut(QKeySequence("F11"), self)
+        self.fs_shortcut.activated.connect(self.toggle_fullscreen)
+
+        self.esc_shortcut = QShortcut(QKeySequence("Esc"), self)
+        self.esc_shortcut.activated.connect(self.exit_fullscreen)
+
+        # 1. Setup Layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(0)
+
+        # 2. Create Scroll Area (in case image is huge)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+
+        # 3. Create Label to hold the image
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignCenter)
+
+        # 4. Load and Set Image
+        if isinstance(image, QPixmap):
+            self.original_pixmap = image
+        else:
+            self.original_pixmap = QPixmap(image)
+
+        if self.original_pixmap.isNull():
+            self.image_label.setText(_("Failed to load image."))
+
+        self.scroll_area.setWidget(self.image_label)
+
+        self.scroll_area.setAutoFillBackground(True)
+        self.scroll_area.setBackgroundRole(QPalette.ColorRole.Dark)
+        layout.addWidget(self.scroll_area)
+
+        self.update_image_size()
+
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def exit_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.close()  # Standard behavior: Esc closes a dialog
+
+    def showEvent(self, event):
+        """Called when the dialog is shown for the first time."""
+        if not self.original_pixmap.isNull():
+            self.update_image_size()
+        super().showEvent(event)
+
+    def resizeEvent(self, event):
+        """This triggers every time the user drags the window corner."""
+        if not self.original_pixmap.isNull():
+            self.update_image_size()
+        super().resizeEvent(event)
+
+    def update_image_size(self):
+        # Get the current size of the scroll area (the visible container)
+        container_size = self.scroll_area.viewport().size()
+
+        # Scale the original image to the container size
+        scaled_pixmap = self.original_pixmap.scaled(
+            container_size,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+
+        self.image_label.setPixmap(scaled_pixmap)

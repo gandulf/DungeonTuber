@@ -296,7 +296,7 @@ class FilterWidget(QWidget):
         # --------------------------------------
 
         self.tags_genres_widget = QWidget()
-        self.tags_genres_widget.setContentsMargins(app_theme.margin)
+        self.tags_genres_widget.setContentsMargins(app_theme.spacing, 0, app_theme.spacing,0)
         self.filter_layout.addWidget(self.tags_genres_widget)
 
         tags_genres_layout = QVBoxLayout(self.tags_genres_widget)
@@ -305,7 +305,7 @@ class FilterWidget(QWidget):
 
         self.tags_widget = QWidget()
         tags_widget_layout = QVBoxLayout(self.tags_widget)
-        tags_widget_layout.setContentsMargins(0, 4, 0, 0)
+        tags_widget_layout.setContentsMargins(0, 0, 0, 0)
         tags_widget_layout.setSpacing(0)
 
         self.tags_layout = FlowLayout()
@@ -316,6 +316,7 @@ class FilterWidget(QWidget):
         tags_label.setFont(label_font)
         tags_label.setProperty("cssClass", "mini")
         tags_label.setStyleSheet("text-transform:uppercase")
+        tags_label.setContentsMargins(0, 4, 0, 2)
         tags_widget_layout.addWidget(tags_label)
         tags_widget_layout.addLayout(self.tags_layout)
 
@@ -331,6 +332,7 @@ class FilterWidget(QWidget):
         genres_label.setFont(label_font)
         genres_label.setProperty("cssClass", "mini")
         genres_label.setStyleSheet("text-transform:uppercase")
+        genres_label.setContentsMargins(0, 4, 0, 2)
         genres_widget_layout.addWidget(genres_label)
         genres_widget_layout.addLayout(self.genres_layout)
 
@@ -646,11 +648,13 @@ class FilterWidget(QWidget):
 
             save_preset = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
             save_preset.setProperty("cssClass", "small")
+
             save_preset.clicked.connect(self.save_preset_action)
             self.presets_layout.addWidget(save_preset)
 
             clear_preset = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.EditClear))
             clear_preset.setProperty("cssClass", "small")
+
             clear_preset.clicked.connect(self.clear_sliders)
             self.presets_layout.addWidget(clear_preset)
         else:
