@@ -24,7 +24,6 @@ import os
 import sys
 import traceback
 
-
 from config import log
 
 log.setup_logging()
@@ -33,11 +32,11 @@ import gettext
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, \
+from PySide6.QtWidgets import QApplication, QMainWindow,  QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, \
     QMenu, QStatusBar, QProgressBar, QSplitter, \
-    QListView, QGraphicsDropShadowEffect, QTabBar, QFrame
-from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent, QPointF
-from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QFontDatabase, QColor, QPalette, QShortcut, QKeySequence
+    QListView,  QFrame
+from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent
+from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent,  QPalette, QShortcut, QKeySequence
 
 from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, \
     set_presets, get_music_categories
@@ -56,7 +55,6 @@ from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, get_m3u_paths, save_playl
 from logic.analyzer import Analyzer, has_voxalyzer
 
 logger = logging.getLogger(__file__)
-
 
 class MusicPlayer(QMainWindow):
     toggle_directory_tree_action: QAction

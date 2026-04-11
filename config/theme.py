@@ -1,9 +1,8 @@
 import string
 from enum import Enum
-from tkinter import font
 
 from PySide6.QtCore import QObject, Property, Qt, QSize, QMargins
-from PySide6.QtGui import QColor, QPalette, QBrush, QGradient, QIcon, QFont, QFontDatabase
+from PySide6.QtGui import QColor, QPalette, QBrush,  QIcon, QFont
 from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect
 
 from config.settings import AppSettings, SettingKeys

@@ -14,13 +14,13 @@ from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderVi
 from sortedcontainers import SortedSet
 
 from components.widgets import AutoSearchHelper
+from components.dialogs import ImagePopup
 from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_categories, CAT_VALENCE, \
     CAT_AROUSAL, FilterConfig
 from config.theme import app_theme, _alpha
-from dialogs import ImagePopup
+
 from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, \
-    update_mp3_category, Mp3FileLoader, save_playlist, remove_m3u, append_m3u, parse_mp3, update_mp3_tags, get_m3u_paths
-from mp3 import update_mp3_summary
+    update_mp3_category, Mp3FileLoader, save_playlist, remove_m3u, append_m3u, parse_mp3, update_mp3_tags, get_m3u_paths, update_mp3_summary
 
 logger = logging.getLogger(__file__)
 

@@ -17,8 +17,6 @@ from config.utils import children_layout, clear_layout
 
 from logic.mp3 import Mp3Entry
 
-
-
 def _map_pt(plot_rect, val, aro):
     x_pos = plot_rect.left() + (val / 10.0) * plot_rect.width()
     y_pos = plot_rect.bottom() - (aro / 10.0) * plot_rect.height()
