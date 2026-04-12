@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version tag (e.g., v0.7.12-beta)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -17,10 +23,29 @@ jobs:
 
     - name: Update version with current tag reference
       id: vars
-      run: |        
-        $version = $env:GITHUB_REF_NAME.TrimStart("v")
+      shell: pwsh
+      run: |
+        $ref = "${{ github.ref }}"
+        $event_name = "${{ github.event_name }}"
+        $input_version = "${{ inputs.version_tag }}"
+
+        if ($ref -like "refs/tags/v*") {
+            $version = $ref -replace "refs/tags/v", ""
+        } elseif ($ref -eq "refs/heads/devel") {
+            $version = "devel"
+        } elseif ($event_name -eq "workflow_dispatch") {
+            $version = $input_version -replace "^v", ""
+        } else {
+            Write-Error "Unsupported trigger. Exiting."
+            exit 1
+        }
+
+        Write-Host "Building version: $version"
+
         (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '" + $version + "'") | Out-File -encoding UTF8noBom version.rc
         (Get-Content pyproject.toml) -replace 'version = "(.*?)"', ('version = "' + $version + '"') | Out-File -encoding UTF8noBom pyproject.toml
+
+        # Export the tags for subsequent steps (comma-separated)        
         echo "app_version=$version" >> $env:GITHUB_OUTPUT
 
     - name: Set up Python 3.12
@@ -106,6 +131,3 @@ jobs:
       with:
         name: DungeonTuber-${{ steps.vars.outputs.app_version }}
         path: DungeonTuber-*.exe
-
-
-# download voxalyzer from https://github.com/gandulf/Voxalyzer/releases/latest/download/voxalyzer.exe
