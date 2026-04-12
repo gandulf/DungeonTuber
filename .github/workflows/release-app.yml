@@ -63,10 +63,9 @@ jobs:
       run: |
         flake8
 
-    - name: Download Release
-      run: gh release download latest --repo gandulf/Voxalyzer --pattern '*.exe' --dir dist/DungeonTuber.dist
-      env:
-        GH_TOKEN: ${{ secrets.VOXALYZER_PAT }}
+    - name: Download Voxalyzer Release
+      shell: pwsh
+      run: Invoke-WebRequest -Uri "https://github.com/gandulf/Voxalyzer/releases/latest/download/voxalyzer.exe" -OutFile "dist/DungeonTuber.dist/voxalyzer.exe"
 
     - name: Create Nuitka Executable
       uses: Nuitka/Nuitka-Action@main
@@ -133,3 +132,4 @@ jobs:
       with:
         name: DungeonTuber-${{ steps.vars.outputs.app_version }}
         path: DungeonTuber-*.exe
+

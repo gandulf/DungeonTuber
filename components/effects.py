@@ -116,7 +116,6 @@ class EffectList(QListView):
         self.setSpacing(0)
         self.verticalScrollBar().setSingleStep(30)
         self.verticalScrollBar().setBackgroundRole(QPalette.ColorRole.Accent)
-        #self.verticalScrollBar().setMaximumWidth(app_theme.application.style().pixelMetric(QStyle.PM_ScrollBarExtent))
         self.setMouseTracking(True)
         self.setAlternatingRowColors(True)
         self.setFont(app_theme.font())
@@ -348,6 +347,7 @@ class EffectListItemDelegate(QStyledItemDelegate):
                     painter.setClipRect(icon_rect)
                     # Draw the scaled and centered pixmap
                     # Painter's clipping (set at top of method) ensures the overflow is hidden
+                    painter.setClipRect(rect)
                     painter.drawPixmap(icon_rect, pixmap)
 
                     rect.setLeft(icon_rect.right() + padding)
@@ -468,9 +468,6 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
                     rect.adjust(0, 0, -1, -1)
                     painter.drawText(rect, str(idx + 1), Qt.AlignmentFlag.AlignCenter)
-
-        if option.state & QStyle.StateFlag.State_MouseOver:
-            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         if self.is_grid_mode():
