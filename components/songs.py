@@ -995,7 +995,7 @@ class SongTable(QTableView):
             self.viewport().update()
 
     def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == Qt.Key.Key_Enter:
+        if event.key() in  [Qt.Key.Key_Enter, Qt.Key.Key_Return]:
             index = self.selectionModel().currentIndex()
             self.item_double_clicked.emit(index, index.data(Qt.ItemDataRole.UserRole))
             return

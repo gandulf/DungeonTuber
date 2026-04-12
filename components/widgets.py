@@ -1212,7 +1212,7 @@ class VolumeSlider(QHBoxLayout):
     last_volume: int = None
     volume_changed = Signal(int)
 
-    def __init__(self,parent, value: int = 70, shortcut: QKeySequence | QKeyCombination | QKeySequence.StandardKey | str | int = None):
+    def __init__(self,parent=None, value: int = 70, shortcut: QKeySequence | QKeyCombination | QKeySequence.StandardKey | str | int = None):
         super(VolumeSlider, self).__init__(parent)
 
         toggle_mute_action = QAction(_("Mute"), self)

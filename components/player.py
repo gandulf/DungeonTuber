@@ -220,6 +220,7 @@ class PlayerWidget(QFrame):
         self.progress_layout.setObjectName("progress_layout")
         self.progress_layout.setSpacing(app_theme.spacing)
         self.time_label = QLabel("00:00")
+
         self.progress_slider = PlayerSlider(self)
         self.progress_slider.setRange(0, 0)
         self.progress_slider.setMinimumWidth(100)
@@ -243,6 +244,7 @@ class PlayerWidget(QFrame):
 
         controls_widget = QWidget()
         self.controls_layout = QHBoxLayout(controls_widget)
+        self.controls_layout.setObjectName("controls_layout")
         self.controls_layout.setSpacing(0)
         self.controls_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -274,7 +276,7 @@ class PlayerWidget(QFrame):
 
         self.repeat_mode_changed = self.btn_repeat.value_changed
 
-        self.slider_vol = VolumeSlider(self, AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
+        self.slider_vol = VolumeSlider(value = AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
         self.slider_vol.btn_volume.setProperty("cssClass", "small")
         self.slider_vol.slider_vol.setMinimumWidth(200)
         self.slider_vol.set_icon_size(app_theme.icon_size)

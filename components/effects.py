@@ -237,7 +237,11 @@ class EffectList(QListView):
         self.update()
 
     def keyPressEvent(self, event: QKeyEvent):
-        if not self.auto_search_helper.keyPressEvent(event):
+        if event.key() in  [Qt.Key.Key_Enter, Qt.Key.Key_Return]:
+            index = self.selectionModel().currentIndex()
+            self.on_item_double_clicked(index)
+            return
+        elif not self.auto_search_helper.keyPressEvent(event):
             super().keyPressEvent(event)
 
     def paintEvent(self, event: QPaintEvent):
@@ -496,6 +500,7 @@ class EffectWidget(QFrame):
         self.list_widget.open_context_menu.connect(self.populate_effects_menu)
 
         self.player_layout = QHBoxLayout()
+        self.player_layout.setObjectName("player_layout")
         self.player_layout.setContentsMargins(0, 0, 0, app_theme.spacing)
         self.player_layout.setSpacing(0)
 
@@ -507,7 +512,8 @@ class EffectWidget(QFrame):
         self.btn_play.clicked.connect(self.toogle_play)
         self.btn_play.setShortcut("Ctrl+E")
 
-        self.volume_slider = VolumeSlider(self)
+        self.volume_slider = VolumeSlider()
+        self.volume_slider.setObjectName("volume_slider")
         self.volume_slider.volume_changed.connect(self.on_volume_changed)
         self.volume_slider.btn_volume.setProperty("cssClass", "mini")
         self.volume_slider.slider_vol.setProperty("cssClass", "buttonSmall")
@@ -542,7 +548,6 @@ class EffectWidget(QFrame):
 
         self.layout.addLayout(self.player_layout, 0)
         self.layout.addWidget(self.list_widget, 1)
-
 
         self.list_widget.calculate_grid_size()
 

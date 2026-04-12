@@ -109,6 +109,7 @@ class FileFilterProxyModel(QSortFilterProxyModel):
 
 class DirectoryTree(QTreeView):
     file_opened = Signal(QFileInfo)
+    directory_opened = Signal(QFileInfo)
     analyze_file = Signal(QFileInfo)
     open_context_menu = Signal(QMenu, list)
 
@@ -212,7 +213,11 @@ class DirectoryTree(QTreeView):
             self.open_action.setEnabled(False)
 
     def keyPressEvent(self, event: QKeyEvent):
-        if self.autoSearchHelper.keyPressEvent(event):
+        if event.key() in [Qt.Key.Key_Enter, Qt.Key.Key_Return]:
+            index = self.selectionModel().currentIndex()
+            file_info = index.data(QFileSystemModel.Roles.FileInfoRole)
+            self.file_opened.emit(file_info)
+        elif self.autoSearchHelper.keyPressEvent(event):
             self._apply_proxy_root()
             self.viewport().update()
         else:
