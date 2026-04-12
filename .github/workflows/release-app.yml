@@ -65,7 +65,9 @@ jobs:
 
     - name: Download Voxalyzer Release
       shell: pwsh
-      run: Invoke-WebRequest -Uri "https://github.com/gandulf/Voxalyzer/releases/latest/download/voxalyzer.exe" -OutFile "dist/DungeonTuber.dist/voxalyzer.exe"
+      run: |
+        New-Item -ItemType Directory -Force -Path "dist/DungeonTuber.dist"
+        Invoke-WebRequest -Uri "https://github.com/gandulf/Voxalyzer/releases/latest/download/voxalyzer.exe" -OutFile "dist/DungeonTuber.dist/voxalyzer.exe"
 
     - name: Create Nuitka Executable
       uses: Nuitka/Nuitka-Action@main
@@ -128,7 +130,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: DungeonTuber-${{ steps.vars.outputs.app_version }}
         path: DungeonTuber-*.exe
