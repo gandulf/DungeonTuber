@@ -63,6 +63,11 @@ jobs:
       run: |
         flake8
 
+    - name: Download Release
+      run: gh release download latest --repo gandulf/Voxalyzer --pattern '*.exe' --dir dist\DungeonTuber.dist
+      env:
+        GH_TOKEN: ${{ github.token }}
+
     - name: Create Nuitka Executable
       uses: Nuitka/Nuitka-Action@main
       with:
@@ -79,9 +84,6 @@ jobs:
       if: false
       run: |
         pyinstaller DungeonTuber.spec
-
-    - name: Download Release
-      run: gh release download latest --repo gandulf/Voxalyzer --pattern '*.exe' --dir dist\DungeonTuber.dist
 
     - name: Compile .ISS to .EXE Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
