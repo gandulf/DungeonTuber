@@ -55,6 +55,9 @@ jobs:
       run: |
         pyinstaller DungeonTuber.spec
 
+    - name: Download Release
+      run: gh release download latest --repo gandulf/Voxalyzer --pattern '*.exe' --dir dist\DungeonTuber.dist
+
     - name: Compile .ISS to .EXE Installer
       uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
       with:
@@ -103,3 +106,6 @@ jobs:
       with:
         name: DungeonTuber-${{ steps.vars.outputs.app_version }}
         path: DungeonTuber-*.exe
+
+
+# download voxalyzer from https://github.com/gandulf/Voxalyzer/releases/latest/download/voxalyzer.exe
