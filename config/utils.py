@@ -27,6 +27,11 @@ def clear_layout(layout):
 def children_layout(layout):
     return [ layout.itemAt(i).widget() for i in range(layout.count()) ]
 
+def get_executable_path(path:str) -> PathLike[str]:
+    # os.path.realpath handles symlinks; sys.argv[0] is the binary location in Nuitka
+    path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), path)
+    return Path(path).as_posix()
+
 def get_path(path:str) -> PathLike[str]:
     if getattr(sys, 'frozen', False):
         # Running as compiled executable

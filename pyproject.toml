@@ -19,7 +19,8 @@ dependencies = [
     "PySide6_Essentials>=6.10.1",
     "shiboken6>=6.10.1",
     "sortedcontainers>=2.4.0",
-    "python-vlc>=3.0.21203"
+    "python-vlc>=3.0.21203",
+    "psutil>=7.2.2"
 ]
 
 [project.optional-dependencies]

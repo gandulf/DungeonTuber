@@ -1,15 +1,20 @@
+import atexit
 import json
 import os
 import random
 import re
+import threading
 import traceback
 import logging
 import urllib.request
 import urllib.error
 from _winapi import CREATE_NO_WINDOW
+
+import psutil
 from abc import abstractmethod
 
 from queue import Queue
+from subprocess import Popen
 from typing import Any
 from os import PathLike
 from pathlib import Path
@@ -19,40 +24,74 @@ from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QFileInfo
 from logic.mp3 import Mp3Entry, parse_mp3, update_categories_and_tags, print_mp3_tags, list_mp3s
 
 from config.settings import AppSettings, SettingKeys, CATEGORY_MIN, CATEGORY_MAX, MusicCategory, get_category_keys, has_local_voxalyzer, has_voxalyzer
-from config.utils import get_path
+from config.utils import get_executable_path
 
 logger = logging.getLogger(__file__)
 
 voxalyzer_port: int|None = None
+voxalyzer_port_found_event = threading.Event()
+voxalyzer_process: Popen[str]|None = None
 
 def start_voxalyzer() -> str | None:
-    global voxalyzer_port
-    has_local_voxalyzer = os.path.isfile(get_path("voxalyzer.exe"))
+    global voxalyzer_port, voxalyzer_process
+    has_local_voxalyzer = os.path.isfile(get_executable_path("voxalyzer.exe"))
 
     if has_local_voxalyzer and voxalyzer_port is None:
         import subprocess
 
-        process = subprocess.Popen([get_path("voxalyzer.exe"), "--port", "0"],
+        voxalyzer_process = subprocess.Popen([get_executable_path("voxalyzer.exe"), "--port", "0"],
                                    creationflags=CREATE_NO_WINDOW,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE,
                                    text=True
                                    )
+        atexit.register(stop_voxalyzer)
+        # 3. Define the logger function
+        def stream_logger(pipe, prefix):
+            global voxalyzer_port
+            for line in pipe:
+                logger.info(f"[Voxalyzer]: {line.strip()}")
+                match = re.search(r"http://0.0.0.0:(\d+) ", line)
+                if match:
+                    voxalyzer_port = match.group(1)
+                    voxalyzer_port_found_event.set()
+                    break
 
-        # Read line by line as the app prints
-        for line in process.stdout:
-            # print(f"[App Log]: {line.strip()}")
-            match = re.search(r"http://0.0.0.0:(\d+) ", line)
-            if match:
-                voxalyzer_port = match.group(1)
-                break
+        logger.info("Voxalyzer: Listening for port...")
 
-        logger.info(f"Voxalyzer is running on port {voxalyzer_port}")
+        out_thread = threading.Thread(target=stream_logger, args=(voxalyzer_process.stdout, "INFO"), daemon=True)
+        err_thread = threading.Thread(target=stream_logger, args=(voxalyzer_process.stderr, "ERROR"), daemon=True)
+        out_thread.start()
+        err_thread.start()
+
+        # 3. Wait (blocks the main thread until .set() is called)
+        logger.info("Voxalyzer: Waiting for port...")
+        is_set = voxalyzer_port_found_event.wait(timeout=60)  # Optional timeout in seconds
+
+        if is_set:
+            logger.info(f"Voxalyzer is running on port {voxalyzer_port}")
+        else:
+            logger.error("Voxalyzer: Timed out waiting for port!")
 
     if voxalyzer_port:
         return f"http://localhost:{voxalyzer_port}"
     else:
         return None
+
+# This ensures the child is killed when Python exits gracefully
+def stop_voxalyzer():
+    try:
+        if voxalyzer_process is not None:
+            parent = psutil.Process(voxalyzer_process.pid)
+            # Find all grandchildren (Uvicorn, etc.)
+            children = parent.children(recursive=True)
+
+            for child in children:
+                child.terminate()  # or child.kill()
+
+            parent.terminate()
+    except psutil.NoSuchProcess:
+        pass  # Already dead
 
 def is_analyzed(file_path: PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
@@ -203,7 +242,9 @@ class LocalVoxalyzerAnalyzer(Analyzer):
             self.url = start_voxalyzer()
 
         if self.url is not None and self.url !='None' and self.url !='':
-            if self.url.endswith("/"):
+            if self.url.endswith("/analyze"):
+                pass
+            elif self.url.endswith("/"):
                 self.url = f"{self.url}analyze"
             else:
                 self.url = f"{self.url}/analyze"
