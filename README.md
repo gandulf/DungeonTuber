@@ -8,8 +8,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **DungeonTuber** is a specialized music player designed for Role-Playing Game Masters, streamers, and storytellers who need the perfect atmosphere at their fingertips. Unlike standard players, DungeonTuber allows you to categorize and filter your music based on emotional weight, intensity, and genre-specific metadata.
- 
-![Screenshot of application](docs/screen1.png)
+
+![Screenshot of application](docs/screen2.png)
 
 ---
 
