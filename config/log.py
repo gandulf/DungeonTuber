@@ -1,9 +1,8 @@
 import collections
 import logging
 
-from settings import AppSettings, SettingKeys
-from utils import get_executable_path
-
+from config.settings import AppSettings, SettingKeys
+from config.utils import get_executable_path
 
 class StrFormatLogRecord(logging.LogRecord):
     """

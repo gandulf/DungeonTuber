@@ -10,8 +10,7 @@ from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLa
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
     QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox, QLabel
 
-from config.utils import get_available_locales, restart_application, get_path
-from utils import get_executable_path
+from config.utils import get_available_locales, restart_application, get_executable_path
 
 logger = logging.getLogger(__file__)
 
