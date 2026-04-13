@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLa
     QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox, QLabel
 
 from config.utils import get_available_locales, restart_application, get_path
+from utils import get_executable_path
 
 logger = logging.getLogger(__file__)
 
@@ -34,7 +35,7 @@ def has_voxalyzer():
     return has_local_voxalyzer() or AppSettings.value(SettingKeys.VOXALYZER_URL, type=str, defaultValue='') != ''
 
 def has_local_voxalyzer():
-    return os.path.isfile(get_path("voxalyzer.exe")) and AppSettings.value(SettingKeys.VOXALYZER_LOCAL, True, type=bool)
+    return os.path.isfile(get_executable_path("voxalyzer.exe")) and AppSettings.value(SettingKeys.VOXALYZER_LOCAL, True, type=bool)
 
 @total_ordering
 @dataclass
@@ -211,6 +212,7 @@ def reset_presets():
 
 
 class SettingKeys(StrEnum):
+    DEBUG = "debug"
     WINDOW_SIZE="windowSize"
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
@@ -318,7 +320,7 @@ class SettingsDialog(QDialog):
         self.analyzer_layout.addRow(_("Voxalyzer BaseUrl") , self.voxalyzerUrl)
 
         self.local_voxalyzer = QCheckBox(_("Use Local Voxalyzer"))
-        self.local_voxalyzer.setEnabled(has_local_voxalyzer())
+        self.local_voxalyzer.setEnabled(os.path.isfile(get_executable_path("voxalyzer.exe")))
         self.local_voxalyzer.setChecked(has_local_voxalyzer() and AppSettings.value(SettingKeys.VOXALYZER_LOCAL,True, type=bool))
         self.local_voxalyzer.clicked.connect(self._local_voxalyzer_changed)
         self.analyzer_layout.addRow("", self.local_voxalyzer)
@@ -368,6 +370,10 @@ class SettingsDialog(QDialog):
         self.summary_column = QCheckBox(_("Display summary next to title"))
         self.summary_column.setChecked(AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool))
         table_layout.addRow("", self.summary_column)
+
+        self.debug_checkbox = QCheckBox(_("Debug"))
+        self.debug_checkbox.setChecked(AppSettings.value(SettingKeys.DEBUG, False, type=bool))
+        self.analyzer_layout.addRow("", self.debug_checkbox)
 
         layout.addStretch()
 
@@ -456,6 +462,8 @@ class SettingsDialog(QDialog):
         AppSettings.setValue(SettingKeys.DYNAMIC_SCORE_COLUMN, self.dynamic_score_column.isChecked())
         AppSettings.setValue(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, self.summary_column.isChecked())
         AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
+        AppSettings.setValue(SettingKeys.DEBUG, self.debug_checkbox.isChecked())
+        AppSettings.setValue(SettingKeys.VOXALYZER_LOCAL, self.local_voxalyzer.isChecked())
         if self.voxalyzerUrl.text() == '' or self.voxalyzerUrl.text() is None:
             AppSettings.remove(SettingKeys.VOXALYZER_URL)
         else:

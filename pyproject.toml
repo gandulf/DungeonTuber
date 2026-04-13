@@ -27,7 +27,7 @@ dependencies = [
 dev = [
     "pyinstaller>=6.17.0",
     "flake8>=7.3.0",
-    "Nuitka>=2.8.10"
+    "Nuitka[app]>=2.8.10"
 ]
 
 [project.scripts]

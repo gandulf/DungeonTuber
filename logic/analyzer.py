@@ -236,10 +236,7 @@ class MockAnalyzer(Analyzer):
 
 class LocalVoxalyzerAnalyzer(Analyzer):
     def _lazy_startup(self) -> str | None:
-        self.url = AppSettings.value(SettingKeys.VOXALYZER_URL, type=str, defaultValue='None')
-
-        if self.url == 'None':
-            self.url = start_voxalyzer()
+        self.url = start_voxalyzer()
 
         if self.url is not None and self.url !='None' and self.url !='':
             if self.url.endswith("/analyze"):

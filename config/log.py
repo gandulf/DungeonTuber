@@ -1,6 +1,10 @@
 import collections
 import logging
 
+from settings import AppSettings, SettingKeys
+from utils import get_executable_path
+
+
 class StrFormatLogRecord(logging.LogRecord):
     """
     Drop-in replacement for ``LogRecord`` that supports ``str.format``.
@@ -33,8 +37,11 @@ class StrFormatLogRecord(logging.LogRecord):
 
 def setup_logging():
     logging.basicConfig(
-        level=logging.WARNING,
+        filename=get_executable_path('debug.log'),
+        filemode='a',
+        level=logging.DEBUG if AppSettings.value(SettingKeys.DEBUG, False, type=bool) else logging.WARNING,
         style='{',
-        format='[{levelname}] {message}'
+        format='[{levelname}] {message}',
+        force=True
     )
     logging.setLogRecordFactory(StrFormatLogRecord)
