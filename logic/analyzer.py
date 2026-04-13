@@ -39,7 +39,7 @@ def start_voxalyzer() -> str | None:
     if has_local_voxalyzer and voxalyzer_port is None:
         import subprocess
 
-        voxalyzer_process = subprocess.Popen([get_executable_path("voxalyzer.exe"), "--port", "0"],
+        voxalyzer_process = subprocess.Popen([get_executable_path("voxalyzer.exe"), "--port", "0", "--host", "127.0.0.1"],
                                    creationflags=CREATE_NO_WINDOW,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE,
@@ -52,7 +52,7 @@ def start_voxalyzer() -> str | None:
             global voxalyzer_port
             for line in pipe:
                 logger.info(f"[Voxalyzer]: {line.strip()}")
-                match = re.search(r"http://0.0.0.0:(\d+) ", line)
+                match = re.search(r"http://127.0.0.1:(\d+) ", line)
                 if match:
                     voxalyzer_port = match.group(1)
                     voxalyzer_port_found_event.set()
