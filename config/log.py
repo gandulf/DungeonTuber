@@ -1,5 +1,7 @@
 import collections
 import logging
+import os
+from pathlib import Path
 
 from config.settings import AppSettings, SettingKeys
 from config.utils import get_executable_path
@@ -33,10 +35,13 @@ class StrFormatLogRecord(logging.LogRecord):
 
         return msg
 
-
 def setup_logging():
+    app_name = "DungeonTuber"
+    log_dir = Path(os.environ['APPDATA']) / app_name / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
     logging.basicConfig(
-        filename=get_executable_path('debug.log'),
+        filename= log_dir.joinpath('debug.log'),
         filemode='a',
         level=logging.DEBUG if AppSettings.value(SettingKeys.DEBUG, False, type=bool) else logging.WARNING,
         style='{',
