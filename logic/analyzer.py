@@ -33,7 +33,7 @@ voxalyzer_port_found_event = threading.Event()
 voxalyzer_process: Popen[str]|None = None
 
 def start_voxalyzer() -> str | None:
-    global voxalyzer_port, voxalyzer_process
+    global voxalyzer_process
     has_local_voxalyzer = os.path.isfile(get_executable_path("voxalyzer.exe"))
 
     if has_local_voxalyzer and voxalyzer_port is None:
