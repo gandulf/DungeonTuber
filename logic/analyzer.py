@@ -43,6 +43,7 @@ def start_voxalyzer() -> str | None:
                                    creationflags=CREATE_NO_WINDOW,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE,
+                                   stdin=subprocess.DEVNULL,
                                    text=True
                                    )
         atexit.register(stop_voxalyzer)
