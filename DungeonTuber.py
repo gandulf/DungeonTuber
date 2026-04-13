@@ -1,7 +1,7 @@
 # Compilation mode, standalone everywhere, except on macOS there app bundle
 # nuitka-project-if: {OS} in ("Windows", "Linux", "FreeBSD"):
 #    nuitka-project: --mode=standalone
-#    nuitka-project: --windows-console-mode=hide
+#    nuitka-project: --windows-console-mode=disable
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/docs/icon.ico
 # nuitka-project-else:
 #    nuitka-project: --mode=standalone

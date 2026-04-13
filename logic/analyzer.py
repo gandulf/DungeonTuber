@@ -87,11 +87,11 @@ def stop_voxalyzer():
             children = parent.children(recursive=True)
 
             for child in children:
-                child.terminate()  # or child.kill()
+                child.terminate()
 
             parent.terminate()
     except psutil.NoSuchProcess:
-        pass  # Already dead
+        pass
 
 def is_analyzed(file_path: PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
