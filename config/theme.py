@@ -44,8 +44,8 @@ class AppTheme(QObject):
 
     application: QApplication
 
-    _color_cache: dict[string, QColor] = {}
-    _brush_cache: dict[string, QBrush] = {}
+    _color_cache: dict[str, QColor] = {}
+    _brush_cache: dict[str, QBrush] = {}
 
     _small_factor = 0.6
 
@@ -235,12 +235,12 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(127, 127, 127))
 
             # --- BORDERS & SHADOWS ---
-            palette.setColor(QPalette.ColorRole.Light, QColor(33, 33, 33))
-            palette.setColor(QPalette.ColorRole.Midlight, QColor(43, 43, 43))
-            palette.setColor(QPalette.ColorRole.Mid, QColor(63, 63, 63))
+            palette.setColor(QPalette.ColorRole.Light, QColor(73, 73, 73))
+            palette.setColor(QPalette.ColorRole.Midlight, QColor(63, 63, 63))
+            palette.setColor(QPalette.ColorRole.Mid, QColor(43, 43, 43))
             palette.setColor(QPalette.ColorRole.Dark, QColor(35, 35, 35))
-            palette.setColor(QPalette.ColorRole.Shadow, QColor(20, 20, 20))
 
+            palette.setColor(QPalette.ColorRole.Shadow, QColor(20, 20, 20))
 
             self.dark_palette = palette
 
@@ -278,11 +278,13 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.ButtonText, dark_text)
 
             # --- BORDERS & SHADOWS ---
-            palette.setColor(QPalette.ColorRole.Light, QColor(240, 240, 240))
-            palette.setColor(QPalette.ColorRole.Midlight, QColor(225, 225, 225))
-            palette.setColor(QPalette.ColorRole.Mid, QColor(200, 200, 200))
-            palette.setColor(QPalette.ColorRole.Dark, QColor(180, 180, 180))
-            palette.setColor(QPalette.ColorRole.Shadow, QColor(140, 140, 140))
+            light = QColor(240, 240, 240)
+            palette.setColor(QPalette.ColorRole.Light, light)
+            palette.setColor(QPalette.ColorRole.Midlight, light.darker(107))  # Result: ~224
+            palette.setColor(QPalette.ColorRole.Mid, light.darker(120))  # Result: 200
+            palette.setColor(QPalette.ColorRole.Dark, light.darker(133))  # Result: 180
+
+            palette.setColor(QPalette.ColorRole.Shadow, QColor(140, 140, 140))  # Result: 140
 
             # --- DISABLED STATE ---
             # Crucial: Grey text on a light background must be dark enough to see

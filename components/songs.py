@@ -1021,7 +1021,8 @@ class SongTable(QTableView):
         elif index.column() == SongTableModel.COVER_COL:
             data = index.data(Qt.ItemDataRole.UserRole)
             if data.cover:
-                ImagePopup(data.title, data.cover).exec()
+                self.image_popup = ImagePopup(data.title, data.cover)
+                self.image_popup.show()
 
 
     def refresh_item(self, file_path: PathLike[str]):

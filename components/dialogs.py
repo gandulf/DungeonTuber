@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QPixmap, QIcon, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication, QDialogButtonBox, QLineEdit, QSpinBox, \
     QTextEdit, QCheckBox, QFormLayout, QMessageBox, QFileDialog, QPushButton, QScrollArea
@@ -200,9 +200,7 @@ class ImagePopup(QDialog):
         self.setWindowTitle(title)
         self.resize(800, 600)
 
-        # 1. Enable Maximize and Minimize buttons
-        # We combine the default Dialog flags with the Maximize hint
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowMaximizeButtonHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
 
         # 2. Setup Fullscreen Shortcut (Press F11 or Esc)
         self.fs_shortcut = QShortcut(QKeySequence("F11"), self)
@@ -252,6 +250,13 @@ class ImagePopup(QDialog):
             self.showNormal()
         else:
             self.close()  # Standard behavior: Esc closes a dialog
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.ActivationChange:
+            # If the window is no longer active, close it
+            if not self.isActiveWindow():
+                self.close()
+        super().changeEvent(event)
 
     def showEvent(self, event):
         """Called when the dialog is shown for the first time."""
