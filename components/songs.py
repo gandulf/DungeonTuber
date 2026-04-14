@@ -24,7 +24,6 @@ from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp
 
 logger = logging.getLogger(__file__)
 
-
 def _get_bpm_background_brush(desired_value: int | None, value: int, data: Mp3Entry) -> QBrush | Qt.GlobalColor | None:
     if value is None or desired_value is None or desired_value == 0:
         return _get_entry_background_brush(data)
@@ -44,7 +43,7 @@ def _get_entry_background_brush(data: Mp3Entry):
         background = QColor(data.color)
         background.setAlphaF(0.5)
         gradient = QLinearGradient(0, 0, 0, 1)
-        gradient.setCoordinateMode(QGradient.CoordinateMode.ObjectBoundingMode);
+        gradient.setCoordinateMode(QGradient.CoordinateMode.ObjectBoundingMode)
         gradient.setColorAt(0.0, Qt.GlobalColor.transparent)
         gradient.setColorAt(0.3, Qt.GlobalColor.transparent)
         gradient.setColorAt(1.0, background)
@@ -772,8 +771,8 @@ class SongTable(QTableView):
         font_metrics = self.horizontalHeader().fontMetrics()
 
         name = self.table_model.headerData(index, Qt.Orientation.Horizontal, role=Qt.ItemDataRole.DisplayRole)
-        # padding + space for sort icon + text width
-        return (app_theme.font_size * 2 + 8 +
+        # padding + text width
+        return (app_theme.font_size * 2 +
                 + self.horizontalHeader().contentsMargins().left()
                 + self.horizontalHeader().contentsMargins().right()
                 + font_metrics.horizontalAdvance(name))
@@ -1027,9 +1026,10 @@ class SongTable(QTableView):
 
     def refresh_item(self, file_path: PathLike[str]):
         data = parse_mp3(Path(file_path))
-        index = self.index_of(data)
-        if index.isValid():
-            self.model().setData(index, data, Qt.ItemDataRole.UserRole)
+        if data is not None:
+            index = self.index_of(data)
+            if index.isValid():
+                self.model().setData(index, data, Qt.ItemDataRole.UserRole)
 
     def setModel(self, model: SongTableModel | SongTableProxyModel):
         if isinstance(model, SongTableProxyModel):
@@ -1192,10 +1192,10 @@ class SongTable(QTableView):
 
             if all(os.path.isdir(path) for path in paths):
                 event.accept()
-                self.file_opened.emit([QFileInfo(path) for path in paths])
+                self.open_files.emit([QFileInfo(path) for path in paths])
             elif all(path.suffix.lower() == ".m3u" for path in paths):
                 event.accept()
-                self.file_opened.emit([QFileInfo(path) for path in paths])
+                self.open_files.emit([QFileInfo(path) for path in paths])
             elif self.playlist:
                 index = self.indexAt(event.position().toPoint())
 

@@ -6,9 +6,10 @@ from enum import StrEnum
 from functools import total_ordering
 
 from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLayout, QTabWidget, QWidget, \
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
-    QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox, QLabel
+    QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox, QLabel, QProxyStyle
 
 from config.utils import get_available_locales, restart_application, get_executable_path
 
@@ -264,6 +265,10 @@ class SettingKeys(StrEnum):
     VOXALYZER_URL ="voxalyzerUrl"
     VOXALYZER_LOCAL = "voxalyzerLocal"
 
+class TabColorStyle(QProxyStyle):
+    def drawItemText(self, painter, rect, flags, pal, enabled, text, role):
+        painter.setPen(pal.color(QPalette.ColorRole.ButtonText))
+        super().drawItemText(painter, rect, flags, pal, enabled, text, role)
 
 class SettingsDialog(QDialog):
 
@@ -276,6 +281,8 @@ class SettingsDialog(QDialog):
 
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
+        self.table_tabs_style = TabColorStyle()
+        self.tabs.tabBar().setStyle(self.table_tabs_style)
         layout.addWidget(self.tabs)
 
         # General Tab

@@ -44,7 +44,7 @@ from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, is_frozen
 
 from components.effects import EffectList, EffectWidget
-from components.widgets import FeatureOverlay
+from components.widgets import FeatureOverlay, TabColorStyle
 from components.player import PlayerWidget
 from components.dialogs import AboutDialog, EditSongDialog
 from components.filter import FilterWidget
@@ -603,8 +603,10 @@ class MusicPlayer(QMainWindow):
         self.table_tabs.currentChanged.connect(self.on_table_tab_changed)
         self.table_tabs.tabCloseRequested.connect(self.on_table_tab_close)
         self.table_tabs.tabBar().tabMoved.connect(self.on_table_tab_moved)
-        tabs_layout.addWidget(self.table_tabs)
 
+        self.table_tabs_style = TabColorStyle()
+        self.table_tabs.tabBar().setStyle(self.table_tabs_style)
+        tabs_layout.addWidget(self.table_tabs)
 
         main_layout.addSpacing(app_theme.spacing)
         main_layout.addWidget(tabs_widget, 2)
@@ -664,9 +666,19 @@ class MusicPlayer(QMainWindow):
         refresh_action.triggered.connect(self.reload_table)
         menu.addAction(refresh_action)
 
-        close_tables_action = QAction(_("Close All"), icon=QIcon.fromTheme(QIcon.ThemeIcon.WindowClose))
-        close_tables_action.triggered.connect(self.close_tables)
-        menu.addAction(close_tables_action)
+        menu.addSeparator()
+
+        close_tables_current_action = QAction(_("Close"), icon=QIcon.fromTheme(QIcon.ThemeIcon.WindowClose))
+        close_tables_current_action.triggered.connect(self.close_tables_current)
+        menu.addAction(close_tables_current_action)
+
+        close_tables_other_action = QAction(_("Close Other"), icon=QIcon.fromTheme(QIcon.ThemeIcon.WindowClose))
+        close_tables_other_action.triggered.connect(self.close_tables_other)
+        menu.addAction(close_tables_other_action)
+
+        close_tables_all_action = QAction(_("Close All"), icon=QIcon.fromTheme(QIcon.ThemeIcon.WindowClose))
+        close_tables_all_action.triggered.connect(self.close_tables_all)
+        menu.addAction(close_tables_all_action)
 
         menu.exec(self.table_tabs.tabBar().mapToGlobal(position))
 
@@ -898,8 +910,18 @@ class MusicPlayer(QMainWindow):
         table = self.current_table()
         return table.table_model.available_categories if table is not None else get_music_categories()
 
-    def close_tables(self):
+    def close_tables_other(self):
+        current_index = self.table_tabs.currentIndex()
+
+        for i in reversed(range(self.table_tabs.count())):
+            if i != current_index:
+                self.table_tabs.removeTab(i)
+
+    def close_tables_all(self):
         self.table_tabs.clear()
+
+    def close_tables_current(self):
+        self.table_tabs.removeTab(self.table_tabs.currentIndex())
 
     def reload_table(self, checked:bool = False, index: int = None):
         if index is None:

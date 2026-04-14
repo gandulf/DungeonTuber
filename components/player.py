@@ -3,24 +3,20 @@ import random
 from os import PathLike
 
 from PySide6.QtCore import Signal, QSize, QTimer, QPersistentModelIndex, Qt, QEvent, QPoint, QPointF
-from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent, QFontMetrics, QIcon, QPalette, QAction, QPen, QMouseEvent
-from PySide6.QtWidgets import QWidget, QFrame, QLabel, QSlider, QToolButton, QSizePolicy, QVBoxLayout, QHBoxLayout, QToolTip, QStyleOptionSlider, QStyle, QMenu
+from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent, QFontMetrics, QIcon, QPalette, \
+    QAction, QPen, QMouseEvent, QFont
+from PySide6.QtWidgets import QWidget, QFrame, QLabel, QSlider, QSizePolicy, QVBoxLayout, QHBoxLayout, \
+    QToolTip, QStyleOptionSlider, QStyle, QMenu
 
 from logic.audioengine import AudioEngine, EngineState
 from logic.mp3 import Mp3Entry, update_mp3_chapters
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
-from config.utils import  ms_to_promille, format_time
+from config.utils import ms_to_promille, format_time
 from components.widgets import RepeatMode, RepeatButton, JumpSlider, VolumeSlider, RoundButton
 from components.dialogs import NameDialog
 
 logger = logging.getLogger(__file__)
-
-_green = QColor("#5CB338")
-_yellow = QColor("#ECE852")
-_orange = QColor("#FFC145")
-_red = QColor("#FB4141")
-
 
 class Visualizer:
     video_frame = None
@@ -164,13 +160,12 @@ class FakeVisualizerWidget(QWidget, Visualizer):
         painter.fillRect(content_rect, base_color)
 
         bar_width = w / self.bars
-
         # Gradient brush for a modern look
         gradient = QLinearGradient(0, h, 0, 0)
-        gradient.setColorAt(0.0, _green)  # Green
-        gradient.setColorAt(0.4, _yellow)  # yellow
-        gradient.setColorAt(0.6, _orange)  # Orange
-        gradient.setColorAt(1.0, _red)  # Red
+        gradient.setColorAt(0.0, app_theme.get_green())  # Green
+        gradient.setColorAt(0.4, app_theme.get_yellow())  # yellow
+        gradient.setColorAt(0.6, app_theme.get_orange())  # Orange
+        gradient.setColorAt(1.0, app_theme.get_red())  # Red
 
         for i, val in enumerate(self.values):
             bar_h = max(1, int(val * h * 1.2))  # make the bars fill up more space by using factor 1.2
@@ -395,7 +390,7 @@ class PlayerWidget(QFrame):
         self.btn_play.setEnabled(enabled)
         self.btn_next.setEnabled(enabled)
 
-    def update_progress(self, current_time_ms:int, total_time_ms:int):
+    def update_progress(self, current_time_ms: int, total_time_ms: int):
         if not self.progress_slider.isSliderDown():
             self.progress_slider.setValue(current_time_ms)
         self.time_label.setText(format_time(current_time_ms))
@@ -517,7 +512,7 @@ class PlayerSlider(JumpSlider):
         self.customContextMenuRequested.connect(self.show_context_menu)
 
     def show_context_menu(self, pos: QPoint):
-        if self.maximum()>0:
+        if self.maximum() > 0:
             menu = QMenu(self)
 
             # Add actions
@@ -556,12 +551,12 @@ class PlayerSlider(JumpSlider):
             self.remove_chapter.emit(index)
             del self.chapters[index]
 
-    def set_chapters(self, chapter_data: list[dict] |None):
+    def set_chapters(self, chapter_data: list[dict] | None):
         """Pass a list of dicts: [{'time': 0, 'title': 'Intro'}, ...]"""
         if chapter_data:
             self.chapters = chapter_data.copy()
         else:
-            self.chapters =[]
+            self.chapters = []
         self.update()
 
     def mousePressEvent(self, event: QMouseEvent):
@@ -579,10 +574,21 @@ class PlayerSlider(JumpSlider):
                 self.setValue(self._get_value_from_position(event.pos()))
 
     def paintEvent(self, event: QPaintEvent):
-        super().paintEvent(event)
+        painter = QPainter(self)
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
 
+        # Force the option rect to respect the margins
+        opt.rect = self.contentsRect()
+
+        # Tell it exactly what to draw
+        opt.subControls = QStyle.SC_SliderGroove | QStyle.SubControl.SC_SliderTickmarks
+
+        self.style().drawComplexControl(QStyle.CC_Slider, opt, painter, self)
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         if self.chapters and self.maximum() > 0:
-            painter = QPainter(self)
 
             opt = QStyleOptionSlider()
             self.initStyleOption(opt)
@@ -591,12 +597,44 @@ class PlayerSlider(JumpSlider):
             groove_width = 4  # thickness of groove line width
             tick_width = 3  # width of chapter tick
 
+            chapter_font = app_theme.font_small()
+            chapter_font.setCapitalization(QFont.Capitalization.AllUppercase)
+            painter.setFont(chapter_font)
+
+            chapterFM = QFontMetrics(chapter_font)
             for ch in self.chapters:
                 x = self._get_position_from_value(ch['time'])
-                painter.fillRect(x - tick_width // 2, gr.center().y() - (groove_width+2) //2, tick_width, groove_width+2, self.palette().brush(self.backgroundRole()))
-            painter.end()
 
+                painter.fillRect(x - tick_width // 2, gr.center().y() - (groove_width + 2) // 2, tick_width,
+                                 groove_width + 2, self.palette().brush(self.backgroundRole()))
 
+                textHeight = chapterFM.height()
+
+                x = x + 9
+
+                text_rect = chapterFM.boundingRect(x, gr.center().y() - textHeight // 2, opt.rect.width(),
+                                                   opt.rect.height(), Qt.TextFlag.TextSingleLine, ch['title']);
+
+                brush_rect = text_rect.adjusted(-10, -2, 2, 2)
+                painter.setBrush(self.palette().brush(self.backgroundRole()))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawRoundedRect(brush_rect, 2.0, 2.0)
+
+                painter.setBrush(self.palette().brush(QPalette.ColorRole.Accent))
+                painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Base)))
+
+                painter.drawEllipse(brush_rect.x(), text_rect.top() + 4, 8, 8)
+
+                painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Text)))
+                painter.drawText(text_rect, Qt.TextFlag.TextSingleLine, ch['title'])
+
+        painter.restore()
+
+        opt.subControls = QStyle.SC_SliderHandle
+
+        self.style().drawComplexControl(QStyle.CC_Slider, opt, painter, self)
+
+        painter.end()
 
     def _find_chapter_for_position(self, mouse_x: int):
         threshold = 5  # Pixels of 'forgiveness' for the mouse cursor
@@ -614,8 +652,10 @@ class PlayerSlider(JumpSlider):
         found_chapter = self._find_chapter_for_position(event.pos().x())
 
         if found_chapter:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
             QToolTip.showText(event.globalPosition().toPoint(), found_chapter['title'], self)
         else:
+            self.unsetCursor()
             QToolTip.hideText()
 
         super().mouseMoveEvent(event)
@@ -623,22 +663,26 @@ class PlayerSlider(JumpSlider):
     def _get_value_from_position(self, position: QPoint | QPointF | int) -> int:
         opt = QStyleOptionSlider()
         self.initStyleOption(opt)
-        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
-        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
+        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt,
+                                                  QStyle.SubControl.SC_SliderGroove, self)
+        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt,
+                                                  QStyle.SubControl.SC_SliderHandle, self)
 
         if self.orientation() == Qt.Orientation.Vertical:
             pos_y = position.y() if isinstance(position, (QPoint, QPointF)) else position
             slider_pos = pos_y - handle_rect.height() // 2
 
             value = QStyle.sliderValueFromPosition(
-                self.minimum(), self.maximum(), slider_pos, groove_rect.height() - handle_rect.height(), not self.invertedAppearance()
+                self.minimum(), self.maximum(), slider_pos, groove_rect.height() - handle_rect.height(),
+                not self.invertedAppearance()
             )
         else:  # Horizontal
             pos_x = position.x() if isinstance(position, (QPoint, QPointF)) else position
             slider_pos = pos_x - handle_rect.width() // 2
 
             value = QStyle.sliderValueFromPosition(
-                self.minimum(), self.maximum(), slider_pos, groove_rect.width() - handle_rect.width(), self.invertedAppearance()
+                self.minimum(), self.maximum(), slider_pos, groove_rect.width() - handle_rect.width(),
+                self.invertedAppearance()
             )
 
         return value
@@ -646,12 +690,15 @@ class PlayerSlider(JumpSlider):
     def _get_position_from_value(self, ms: int) -> int:
         opt = QStyleOptionSlider()
         self.initStyleOption(opt)
-        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
-        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
+        groove_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt,
+                                                  QStyle.SubControl.SC_SliderGroove, self)
+        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt,
+                                                  QStyle.SubControl.SC_SliderHandle, self)
 
         if self.orientation() == Qt.Orientation.Vertical:
             pos_in_groove = QStyle.sliderPositionFromValue(
-                self.minimum(), self.maximum(), ms, groove_rect.height() - handle_rect.height(), not self.invertedAppearance()
+                self.minimum(), self.maximum(), ms, groove_rect.height() - handle_rect.height(),
+                not self.invertedAppearance()
             )
             # The returned position is relative to the groove, so add the groove's top.
             return groove_rect.top() + pos_in_groove + handle_rect.height() // 2

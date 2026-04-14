@@ -204,31 +204,43 @@ class AppTheme(QObject):
     def get_dark_mode_palette(self) -> QPalette:
         if self.dark_palette is None:
             palette = QPalette()
+
+            # --- ACCENT & HIGHLIGHT ---
+            # Keeping your blue accent, but slightly less vibrant for dark mode
             palette.setColor(QPalette.ColorRole.Accent, QColor(0, 80, 203))
-            palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
-            palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, QColor(127, 127, 127))
-            palette.setColor(QPalette.ColorRole.Base, QColor(42, 42, 42))
-            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(66, 66, 66, 50))
-            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(53, 53, 53))
-            palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(127, 127, 127))
-            palette.setColor(QPalette.ColorRole.Shadow, QColor(20, 20, 20))
-            palette.setColor(QPalette.ColorRole.Button, QColor(63, 63, 63))
-            palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(127, 127, 127))
-            palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.lightGray)
-            palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
             palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 102, 255))
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(80, 80, 80))
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, QColor(127, 127, 127))
+            palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
 
-            palette.setColor(QPalette.ColorRole.Dark, QColor(35, 35, 35))
-            palette.setColor(QPalette.ColorRole.Mid, QColor(63, 63, 63))
-            palette.setColor(QPalette.ColorRole.Midlight, QColor(43, 43, 43))
+            # --- BACKGROUNDS ---
+            # Window is the main background; Base is for text inputs/lists
+            palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+            palette.setColor(QPalette.ColorRole.Base, QColor(42, 42, 42))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(66, 66, 66, 50))
+            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(53, 53, 53))
+
+            # --- TEXT ---
+            palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(127, 127, 127))
+            palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
+            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, QColor(127, 127, 127))
+            palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
+            palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.lightGray)
+
+            # --- BUTTONS ---
+            palette.setColor(QPalette.ColorRole.Button, QColor(73, 73, 73))
+            palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
+            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(127, 127, 127))
+
+            # --- BORDERS & SHADOWS ---
             palette.setColor(QPalette.ColorRole.Light, QColor(33, 33, 33))
+            palette.setColor(QPalette.ColorRole.Midlight, QColor(43, 43, 43))
+            palette.setColor(QPalette.ColorRole.Mid, QColor(63, 63, 63))
+            palette.setColor(QPalette.ColorRole.Dark, QColor(35, 35, 35))
+            palette.setColor(QPalette.ColorRole.Shadow, QColor(20, 20, 20))
+
 
             self.dark_palette = palette
 
@@ -244,7 +256,7 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.Accent, accent_blue)
             palette.setColor(QPalette.ColorRole.Highlight, accent_blue)
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorRole.Link, QColor(0, 80, 203))
+            palette.setColor(QPalette.ColorRole.Link, accent_blue)
 
             # --- BACKGROUNDS ---
             # Window is the main background; Base is for text inputs/lists
@@ -266,7 +278,6 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.ButtonText, dark_text)
 
             # --- BORDERS & SHADOWS ---
-
             palette.setColor(QPalette.ColorRole.Light, QColor(240, 240, 240))
             palette.setColor(QPalette.ColorRole.Midlight, QColor(225, 225, 225))
             palette.setColor(QPalette.ColorRole.Mid, QColor(200, 200, 200))
@@ -279,7 +290,7 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_grey)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_grey)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_grey)
-            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(200, 200, 200))
+            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, disabled_grey.lighter(125))
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
 
             self.light_palette = palette
@@ -356,7 +367,8 @@ class AppTheme(QObject):
                         font-family: '{font_family}';                        
                     }}
                     QMenuBar, QMenuBar::item {{
-                        font-family: '{font_family}';                        
+                        font-family: '{font_family}';
+                        color: {_text_color};                        
                     }}
                     
                     QTreeView, QListView {{
@@ -378,11 +390,14 @@ class AppTheme(QObject):
                     
                     QTabBar::tab:!selected {{                                                                          
                         font-size:{self._font_size_large}pt;
-                    }}
-                    
+                        
+                        background-color: {_button_color};
+                    }}                                    
                     QTabBar::tab:selected {{                                                                        
                         font-size:{self._font_size_large}pt;
                         font-weight:bold;
+                        
+                        background-color: {_button_hover_color};
                     }}
                     
                     QTableView {{
@@ -406,9 +421,10 @@ class AppTheme(QObject):
                         border-right:1px solid {_border_color};
                     }}
                     
-                    QLineEdit[text=""] {{
-                        color:{_text_color};
-                    }}
+                    QLineEdit {{
+                        color: {_text_color};
+                        background-color: {_base_color};
+                    }}                    
                     
                     QPushButton, QToolButton {{
                         background-color: {_button_color};
@@ -503,7 +519,7 @@ class AppTheme(QObject):
         }}
         
         QMenu::item {{
-            padding:8px;                     
+            padding:8px;            
         }}
         
         QMenu::icon {{

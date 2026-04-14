@@ -1407,3 +1407,7 @@ class ColorButton(QPushButton):
         return super().mousePressEvent(e)
 
 
+class TabColorStyle(QProxyStyle):
+    def drawItemText(self, painter, rect, flags, pal, enabled, text, role):
+        painter.setPen(pal.color(QPalette.ColorRole.ButtonText))
+        super().drawItemText(painter, rect, flags, pal, enabled, text, role)

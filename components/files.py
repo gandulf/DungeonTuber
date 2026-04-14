@@ -19,13 +19,18 @@ class CustomIconProvider(QFileIconProvider):
     def __init__(self):
         super().__init__()
         # Pre-load icons to save memory/processing
+        self.refresh_icons()
+
+    def refresh_icons(self):
         self.music_icon = QIcon.fromTheme("file-mp3")
         folder_open_icon = QIcon.fromTheme("folder-open")
         folder_icon = QIcon.fromTheme("folder-closed")
 
         self.folder_icon = QIcon()
-        self.folder_icon.addPixmap(folder_icon.pixmap(app_theme.icon_size), QIcon.Normal, QIcon.Off)  # State: Off (Closed)
-        self.folder_icon.addPixmap(folder_open_icon.pixmap(app_theme.icon_size), QIcon.Normal, QIcon.On)  # State: On (Open)
+        self.folder_icon.addPixmap(folder_icon.pixmap(app_theme.icon_size), QIcon.Normal,
+                                   QIcon.Off)  # State: Off (Closed)
+        self.folder_icon.addPixmap(folder_open_icon.pixmap(app_theme.icon_size), QIcon.Normal,
+                                   QIcon.On)  # State: On (Open)
 
         self.playlist_icon = QIcon.fromTheme("list-music")
 
@@ -142,9 +147,10 @@ class DirectoryTree(QTreeView):
 
         self._source_root_index = QPersistentModelIndex()
 
+        self.directory_icon_provider = CustomIconProvider()
         self.directory_model = QFileSystemModel()
         self.directory_model.setReadOnly(False)
-        self.directory_model.setIconProvider(CustomIconProvider())
+        self.directory_model.setIconProvider(self.directory_icon_provider)
         self.directory_model.setRootPath(QDir.rootPath())
         self.directory_model.setNameFilters(["*.mp3", "*.m3u"])
         self.directory_model.setNameFilterDisables(False)
@@ -198,6 +204,9 @@ class DirectoryTree(QTreeView):
         if event.type() == QEvent.Type.FontChange:
             self.setFont(app_theme.font())
             self.setIconSize(app_theme.icon_size)
+        elif event.type() == QEvent.Type.PaletteChange:
+            self.directory_icon_provider.refresh_icons()
+            self.directory_model.setIconProvider(self.directory_icon_provider)
 
     def on_directories_loaded(self):
         self.proxy_model.beginFilterChange()
