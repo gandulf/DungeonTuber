@@ -7,8 +7,8 @@ import logging
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QPixmap, QColor
+from PySide6.QtCore import Qt, QThread, Signal, QSize, QByteArray, QBuffer
+from PySide6.QtGui import QPixmap, QColor, QImageReader
 
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType, CHAP, CTOC
@@ -19,11 +19,12 @@ logger = logging.getLogger(__file__)
 
 
 class Mp3Entry(object):
-    __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover", "has_cover",
+    __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover","_cover_preview",
+                 "_has_cover",
                  "bpm", "_moods", "color","chapters"]
 
     index: int
-    name: str
+    name: str | None
     path: Path
     title: str
     artist: str
@@ -33,7 +34,8 @@ class Mp3Entry(object):
     length: int
     favorite: bool
     _cover: QPixmap | None
-    has_cover: bool
+    _cover_preview: QPixmap | None
+    _has_cover: bool | None
     bpm: int
     color: QColor
     duration:int
@@ -74,7 +76,8 @@ class Mp3Entry(object):
             self._tags = []
 
         self._cover = None
-        self.has_cover = None
+        self._cover_preview = None
+        self._has_cover = None
         self.bpm = bpm
         self.index = None
         self.color = None
@@ -123,25 +126,73 @@ class Mp3Entry(object):
         self._load_cover()
         return self._cover
 
+    @property
+    def cover_preview(self):
+        self._load_cover_preview()
+        return self._cover_preview
+
+    @property
+    def has_cover(self) -> bool:
+        if self._has_cover is not None:
+            return self._has_cover
+        else:
+            self._load_cover_preview()
+            return self._has_cover
+
     def clear_cover(self):
         self._cover = None
-        self.has_cover = None
+        self._cover_preview = None
+        self._has_cover = None
 
     def _load_cover(self, audio: MP3 = None):
-        if self.has_cover is None and self._cover is None:
+        if (self._has_cover is None or self._has_cover) and self._cover is None:
             if audio is None:
                 audio = MP3(self.path, ID3=ID3)
-            self.has_cover = False
+            self._has_cover = False
             for key in audio.tags.keys():
                 # APIC tags often have suffixes like APIC:Cover
                 if key.startswith("APIC"):
                     data = audio.tags[key].data
-                    pixmap = QPixmap()
-                    pixmap.loadFromData(data)
-                    icon_pixmap = pixmap
-                    self._cover = icon_pixmap
-                    self.has_cover = True
+                    self._cover = self._load_image(data, None)
+                    self._has_cover = True
+                    break
 
+    def _load_cover_preview(self, audio: MP3 = None):
+        if (self._has_cover is None or self._has_cover) and self._cover_preview is None:
+            if audio is None:
+                audio = MP3(self.path, ID3=ID3)
+            self._has_cover = False
+            for key in audio.tags.keys():
+                # APIC tags often have suffixes like APIC:Cover
+                if key.startswith("APIC"):
+                    data = audio.tags[key].data
+                    self._cover_preview = self._load_image(data, QSize(128,128))
+                    self._has_cover = True
+                    break
+
+    def _load_image(self, data, target_size:QSize | None) -> QPixmap | None:
+        try:
+            # 1. Wrap bytes in a QBuffer so QImageReader can use it
+            byte_array = QByteArray(data)
+            buffer = QBuffer(byte_array)
+            buffer.open(QBuffer.OpenModeFlag.ReadOnly)
+
+            # 2. Use QImageReader to handle the heavy lifting
+            reader = QImageReader(buffer)
+            reader.setAutoTransform(True)
+
+            # 3. Calculate aspect ratio scaling to target size
+            if target_size is not None:
+                orig_size = reader.size()
+                target_size = orig_size.scaled(target_size, Qt.AspectRatioMode.KeepAspectRatio)
+                reader.setScaledSize(target_size)
+
+            image = reader.read()
+
+            if not image.isNull():
+                return QPixmap.fromImage(image)
+        finally:
+            buffer.close()
 
 class EffectEntry(object):
     __slots__ = ["intensities", "intensity", "name", "_cover"]
@@ -175,6 +226,20 @@ class EffectEntry(object):
             return self.mp3_entry.cover
         else:
             return self._cover
+
+    @property
+    def cover_preview(self):
+        if self.mp3_entry is not None and self.mp3_entry.cover_preview is not None:
+            return self.mp3_entry.cover_preview
+        else:
+            return self._cover
+
+    @property
+    def has_cover(self) -> bool:
+        if self.mp3_entry is not None and self.mp3_entry.has_cover is not None:
+            return self.mp3_entry.has_cover
+        else:
+            return self._cover is not None
 
     @property
     def mp3_entry(self):
@@ -227,7 +292,7 @@ class EffectEntry(object):
         elif os.path.isfile(file):
             mp3_entry = parse_mp3(file)
             name = mp3_entry.name
-            return EffectEntry([mp3_entry], name, mp3_entry.cover)
+            return EffectEntry([mp3_entry], name, mp3_entry.cover_preview)
         else:
             return None
 

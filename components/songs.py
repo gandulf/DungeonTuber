@@ -1020,7 +1020,7 @@ class SongTable(QTableView):
             self.repaint()
         elif index.column() == SongTableModel.COVER_COL:
             data = index.data(Qt.ItemDataRole.UserRole)
-            if data.cover:
+            if data.has_cover:
                 self.image_popup = ImagePopup(data.title, data.cover)
                 self.image_popup.show()
 
@@ -1285,12 +1285,12 @@ class CategoryDelegate(BaseStyledItemDelegate):
         #padding = _get_table_padding()
         #option.rect = option.rect.adjusted(0, 0, 0, -padding)
         if index.column() == SongTableModel.COVER_COL:
-            data = index.data(Qt.ItemDataRole.UserRole)
+            data: Mp3Entry = index.data(Qt.ItemDataRole.UserRole)
 
             rect = option.rect
-            if data.cover:
+            if data.has_cover:
                 with QPainterStateGuard(painter):
-                    pixmap = get_full_pixmap(data.cover)
+                    pixmap = data.cover_preview
                     scaled_size = pixmap.size().scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
                     # Calculate the top-left to center the "crop"
                     x = rect.x() + (rect.width() - scaled_size.width()) // 2

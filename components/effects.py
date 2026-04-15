@@ -73,8 +73,8 @@ class EffectTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.CheckStateRole:
             return Qt.CheckState.Checked if self._checked == index else Qt.CheckState.Unchecked
         elif role == Qt.ItemDataRole.DecorationRole:
-            data = index.data(Qt.ItemDataRole.UserRole)
-            return data.cover if data.cover is not None else None
+            data: Mp3Entry = index.data(Qt.ItemDataRole.UserRole)
+            return data.cover_preview if data.has_cover else None
         elif role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             data = index.data(Qt.ItemDataRole.UserRole)
             return data.title if AppSettings.value(SettingKeys.EFFECTS_TITLE_INSTEAD_OF_FILE_NAME, False, type=bool) else data.name
