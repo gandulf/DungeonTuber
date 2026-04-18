@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 
 from config.settings import AppSettings, SettingKeys
-from config.utils import get_executable_path
 
 class StrFormatLogRecord(logging.LogRecord):
     """
@@ -40,12 +39,14 @@ def setup_logging():
     log_dir = Path(os.environ['APPDATA']) / app_name / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
+    file_handler = logging.FileHandler(log_dir.joinpath('debug.log'), encoding="utf-8")
+    console_handler = logging.StreamHandler()
+
     logging.basicConfig(
-        filename= log_dir.joinpath('debug.log'),
-        filemode='a',
-        level=logging.DEBUG if AppSettings.value(SettingKeys.DEBUG, False, type=bool) else logging.WARNING,
+        level=logging.DEBUG if AppSettings.value(SettingKeys.DEBUG, False, type=bool) else logging.DEBUG,
         style='{',
         format='[{levelname}] {message}',
-        force=True
+        force=True,
+        handlers=[file_handler,console_handler]
     )
     logging.setLogRecordFactory(StrFormatLogRecord)

@@ -36,6 +36,9 @@ class NameDialog(QDialog):
     def get_name(self):
         return self.name_edit.text()
 
+    def set_name(self, name:str):
+        return self.name_edit.setText(name)
+
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)

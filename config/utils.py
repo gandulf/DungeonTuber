@@ -1,16 +1,19 @@
 import ctypes
 import json
 import logging
+import math
 import os
 import subprocess
 import sys
 from ctypes import wintypes
+from dataclasses import is_dataclass, fields
 from os import PathLike
 from pathlib import Path
 
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 from packaging import version
 
@@ -228,3 +231,60 @@ def format_time(ms: int):
     mins = seconds // 60
     secs = seconds % 60
     return f"{mins:02d}:{secs:02d}"
+
+
+def asdict_filtered(obj):
+    if is_dataclass(obj):
+        skip_keys = [
+            f.name for f in fields(obj) if not f.metadata.get('export', True)
+        ]
+
+        res = {}
+        for f in fields(obj):
+            if f.name in skip_keys:
+                continue
+            val = getattr(obj, f.name)
+            res[f.name] = asdict_filtered(val)
+        return res
+    elif isinstance(obj, QColor):
+        return obj.name()
+    return obj
+
+
+def kelvin_to_rgb(kelvin):
+    temp = kelvin / 100
+
+    # Calculate Red
+    if temp <= 66:
+        red = 255
+    else:
+        red = temp - 60
+        red = 329.698727446 * (red ** -0.1332047592)
+        red = clip(red)
+
+    # Calculate Green
+    if temp <= 66:
+        green = temp
+        green = 99.4708025861 * math.log(green) - 161.1195681661
+    else:
+        green = temp - 60
+        green = 288.1221695283 * (green ** -0.0755148492)
+    green = clip(green)
+
+    # Calculate Blue
+    if temp >= 66:
+        blue = 255
+    elif temp <= 19:
+        blue = 0
+    else:
+        blue = temp - 10
+        blue = 138.5177312231 * math.log(blue) - 305.0447927307
+    blue = clip(blue)
+
+
+    color = QColor(int(red), int(green), int(blue))
+    return color.name()
+
+
+def clip(value):
+    return max(0, min(255, value))

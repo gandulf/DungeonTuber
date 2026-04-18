@@ -237,6 +237,7 @@ class SettingKeys(StrEnum):
     LOCALE = "locale"
     START_TOUR = "startTour"
     OPEN_TABLES = "openTables"
+    LIGHTS_WIDGET = "lightsWidget"
 
     TABLE_COLUMNS ="tableColumns"
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
@@ -261,6 +262,7 @@ class SettingKeys(StrEnum):
 
     CATEGORIES = "categories"
     PRESETS = "presets"
+    LIGHTS = "lights"
 
     VOXALYZER_URL ="voxalyzerUrl"
     VOXALYZER_LOCAL = "voxalyzerLocal"

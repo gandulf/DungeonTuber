@@ -682,3 +682,21 @@ msgstr "Cover"
 
 msgid "Index"
 msgstr "Index"
+
+msgid "Lights"
+msgstr "Lichter"
+
+msgid "Brightness"
+msgstr "Helligkeit"
+
+msgid "Temperature"
+msgstr "Temperatur"
+
+msgid "Color"
+msgstr "Farbe"
+
+msgid "Scene"
+msgstr "Szene"
+
+msgid "Controlled by Songs"
+msgstr "Von Songs gesteuert"

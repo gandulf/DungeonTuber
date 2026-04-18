@@ -1,4 +1,3 @@
-import string
 from enum import Enum
 
 from PySide6.QtCore import QObject, Property, Qt, QSize, QMargins
@@ -364,6 +363,10 @@ class AppTheme(QObject):
                         border-bottom:3px solid {_border_color};
                         padding-bottom:3px;
                     }}
+                    
+                    .IconLabel#sub {{
+                        border:none;
+                    }}                                    
                                
                     QMenu {{
                         font-family: '{font_family}';                        
@@ -505,7 +508,60 @@ class AppTheme(QObject):
                     
                     QComboBox QListView {{
                         background-color: {_base_color};
-                    }}                    
+                    }}
+                    
+                    
+                    
+                    QSlider#temperature::groove:horizontal {{
+                        height: 16px;
+                        border:1px solid {_border_color};
+                        border-radius: 8px;  
+                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                            stop:0 #FF9329,   /* Warm Candlelight */
+                            stop:0.5 #FFFFFB, /* Neutral Daylight */
+                            stop:1 #C9DAFF);  /* Cold Overcast */        
+                    }}
+                
+                    QSlider#temperature::handle:horizontal {{
+                        background: {_accent_color};
+                        border: 2px solid {_border_color};
+                        border-radius: 7px;
+                        width: 14px;
+                        height: 14px;
+                    }}
+                    
+                    QSlider#brightness::groove:horizontal {{
+                        height: 16px;
+                        border-radius: 8px;
+                        border:1px solid {_border_color};
+                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                            stop:0 #000000, 
+                            stop:1 #FFFFFF);        
+                    }}
+                
+                    QSlider#brightness::handle:horizontal {{
+                        background: {_accent_color};
+                        border: 2px solid {_border_color};
+                        border-radius: 7px;
+                        width: 14px;
+                        height: 14px;
+                    }}
+                    
+                    QListWidget#lights {{
+                        show-decoration-selected: 1;
+                        outline: 0;
+                    }}
+                    
+                    QListWidget#lights::item {{
+                        border:none;
+                        padding-bottom:2px;                        
+                    }}
+                    QListWidget#lights::item:selected {{
+                        padding-bottom:0px;
+                        border: none;
+                        border-bottom:2px solid {_accent_color};
+                        color: {_text_color};                        
+                    }}
                     
                 """
 

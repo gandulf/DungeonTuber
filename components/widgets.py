@@ -3,9 +3,9 @@ from enum import StrEnum
 from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, \
     QPoint, QObject, QSortFilterProxyModel, QTimer, QKeyCombination, QMimeData, QByteArray
 from PySide6.QtGui import QIcon, QBrush, QPainter, QMouseEvent, QColor, \
-    QPaintEvent, QFontMetrics, QFont, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap, QPainterStateGuard
+    QPaintEvent, QFontMetrics, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap, QPainterStateGuard
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton, QAbstractScrollArea, QLayout, QSizePolicy, QSlider, QVBoxLayout, QStyle, \
-    QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QStyleOptionSlider, QFrame
+    QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QFrame
 
 from config.settings import MusicCategory
 from config.theme import app_theme
@@ -81,6 +81,13 @@ class IconLabel(QFrame):
             self.icon_label.setVisible(True)
         else:
             self.icon_label.setVisible(False)
+
+    def set_text(self, text: str):
+        self.text_label.setText(text)
+
+    def setFont(self, font, /):
+        self.text_label.setFont(font)
+        self.icon_label.setFont(font)
 
 
 class FeatureOverlay(QWidget):
@@ -492,6 +499,8 @@ class JumpSlider(QSlider):
     mouse_pressed = Signal(QMouseEvent)
     mouse_released = Signal(QMouseEvent)
 
+    groove_thickness:int =3
+
     def __init__(self, orientation: Qt.Orientation = Qt.Orientation.Horizontal, parent=None):
         super(JumpSlider, self).__init__(orientation, parent)
         # Animation
@@ -581,7 +590,7 @@ class JumpSlider(QSlider):
                                                        self.width(), self.invertedAppearance())
 
             self.setValue(self._roundStep(value, self.singleStep()))
-
+            
 class CategoryTooltip(QWidget):
     __parent: QWidget
 

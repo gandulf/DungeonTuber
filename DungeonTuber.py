@@ -32,14 +32,14 @@ import gettext
 from pathlib import Path
 from os import PathLike
 
-from PySide6.QtWidgets import QApplication, QMainWindow,  QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, \
+from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QTabWidget, QFileDialog, QMessageBox, \
     QMenu, QStatusBar, QProgressBar, QSplitter, \
-    QListView,  QFrame
+    QListView, QFrame
 from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent
 from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent,  QPalette, QShortcut, QKeySequence
 
-from config.settings import AppSettings, SettingKeys, SettingsDialog, Preset, MusicCategory, set_music_categories, \
-    set_presets, get_music_categories
+from config.settings import AppSettings, SettingKeys, SettingsDialog, MusicCategory, set_music_categories, \
+    get_music_categories
 from config.theme import app_theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, is_frozen
 
@@ -50,6 +50,7 @@ from components.dialogs import AboutDialog, EditSongDialog
 from components.filter import FilterWidget
 from components.songs import SongTable
 from components.files import DirectoryWidget
+from components.lights import LightsWidget
 
 from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, get_m3u_paths, save_playlist
 from logic.analyzer import Analyzer, has_voxalyzer
@@ -94,7 +95,6 @@ class MusicPlayer(QMainWindow):
         self.load_settings()
 
         self.init_analyzer()
-
         self.init_ui()
         self.load_initial_directory()
 
@@ -135,15 +135,6 @@ class MusicPlayer(QMainWindow):
             AppSettings.remove(SettingKeys.CATEGORIES)
             logger.error("Failed to load custom categories: {0}", e)
 
-        try:
-            custom_presets = AppSettings.value(SettingKeys.PRESETS)
-            if custom_presets:
-                list_of_custom_presets = json.loads(custom_presets)
-                set_presets([Preset(**d) for d in list_of_custom_presets])
-        except Exception as e:
-            AppSettings.remove(SettingKeys.PRESETS)
-            logger.error("Failed to load custom presets: {0}", e)
-
     def check_newer_version(self):
         if not is_latest_version() and is_frozen():
             version_text = _("Newer version available {0}").format(get_latest_version())
@@ -155,6 +146,7 @@ class MusicPlayer(QMainWindow):
     def config_simple_mode(self):
         self.toggle_directory_tree_action.setChecked(True)
         self.toggle_effects_tree_action.setChecked(False)
+        self.toggle_lights_manager_action.setChecked(False)
 
         self.presets_action.setChecked(False)
         self.tags_action.setChecked(True)
@@ -166,6 +158,7 @@ class MusicPlayer(QMainWindow):
     def config_complex_mode(self):
         self.toggle_directory_tree_action.setChecked(True)
         self.toggle_effects_tree_action.setChecked(True)
+        self.toggle_lights_manager_action.setChecked(True)
 
         self.presets_action.setChecked(True)
         self.tags_action.setChecked(True)
@@ -275,6 +268,12 @@ class MusicPlayer(QMainWindow):
         self.toggle_effects_tree_action.setChecked(AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool))
         self.toggle_effects_tree_action.changed.connect(self.toggle_effects_tree)
         view_menu.addAction(self.toggle_effects_tree_action)
+
+        self.toggle_lights_manager_action = QAction(_("Lights Manager"), self, icon=QIcon.fromTheme("light"))
+        self.toggle_lights_manager_action.setCheckable(True)
+        self.toggle_lights_manager_action.setChecked(AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool))
+        self.toggle_lights_manager_action.changed.connect(self.toggle_lights_manager)
+        view_menu.addAction(self.toggle_lights_manager_action)
 
         view_menu.addSeparator()
 
@@ -428,48 +427,61 @@ class MusicPlayer(QMainWindow):
         AppSettings.setValue(SettingKeys.VISUALIZER, "NONE")
         self.player.refresh_visualizer()
 
+
+    def update_splitter_sizes(self):
+
+        left = AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool)
+        right = AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool) or AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool)
+
+        sizes = self.central_splitter.sizes()
+        if sizes[0] ==0 and left:
+            sizes[0] = 200
+            sizes[1] = sizes[1] -200
+        elif sizes[0] > 0 and not left:
+            sizes[1] = sizes[1] + sizes[0]
+            sizes[0] = 0
+
+        if sizes[2] == 0 and right:
+            sizes[2] = 200
+            sizes[1] = sizes[1] - 200
+        elif  sizes[2] > 0 and not right:
+            sizes[1] = sizes[1] + sizes[2]
+            sizes[2] = 0
+
+        self.central_splitter.setSizes(sizes)
+
     def toggle_directory_tree(self, visible: bool = None):
 
         if visible is None:
             visible = not AppSettings.value(SettingKeys.DIRECTORY_TREE, True, type=bool)
 
-        if visible:
-            sizes = self.central_splitter.sizes()
-            sizes[1] = sizes[1] - 200
-            sizes[0] = 200
-            self.central_splitter.setSizes(sizes)
-            AppSettings.setValue(SettingKeys.DIRECTORY_TREE, True)
-            self.directory_widget.setEnabled(True)
-        else:
-            sizes = self.central_splitter.sizes()
-            sizes[1] = sizes[1] + sizes[0]
-            sizes[0] = 0
-            self.central_splitter.setSizes(sizes)
-            AppSettings.setValue(SettingKeys.DIRECTORY_TREE, False)
-            self.directory_widget.setEnabled(False)
+        AppSettings.setValue(SettingKeys.DIRECTORY_TREE, visible)
+        self.directory_widget.setEnabled(visible)
+
+        self.update_splitter_sizes()
+
+    def toggle_lights_manager(self, visible: bool = None):
+        if visible is None:
+            visible = not AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool)
+
+        self.lights_widget.setVisible(visible)
+        self.lights_widget.setEnabled(visible)
+        AppSettings.setValue(SettingKeys.LIGHTS_WIDGET, visible)
+
+        self.update_splitter_sizes()
 
     def toggle_effects_tree(self, visible: bool = None):
 
         if visible is None:
             visible = not AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool)
 
-        if visible:
-            sizes = self.central_splitter.sizes()
-            sizes[1] = sizes[1] - 200
-            sizes[2] = 200
-            self.central_splitter.setSizes(sizes)
-            AppSettings.setValue(SettingKeys.EFFECTS_TREE, True)
-            self.effects_widget.setEnabled(True)
-        else:
-            sizes = self.central_splitter.sizes()
-            sizes[1] = sizes[1] + sizes[2]
-            sizes[2] = 0
-            self.central_splitter.setSizes(sizes)
-            AppSettings.setValue(SettingKeys.EFFECTS_TREE, False)
-            self.effects_widget.setEnabled(False)
+        AppSettings.setValue(SettingKeys.EFFECTS_TREE, visible)
+        self.effects_widget.setEnabled(visible)
+        self.effects_widget.setVisible(visible)
+
+        self.update_splitter_sizes()
 
     def open_settings(self):
-
         dialog = SettingsDialog(self)
         if dialog.exec():
             self.filter_widget.update_sliders(self.get_available_categories())
@@ -490,10 +502,13 @@ class MusicPlayer(QMainWindow):
         else:
             if pos_x + self.central_splitter.handleWidth() >= self.width():
                 self.toggle_effects_tree_action.setChecked(False)
+                self.toggle_lights_manager_action.setChecked(False)
                 self.effects_widget.setEnabled(False)
             else:
-                self.toggle_effects_tree_action.setChecked(True)
-                self.effects_widget.setEnabled(True)
+                if not self.toggle_effects_tree_action.isChecked() and not self.toggle_lights_manager_action.isChecked():
+                    self.toggle_effects_tree_action.setChecked(True)
+                    self.toggle_lights_manager_action.setChecked(True)
+                    self.effects_widget.setEnabled(True)
 
     def tree_open_file(self, file_info: QFileInfo):
         if file_info.isDir():
@@ -619,12 +634,26 @@ class MusicPlayer(QMainWindow):
         view_mode = QListView.ViewMode[AppSettings.value(SettingKeys.EFFECTS_LIST_VIEW_MODE, "IconMode", type=str)]
 
 
+        sidebar_widget = QFrame()
+        sidebar_widget.setAutoFillBackground(True)
+        sidebar_widget.setGraphicsEffect(app_theme.drop_shadow(self))
+        sidebar_widget.setBackgroundRole(QPalette.ColorRole.Midlight)
+        sidebar_right = QVBoxLayout(sidebar_widget)
+
+        sidebar_right.setSpacing(0)
+        sidebar_right.setContentsMargins(0, 0, 0, 0)
+
         self.effects_widget = EffectWidget(list_mode=view_mode)
-        self.effects_widget.setBackgroundRole(QPalette.ColorRole.Midlight)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_playlist_context_menu)
 
-        self.central_splitter.addWidget(self.effects_widget)
+        self.lights_widget = LightsWidget()
+        self.lights_widget.setVisible(False)
+
+        sidebar_right.addWidget(self.effects_widget,2)
+        sidebar_right.addWidget(self.lights_widget,0)
+
+        self.central_splitter.addWidget(sidebar_widget)
         self.central_splitter.setCollapsible(2, True)
 
         # Statusbar bottom
@@ -958,28 +987,30 @@ class MusicPlayer(QMainWindow):
     def play_track(self, index: QPersistentModelIndex | None, entry: Mp3Entry | None):
         table = self.current_table()
         if table is None:
-            if entry is not None:
-                self.player.play_track(index, entry)
+            if entry is None:
                 return
-            else:
-                return
-
-        if not index.isValid() and entry is not None:
+        elif not index.isValid() and entry is not None:
             # calc index of entry
             entry_index = table.index_of(entry)
             if entry_index.isValid():
                 table.clearSelection()
                 table.selectRow(entry_index.row())
-            self.player.play_track(QPersistentModelIndex(entry_index), entry)
+
+            index = QPersistentModelIndex(entry_index)
         elif index.isValid():
             table.clearSelection()
             table.selectRow(index.row())
-            self.player.play_track(index, index.data(Qt.ItemDataRole.UserRole))
+            entry = index.data(Qt.ItemDataRole.UserRole)
         else:
             index = table.model().index(0, 0)
             table.clearSelection()
             table.selectRow(index.row())
-            self.player.play_track(index, index.data(Qt.ItemDataRole.UserRole))
+            entry = index.data(Qt.ItemDataRole.UserRole)
+
+        if entry is not None and entry.color is not None:
+            self.lights_widget.set_scene(color=entry.color)
+
+        self.player.play_track(index, entry)
 
 
 def hide_splash(window: QMainWindow):

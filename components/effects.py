@@ -485,6 +485,10 @@ class EffectWidget(QFrame):
         self.setAutoFillBackground(True)
         self.setContentsMargins(app_theme.margin)
 
+        policy = self.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.setSizePolicy(policy)
+
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
 
         self.layout = QVBoxLayout(self)
