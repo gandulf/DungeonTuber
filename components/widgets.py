@@ -57,6 +57,12 @@ class IconLabel(QFrame):
         if final_stretch:
             self.layout.addStretch()
 
+    def changeEvent(self, event, /):
+        if event.type() == QEvent.Type.PaletteChange:
+            if self.icon:
+                self.icon = QIcon.fromTheme(self.icon.name())
+                self.icon_label.setPixmap(self.icon.pixmap(self.icon_size))
+
     def set_icon_size(self, size: QSize):
         self.icon_label.setPixmap(self.icon.pixmap(size))
 

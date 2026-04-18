@@ -1,7 +1,6 @@
 from PySide6.QtCore import Qt, QSize, QEvent
 from PySide6.QtGui import QIcon, QColor
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QListWidget, QListView, QListWidgetItem, QCheckBox, QSizePolicy, QLabel, QToolButton, QComboBox, \
-    QGraphicsOpacityEffect
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QListWidget, QListView, QListWidgetItem, QCheckBox, QSizePolicy, QLabel, QToolButton, QComboBox
 
 from logic.lightengine import LightManager, Light
 from config.theme import app_theme
@@ -135,9 +134,7 @@ class LightsWidget(QFrame):
         self.lights_manager.lookup()
 
     def changeEvent(self, event, /):
-        if event.type() == QEvent.Type.PaletteChange:
-            self.headerLabel.set_icon(QIcon.fromTheme("lights"))
-        elif event.type() in [QEvent.Type.FontChange, QEvent.Type.ApplicationFontChange ]:
+        if event.type() in [QEvent.Type.FontChange, QEvent.Type.ApplicationFontChange ]:
             self.headerLabel.set_icon_size(app_theme.icon_size)
 
     def change_name(self):
@@ -153,39 +150,21 @@ class LightsWidget(QFrame):
             self.refresh_lights_list()
 
     def set_scene(self, brightness: int | None = None, temperature: int | None = None, color: QColor | None = None):
-
-        if brightness:
-            self.brightness_slider.blockSignals(True)
-            self.brightness_slider.setValue(brightness)
-            self.brightness_slider.blockSignals(False)
-
-        if color:
-            self.color_edit.blockSignals(True)
-            self.color_edit.setColor(color=color)
-            self.color_edit.blockSignals(False)
-
-        if temperature:
-            self.temperature_slider.blockSignals(True)
-            self.temperature_slider.setValue(temperature)
-            self.temperature_slider.blockSignals(False)
-
         for i in range(self.lights_list.count()):
             item = self.lights_list.item(i)
             light = item.data(Qt.ItemDataRole.UserRole)
             if light.scenable:
                 light.set_scene(brightness, temperature, color)
-                self.update_light(light)
+
+                if item in self.lights_list.selectedItems():
+                    self.update_light(light)
 
     def state_changed(self, state: Qt.CheckState):
         for item in self.lights_list.selectedItems():
             light = item.data(Qt.ItemDataRole.UserRole)
             light.state = state != Qt.CheckState.Unchecked
 
-
     def _reset_color_values(self, skip:str = None):
-        opacity_effect = QGraphicsOpacityEffect()
-        opacity_effect.setOpacity(0.5)  # 50% transparent
-
         if skip != "color":
             self.color_edit.blockSignals(True)
             self.color_edit.setColor(QColor(255, 255, 255))

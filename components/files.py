@@ -2,11 +2,10 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
-    Signal, QObject, QPoint, QItemSelection, QSize
-from PySide6.QtGui import QIcon, QAction, QKeyEvent, \
-    QPaintEvent, QColor, QPalette
+    Signal, QObject, QPoint, QItemSelection
+from PySide6.QtGui import QIcon, QAction, QKeyEvent, QPaintEvent
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QWidget, \
-    QVBoxLayout, QToolButton, QAbstractItemView, QFrame, QGraphicsDropShadowEffect
+    QVBoxLayout, QToolButton, QAbstractItemView, QFrame
 
 from components.dialogs import EditSongDialog
 from components.widgets import IconLabel, AutoSearchHelper
@@ -381,8 +380,6 @@ class DirectoryWidget(QFrame):
         self.directory_layout.addWidget(self.directory_tree)
 
     def changeEvent(self, event, /):
-        if event.type() == QEvent.Type.PaletteChange:
-            self.headerLabel.set_icon(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen))
-        elif event.type() == QEvent.Type.FontChange:
+        if event.type() == QEvent.Type.FontChange:
             self.headerLabel.set_icon_size(app_theme.icon_size)
             self.directory_tree.setFont(app_theme.font())

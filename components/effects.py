@@ -1,11 +1,11 @@
 import os
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, \
-    Signal, QRect, QSize, QAbstractTableModel, QAbstractItemModel, QPoint, QSizeF
+    Signal, QRect, QSize, QAbstractTableModel, QAbstractItemModel, QPoint
 from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QPalette, QPen, QKeyEvent, \
-    QPaintEvent, QLinearGradient, QBrush, QGradient, QPainterStateGuard, QPixmap, QResizeEvent
-from PySide6.QtWidgets import QMenu, QListView, QStyleOptionViewItem, QStyle, QWidget, \
-    QStyledItemDelegate, QFileDialog, QToolButton, QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView, QFrame, QGraphicsDropShadowEffect
+    QPaintEvent, QLinearGradient, QBrush, QGradient, QPainterStateGuard,  QResizeEvent
+from PySide6.QtWidgets import QMenu, QListView, QStyleOptionViewItem, QStyle, \
+    QStyledItemDelegate, QFileDialog, QToolButton, QPushButton, QVBoxLayout, QHBoxLayout, QFrame
 
 from components.widgets import IconLabel, AutoSearchHelper, VolumeSlider, RoundButton
 from config.settings import AppSettings, SettingKeys
@@ -577,7 +577,6 @@ class EffectWidget(QFrame):
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.PaletteChange:
-            self.headerLabel.set_icon(QIcon.fromTheme("effects"))
             self.btn_play.setIcon(app_theme.create_play_pause_icon())
         elif event.type() == QEvent.Type.FontChange:
             self.headerLabel.set_icon_size(app_theme.icon_size)
