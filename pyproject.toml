@@ -10,7 +10,7 @@ name = "DungeonTuber"
 version = "0.2.0.0"
 description = "RPG music player wit advanced categorization"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 authors = [
   {name = "Gandulf Kohlweiss", email = "gandulf.k@gmail.com"}
 ]

@@ -342,8 +342,9 @@ async def find_wizlights(
     transport.close()
 
     bulbs = registry.bulbs()
-    for bulb in bulbs:
-        logger.debug(f"Discovered bulb {bulb.ip_address} with MAC {bulb.mac_address}")
+
+    logger.debug(f"Discovered {len(bulbs)} bulbs.")
+
     return bulbs
 
 
