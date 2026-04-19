@@ -43,7 +43,7 @@ def setup_logging():
     console_handler = logging.StreamHandler()
 
     logging.basicConfig(
-        level=logging.DEBUG if AppSettings.value(SettingKeys.DEBUG, False, type=bool) else logging.DEBUG,
+        level=logging.DEBUG if AppSettings.value(SettingKeys.DEBUG, False, type=bool) else logging.WARNING,
         style='{',
         format='[{levelname}] {message}',
         force=True,

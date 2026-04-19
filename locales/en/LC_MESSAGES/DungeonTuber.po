@@ -676,6 +676,9 @@ msgstr "Index"
 msgid "Lights"
 msgstr "Lights"
 
+msgid "Lights Manager"
+msgstr "Lights Manager"
+
 msgid "Brightness"
 msgstr "Brightness"
 
@@ -690,3 +693,21 @@ msgstr "Scene"
 
 msgid "Controlled by Songs"
 msgstr "Controlled by Songs"
+
+msgid "Wiz Lights"
+msgstr "Wiz Lights"
+
+msgid "Enabled"
+msgstr "Enabled"
+
+msgid "Broadcast Space"
+msgstr "Broadcast Space"
+
+msgid "Take the ip address of you local wlan network and replace the last number with 255."
+msgstr "Take the ip address of you local wlan network and replace the last number with 255."
+
+msgid "Timeout"
+msgstr "Timeout"
+
+msgid "Time to search for bulbs in seconds"
+msgstr "Time to search for bulbs in seconds"

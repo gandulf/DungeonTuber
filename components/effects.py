@@ -479,6 +479,8 @@ class EffectListItemDelegate(QStyledItemDelegate):
 class EffectWidget(QFrame):
     open_item: QPushButton = None
 
+    effect_played = Signal(Mp3Entry)
+
     def __init__(self, list_mode: QListView.ViewMode = QListView.ViewMode.ListMode):
         super().__init__()
 
@@ -598,6 +600,8 @@ class EffectWidget(QFrame):
         self.engine.loop_media(effect.path)
         self.btn_play.setChecked(True)
         self.btn_play.setEnabled(True)
+
+        self.effect_played.emit(effect)
 
     def refresh_directory(self):
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)

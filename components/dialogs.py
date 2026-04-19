@@ -242,6 +242,9 @@ class ImagePopup(QDialog):
 
         self.update_image_size()
 
+    def mouseDoubleClickEvent(self, event, /):
+        self.toggle_fullscreen()
+
     def toggle_fullscreen(self):
         if self.isFullScreen():
             self.showNormal()

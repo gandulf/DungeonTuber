@@ -1,10 +1,12 @@
 import ctypes
+import ipaddress
 import json
 import logging
 import math
 import os
 import subprocess
 import sys
+import socket
 from ctypes import wintypes
 from dataclasses import is_dataclass, fields
 from os import PathLike
@@ -288,3 +290,21 @@ def kelvin_to_rgb(kelvin):
 
 def clip(value):
     return max(0, min(255, value))
+
+def get_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.254.254.254', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+def get_broadcast_ip():
+    interface = ipaddress.IPv4Interface(f"{get_ip()}/24")
+    broadcast_ip = interface.network.broadcast_address
+    return str(broadcast_ip)

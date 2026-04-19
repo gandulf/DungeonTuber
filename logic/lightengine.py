@@ -17,19 +17,18 @@ from pywizlight.scenes import get_id_from_scene_name
 from pywizlight.utils import create_udp_broadcast_socket
 
 from config.settings import SettingKeys, AppSettings
-from config.utils import asdict_filtered
+from config.utils import asdict_filtered, get_broadcast_ip
 
 logger = logging.getLogger(__file__)
 
 _LIGHTS = set()
 
-
 def set_lights(lights: list):
     if lights is None:
-        AppSettings.remove(SettingKeys.LIGHTS)
+        AppSettings.remove(SettingKeys.LIGHTS_CONFIG)
         _LIGHTS.clear()
     else:
-        AppSettings.setValue(SettingKeys.LIGHTS, Light.json_dump_list(lights))
+        AppSettings.setValue(SettingKeys.LIGHTS_CONFIG, Light.json_dump_list(lights))
         _LIGHTS.update(lights)
 
 
@@ -39,7 +38,21 @@ def get_lights():
 
 def save_on_exit():
     print(f"Storing{get_lights()}")
-    AppSettings.setValue(SettingKeys.LIGHTS, Light.json_dump_list(get_lights()))
+    AppSettings.setValue(SettingKeys.LIGHTS_CONFIG, Light.json_dump_list(get_lights()))
+
+
+@dataclass
+class LightSetting:
+    scene: str | None = None
+    brightness: int = 255  # 0..255
+    temperature: int | None = None  # 1000 - 10000
+    color: QColor | None = None  # 255,255,255
+
+    def __init__(self, brightness: int = 255, temperature: int = None, color: QColor | None = None, scene: str | None = None, ):
+        self.scene = scene
+        self.brightness = brightness
+        self.temperature = temperature
+        self.color = color
 
 
 @dataclass
@@ -75,6 +88,15 @@ class Light:
 
         self.loop = asyncio.get_event_loop()
 
+    def apply_settings(self, settings: LightSetting):
+        if self.scene is not None:
+            self.scene = settings.scene
+        else:
+            self.set_scene(settings.brightness, self.temperature, self.color)
+
+    def get_settings(self):
+        return LightSetting(self.brightness, self.temperature, self.color, self.scene)
+
     async def refresh_state(self):
         state = await self.control.updateState()
 
@@ -106,15 +128,19 @@ class Light:
     def scene(self):
         return self._scene
 
+    @property
+    def scene_id(self):
+        try:
+            return get_id_from_scene_name(self._scene) if self._scene is not None else None
+        except ValueError as e:
+            logger.warning(f"Invalid scene name '{self._scene}': {e}")
+            return None
+
     @scene.setter
     def scene(self, value: str | None):
         self._scene = value
-        if value is not None:
-            try:
-                scene_id = get_id_from_scene_name(value)
-                self.turn_on(PilotBuilder(scene=scene_id))
-            except ValueError:
-                logger.warning(f"Invalid scene name: {value}")
+        if self.scene_id is not None:
+            self.turn_on(PilotBuilder(scene=self.scene_id))
 
     @property
     def color(self):
@@ -168,7 +194,7 @@ class Light:
         self.turn_on(self._pilot())
 
     def _pilot(self):
-        return PilotBuilder(brightness=self._brightness, colortemp=self._temperature, rgb=self._rgb())
+        return PilotBuilder(scene=self.scene_id, brightness=self._brightness, colortemp=self._temperature, rgb=self._rgb())
 
     def _rgb(self):
         return (self._color.red(), self._color.green(), self._color.blue()) if self._color is not None else None
@@ -231,7 +257,7 @@ class LightManager(QObject):
         asyncio.set_event_loop(self.loop)
 
         try:
-            custom_lights = AppSettings.value(SettingKeys.LIGHTS)
+            custom_lights = AppSettings.value(SettingKeys.LIGHTS_CONFIG)
             if custom_lights:
                 list_of_custom_lights = json.loads(custom_lights)
                 set_lights([Light(**d) for d in list_of_custom_lights])
@@ -240,16 +266,17 @@ class LightManager(QObject):
             logger.error("Failed to load custom presets: {0}", e)
 
     def lookup(self):
-        self.thread = DiscoveryThread(self.loop)
+        if AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool):
+            self.thread = DiscoveryThread(self.loop)
 
-        # 2. Connect worker signals to UI slots
-        self.thread.bulbs_found.connect(self.on_lights_found)
+            # 2. Connect worker signals to UI slots
+            self.thread.bulbs_found.connect(self.on_lights_found)
 
-        # Cleanup: Ensure the thread is deleted when done
-        self.thread.finished.connect(self.thread.deleteLater)
+            # Cleanup: Ensure the thread is deleted when done
+            self.thread.finished.connect(self.thread.deleteLater)
 
-        # 3. Go!
-        self.thread.start()
+            # 3. Go!
+            self.thread.start()
 
     def on_lights_found(self, lights: list[Light]):
         set_lights(lights)
@@ -267,10 +294,13 @@ class DiscoveryThread(QThread):
         self.loop = loop
 
     def run(self):
+
+        broadcast_adress = AppSettings.value(SettingKeys.LIGHTS_BROADCAST_IP, get_broadcast_ip(), type=str)
+        timeout = AppSettings.value(SettingKeys.LIGHTS_TIMEOUT, 5, type=float)
         # 2. Run your async tasks until complete (or forever)
-        logger.info("Start lookup")
+        logger.info("Start lookup with broadcast address: %s for %s seconds", broadcast_adress, timeout)
         # Use wait_for to ensure the thread doesn't hang forever
-        bulbs = self.loop.run_until_complete(discover_lights(broadcast_space="192.168.178.255", wait_time=3))
+        bulbs = self.loop.run_until_complete(discover_lights(broadcast_space=broadcast_adress, wait_time=timeout))
         # Run the discovery coroutine
 
         lights = self.loop.run_until_complete(self.update_states(bulbs))
@@ -295,6 +325,7 @@ class DiscoveryThread(QThread):
 
         return lights
 
+
 ## wizlight BUGFIX BEGIN
 async def find_wizlights(
         wait_time: float = DEFAULT_WAIT_TIME, broadcast_address: str = "255.255.255.255"
@@ -314,6 +345,7 @@ async def find_wizlights(
     for bulb in bulbs:
         logger.debug(f"Discovered bulb {bulb.ip_address} with MAC {bulb.mac_address}")
     return bulbs
+
 
 async def discover_lights(
         broadcast_space: str = "255.255.255.255", wait_time: float = DEFAULT_WAIT_TIME

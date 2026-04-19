@@ -462,7 +462,7 @@ class MusicPlayer(QMainWindow):
 
     def toggle_lights_manager(self, visible: bool = None):
         if visible is None:
-            visible = not AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool)
+            visible = self.toggle_lights_manager_action.isChecked()
 
         self.lights_widget.setVisible(visible)
         self.lights_widget.setEnabled(visible)
@@ -490,6 +490,10 @@ class MusicPlayer(QMainWindow):
 
             self.init_analyzer()
             self.analyze_file_action.setVisible(has_voxalyzer())
+
+            if dialog.has_changed(SettingKeys.LIGHTS_WIDGET, SettingKeys.LIGHTS_BROADCAST_IP, SettingKeys.LIGHTS_TIMEOUT):
+                self.lights_widget.refresh()
+                self.toggle_lights_manager_action.setChecked(AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool))
 
     def on_layout_splitter_moved(self, pos_x: int, index: int):
         if index == 1:
@@ -633,7 +637,6 @@ class MusicPlayer(QMainWindow):
 
         view_mode = QListView.ViewMode[AppSettings.value(SettingKeys.EFFECTS_LIST_VIEW_MODE, "IconMode", type=str)]
 
-
         sidebar_widget = QFrame()
         sidebar_widget.setAutoFillBackground(True)
         sidebar_widget.setGraphicsEffect(app_theme.drop_shadow(self))
@@ -646,6 +649,7 @@ class MusicPlayer(QMainWindow):
         self.effects_widget = EffectWidget(list_mode=view_mode)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_mp3_entry_context_menu)
         self.effects_widget.list_widget.open_context_menu.connect(self.populate_playlist_context_menu)
+        self.effects_widget.effect_played.connect(self.apply_light_settings)
 
         self.lights_widget = LightsWidget()
         self.lights_widget.setVisible(False)
@@ -673,6 +677,10 @@ class MusicPlayer(QMainWindow):
         self.toggle_effects_tree(AppSettings.value(SettingKeys.EFFECTS_TREE, True, type=bool))
 
         self.init_main_menu()
+
+    def apply_light_settings(self, entry:Mp3Entry):
+        if entry.color is not None:
+            self.lights_widget.set_scene(color=entry.color)
 
     def resizeEvent(self, event: QResizeEvent):
         AppSettings.setValue(SettingKeys.WINDOW_SIZE, event.size())
@@ -1007,8 +1015,8 @@ class MusicPlayer(QMainWindow):
             table.selectRow(index.row())
             entry = index.data(Qt.ItemDataRole.UserRole)
 
-        if entry is not None and entry.color is not None:
-            self.lights_widget.set_scene(color=entry.color)
+        if entry is not None:
+            self.apply_light_settings(entry)
 
         self.player.play_track(index, entry)
 

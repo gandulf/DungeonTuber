@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QDialog, QLineEdit, QCompleter, QTextEdit, QVBoxLa
     QDialogButtonBox, QFormLayout, QCheckBox, QHBoxLayout, QTableWidget, QHeaderView, QPushButton, QTableWidgetItem, \
     QGroupBox, QComboBox, QStyledItemDelegate, QMessageBox, QLabel, QProxyStyle
 
-from config.utils import get_available_locales, restart_application, get_executable_path
+from config.utils import get_available_locales, restart_application, get_executable_path, get_broadcast_ip
 
 logger = logging.getLogger(__file__)
 
@@ -31,11 +31,14 @@ CAT_PARTY = "Party"
 CAT_RELAXED = "Relaxed"
 CAT_SAD = "Sad"
 
+
 def has_voxalyzer():
     return has_local_voxalyzer() or AppSettings.value(SettingKeys.VOXALYZER_URL, type=str, defaultValue='') != ''
 
+
 def has_local_voxalyzer():
     return os.path.isfile(get_executable_path("voxalyzer.exe")) and AppSettings.value(SettingKeys.VOXALYZER_LOCAL, True, type=bool)
+
 
 @total_ordering
 @dataclass
@@ -66,7 +69,7 @@ class MusicCategory:
         if not isinstance(other, MusicCategory):
             return False
         return self.key == other.key or self.name == other.name
-    
+
     def json_dump(self):
         return json.dumps(asdict(self))
 
@@ -112,7 +115,7 @@ class Preset:
     genres: list[str]
     bpm: int
 
-    def __init__(self, name: str, categories: dict[str, int], tags: list[str] = None, genres: list[str] = None, bpm: int =None):
+    def __init__(self, name: str, categories: dict[str, int], tags: list[str] = None, genres: list[str] = None, bpm: int = None):
         self.name = name
         self.categories = categories.copy() if categories is not None else {}
         self.tags = tags.copy() if tags is not None else []
@@ -147,16 +150,20 @@ _DEFAULT_CATEGORIES = [CAT_VALENCE, CAT_AROUSAL, CAT_ENGAGEMENT, CAT_DARKNESS, C
 _MUSIC_CATEGORIES = None
 _CATEGORIES = None
 
+
 def remove_preset(preset: Preset):
     _PRESETS.remove(preset)
     AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
+
 
 def add_preset(preset: Preset):
     _PRESETS.append(preset)
     AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
 
+
 def get_presets():
     return _PRESETS
+
 
 def set_presets(presets: list[Preset]):
     global _PRESETS
@@ -168,7 +175,8 @@ def set_presets(presets: list[Preset]):
         _PRESETS = presets
         AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
 
-def get_music_category(key: str, additional_categories: list[MusicCategory] = [] ) -> MusicCategory:
+
+def get_music_category(key: str, additional_categories: list[MusicCategory] = []) -> MusicCategory:
     cats = [cat for cat in get_music_categories() + additional_categories if cat.key == key]
 
     return cats[0] if cats and len(cats) > 0 else None
@@ -213,13 +221,13 @@ def reset_presets():
 
 class SettingKeys(StrEnum):
     DEBUG = "debug"
-    WINDOW_SIZE="windowSize"
+    WINDOW_SIZE = "windowSize"
     REPEAT_MODE = "repeatMode"
     VOLUME = "volume"
     NORMALIZE_VOLUME = "normalizeVolume"
     EFFECTS_DIRECTORY = "effectsDirectory"
     EFFECTS_TREE = "effectsTree"
-    EFFECTS_LIST_VIEW_MODE ="effectsListViewMode"
+    EFFECTS_LIST_VIEW_MODE = "effectsListViewMode"
     LAST_DIRECTORY = "lastDirectory"
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
     EXPANDED_DIRS = "expandedDirs"
@@ -229,7 +237,7 @@ class SettingKeys(StrEnum):
     CATEGORY_WIDGETS = "categoryWidgets"
     PRESET_WIDGETS = "presetWidgets"
     BPM_WIDGET = "bpmWidget"
-    TAGS_WIDGET ="tagsWidget"
+    TAGS_WIDGET = "tagsWidget"
     GENRES_WIDGET = "genresWidget"
     FONT_SIZE = "fontSize"
     VISUALIZER = "visualizer"
@@ -239,7 +247,7 @@ class SettingKeys(StrEnum):
     OPEN_TABLES = "openTables"
     LIGHTS_WIDGET = "lightsWidget"
 
-    TABLE_COLUMNS ="tableColumns"
+    TABLE_COLUMNS = "tableColumns"
     DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
     DYNAMIC_SCORE_COLUMN = "dynamicScoreColumn"
     COLUMN_INDEX_VISIBLE = "columnIndexVisible"
@@ -262,15 +270,19 @@ class SettingKeys(StrEnum):
 
     CATEGORIES = "categories"
     PRESETS = "presets"
-    LIGHTS = "lights"
+    LIGHTS_CONFIG = "lightsConfig"
+    LIGHTS_BROADCAST_IP = "lightsBroadcastIP"
+    LIGHTS_TIMEOUT = "lightsTimeout"
 
-    VOXALYZER_URL ="voxalyzerUrl"
+    VOXALYZER_URL = "voxalyzerUrl"
     VOXALYZER_LOCAL = "voxalyzerLocal"
+
 
 class TabColorStyle(QProxyStyle):
     def drawItemText(self, painter, rect, flags, pal, enabled, text, role):
         painter.setPen(pal.color(QPalette.ColorRole.ButtonText))
         super().drawItemText(painter, rect, flags, pal, enabled, text, role)
+
 
 class SettingsDialog(QDialog):
 
@@ -280,6 +292,8 @@ class SettingsDialog(QDialog):
         self.resize(800, 600)
 
         layout = QVBoxLayout(self)
+
+        self.changed_keys = []
 
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
@@ -296,6 +310,10 @@ class SettingsDialog(QDialog):
         self.categories_tab = QWidget()
         self.init_categories_tab()
         self.tabs.addTab(self.categories_tab, _("Categories"))
+
+        self.lights_tab = QWidget()
+        self.init_lights_tab()
+        self.tabs.addTab(self.lights_tab, _("Lights"))
 
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept)
@@ -325,11 +343,11 @@ class SettingsDialog(QDialog):
         self.voxalyzerUrl = QLineEdit()
         self.voxalyzerUrl.setPlaceholderText("http://localhost:8000/analyze")
         self.voxalyzerUrl.setText(AppSettings.value(SettingKeys.VOXALYZER_URL, type=str))
-        self.analyzer_layout.addRow(_("Voxalyzer BaseUrl") , self.voxalyzerUrl)
+        self.analyzer_layout.addRow(_("Voxalyzer BaseUrl"), self.voxalyzerUrl)
 
         self.local_voxalyzer = QCheckBox(_("Use Local Voxalyzer"))
         self.local_voxalyzer.setEnabled(os.path.isfile(get_executable_path("voxalyzer.exe")))
-        self.local_voxalyzer.setChecked(has_local_voxalyzer() and AppSettings.value(SettingKeys.VOXALYZER_LOCAL,True, type=bool))
+        self.local_voxalyzer.setChecked(has_local_voxalyzer() and AppSettings.value(SettingKeys.VOXALYZER_LOCAL, True, type=bool))
         self.local_voxalyzer.clicked.connect(self._local_voxalyzer_changed)
         self.analyzer_layout.addRow("", self.local_voxalyzer)
 
@@ -339,12 +357,12 @@ class SettingsDialog(QDialog):
         player_group = QGroupBox(_("Player"))
         self.player_layout = QFormLayout(player_group)
 
-        self.normalize_volume = QCheckBox(_("Normalize Volume")+"*")
+        self.normalize_volume = QCheckBox(_("Normalize Volume") + "*")
         self.normalize_volume.setToolTip(_("Requires restart"))
         self.normalize_volume.setChecked(AppSettings.value(SettingKeys.NORMALIZE_VOLUME, True, type=bool))
         self.player_layout.addRow("", self.normalize_volume)
         normalize_volume_description = QLabel(_("All songs will be played at a normalized volume."))
-        normalize_volume_description.setProperty("cssClass","small")
+        normalize_volume_description.setProperty("cssClass", "small")
         normalize_volume_description.setContentsMargins(28, 0, 0, 0)
         self.player_layout.addRow("", normalize_volume_description)
 
@@ -385,7 +403,38 @@ class SettingsDialog(QDialog):
 
         layout.addStretch()
 
-    def _local_voxalyzer_changed(self, checked:bool=False):
+    def init_lights_tab(self):
+        layout = QVBoxLayout(self.lights_tab)
+
+        wiz_group = QGroupBox(_("Wiz Lights"))
+        form_layout = QFormLayout(wiz_group)
+        layout.addWidget(wiz_group, 0)
+
+        layout.addLayout(form_layout, 0)
+
+        self.lights_enabled = QCheckBox(_("Enabled"))
+        self.lights_enabled.setChecked(AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool))
+        form_layout.addRow("", self.lights_enabled)
+
+        ip = AppSettings.value(SettingKeys.LIGHTS_BROADCAST_IP, get_broadcast_ip(), type=str)
+
+        self.lights_broadcast_ip = QLineEdit()
+        self.lights_broadcast_ip.setPlaceholderText(get_broadcast_ip())
+        self.lights_broadcast_ip.setText(ip)
+        form_layout.addRow(_("Broadcast Space"), self.lights_broadcast_ip)
+        lights_broadcast_ip_description = QLabel(_("Take the ip address of you local wlan network and replace the last number with 255."))
+        lights_broadcast_ip_description.setProperty("cssClass", "small")
+        lights_broadcast_ip_description.setContentsMargins(0, 0, 0, 0)
+        form_layout.addRow("", lights_broadcast_ip_description)
+
+        self.lights_broadcast_timeout = QLineEdit()
+        self.lights_broadcast_timeout.setText(AppSettings.value(SettingKeys.LIGHTS_TIMEOUT, "5", type=str))
+        self.lights_broadcast_timeout.setToolTip(_("Time to search for bulbs in seconds"))
+        form_layout.addRow(_("Timeout"), self.lights_broadcast_timeout)
+
+        layout.addStretch(1)
+
+    def _local_voxalyzer_changed(self, checked: bool = False):
         self.voxalyzerUrl.setEnabled(not checked)
 
     def init_categories_tab(self):
@@ -399,7 +448,7 @@ class SettingsDialog(QDialog):
         self.categories_table = QTableWidget()
         self.categories_table.setItemDelegate(SettingsTableDelegate(groups))
         self.categories_table.setColumnCount(5)
-        self.categories_table.setHorizontalHeaderLabels([_("Key"),_("Name"), _("Group"), _("Description"), _("Levels (json)")])
+        self.categories_table.setHorizontalHeaderLabels([_("Key"), _("Name"), _("Group"), _("Description"), _("Levels (json)")])
         self.categories_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 
         self.fill_categories()
@@ -462,22 +511,46 @@ class SettingsDialog(QDialog):
 
         return result
 
+    def _set_settings_value(self, key: SettingKeys, type: object | None, value: object):
+        original_value = AppSettings.value(key, type=type)
+
+        if value is None:
+            AppSettings.remove(key)
+        else:
+            AppSettings.setValue(key, value)
+
+        if original_value != value:
+            self.changed_keys.append(key)
+
+        return original_value != value
+
+    def exec(self, /):
+        self.changed_keys.clear()
+        return super().exec()
+
+    def has_changed(self, *keys: SettingKeys) -> bool:
+        for key in keys:
+            if key in self.changed_keys:
+                return True
+
+        return False
+
     def accept(self):
         requires_restart = self.requires_restart()
 
-        AppSettings.setValue(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, self.title_file_name_columns.isChecked())
-        AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, self.dynamic_table_columns.isChecked())
-        AppSettings.setValue(SettingKeys.DYNAMIC_SCORE_COLUMN, self.dynamic_score_column.isChecked())
-        AppSettings.setValue(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, self.summary_column.isChecked())
-        AppSettings.setValue(SettingKeys.LOCALE, self.locale_combo.currentData())
-        AppSettings.setValue(SettingKeys.DEBUG, self.debug_checkbox.isChecked())
-        AppSettings.setValue(SettingKeys.VOXALYZER_LOCAL, self.local_voxalyzer.isChecked())
+        self._set_settings_value(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, bool, self.title_file_name_columns.isChecked())
+        self._set_settings_value(SettingKeys.DYNAMIC_TABLE_COLUMNS, bool, self.dynamic_table_columns.isChecked())
+        self._set_settings_value(SettingKeys.DYNAMIC_SCORE_COLUMN, bool, self.dynamic_score_column.isChecked())
+        self._set_settings_value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, bool, self.summary_column.isChecked())
+        self._set_settings_value(SettingKeys.LOCALE, str, self.locale_combo.currentData())
+        self._set_settings_value(SettingKeys.DEBUG, bool, self.debug_checkbox.isChecked())
+        self._set_settings_value(SettingKeys.VOXALYZER_LOCAL, bool, self.local_voxalyzer.isChecked())
         if self.voxalyzerUrl.text() == '' or self.voxalyzerUrl.text() is None:
-            AppSettings.remove(SettingKeys.VOXALYZER_URL)
+            self._set_settings_value(SettingKeys.VOXALYZER_URL, str, None)
         else:
-            AppSettings.setValue(SettingKeys.VOXALYZER_URL, self.voxalyzerUrl.text())
+            self._set_settings_value(SettingKeys.VOXALYZER_URL, str, self.voxalyzerUrl.text())
 
-        AppSettings.setValue(SettingKeys.NORMALIZE_VOLUME, self.normalize_volume.isChecked())
+        self._set_settings_value(SettingKeys.NORMALIZE_VOLUME, bool, self.normalize_volume.isChecked())
 
         _categories = []
         for row in range(self.categories_table.rowCount()):
@@ -493,8 +566,13 @@ class SettingsDialog(QDialog):
                 cat_desc = desc_item.text()
                 cat_levels = json.loads(level_item.text())
                 if cat_name:
-                    _categories.append(MusicCategory(cat_name, cat_desc, cat_levels, group=cat_group, key = cat_key))
+                    _categories.append(MusicCategory(cat_name, cat_desc, cat_levels, group=cat_group, key=cat_key))
         set_music_categories(_categories)
+
+        # Lights
+        self._set_settings_value(SettingKeys.LIGHTS_BROADCAST_IP, str, self.lights_broadcast_ip.text())
+        self._set_settings_value(SettingKeys.LIGHTS_TIMEOUT, int, int(self.lights_broadcast_timeout.text()))
+        self._set_settings_value(SettingKeys.LIGHTS_WIDGET, bool, self.lights_enabled.isChecked())
 
         if requires_restart:
 
@@ -506,6 +584,7 @@ class SettingsDialog(QDialog):
                 restart_application()
 
         super().accept()
+
 
 class SettingsTableDelegate(QStyledItemDelegate):
 
@@ -546,6 +625,7 @@ class SettingsTableDelegate(QStyledItemDelegate):
             return None
         return super(SettingsDialog.SettingsTableDelegate, self).setModelData(editor, model, index)
 
+
 class FilterConfig:
     categories: dict[str, int] = {}
     tags: list[str] = []
@@ -560,15 +640,15 @@ class FilterConfig:
 
     def get_category(self, category_key: str, default: int = None) -> int:
         value = self.categories.get(category_key, default)
-        return value if value is not None and value >=0 else None
+        return value if value is not None and value >= 0 else None
 
-    def toggle_tag(self, tag:str, state:int):
+    def toggle_tag(self, tag: str, state: int):
         if state == 0 and tag in self.tags:
             self.tags.remove(tag)
         elif tag not in self.tags:
             self.tags.append(tag)
 
-    def toggle_genre(self, genre:str, state:int):
+    def toggle_genre(self, genre: str, state: int):
         if state == 0 and genre in self.genres:
             self.genres.remove(genre)
         elif genre not in self.genres:

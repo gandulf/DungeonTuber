@@ -686,6 +686,9 @@ msgstr "Index"
 msgid "Lights"
 msgstr "Lichter"
 
+msgid "Lights Manager"
+msgstr "Lichtmanager"
+
 msgid "Brightness"
 msgstr "Helligkeit"
 
@@ -700,3 +703,21 @@ msgstr "Szene"
 
 msgid "Controlled by Songs"
 msgstr "Von Songs gesteuert"
+
+msgid "Wiz Lights"
+msgstr "Wiz Lichter"
+
+msgid "Enabled"
+msgstr "Aktiviert"
+
+msgid "Broadcast Space"
+msgstr "Broadcast Bereich"
+
+msgid "Take the ip address of you local wlan network and replace the last number with 255."
+msgstr "Nimm die IP-Adresse deines lokalen WLAN-Netzwerks und ersetze die letzte Ziffer durch 255."
+
+msgid "Timeout"
+msgstr "Zeitlimit"
+
+msgid "Time to search for bulbs in seconds"
+msgstr "Dauer die nach Glühbirnen gesucht werden soll (in Sekunden)"

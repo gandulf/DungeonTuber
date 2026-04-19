@@ -115,6 +115,7 @@ class LightsWidget(QFrame):
         self.scene_combo = QComboBox(editable=False)
         self.scene_combo.addItem(_("None"), None)
         self.scene_combo.setCurrentIndex(0)
+        self.scene_combo.setDisabled(True)
         self.scene_combo.currentIndexChanged.connect(self.scene_changed)
         form_layout.addWidget(self.scene_combo)
 
@@ -131,6 +132,9 @@ class LightsWidget(QFrame):
 
         self.lights_manager = LightManager()
         self.lights_manager.lights_found.connect(self.on_lights_found)
+        self.lights_manager.lookup()
+
+    def refresh(self):
         self.lights_manager.lookup()
 
     def changeEvent(self, event, /):
@@ -247,6 +251,7 @@ class LightsWidget(QFrame):
             self.color_edit.setDisabled(False)
             self.scenable_edit.setDisabled(False)
             self.edit_name.setDisabled(False)
+            self.scene_combo.setDisabled(False)
 
             self.setVisible(AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool))
 
