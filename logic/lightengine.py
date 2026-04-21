@@ -23,6 +23,7 @@ logger = logging.getLogger(__file__)
 
 _LIGHTS = set()
 
+
 def set_lights(lights: list):
     if lights is None:
         AppSettings.remove(SettingKeys.LIGHTS_CONFIG)
@@ -37,6 +38,7 @@ def get_lights():
 
 
 def save_on_exit():
+    logger.debug("Saving lights as %s" % Light.json_dump_list(get_lights()))
     AppSettings.setValue(SettingKeys.LIGHTS_CONFIG, Light.json_dump_list(get_lights()))
 
 
@@ -82,7 +84,10 @@ class Light:
         self._state = _state
         self._brightness = _brightness
         self._temperature = _temperature
-        self._color = _color
+        if isinstance(_color, str):
+            self._color = QColor(_color)
+        else:
+            self._color = _color
         self._scene = _scene
 
     def apply_settings(self, settings: LightSetting):
@@ -93,6 +98,12 @@ class Light:
 
     def get_settings(self):
         return LightSetting(self.brightness, self.temperature, self.color, self.scene)
+
+    async def update_state(self):
+        if self.state:
+            await self._turn_on(self._pilot())
+        else:
+            await self._turn_off()
 
     async def refresh_state(self):
         state = await self.control.updateState()
@@ -283,7 +294,7 @@ class LightManager(QObject):
 
 
 class DiscoveryThread(QThread):
-    FAKE_BULBS = False
+    FAKE_BULBS = True
     """
     A dedicated thread to run the asyncio event loop.
     """
@@ -319,7 +330,7 @@ class DiscoveryThread(QThread):
     async def update_states(self, bulbs: list[wizlight]) -> list[Light]:
         lights = []
         for bulb in bulbs:
-            light = None
+            light: Light | None = None
             for _light in get_lights():
                 if _light.mac == bulb.mac:
                     light = _light
@@ -327,10 +338,15 @@ class DiscoveryThread(QThread):
 
             if light is None:
                 light = Light()
+                light.name = "Change me"
+                light.control = bulb
+                await light.refresh_state()
                 get_lights().add(light)
+            else:
+                light.control = bulb
+                await light.update_state()
+                await light.refresh_state()
 
-            light.control = bulb
-            await light.refresh_state()
             lights.append(light)
 
         return lights
@@ -410,12 +426,16 @@ class MockControl:
             "sceneId": self.scene_id,
             "c": self.c,
             "dimming": self.dimming,
-            "temp": self.temp,
-
-            "r": self.r,
-            "g": self.g,
-            "b": self.b
+            "temp": self.temp
         }
+
+        if self.r is not None:
+            fakeResponse["r"] = self.r
+        if self.g is not None:
+            fakeResponse["g"] = self.g
+        if self.b is not None:
+            fakeResponse["b"] = self.b
+
         return PilotParser(fakeResponse)
 
     async def get_bulbtype(self) -> BulbType:
@@ -426,8 +446,15 @@ class MockControl:
         return SCENES.values()
 
     async def turn_on(self, state: PilotBuilder):
+        if "state" in state.pilot_params:
+            self.state = state.pilot_params["state"]
+
+        if "dimming" in state.pilot_params:
+            self.dimming = state.pilot_params["dimming"]
+
         if "sceneId" in state.pilot_params:
             self.scene_id = state.pilot_params["sceneId"]
+
         if "r" in state.pilot_params:
             self.r = state.pilot_params["r"]
         if "g" in state.pilot_params:
@@ -435,9 +462,6 @@ class MockControl:
 
         if "b" in state.pilot_params:
             self.b = state.pilot_params["b"]
-
-        if "state" in state.pilot_params:
-            self.state = state.pilot_params["state"]
 
         if "temp" in state.pilot_params:
             self.temp = state.pilot_params["temp"]
@@ -448,8 +472,8 @@ class MockControl:
         if "w" in state.pilot_params:
             self.w = state.pilot_params["w"]
 
-        if "dimming" in state.pilot_params:
-            self.dimming = state.pilot_params["dimming"]
+
+
         print("turn on with %s" % state.pilot_params)
 
     async def turn_off(self):

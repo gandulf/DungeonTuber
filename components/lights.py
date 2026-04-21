@@ -168,10 +168,12 @@ class LightsWidget(QFrame):
             light = item.data(Qt.ItemDataRole.UserRole)
             light.state = state != Qt.CheckState.Unchecked
 
+        self.refresh_lights_list()
+
     def _reset_color_values(self, skip:str = None):
         if skip != "color":
             self.color_edit.blockSignals(True)
-            self.color_edit.setColor(QColor(255, 255, 255))
+            self.color_edit.setColor(None)
             self.color_edit.blockSignals(False)
 
         if skip != "scene":
@@ -182,6 +184,7 @@ class LightsWidget(QFrame):
         if skip != "temperature":
             self.temperature_slider.blockSignals(True)
             self.temperature_slider.setValue(self.temperature_slider.minimum())
+            self.temperature_label.setText("")
             self.temperature_slider.blockSignals(False)
 
     def brightness_changed(self, new_value: int):
@@ -225,9 +228,10 @@ class LightsWidget(QFrame):
 
     def refresh_lights_list(self):
         for i in range(self.lights_list.count()):
-            item = self.lights_list.item(i)
-            light = item.data(Qt.ItemDataRole.UserRole)
-            item.setText(light.name)
+            list_item = self.lights_list.item(i)
+            light = list_item.data(Qt.ItemDataRole.UserRole)
+            list_item.setText(light.name)
+            list_item.setIcon(QIcon.fromTheme("light-full" if light.state else "light"))
 
         self.lights_list.doItemsLayout()
 
@@ -235,10 +239,10 @@ class LightsWidget(QFrame):
         self.lights_list.clear()
 
         for light in lights:
-            table_item = QListWidgetItem(light.name)
-            table_item.setData(Qt.ItemDataRole.UserRole, light)
-            table_item.setIcon(QIcon.fromTheme("light-full" if light.state else "light"))
-            self.lights_list.addItem(table_item)
+            list_item = QListWidgetItem(light.name)
+            list_item.setData(Qt.ItemDataRole.UserRole, light)
+            list_item.setIcon(QIcon.fromTheme("light-full" if light.state else "light"))
+            self.lights_list.addItem(list_item)
 
         if len(lights) == 0:
             self.setVisible(False)
@@ -292,9 +296,14 @@ class LightsWidget(QFrame):
         if light.temperature:
             self.temperature_slider.setValue(light.temperature)
             self.temperature_label.setText(f"{light.temperature // 1000}K")
+        else:
+            self.temperature_slider.setValue(self.temperature_slider.minimum())
+            self.temperature_label.setText("")
 
         if light.color:
             self.color_edit.setColor(light.color)
+        else:
+            self.color_edit.setColor(None)
 
         if light.scenes:
             for scene in light.scenes:
