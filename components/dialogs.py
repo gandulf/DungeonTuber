@@ -9,9 +9,8 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication, QDialo
 
 from config.theme import app_theme
 from config.utils import get_path, is_latest_version, get_latest_version, DOWNLOAD_LINK
+from lights import LightSettingsWidget
 from logic.mp3 import Mp3Entry, update_mp3_data, update_mp3_cover
-
-from components.widgets import ColorButton
 
 logger = logging.getLogger(__file__)
 
@@ -131,14 +130,13 @@ class EditSongDialog(QDialog):
 
         layout.addRow("", self.favorite_edit)
 
-        self.color_edit = ColorButton()
-        self.color_edit.setMaximumWidth(64)
-        self.color_edit.setColor(self.data.color)
-        layout.addRow(_("Color"), self.color_edit)
-
         self.choose_cover = QPushButton(_("Select Image"))
         self.choose_cover.clicked.connect(self.pick_image_file)
         layout.addRow(_("Cover"), self.choose_cover)
+
+        self.light_settings = LightSettingsWidget(settings = self.data.light)
+        self.light_settings.setDisabled(False)
+        layout.addRow(_("Lights"), self.light_settings)
 
         file_name = QLabel(os.path.abspath(data.path))
         file_name.setWordWrap(True)
@@ -166,7 +164,7 @@ class EditSongDialog(QDialog):
         self.data.summary = self.summary_edit.toPlainText()
         self.data.favorite = self.favorite_edit.isChecked()
         self.data.tags = list(map(str.strip, self.tags_edit.text().split(","))) if self.tags_edit.text() != "" else []
-        self.data.color =self.color_edit.color()
+        self.data.light = self.light_settings.get_settings() if not self.light_settings.get_settings().is_empty() else None
 
         new_name = self.name_edit.text()
 

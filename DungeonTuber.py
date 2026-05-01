@@ -679,8 +679,8 @@ class MusicPlayer(QMainWindow):
         self.init_main_menu()
 
     def apply_light_settings(self, entry:Mp3Entry):
-        if entry.color is not None:
-            self.lights_widget.set_scene(color=entry.color)
+        if entry.light is not None:
+            self.lights_widget.apply_settings(entry.light)
 
     def resizeEvent(self, event: QResizeEvent):
         AppSettings.setValue(SettingKeys.WINDOW_SIZE, event.size())

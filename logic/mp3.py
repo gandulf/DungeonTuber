@@ -12,8 +12,10 @@ from PySide6.QtGui import QPixmap, QColor, QImageReader
 
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType, CHAP, CTOC
+from nuitka.build.inline_copy.pefile.pefile import set_flags
 
 from config.settings import AppSettings, SettingKeys
+from lightengine import LightSetting
 
 logger = logging.getLogger(__file__)
 
@@ -21,7 +23,7 @@ logger = logging.getLogger(__file__)
 class Mp3Entry(object):
     __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover","_cover_preview",
                  "_has_cover",
-                 "bpm", "_moods", "color","chapters"]
+                 "bpm", "_moods", "light","chapters"]
 
     index: int
     name: str | None
@@ -37,7 +39,7 @@ class Mp3Entry(object):
     _cover_preview: QPixmap | None
     _has_cover: bool | None
     bpm: int
-    color: QColor
+    light: LightSetting | None
     duration:int
 
     categories: dict[str, int]
@@ -80,7 +82,7 @@ class Mp3Entry(object):
         self._has_cover = None
         self.bpm = bpm
         self.index = None
-        self.color = None
+        self.light = None
 
         self.chapters = []
 
@@ -193,6 +195,13 @@ class Mp3Entry(object):
                 return QPixmap.fromImage(image)
         finally:
             buffer.close()
+
+    @property
+    def color(self):
+        if self.light and self.light.color:
+            return self.light.color
+        else:
+            return None
 
 class EffectEntry(object):
     __slots__ = ["intensities", "intensity", "name", "_cover"]
@@ -355,9 +364,9 @@ def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
             if txxx_fav and txxx_fav.text:
                 entry.favorite = bool(txxx_fav.text)
 
-            color = audio.tags.get("TXXX:ai_color")
-            if color and color.text:
-                entry.color = QColor.fromString(color.text[0])
+            light = audio.tags.get("TXXX:ai_light")
+            if light and light.text:
+                entry.light = LightSetting.json_load(light.text[0])
 
             chapter_list = []
             for key in audio.keys():
@@ -402,7 +411,7 @@ def update_mp3_data(path: PathLike[str], data: Mp3Entry):
     update_mp3_favorite(audio, data.favorite, False)
     update_mp3_categories(audio, data.categories, False)
     update_mp3_tags(audio, data.tags, False)
-    update_mp3_color(audio, data.color, False)
+    update_mp3_light(audio, data.light, False)
 
     audio.save()
 
@@ -551,21 +560,21 @@ def update_mp3_tags(path: str | PathLike[str] | MP3, tags: list[str], save: bool
         logger.debug("Updated tags to {0} for {1}", tags, path)
 
 
-def update_mp3_color(path: str | PathLike[str] | MP3, color: QColor, save: bool = True):
+def update_mp3_light(path: str | PathLike[str] | MP3, light: LightSetting, save: bool = True):
     audio = _audio(path)
 
-    if color:
+    if light:
         audio.tags.add(
             TXXX(
                 Encoding.UTF8,
-                desc='ai_color',
-                text=[color.name()]
+                desc='ai_light',
+                text=[light.json_dump()]
             )
         )
 
     if save:
         audio.save()
-        logger.debug("Updated color to {0} for {1}", color, path)
+        logger.debug("Updated color to {0} for {1}", light.json_dump(), path)
 
 
 def update_mp3_chapters(path: str | PathLike[str] | MP3, chapters: list[dict], save: bool = True):

@@ -44,60 +44,82 @@ def save_on_exit():
 
 @dataclass
 class LightSetting:
+
     scene: str | None = None
     brightness: int = 255  # 0..255
     temperature: int | None = None  # 1000 - 10000
     color: QColor | None = None  # 255,255,255
 
-    def __init__(self, brightness: int = 255, temperature: int = None, color: QColor | None = None, scene: str | None = None, ):
+    def __init__(self, brightness: int = 255, temperature: int = None, color: QColor | None = None, scene: str | None = None):
         self.scene = scene
         self.brightness = brightness
         self.temperature = temperature
-        self.color = color
+        if isinstance(color, str):
+            self.color = QColor(color)
+        else:
+            self.color = color
+
+    def is_empty(self) -> bool:
+        return self.scene is None and self.color is None and (self.brightness is None or self.brightness == 255) and (self.temperature is None or self.temperature == 1000)
+
+    @property
+    def scene_id(self):
+        try:
+            return get_id_from_scene_name(self.scene) if self.scene is not None else None
+        except ValueError as e:
+            logger.warning(f"Invalid scene name '{self.scene}': {e}")
+            return None
+
+    @classmethod
+    def json_dump_list(cls, lights: list):
+        return json.dumps([asdict_filtered(mc) for mc in lights])
+
+    def json_dump(self):
+        logger.debug(asdict_filtered(self))
+        return json.dumps(asdict_filtered(self))
+
+    @classmethod
+    def json_load(cls, json_string: str):
+        data = json.loads(json_string)
+
+        if "color" in data and isinstance(data["color"],str):
+            data["color"] = QColor(data["color"])
+
+        return LightSetting(**data)
 
 
 @dataclass
-class Light:
-    name: str = "Light"
-    scenable: bool = True
-    _scene: str | None = None
-
+class Light(LightSetting):
+    name: str | None = "Light"
     mac: str | None = None
-
-    _state: bool = False
-    _brightness: int = 255  # 0..255
-    _temperature: int = 100  # 1000 - 10000
-    _color: QColor | None = None  # 255,255,255
+    scenable: bool = True
+    state: bool = False
 
     control: wizlight | None = field(default=None, metadata={'export': False})
     loop: asyncio.AbstractEventLoop = field(default=None, metadata={'export': False})  # Custom flag
 
     temperature_min: int = field(default=1000, metadata={'export': False})
     temperature_max: int = field(default=10000, metadata={'export': False})
+
     scenes: list[str] = field(default=None, metadata={'export': False})
 
-    def __init__(self, name: str = None, scenable: bool = True, mac: str | None = None, _state: bool = False, _brightness: int | None = None,
-                 _temperature: int = None, _color: QColor | None = None, _scene: str | None = None):
+    def __init__(self, name: str = None, scenable: bool = True, mac: str | None = None, state: bool = False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.name = name
-        self.scenable = scenable
         self.mac = mac
-        self._state = _state
-        self._brightness = _brightness
-        self._temperature = _temperature
-        if isinstance(_color, str):
-            self._color = QColor(_color)
-        else:
-            self._color = _color
-        self._scene = _scene
+        self.scenable = scenable
+        self.state = state
 
     def apply_settings(self, settings: LightSetting):
-        if self.scene is not None:
-            self.scene = settings.scene
-        else:
-            self.set_scene(settings.brightness, self.temperature, self.color)
+        self.temperature = settings.temperature
+        self.brightness = settings.brightness
+        self.color = settings.color
+        self.scene = settings.scene
+
+        self.turn_on(self._pilot())
 
     def get_settings(self):
-        return LightSetting(self.brightness, self.temperature, self.color, self.scene)
+        return self
 
     async def update_state(self):
         if self.state:
@@ -111,17 +133,17 @@ class Light:
         self.mac = state.get_mac()
 
         if state.get_state() is not None:
-            self._state = state.get_state()
+            self.state = state.get_state()
         if state.get_colortemp() is not None:
-            self._temperature = state.get_colortemp()
+            self.temperature = state.get_colortemp()
         if state.get_brightness() is not None:
-            self._brightness = state.get_brightness()
+            self.brightness = state.get_brightness()
 
         red, green, blue = state.get_rgb()
         if red is not None and green is not None and blue is not None:
-            self._color = QColor(red, green, blue)
+            self.color = QColor(red, green, blue)
         else:
-            self._color = None
+            self.color = None
 
         bulb_type = await self.control.get_bulbtype()
 
@@ -130,85 +152,54 @@ class Light:
             self.temperature_max = bulb_type.kelvin_range.max
 
         self.scenes = await self.control.getSupportedScenes()
-        self._scene = state.get_scene()
+        self.scene = state.get_scene()
 
-    @property
-    def scene(self):
-        return self._scene
 
-    @property
-    def scene_id(self):
-        try:
-            return get_id_from_scene_name(self._scene) if self._scene is not None else None
-        except ValueError as e:
-            logger.warning(f"Invalid scene name '{self._scene}': {e}")
-            return None
 
-    @scene.setter
-    def scene(self, value: str | None):
-        self._scene = value
-        if self.scene_id is not None:
-            self.turn_on(PilotBuilder(scene=self.scene_id))
-
-    @property
-    def color(self):
-        return self._color
-
-    @color.setter
-    def color(self, value):
-        self._color = value
+    def set_color(self, value):
+        self.color = value
         self.turn_on(PilotBuilder(rgb=(value.red(), value.green(), value.blue()) if value is not None else (255, 255, 255)))
 
-    @property
-    def brightness(self):
-        return self._brightness
-
-    @brightness.setter
-    def brightness(self, value):
-        self._brightness = value
+    def set_brightness(self, value):
+        self.brightness = value
         self.turn_on(PilotBuilder(brightness=value))
 
-    @property
-    def temperature(self):
-        return self._temperature
-
-    @temperature.setter
-    def temperature(self, value):
-        self._temperature = value
+    def set_temperature(self, value):
+        self.temperature = value
         self.turn_on(PilotBuilder(colortemp=value))
 
-    @property
-    def state(self):
-        return self._state
-
-    @state.setter
-    def state(self, value):
-        self._state = value
-        if self._state:
+    def set_state(self, value):
+        self.state = value
+        if self.state:
             self.turn_on(self._pilot())
         else:
             self.turn_off()
 
+    def set_scene_id(self, value: str | None):
+        self.scene = value
+        if self.scene_id is not None:
+            self.turn_on(PilotBuilder(scene=self.scene_id))
+
     def set_scene(self, brightness: int | None = None, temperature: int | None = None, color: QColor | None = None):
         if brightness:
-            self._brightness = brightness
+            self.brightness = brightness
 
         if temperature:
-            self._temperature = temperature
+            self.temperature = temperature
 
         if color:
-            self._color = color
+            self.color = color
 
         self.turn_on(self._pilot())
 
     def _pilot(self):
-        return PilotBuilder(scene=self.scene_id, brightness=self._brightness, colortemp=self._temperature, rgb=self._rgb())
+        return PilotBuilder(scene=self.scene_id, brightness=self.brightness, colortemp=self.temperature, rgb=self._rgb())
 
     def _rgb(self):
-        return (self._color.red(), self._color.green(), self._color.blue()) if self._color is not None else None
+        return (self.color.red(), self.color.green(), self.color.blue()) if self.color is not None else None
 
     def turn_on(self, pilot_builder: PilotBuilder = PilotBuilder()):
-        if self._state:
+        if self.state:
             self._execute(partial(self._turn_on, pilot_builder))
 
     def turn_off(self):
@@ -248,8 +239,8 @@ class Light:
     def json_load(cls, json_string: str):
         data = json.loads(json_string)
 
-        if "_color" in data:
-            data["_color"] = QColor(data["_color"])
+        if "color" in data:
+            data["color"] = QColor(data["color"])
 
         return Light(**data)
 

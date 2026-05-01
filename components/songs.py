@@ -1342,7 +1342,7 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         self.initStyleOption(option, index)
 
         painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
-        data = index.data(Qt.ItemDataRole.UserRole)
+        data: Mp3Entry = index.data(Qt.ItemDataRole.UserRole)
 
         padding = _get_table_padding()
         content_rect = option.rect.adjusted(3 * 2, padding, -padding * 2, -padding)
@@ -1350,6 +1350,7 @@ class LabelItemDelegate(BaseStyledItemDelegate):
 
         # draw tags
         tag_left = content_rect.right()
+        tag_top = content_rect.top() + 2
 
         if AppSettings.value(SettingKeys.COLUMN_TAGS_VISIBLE, True, type=bool):
             tags_font = app_theme.font_small()
@@ -1357,17 +1358,18 @@ class LabelItemDelegate(BaseStyledItemDelegate):
             fmTitle = QFontMetrics(tags_font)
             painter.setFont(tags_font)
 
-            tag_top = content_rect.top() + 2
-
             green_tags = [x for x in data.tags if x in self.parent().filter_config.tags]
             red_tags = [x for x in data.tags if x not in self.parent().filter_config.tags]
+
+            tag_padding_x = 6
+            tag_padding_y = 3
+
+            text_padding_x = 4
+            text_padding_y = 2
 
             for tag in green_tags + red_tags:
 
                 bounding_rect = fmTitle.boundingRect(tag)
-
-                tag_padding_x = 6
-                tag_padding_y = 3
 
                 # check if enough space for tag is left
                 if content_rect.left() > tag_left - bounding_rect.width() - tag_padding_x * 2:
@@ -1386,14 +1388,17 @@ class LabelItemDelegate(BaseStyledItemDelegate):
                 painter.drawRoundedRect(tags_rect, 6.0, 6.0)
 
                 pen.setColor(option.palette.color(QPalette.ColorRole.HighlightedText))
-
                 painter.setPen(pen)
-                text_padding_x = 4
-                text_padding_y = 2
+
                 tags_rect.adjust(text_padding_x, text_padding_y, -text_padding_x, -text_padding_y)
                 painter.drawText(tags_rect, Qt.AlignmentFlag.AlignRight, tag)
 
                 tag_left = tags_rect.left() - tag_padding_x * 2
+
+        if data.light:
+            bulb = QIcon.fromTheme("light")
+            bulb_rect = QRect(tag_left - app_theme._icon_width,tag_top, app_theme._icon_width, app_theme._icon_height)
+            bulb.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # draw Texts
         summary_font = app_theme.font_small()
