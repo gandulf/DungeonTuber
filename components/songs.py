@@ -1338,6 +1338,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
 
+        self.bulb = QIcon.fromTheme("light")
+
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex, /):
         self.initStyleOption(option, index)
 
@@ -1396,9 +1398,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
                 tag_left = tags_rect.left() - tag_padding_x * 2
 
         if data.light:
-            bulb = QIcon.fromTheme("light")
             bulb_rect = QRect(tag_left - app_theme._icon_width,tag_top, app_theme._icon_width, app_theme._icon_height)
-            bulb.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
+            self.bulb.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # draw Texts
         summary_font = app_theme.font_small()

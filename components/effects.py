@@ -257,6 +257,9 @@ class EffectListItemDelegate(QStyledItemDelegate):
     def __init__(self, parent: EffectList = None):
         super().__init__(parent)
 
+        self.bulb = QIcon.fromTheme("light")
+        self.bulb_invert= app_theme.get_icon("light","DARK")
+
     def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         super().initStyleOption(option, index)
         # Remove the 'HasCheckIndicator' feature so Qt doesn't draw the box
@@ -443,12 +446,15 @@ class EffectListItemDelegate(QStyledItemDelegate):
         else:
             self._paint_list_item(painter, option, index)
 
-        effect_entry = index.data(Qt.ItemDataRole.UserRole)
+        effect_entry: EffectEntry = index.data(Qt.ItemDataRole.UserRole)
         cnt = len(effect_entry.intensities)
+        right = option.rect.right()
         if cnt > 1:
+            right = self.get_intensity_rect(option.rect, effect_entry, intensity=0).left()
             with QPainterStateGuard(painter):
                 for idx, entry in enumerate(effect_entry.intensities):
                     rect = self.get_intensity_rect(option.rect, effect_entry, intensity=idx)
+
                     if effect_entry.intensity == idx:
                         painter.setBrush(option.palette.color(QPalette.ColorRole.Highlight))
                     else:
@@ -468,6 +474,15 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
                     rect.adjust(0, 0, -1, -1)
                     painter.drawText(rect, str(idx + 1), Qt.AlignmentFlag.AlignCenter)
+
+
+        if effect_entry.light:
+            if self.is_grid_mode():
+                bulb_rect = QRect(option.rect.right() - app_theme._icon_width, option.rect.bottom() - app_theme._icon_height - 2, app_theme._icon_width, app_theme._icon_height)
+                self.bulb_invert.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
+            else:
+                bulb_rect = QRect(right - app_theme._icon_width, option.rect.top(), app_theme._icon_width, option.rect.height())
+                self.bulb.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         if self.is_grid_mode():

@@ -1,7 +1,8 @@
+import os
 from enum import Enum
 
 from PySide6.QtCore import QObject, Property, Qt, QSize, QMargins
-from PySide6.QtGui import QColor, QPalette, QBrush,  QIcon, QFont
+from PySide6.QtGui import QColor, QPalette, QBrush, QIcon, QFont
 from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect
 
 from config.settings import AppSettings, SettingKeys
@@ -47,8 +48,6 @@ class AppTheme(QObject):
     _brush_cache: dict[str, QBrush] = {}
 
     _small_factor = 0.6
-
-
 
     def __init__(self):
         super().__init__()
@@ -329,8 +328,15 @@ class AppTheme(QObject):
         self._brush_cache.clear()
         self.apply_stylesheet()
 
-    def theme(self):
+    def theme(self) -> str:
         return AppSettings.value(SettingKeys.THEME, "LIGHT", type=str)
+
+    def get_icon(self, icon_name: str, theme_name: str):
+        for path in QIcon.themeSearchPaths():
+            full_path = os.path.join(path, theme_name, "32x32", f"{icon_name}.svg")
+            if os.path.exists(full_path):
+                return QIcon(full_path)
+        return None
 
     def apply_stylesheet(self):
         theme = self.theme()

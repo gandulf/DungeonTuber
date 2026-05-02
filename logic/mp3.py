@@ -230,6 +230,13 @@ class EffectEntry(object):
         return self.intensities == other.intensities
 
     @property
+    def light(self):
+        if self.mp3_entry is not None and self.mp3_entry.light is not None:
+            return self.mp3_entry.light
+        else:
+            return None
+
+    @property
     def cover(self):
         if self.mp3_entry is not None and self.mp3_entry.cover is not None:
             return self.mp3_entry.cover
