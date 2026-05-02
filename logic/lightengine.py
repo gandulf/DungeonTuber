@@ -23,7 +23,6 @@ logger = logging.getLogger(__file__)
 
 _LIGHTS = set()
 
-
 def set_lights(lights: list):
     if lights is None:
         AppSettings.remove(SettingKeys.LIGHTS_CONFIG)
@@ -285,7 +284,7 @@ class LightManager(QObject):
 
 
 class DiscoveryThread(QThread):
-    FAKE_BULBS = True
+    FAKE_BULBS = False
     """
     A dedicated thread to run the asyncio event loop.
     """

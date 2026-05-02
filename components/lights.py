@@ -2,14 +2,11 @@ from PySide6.QtCore import Qt, QSize, QEvent, Signal
 from PySide6.QtGui import QIcon, QColor
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QListWidget, QListView, QListWidgetItem, QCheckBox, QSizePolicy, QLabel, QToolButton, QComboBox
 from pywizlight import SCENES
-from pywizlight.scenes import get_id_from_scene_name
 
-from lightengine import Light
 from logic.lightengine import LightManager, Light, LightSetting
 from config.theme import app_theme
 from config.settings import AppSettings, SettingKeys
 from components.widgets import IconLabel, JumpSlider, ColorButton, ToggleSlider
-
 
 class LightSettingsWidget(QFrame):
     temperature_changed = Signal(int) # 1000-10000

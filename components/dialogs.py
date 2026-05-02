@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication, QDialo
 
 from config.theme import app_theme
 from config.utils import get_path, is_latest_version, get_latest_version, DOWNLOAD_LINK
-from lights import LightSettingsWidget
+from components.lights import LightSettingsWidget
 from logic.mp3 import Mp3Entry, update_mp3_data, update_mp3_cover
 
 logger = logging.getLogger(__file__)

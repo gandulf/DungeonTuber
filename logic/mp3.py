@@ -8,17 +8,14 @@ from pathlib import Path
 from os import PathLike
 
 from PySide6.QtCore import Qt, QThread, Signal, QSize, QByteArray, QBuffer
-from PySide6.QtGui import QPixmap, QColor, QImageReader
+from PySide6.QtGui import QPixmap, QImageReader
 
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType, CHAP, CTOC
-from nuitka.build.inline_copy.pefile.pefile import set_flags
 
-from config.settings import AppSettings, SettingKeys
-from lightengine import LightSetting
+from logic.lightengine import LightSetting
 
 logger = logging.getLogger(__file__)
-
 
 class Mp3Entry(object):
     __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover","_cover_preview",
