@@ -333,7 +333,7 @@ class AppTheme(QObject):
 
     def get_icon(self, icon_name: str, theme_name: str):
         for path in QIcon.themeSearchPaths():
-            full_path = os.path.join(path, theme_name, "32x32", f"{icon_name}.svg")
+            full_path =get_path(os.path.join(path, theme_name, "32x32", f"{icon_name}.svg"))
             if os.path.exists(full_path):
                 return QIcon(full_path)
         return None
