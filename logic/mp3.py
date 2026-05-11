@@ -148,26 +148,39 @@ class Mp3Entry(object):
             if audio is None:
                 audio = MP3(self.path, ID3=ID3)
             self._has_cover = False
-            for key in audio.tags.keys():
-                # APIC tags often have suffixes like APIC:Cover
-                if key.startswith("APIC"):
-                    data = audio.tags[key].data
-                    self._cover = self._load_image(data, None)
-                    self._has_cover = True
-                    break
+            data = None
+            if "APIC:Cover" in audio.tags:
+                data = audio.tags["APIC:Cover"].data
+            else:
+                for key in audio.tags.keys():
+                    # APIC tags often have suffixes like APIC:thumbnail etc
+                    if key.startswith("APIC"):
+                        data = audio.tags[key].data
+                        break
+
+            if data is not None:
+                self._cover = self._load_image(data, None)
+                self._has_cover = True
 
     def _load_cover_preview(self, audio: MP3 = None):
         if (self._has_cover is None or self._has_cover) and self._cover_preview is None:
             if audio is None:
                 audio = MP3(self.path, ID3=ID3)
             self._has_cover = False
-            for key in audio.tags.keys():
-                # APIC tags often have suffixes like APIC:Cover
-                if key.startswith("APIC"):
-                    data = audio.tags[key].data
-                    self._cover_preview = self._load_image(data, QSize(128,128))
-                    self._has_cover = True
-                    break
+
+            data = None
+            if "APIC:Cover" in audio.tags:
+                data = audio.tags["APIC:Cover"].data
+            else:
+                for key in audio.tags.keys():
+                    # APIC tags often have suffixes like APIC:thumbnail etc
+                    if key.startswith("APIC"):
+                        data = audio.tags[key].data
+                        break
+
+            if data is not None:
+                self._cover_preview = self._load_image(data, QSize(128, 128))
+                self._has_cover = True
 
     def _load_image(self, data, target_size:QSize | None) -> QPixmap | None:
         try:

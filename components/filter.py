@@ -1,11 +1,11 @@
 import functools
 
 from PySide6.QtCore import Qt, QPoint, Signal, QMetaMethod, QSize, QEvent, QPointF, QRectF, QRect
-from PySide6.QtGui import QIcon, QAction, QPalette, QFont, QColor, QPaintEvent, QPainter, QPen, QBrush
-from PySide6.QtWidgets import QDialogButtonBox, QFormLayout, QLineEdit, QDialog, QToolButton, QPushButton, QHBoxLayout, \
+from PySide6.QtGui import QIcon, QAction, QPalette, QColor, QPaintEvent, QPainter, QPen, QBrush
+from PySide6.QtWidgets import QToolButton, QPushButton, QHBoxLayout, \
     QWidget, QVBoxLayout, QMenu, QLabel, QTabWidget
 
-from components.widgets import FlowLayout, ToggleSlider, CategoryWidget, BPMSlider
+from components.widgets import FlowLayout, ToggleSlider, CategoryWidget, BPMSlider, TabColorStyle
 from components.songs import SongTable
 from components.dialogs import NameDialog
 
@@ -279,6 +279,8 @@ class FilterWidget(QWidget):
         self.filter_layout.setSpacing(0)
 
         self.slider_tabs = QTabWidget()
+        self.table_tabs_style = TabColorStyle()
+        self.slider_tabs.tabBar().setStyle(self.table_tabs_style)
         self.slider_tabs.tabBar().setAutoHide(True)
 
         # sliders_container.addWidget(self.sliders_widget, 1)
