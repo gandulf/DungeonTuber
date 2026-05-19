@@ -1,18 +1,18 @@
 import functools
 
 from PySide6.QtCore import Qt, QPoint, Signal, QMetaMethod, QSize, QEvent, QPointF, QRectF, QRect
-from PySide6.QtGui import QIcon, QAction, QPalette, QColor, QPaintEvent, QPainter, QPen, QBrush
-from PySide6.QtWidgets import QToolButton, QPushButton, QHBoxLayout, \
+from PySide6.QtGui import QIcon, QAction, QPalette, QColor, QPaintEvent, QPainter, QPen, QBrush, QFont
+from PySide6.QtWidgets import QPushButton, QHBoxLayout, \
     QWidget, QVBoxLayout, QMenu, QLabel, QTabWidget
 
-from components.widgets import FlowLayout, ToggleSlider, CategoryWidget, BPMSlider, TabColorStyle
+from components.widgets import FlowLayout, ToggleSlider, CategoryWidget, BPMSlider, ToolButton
 from components.songs import SongTable
 from components.dialogs import NameDialog
 
 from config.settings import CAT_VALENCE, get_music_category, CAT_AROUSAL, Preset, add_preset, remove_preset, \
     reset_presets, SettingKeys, get_presets, AppSettings, MusicCategory, CATEGORY_MIN, CATEGORY_MAX, \
     FilterConfig, get_music_categories
-from config.theme import app_theme
+from config.theme import app_theme, Theme, _alpha
 from config.utils import children_layout, clear_layout
 
 from logic.mp3 import Mp3Entry
@@ -53,8 +53,8 @@ class RussellEmotionWidget(QWidget):
         return QSize(22 * app_theme.font_size, 22 * app_theme.font_size)
 
     def update_theme(self):
-        is_dark = AppSettings.value(SettingKeys.THEME, "LIGHT", type=str) == "DARK"
-        if is_dark:
+        theme = app_theme.theme()
+        if theme == Theme.DARK:
             self.bg_color = QColor("#2b2b2b")
             self.fg_color = QColor("#dddddd")
             self.grid_color = QColor("#555555")
@@ -68,6 +68,7 @@ class RussellEmotionWidget(QWidget):
             self.point_color = QColor("#0000FF")  # Blue
             self.ref_point_color = QColor("#0000FF")
             self.ref_point_border_color = QColor("#2b2b2b")
+
         self.update()
 
     def changeEvent(self, event: QEvent):
@@ -80,8 +81,8 @@ class RussellEmotionWidget(QWidget):
 
     def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
-        painter.setFont(app_theme.font())
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        painter.setFont(app_theme.font_medium)
 
         MARGIN_LEFT = self.contentsMargins().left() + painter.fontMetrics().height()
         MARGIN_BOTTOM = self.contentsMargins().bottom() + painter.fontMetrics().height()
@@ -94,7 +95,7 @@ class RussellEmotionWidget(QWidget):
         self.plot_rect = event.rect().adjusted(MARGIN_LEFT, MARGIN_TOP, -MARGIN_RIGHT,-MARGIN_BOTTOM)
 
         # Draw Grid (Center lines)
-        painter.setPen(QPen(self.grid_color, 1))
+        painter.setPen(self.grid_color)
         center_x = self.plot_rect.center().x()
         center_y = self.plot_rect.center().y()
 
@@ -102,7 +103,7 @@ class RussellEmotionWidget(QWidget):
         painter.drawLine(QPointF(center_x, self.plot_rect.top()), QPointF(center_x, self.plot_rect.bottom()))
 
         # Draw dashed grid border
-        painter.setPen(QPen(self.grid_color, 1, Qt.PenStyle.DashLine))
+        painter.setPen(QPen(self.grid_color, 1.0, Qt.PenStyle.DashLine))
         painter.drawRect(self.plot_rect)
 
         # Draw Labels inside
@@ -146,9 +147,7 @@ class RussellEmotionWidget(QWidget):
         painter.restore()
 
         # Draw Reference Points
-        c = QColor(self.ref_point_color)
-        c.setAlpha(50)
-        painter.setBrush(QBrush(c))
+        painter.setBrush(QBrush(_alpha(self.ref_point_color,50)))
         painter.setPen(QPen(self.ref_point_border_color, 0.5))
 
         for val, aro in self.reference_points:
@@ -263,7 +262,7 @@ class FilterWidget(QWidget):
         super().__init__(parent)
 
         self.setAutoFillBackground(True)
-        self.setContentsMargins(app_theme.margin)
+        self.setContentsMargins(app_theme.margin_large)
         self.russel_widget = RussellEmotionWidget()
         self.russel_widget.value_changed.connect(self.on_russel_changed)
 
@@ -279,8 +278,7 @@ class FilterWidget(QWidget):
         self.filter_layout.setSpacing(0)
 
         self.slider_tabs = QTabWidget()
-        self.table_tabs_style = TabColorStyle()
-        self.slider_tabs.tabBar().setStyle(self.table_tabs_style)
+        self.slider_tabs.setContentsMargins(app_theme.margin_large)
         self.slider_tabs.tabBar().setAutoHide(True)
 
         # sliders_container.addWidget(self.sliders_widget, 1)
@@ -296,7 +294,7 @@ class FilterWidget(QWidget):
         # --------------------------------------
 
         self.tags_genres_widget = QWidget()
-        self.tags_genres_widget.setContentsMargins(app_theme.spacing, 0, app_theme.spacing,0)
+        self.tags_genres_widget.setContentsMargins(0, 0, 0, 0)
         self.filter_layout.addWidget(self.tags_genres_widget)
 
         tags_genres_layout = QVBoxLayout(self.tags_genres_widget)
@@ -311,28 +309,27 @@ class FilterWidget(QWidget):
         self.tags_layout = FlowLayout()
         self.tags_layout.setObjectName("tags_layout")
 
-        label_font = app_theme.font(True)
-        tags_label = QLabel(_("Tags"))
+        label_font = QFont(app_theme.font_medium)
+        label_font.setBold(True)
+        tags_label = QLabel(_("Tags").upper())
         tags_label.setFont(label_font)
         tags_label.setProperty("cssClass", "mini")
-        tags_label.setStyleSheet("text-transform:uppercase")
-        tags_label.setContentsMargins(0, 4, 0, 2)
+        tags_label.setContentsMargins(0, app_theme.padding_large, 0, app_theme.padding_small)
         tags_widget_layout.addWidget(tags_label)
         tags_widget_layout.addLayout(self.tags_layout)
 
         self.genres_widget = QWidget()
         genres_widget_layout = QVBoxLayout(self.genres_widget)
-        genres_widget_layout.setContentsMargins(0, 4, 0, 0)
+        genres_widget_layout.setContentsMargins(0, 0, 0, 0)
         genres_widget_layout.setSpacing(0)
 
         self.genres_layout = FlowLayout()
         self.genres_layout.setObjectName("genres_layout")
 
-        genres_label = QLabel(_("Genres"))
+        genres_label = QLabel(_("Genres").upper())
         genres_label.setFont(label_font)
         genres_label.setProperty("cssClass", "mini")
-        genres_label.setStyleSheet("text-transform:uppercase")
-        genres_label.setContentsMargins(0, 4, 0, 2)
+        genres_label.setContentsMargins(0, app_theme.padding_large, 0, app_theme.padding_small)
         genres_widget_layout.addWidget(genres_label)
         genres_widget_layout.addLayout(self.genres_layout)
 
@@ -396,7 +393,7 @@ class FilterWidget(QWidget):
 
         sliders_layout = QVBoxLayout()
         sliders_layout.setObjectName("sliders_layout")
-        sliders_layout.setContentsMargins(4, 0, 4, 0)
+        sliders_layout.setContentsMargins(app_theme.padding_large, 0, app_theme.padding_large, 0)
 
         if group is None or group == '':
             russle_layout.addWidget(self.russel_widget, 0)
@@ -630,7 +627,8 @@ class FilterWidget(QWidget):
             self.presets_widget.setVisible(True)
             self.presets_layout.addStretch()
             for preset in get_presets():
-                button = QPushButton(text=preset.name)
+                button = QPushButton(text=preset.name, parent = self)
+                button.setBackgroundRole(QPalette.ColorRole.Button)
                 button.setProperty("cssClass", "small")
                 button.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
@@ -646,15 +644,11 @@ class FilterWidget(QWidget):
                 button.clicked.connect(functools.partial(self.select_preset, preset))
                 self.presets_layout.addWidget(button)
 
-            save_preset = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
-            save_preset.setProperty("cssClass", "small")
-
+            save_preset = ToolButton(style="small", icon=QIcon.fromTheme(QIcon.ThemeIcon.DocumentSaveAs))
             save_preset.clicked.connect(self.save_preset_action)
             self.presets_layout.addWidget(save_preset)
 
-            clear_preset = QToolButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.EditClear))
-            clear_preset.setProperty("cssClass", "small")
-
+            clear_preset = ToolButton(style="small", icon=QIcon.fromTheme(QIcon.ThemeIcon.EditClear))
             clear_preset.clicked.connect(self.clear_sliders)
             self.presets_layout.addWidget(clear_preset)
         else:

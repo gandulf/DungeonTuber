@@ -2,13 +2,13 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
-    Signal, QObject, QPoint, QItemSelection
-from PySide6.QtGui import QIcon, QAction, QKeyEvent, QPaintEvent
+    Signal, QObject, QPoint, QItemSelection, QStorageInfo
+from PySide6.QtGui import QIcon, QAction, QKeyEvent, QPaintEvent, QAbstractFileIconProvider, QPalette
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QWidget, \
-    QVBoxLayout, QToolButton, QAbstractItemView, QFrame
+    QVBoxLayout, QAbstractItemView, QFrame
 
 from components.dialogs import EditSongDialog
-from components.widgets import IconLabel, AutoSearchHelper
+from components.widgets import IconLabel, AutoSearchHelper, ToolButton
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
 from logic.mp3 import parse_mp3, Mp3Entry
@@ -33,19 +33,37 @@ class CustomIconProvider(QFileIconProvider):
 
         self.playlist_icon = QIcon.fromTheme("list-music")
 
-    def icon(self, info: QFileInfo):
+    def is_drive(self, file_info: QFileInfo) -> bool:
+        return file_info and file_info.absoluteFilePath().endswith(":/")
+
+    def icon(self, info: QFileInfo | QAbstractFileIconProvider.IconType):
         # 1. Check if it's a directory
-        if info.isDir():
-            return self.folder_icon
+        if isinstance(info,QAbstractFileIconProvider.IconType):
+            if info == QAbstractFileIconProvider.IconType.Folder:
+                return self.folder_icon
+            elif info == QAbstractFileIconProvider.IconType.Drive:
+                return QIcon.fromTheme(QIcon.ThemeIcon.DriveHarddisk)
+            elif info == QAbstractFileIconProvider.IconType.Network:
+                return QIcon.fromTheme(QIcon.ThemeIcon.NetworkWired)
+            elif info == QAbstractFileIconProvider.IconType.Computer:
+                return QIcon.fromTheme(QIcon.ThemeIcon.Computer)
+            else:
+                return super().icon(info)
 
-        # 2. Check extension for specific files
-        if info.suffix().lower() == "mp3":
-            return self.music_icon
-        elif info.suffix().lower() == "m3u":
-            return self.playlist_icon
+        elif isinstance(info, QFileInfo):
+            if self.is_drive(info):
+                return QIcon.fromTheme(QIcon.ThemeIcon.DriveHarddisk)
+            elif info.isDir():
+                return self.folder_icon
 
-        # 3. Fallback to the system default icon for everything else
-        return super().icon(info)
+            # 2. Check extension for specific files
+            if info.suffix().lower() == "mp3":
+                return self.music_icon
+            elif info.suffix().lower() == "m3u":
+                return self.playlist_icon
+
+            # 3. Fallback to the system default icon for everything else
+            return super().icon(info)
 
 
 class FileFilterProxyModel(QSortFilterProxyModel):
@@ -56,9 +74,9 @@ class FileFilterProxyModel(QSortFilterProxyModel):
         # 0 is usually the 'Name' column in QFileSystemModel
         self.setFilterKeyColumn(0)
 
-    def data(self, index, role=Qt.DisplayRole):
+    def data(self, index, role= Qt.ItemDataRole.DisplayRole):
         # 1. Check if we are looking at the 'Name' column and the DisplayRole
-        if role == Qt.DisplayRole and index.column() == 0:
+        if role == Qt.ItemDataRole.DisplayRole and index.isValid() and index.column() == 0:
             # Get the original text (the filename with extension)
             source_data = super().data(index, role)
 
@@ -117,6 +135,8 @@ class DirectoryTree(QTreeView):
     analyze_file = Signal(QFileInfo)
     open_context_menu = Signal(QMenu, list)
 
+    history: list[QPersistentModelIndex] = []
+
     def __init__(self, parent: QWidget | None):
         super().__init__(parent)
 
@@ -127,7 +147,7 @@ class DirectoryTree(QTreeView):
         self.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self.setDropIndicatorShown(True)
-        self.setFont(app_theme.font())
+        self.setFont(app_theme.font_medium)
 
         self.open_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Open"), self)
         self.open_action.triggered.connect(self.do_open_action)
@@ -138,11 +158,15 @@ class DirectoryTree(QTreeView):
         self.analyze_file_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.Scanner), _("Analyze"))
         self.analyze_file_action.triggered.connect(self.do_analyze_file)
 
+        self.go_back_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoPrevious), _("Go Back"), self)
+        self.go_back_action.triggered.connect(self.do_back_action)
+        self.go_back_action.setDisabled(len(self.history) ==0)
+
         self.go_parent_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoUp), _("Go to parent"), self)
         self.go_parent_action.triggered.connect(self.do_parent_action)
 
-        self.set_home_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoNext), _("Go Into"), self)
-        self.set_home_action.triggered.connect(self.do_set_home_action)
+        self.go_into_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoNext), _("Go Into"), self)
+        self.go_into_action.triggered.connect(self.do_into_action)
 
         self._source_root_index = QPersistentModelIndex()
 
@@ -166,7 +190,7 @@ class DirectoryTree(QTreeView):
         self.setColumnHidden(2, True)
         self.setColumnHidden(3, True)
         self.setIconSize(app_theme.icon_size)
-        self.setFont(app_theme.font())
+        self.setFont(app_theme.font_medium)
         self.sortByColumn(0, Qt.SortOrder.AscendingOrder)
         self.setExpandsOnDoubleClick(True)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -199,13 +223,20 @@ class DirectoryTree(QTreeView):
             if index.isValid():
                 self.set_root_index_in_source(index)
 
+        self._refresh_palette()
+
+    def _refresh_palette(self):
+        self.setPalette(app_theme.get_list_palette())
+        self.update()
+
     def changeEvent(self, event: QEvent, /):
         if event.type() == QEvent.Type.FontChange:
-            self.setFont(app_theme.font())
+            self.setFont(app_theme.font_medium)
             self.setIconSize(app_theme.icon_size)
         elif event.type() == QEvent.Type.PaletteChange:
             self.directory_icon_provider.refresh_icons()
             self.directory_model.setIconProvider(self.directory_icon_provider)
+            self._refresh_palette()
 
     def on_directories_loaded(self):
         self.proxy_model.beginFilterChange()
@@ -214,17 +245,17 @@ class DirectoryTree(QTreeView):
 
     def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection, /):
         if len(self.selectedIndexes()) > 0:
-            self.set_home_action.setEnabled(True)
+            self.go_into_action.setEnabled(True)
             self.open_action.setEnabled(True)
         else:
-            self.set_home_action.setEnabled(False)
+            self.go_into_action.setEnabled(False)
             self.open_action.setEnabled(False)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in [Qt.Key.Key_Enter, Qt.Key.Key_Return]:
             index = self.selectionModel().currentIndex()
             file_info = index.data(QFileSystemModel.Roles.FileInfoRole)
-            self.file_opened.emit(file_info)
+            self._open(file_info)
         elif self.autoSearchHelper.keyPressEvent(event):
             self._apply_proxy_root()
             self.viewport().update()
@@ -274,7 +305,7 @@ class DirectoryTree(QTreeView):
         menu.addSeparator()
         #
         menu.addAction(self.go_parent_action)
-        menu.addAction(self.set_home_action)
+        menu.addAction(self.go_into_action)
         #
         menu.show()
         menu.exec(self.mapToGlobal(point))
@@ -286,7 +317,7 @@ class DirectoryTree(QTreeView):
 
     def do_open_action(self):
         index = self.selectedIndexes()[0]
-        self.file_opened.emit(index.data(QFileSystemModel.Roles.FileInfoRole))
+        self._open(index.data(QFileSystemModel.Roles.FileInfoRole))
 
     def do_analyze_file(self):
         for index in self.selectedIndexes():
@@ -294,10 +325,13 @@ class DirectoryTree(QTreeView):
             file_info = self.directory_model.fileInfo(source_index)
             self.analyze_file.emit(file_info)
 
+    def _open(self, file_info:QFileInfo):
+        self.file_opened.emit(file_info)
+
     def double_clicked_action(self, index: QModelIndex | QPersistentModelIndex):
         file_info = index.data(QFileSystemModel.Roles.FileInfoRole)
         if file_info.isFile():
-            self.file_opened.emit(file_info)
+            self._open(file_info)
 
     def _set_root_index(self, root_index: QModelIndex | QPersistentModelIndex):
         if root_index.isValid():
@@ -305,12 +339,25 @@ class DirectoryTree(QTreeView):
             AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, self.directory_model.filePath(source_index))
             self.set_root_index_in_source(source_index)
             self.go_parent_action.setVisible(True)
+
+
+            self.history.append(QPersistentModelIndex(root_index))
+            self.go_back_action.setDisabled(len(self.history) <= 1)
         else:
             AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, None)
             self.set_root_index_in_source(QModelIndex())
             self.go_parent_action.setVisible(False)
 
-    def do_set_home_action(self):
+    def do_back_action(self):
+        if len(self.history) > 1:
+            self.history.pop()
+            self._set_root_index(self.history.pop())
+        elif len(self.history) == 1:
+            self._set_root_index(self.history.pop())
+
+        self.go_back_action.setDisabled(len(self.history) <= 1)
+
+    def do_into_action(self):
         if len(self.selectedIndexes()) == 0:
             return
 
@@ -324,6 +371,9 @@ class DirectoryTree(QTreeView):
             root_index = index.parent()
 
         self._set_root_index(root_index)
+
+
+
 
     def do_clear_home_action(self):
         AppSettings.setValue(SettingKeys.ROOT_DIRECTORY, None)
@@ -352,34 +402,41 @@ class DirectoryWidget(QFrame):
         super(DirectoryWidget, self).__init__(parent)
 
         self.setAutoFillBackground(True)
+        self.setBackgroundRole(QPalette.ColorRole.Window)
         self.setGraphicsEffect(app_theme.drop_shadow(self))
-        self.setContentsMargins(app_theme.margin)
+        self.setContentsMargins(app_theme.margin_large)
 
         self.directory_layout = QVBoxLayout(self)
-        self.directory_layout.setContentsMargins(0, 0, app_theme.spacing, 0)
+        self.directory_layout.setContentsMargins(0, 0, 0, 0)
 
         self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent=self)
         self.headerLabel.set_icon_size(app_theme.icon_size)
-        self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         self.headerLabel.text_label.setProperty("cssClass", "header")
 
         self.directory_tree = DirectoryTree(self)
         self.directory_tree.setContentsMargins(0, 0, 0, 0)
 
-        up_view_button = QToolButton()
-        up_view_button.setProperty("cssClass", "mini")
-        up_view_button.setDefaultAction(self.directory_tree.go_parent_action)
-        self.headerLabel.insert_widget(0, up_view_button)
+        back_view_button = ToolButton(style="mini")
+        back_view_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        back_view_button.setDefaultAction(self.directory_tree.go_back_action)
+        self.headerLabel.add_widget(back_view_button)
 
-        into_view_button = QToolButton()
-        into_view_button.setProperty("cssClass", "mini")
-        into_view_button.setDefaultAction(self.directory_tree.set_home_action)
-        self.headerLabel.insert_widget(1, into_view_button)
+        into_view_button = ToolButton(style="mini")
+        into_view_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        into_view_button.setDefaultAction(self.directory_tree.go_into_action)
+        self.headerLabel.add_widget(into_view_button)
+
+        up_view_button = ToolButton(style="mini")
+        up_view_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        up_view_button.setDefaultAction(self.directory_tree.go_parent_action)
+        self.headerLabel.add_widget(up_view_button)
 
         self.directory_layout.addWidget(self.headerLabel)
         self.directory_layout.addWidget(self.directory_tree)
 
     def changeEvent(self, event, /):
-        if event.type() == QEvent.Type.FontChange:
+        if event.type() in [QEvent.Type.FontChange, QEvent.Type.ApplicationFontChange]:
             self.headerLabel.set_icon_size(app_theme.icon_size)
-            self.directory_tree.setFont(app_theme.font())
+            self.directory_tree.setFont(app_theme.font_medium)
+        elif event.type() in [QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange]:
+            self.setGraphicsEffect(app_theme.drop_shadow(self))

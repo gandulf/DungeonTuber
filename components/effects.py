@@ -1,13 +1,13 @@
 import os
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, \
-    Signal, QRect, QSize, QAbstractTableModel, QAbstractItemModel, QPoint
+    Signal, QRect, QSize, QAbstractTableModel, QAbstractItemModel, QPoint, QMargins
 from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QPalette, QPen, QKeyEvent, \
     QPaintEvent, QLinearGradient, QBrush, QGradient, QPainterStateGuard,  QResizeEvent
 from PySide6.QtWidgets import QMenu, QListView, QStyleOptionViewItem, QStyle, \
-    QStyledItemDelegate, QFileDialog, QToolButton, QPushButton, QVBoxLayout, QHBoxLayout, QFrame
+    QStyledItemDelegate, QFileDialog, QPushButton, QVBoxLayout, QHBoxLayout, QFrame
 
-from components.widgets import IconLabel, AutoSearchHelper, VolumeSlider, RoundButton
+from components.widgets import IconLabel, AutoSearchHelper, VolumeSlider, RoundButton, ToolButton
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
 from logic.audioengine import AudioEngine
@@ -69,7 +69,7 @@ class EffectTableModel(QAbstractTableModel):
             return None
 
         if role == Qt.ItemDataRole.FontRole:
-            return app_theme.font()
+            return app_theme.font_medium
         if role == Qt.ItemDataRole.CheckStateRole:
             return Qt.CheckState.Checked if self._checked == index else Qt.CheckState.Unchecked
         elif role == Qt.ItemDataRole.DecorationRole:
@@ -118,7 +118,7 @@ class EffectList(QListView):
         self.verticalScrollBar().setBackgroundRole(QPalette.ColorRole.Accent)
         self.setMouseTracking(True)
         self.setAlternatingRowColors(True)
-        self.setFont(app_theme.font())
+        self.setFont(app_theme.font_medium)
 
         self.doubleClicked.connect(self.on_item_double_clicked)
 
@@ -174,7 +174,7 @@ class EffectList(QListView):
 
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.FontChange:
-            self.setFont(app_theme.font())
+            self.setFont(app_theme.font_medium)
             self.setIconSize(app_theme.icon_size)
 
     def resizeEvent(self, event: QResizeEvent):
@@ -318,20 +318,20 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
     def _paint_list_item(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         check_state = index.data(Qt.ItemDataRole.CheckStateRole)
-        selected_state = option.state & QStyle.State_Selected
+        selected_state = option.state & QStyle.StateFlag.State_Selected
 
-        padding = app_theme.padding
+        padding = app_theme.padding_small
 
         if index.row() % 2 == 0:
-            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorRole.Base))
+            painter.fillRect(option.rect, option.palette.base())
         else:
-            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorRole.AlternateBase))
+            painter.fillRect(option.rect, option.palette.alternateBase())
 
         if check_state == Qt.CheckState.Checked:
             # Change background for checked items
-            painter.fillRect(option.rect, option.palette.brush(QPalette.ColorRole.Highlight))
+            painter.fillRect(option.rect, option.palette.highlight())
 
-        rect: QRect = option.rect.adjusted(padding * 2, padding, -padding, -padding)
+        rect: QRect = option.rect.adjusted(app_theme.padding , padding, -padding, -padding)
 
         if option.icon:
             pixmap = option.icon.pixmap(rect.size())
@@ -359,7 +359,6 @@ class EffectListItemDelegate(QStyledItemDelegate):
             with QPainterStateGuard(painter):
                 label_rect = QRect(rect.left(), rect.top(), rect.width(), rect.height())
 
-
                 if check_state == Qt.CheckState.Checked:
                     painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText))
                 else:
@@ -369,10 +368,7 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
         with QPainterStateGuard(painter):
             if selected_state:
-                highlight_color = option.palette.color(QPalette.ColorRole.Accent)
-                pen = QPen(highlight_color)
-                pen.setWidth(2)
-                painter.setPen(pen)
+                painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Accent), 2.0))
 
                 p1: QPoint = option.rect.topLeft()
                 p1.setX(p1.x() + padding)
@@ -384,7 +380,7 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
     def _paint_grid_item(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         check_state = index.data(Qt.ItemDataRole.CheckStateRole)
-        selected_state = option.state & QStyle.State_Selected
+        selected_state = option.state & QStyle.StateFlag.State_Selected
 
         padding = 1
         # We use option.rect to get the full space for this item
@@ -433,7 +429,7 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         self.initStyleOption(option, index)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
 
         background = index.data(Qt.ItemDataRole.BackgroundRole)
         if background:
@@ -456,21 +452,21 @@ class EffectListItemDelegate(QStyledItemDelegate):
                     rect = self.get_intensity_rect(option.rect, effect_entry, intensity=idx)
 
                     if effect_entry.intensity == idx:
-                        painter.setBrush(option.palette.color(QPalette.ColorRole.Highlight))
+                        painter.setBrush(option.palette.highlight())
                     else:
-                        painter.setBrush(option.palette.brush(QPalette.ColorRole.Base))
+                        painter.setBrush(option.palette.base())
                     painter.setPen(Qt.GlobalColor.black)
                     painter.drawRoundedRect(rect, 2.0, 2.0)
 
                     if idx == self.hover_intensity and self.hover_index is not None and index.row() == self.hover_index.row():
-                        painter.setPen(QPen(option.palette.color(QPalette.ColorRole.Text)))
+                        painter.setPen(option.palette.color(QPalette.ColorRole.Text))
                         painter.setBrush(option.palette.brush(QPalette.ColorGroup.Active, QPalette.ColorRole.AlternateBase))
                         painter.drawRoundedRect(rect, 2.0, 2.0)
 
                     if effect_entry.intensity == idx:
-                        painter.setPen(QPen(option.palette.color(QPalette.ColorRole.HighlightedText)))
+                        painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText))
                     else:
-                        painter.setPen(QPen(option.palette.color(QPalette.ColorRole.Text)))
+                        painter.setPen(option.palette.color(QPalette.ColorRole.Text))
 
                     rect.adjust(0, 0, -1, -1)
                     painter.drawText(rect, str(idx + 1), Qt.AlignmentFlag.AlignCenter)
@@ -478,10 +474,10 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
         if effect_entry.light:
             if self.is_grid_mode():
-                bulb_rect = QRect(option.rect.right() - app_theme._icon_width, option.rect.bottom() - app_theme._icon_height - 2, app_theme._icon_width, app_theme._icon_height)
+                bulb_rect = QRect(option.rect.right() - app_theme.icon_width, option.rect.bottom() - app_theme.icon_height - 2, app_theme.icon_width, app_theme.icon_height)
                 self.bulb_invert.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
             else:
-                bulb_rect = QRect(right - app_theme._icon_width, option.rect.top(), app_theme._icon_width, option.rect.height())
+                bulb_rect = QRect(right - app_theme.icon_width, option.rect.top(), app_theme.icon_width, option.rect.height())
                 self.bulb.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
@@ -500,7 +496,10 @@ class EffectWidget(QFrame):
         super().__init__()
 
         self.setAutoFillBackground(True)
-        self.setContentsMargins(app_theme.margin)
+
+        margins = QMargins(app_theme.margin_large)
+        margins.setRight(app_theme.padding_xlarge)
+        self.setContentsMargins(margins)
 
         policy = self.sizePolicy()
         policy.setRetainSizeWhenHidden(True)
@@ -509,7 +508,7 @@ class EffectWidget(QFrame):
         effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, None, type=str)
 
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(app_theme.spacing,0,0,0)
+        self.layout.setContentsMargins(0,0,0,0)
 
         self.engine = AudioEngine(False)
 
@@ -519,37 +518,33 @@ class EffectWidget(QFrame):
 
         self.player_layout = QHBoxLayout()
         self.player_layout.setObjectName("player_layout")
-        self.player_layout.setContentsMargins(0, 0, 0, app_theme.spacing)
+        self.player_layout.setContentsMargins(0, 0, 0, app_theme.padding_large)
         self.player_layout.setSpacing(0)
 
-        self.btn_play = RoundButton(icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
-        self.btn_play.setProperty("cssClass", "play small")
+        self.btn_play = RoundButton(style="play mini padded",icon=QIcon.fromTheme(QIcon.ThemeIcon.MediaPlaybackStart))
         self.btn_play.setCheckable(True)
         self.btn_play.setEnabled(False)
         self.btn_play.setIcon(app_theme.create_play_pause_icon())
         self.btn_play.clicked.connect(self.toogle_play)
         self.btn_play.setShortcut("Ctrl+E")
 
-        self.volume_slider = VolumeSlider()
+        self.volume_slider = VolumeSlider(buttonStyle="mini padded")
         self.volume_slider.setObjectName("volume_slider")
         self.volume_slider.volume_changed.connect(self.on_volume_changed)
-        self.volume_slider.btn_volume.setProperty("cssClass", "mini")
-        self.volume_slider.slider_vol.setProperty("cssClass", "buttonSmall")
         self.player_layout.addWidget(self.btn_play, 0)
-        self.player_layout.addSpacing(app_theme.spacing)
+        self.player_layout.addSpacing(app_theme.padding_large)
         self.player_layout.addLayout(self.volume_slider, 1)
 
         self.headerLabel = IconLabel(QIcon.fromTheme("effects"), _("Effects"))
         self.headerLabel.set_icon_size(app_theme.icon_size)
-        self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         self.headerLabel.text_label.setProperty("cssClass", "header")
 
-        list_view = QToolButton(icon=QIcon.fromTheme("list"))
-        list_view.setProperty("cssClass", "mini")
+        list_view = ToolButton(style="mini", icon=QIcon.fromTheme("list"))
+        list_view.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         list_view.clicked.connect(self.list_widget.set_list_view)
 
-        grid_view = QToolButton(icon=QIcon.fromTheme("grid"))
-        grid_view.setProperty("cssClass", "mini")
+        grid_view = ToolButton(style="mini", icon=QIcon.fromTheme("grid"))
+        grid_view.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         grid_view.clicked.connect(self.list_widget.set_grid_view)
 
         self.headerLabel.add_widget(list_view)
@@ -597,7 +592,7 @@ class EffectWidget(QFrame):
             self.btn_play.setIcon(app_theme.create_play_pause_icon())
         elif event.type() == QEvent.Type.FontChange:
             self.headerLabel.set_icon_size(app_theme.icon_size)
-            self.list_widget.setFont(app_theme.font())
+            self.list_widget.setFont(app_theme.font_medium)
 
     def toogle_play(self):
         if self.engine.pause_toggle():

@@ -14,7 +14,7 @@
 # nuitka-project: --include-data-dir={MAIN_DIRECTORY}/locales=locales
 # nuitka-project: --mingw64
 # nuitka-project: --output-dir=dist
-
+import ctypes
 import functools
 import importlib
 import json
@@ -36,17 +36,17 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QTabWidget
     QMenu, QStatusBar, QProgressBar, QSplitter, \
     QListView, QFrame
 from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent
-from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent,  QPalette, QShortcut, QKeySequence
+from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QPalette, QShortcut, QKeySequence, QColor
 
-from config.settings import AppSettings, SettingKeys, SettingsDialog, MusicCategory, set_music_categories, \
+from config.settings import AppSettings, SettingKeys, MusicCategory, set_music_categories, \
     get_music_categories
-from config.theme import app_theme
+from config.theme import app_theme, Theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, is_frozen
 
 from components.effects import EffectList, EffectWidget
-from components.widgets import FeatureOverlay, TabColorStyle
+from components.widgets import FeatureOverlay
 from components.player import PlayerWidget
-from components.dialogs import AboutDialog, EditSongDialog
+from components.dialogs import AboutDialog, EditSongDialog, SettingsDialog
 from components.filter import FilterWidget
 from components.songs import SongTable
 from components.files import DirectoryWidget
@@ -101,6 +101,7 @@ class MusicPlayer(QMainWindow):
         self.check_newer_version()
 
         if AppSettings.value(SettingKeys.START_TOUR, True, type=bool):
+            self.config_player_mode()
             QTimer.singleShot(500, lambda: self.start_tour())
 
     def toggle_fullscreen(self):
@@ -155,6 +156,24 @@ class MusicPlayer(QMainWindow):
         self.bpm_action.setChecked(False)
         self.categories_action.setChecked(False)
 
+    def config_player_mode(self):
+
+        if self.current_table():
+            self.current_table()._toggle_column_setting(SettingKeys.DYNAMIC_TABLE_COLUMNS, True)
+        else:
+            AppSettings.setValue(SettingKeys.DYNAMIC_TABLE_COLUMNS, True)
+
+        self.toggle_directory_tree_action.setChecked(True)
+        self.toggle_effects_tree_action.setChecked(True)
+        self.toggle_lights_manager_action.setChecked(True)
+
+        self.presets_action.setChecked(False)
+        self.tags_action.setChecked(True)
+        self.genres_action.setChecked(True)
+        self.russel_action.setChecked(False)
+        self.bpm_action.setChecked(False)
+        self.categories_action.setChecked(False)
+
     def config_complex_mode(self):
         self.toggle_directory_tree_action.setChecked(True)
         self.toggle_effects_tree_action.setChecked(True)
@@ -171,7 +190,7 @@ class MusicPlayer(QMainWindow):
 
         menu_bar = self.menuBar()
         menu_bar.setNativeMenuBar(False)
-        menu_bar.setFont(app_theme.font())
+        menu_bar.setFont(app_theme.font_medium)
 
         file_menu = menu_bar.addMenu(_("File"))
         file_menu.setContentsMargins(0, 0, 0, 0)
@@ -214,6 +233,10 @@ class MusicPlayer(QMainWindow):
         config_simple_action = QAction(_("Simple Mode"), self, icon=QIcon.fromTheme("filter"))
         config_simple_action.triggered.connect(self.config_simple_mode)
         filter_menu.addAction(config_simple_action)
+
+        config_player_action = QAction(_("Player Mode"), self, icon=QIcon.fromTheme("filter"))
+        config_player_action.triggered.connect(self.config_player_mode)
+        filter_menu.addAction(config_player_action)
 
         config_complex_action = QAction(_("Complex Mode"), self, icon=QIcon.fromTheme("filter"))
         config_complex_action.triggered.connect(self.config_complex_mode)
@@ -283,7 +306,7 @@ class MusicPlayer(QMainWindow):
 
         font_size_medium_action = QAction(_("Medium"), self)
         font_size_medium_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_0))
-        font_size_medium_action.triggered.connect(lambda: setattr(app_theme, 'font_size', 10.5))
+        font_size_medium_action.triggered.connect(lambda: setattr(app_theme, 'font_size', 10))
 
         font_size_larger_action = QAction(_("Larger"), self)
         font_size_larger_action.setShortcut(QKeyCombination(Qt.KeyboardModifier.ControlModifier, Qt.Key.Key_Plus))
@@ -347,13 +370,21 @@ class MusicPlayer(QMainWindow):
         self.dark_theme_action = QAction(_("Dark"), self)
         self.dark_theme_action.triggered.connect(self.set_dark_theme)
         self.dark_theme_action.setCheckable(True)
-        if app_theme.theme() == "LIGHT":
+
+        self.system_theme_action = QAction(_("System"), self)
+        self.system_theme_action.triggered.connect(self.set_system_theme)
+        self.system_theme_action.setCheckable(True)
+
+        if app_theme.theme() == Theme.LIGHT:
             self.light_theme_action.setChecked(True)
-        else:
+        elif app_theme.theme() == Theme.DARK:
             self.dark_theme_action.setChecked(True)
+        else:
+            self.system_theme_action.setChecked(True)
 
         theme_group.addAction(self.light_theme_action)
         theme_group.addAction(self.dark_theme_action)
+        theme_group.addAction(self.system_theme_action)
 
         theme_menu.addActions(theme_group.actions())
 
@@ -373,8 +404,13 @@ class MusicPlayer(QMainWindow):
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.ApplicationFontChange or event.type() == QEvent.Type.FontChange:
             self.table_tabs.setIconSize(app_theme.icon_size)
+        elif event.type() in [QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange]:
+            self.player.setGraphicsEffect(app_theme.drop_shadow(self))
+            self.central_splitter.setGraphicsEffect(app_theme.drop_shadow(self))
+            self.main_widget.setGraphicsEffect(app_theme.drop_shadow(self))
+            self.sidebar_widget.setGraphicsEffect(app_theme.drop_shadow(self))
 
-            # for btn in [self.btn_prev, self.btn_play, self.btn_next, self.slider_vol.btn_volume, self.btn_repeat]:
+            self.apply_windows_11_native_dark(self.winId())
 
     def _get_first_slider(self):
         if len(self.filter_widget.sliders.values()) > 0:
@@ -404,12 +440,17 @@ class MusicPlayer(QMainWindow):
     def set_light_theme(self):
         self.light_theme_action.setChecked(True)
 
-        app_theme.set_theme("LIGHT")
+        app_theme.set_theme(Theme.LIGHT)
 
     def set_dark_theme(self):
         self.dark_theme_action.setChecked(True)
 
-        app_theme.set_theme("DARK")
+        app_theme.set_theme(Theme.DARK)
+
+    def set_system_theme(self):
+        self.system_theme_action.setChecked(True)
+
+        app_theme.set_theme(Theme.SYSTEM)
 
     def set_visualizer_vlc(self):
         AppSettings.setValue(SettingKeys.VISUALIZER, "VLC")
@@ -568,18 +609,16 @@ class MusicPlayer(QMainWindow):
             menu.addMenu(add_to_playlist)
 
     def init_ui(self):
-
         self.player = PlayerWidget()
-        self.player.setContentsMargins(app_theme.margin)
+        self.player.setContentsMargins(0,0,0,0)
         self.player.setGraphicsEffect(app_theme.drop_shadow(self))
         self.player.track_changed.connect(self.play_track)
 
         self.central_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.central_splitter.splitterMoved.connect(self.on_layout_splitter_moved)
         self.setCentralWidget(self.central_splitter)
-
         self.directory_widget = DirectoryWidget()
-        self.directory_widget.setBackgroundRole(QPalette.ColorRole.Midlight)
+        self.directory_widget.setContentsMargins(app_theme.padding_large,app_theme.padding,app_theme.padding,app_theme.padding)
         self.directory_widget.directory_tree.file_opened.connect(self.tree_open_file)
         self.directory_widget.directory_tree.analyze_file.connect(self.analyzer.process)
         self.directory_widget.directory_tree.open_context_menu.connect(self.populate_mp3_entry_context_menu)
@@ -590,10 +629,10 @@ class MusicPlayer(QMainWindow):
         self.central_splitter.setHandleWidth(0)
         self.central_splitter.setGraphicsEffect(app_theme.drop_shadow(self))
 
-        main_widget = QFrame()
-        main_widget.setAutoFillBackground(True)
-        main_widget.setGraphicsEffect(app_theme.drop_shadow(self))
-        main_layout = QVBoxLayout(main_widget)
+        self.main_widget = QFrame()
+        self.main_widget.setAutoFillBackground(True)
+        self.main_widget.setGraphicsEffect(app_theme.drop_shadow(self))
+        main_layout = QVBoxLayout(self.main_widget)
         main_layout.setObjectName("main_layout")
 
         main_layout.setContentsMargins(0,0,0,0)
@@ -609,39 +648,34 @@ class MusicPlayer(QMainWindow):
         tabs_widget.setAutoFillBackground(True)
 
         tabs_layout = QVBoxLayout(tabs_widget)
-        tabs_layout.setContentsMargins(app_theme.margin)  # Padding so the table doesn't hit the curve
+        tabs_layout.setContentsMargins(0,0,0,0)  # Padding so the table doesn't hit the curve
 
         self.table_tabs = QTabWidget(tabs_widget)
+        self.table_tabs.setContentsMargins(0,0,0,0)
         self.table_tabs.tabBar().setMovable(True)
         self.table_tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table_tabs.tabBar().customContextMenuRequested.connect(self.show_tabs_context_menu)
         self.table_tabs.tabBar().setAutoHide(True)
         self.table_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideMiddle)
-        self.table_tabs.tabBar().setFont(app_theme.font_large())
+        self.table_tabs.tabBar().setFont(app_theme.font_large)
         self.table_tabs.setTabsClosable(True)
         self.table_tabs.currentChanged.connect(self.on_table_tab_changed)
         self.table_tabs.tabCloseRequested.connect(self.on_table_tab_close)
         self.table_tabs.tabBar().tabMoved.connect(self.on_table_tab_moved)
-
-        self.table_tabs_style = TabColorStyle()
-        self.table_tabs.tabBar().setStyle(self.table_tabs_style)
         tabs_layout.addWidget(self.table_tabs)
 
-        main_layout.addSpacing(app_theme.spacing)
         main_layout.addWidget(tabs_widget, 2)
-        main_layout.addSpacing(app_theme.spacing)
         main_layout.addWidget(self.player, 0)
 
-        self.central_splitter.addWidget(main_widget)
+        self.central_splitter.addWidget(self.main_widget)
         self.central_splitter.setCollapsible(1, False)
 
         view_mode = QListView.ViewMode[AppSettings.value(SettingKeys.EFFECTS_LIST_VIEW_MODE, "IconMode", type=str)]
 
-        sidebar_widget = QFrame()
-        sidebar_widget.setAutoFillBackground(True)
-        sidebar_widget.setGraphicsEffect(app_theme.drop_shadow(self))
-        sidebar_widget.setBackgroundRole(QPalette.ColorRole.Midlight)
-        sidebar_right = QVBoxLayout(sidebar_widget)
+        self.sidebar_widget = QFrame()
+        self.sidebar_widget.setAutoFillBackground(True)
+        self.sidebar_widget.setGraphicsEffect(app_theme.drop_shadow(self))
+        sidebar_right = QVBoxLayout(self.sidebar_widget)
 
         sidebar_right.setSpacing(0)
         sidebar_right.setContentsMargins(0, 0, 0, 0)
@@ -657,7 +691,7 @@ class MusicPlayer(QMainWindow):
         sidebar_right.addWidget(self.effects_widget,2)
         sidebar_right.addWidget(self.lights_widget,0)
 
-        self.central_splitter.addWidget(sidebar_widget)
+        self.central_splitter.addWidget(self.sidebar_widget)
         self.central_splitter.setCollapsible(2, True)
 
         # Statusbar bottom
@@ -684,6 +718,28 @@ class MusicPlayer(QMainWindow):
 
     def resizeEvent(self, event: QResizeEvent):
         AppSettings.setValue(SettingKeys.WINDOW_SIZE, event.size())
+
+    def apply_windows_11_native_dark(self, window_id):
+        """Uses Windows 11 DWM (Desktop Window Manager) API to force native dark title bars."""
+        if sys.platform == "win32":
+            # 20 = DWMWA_USE_IMMERSIVE_DARK_MODE (Controls dark title bar)
+            # 38 = DWMWA_SYSTEMBACKDROP_TYPE (Can be used for Mica effects on Win 11)
+            DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+
+            hwnd = int(window_id)
+            rendering_policy = ctypes.c_int(1 if app_theme.theme() == Theme.DARK else 0)  # 1 = True (Enable Dark) , 0 Light
+
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                ctypes.byref(rendering_policy),
+                ctypes.sizeof(rendering_policy)
+            )
+
+    def showEvent(self, event, /):
+        super().showEvent(event)
+        # Apply the Windows 11 dark title bar right after the window handle renders
+        self.apply_windows_11_native_dark(self.winId())
 
     def update_table_entry(self, path: PathLike[str]):
         self.current_table().refresh_item(path)
@@ -1057,7 +1113,7 @@ def main():
     app.setApplicationName("Dungeon Tuber")
     app.setApplicationVersion(get_current_version())
 
-    app_theme.application = app
+    app_theme.init_application(app)
 
     # font_id = QFontDatabase.addApplicationFont(get_path("assets/InterVariable.ttf"))
     # if font_id >= 0:
@@ -1069,10 +1125,9 @@ def main():
     app_theme.apply_stylesheet()
 
     window = MusicPlayer(app)
-    hide_splash(window)
+    window.show()
 
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     try:

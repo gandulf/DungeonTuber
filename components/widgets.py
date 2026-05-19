@@ -3,52 +3,114 @@ from enum import StrEnum
 from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, Property, QEvent, \
     QPoint, QObject, QSortFilterProxyModel, QTimer, QKeyCombination, QMimeData, QByteArray
 from PySide6.QtGui import QIcon, QBrush, QPainter, QMouseEvent, QColor, \
-    QPaintEvent, QFontMetrics, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap, QPainterStateGuard
+    QPaintEvent, QFontMetrics, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap, QPainterStateGuard, QFont
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton, QAbstractScrollArea, QLayout, QSizePolicy, QSlider, QVBoxLayout, QStyle, \
     QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QFrame
 
 from config.settings import MusicCategory
-from config.theme import app_theme
+from config.theme import app_theme, Theme, _alpha
 
-class RoundButton(QToolButton):
+
+class ToolButton(QToolButton):
+    style: str = None
+    padding_scale: float = 1
+
+    def __init__(self, style: str|None = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if style:
+            self.setProperty("cssClass", style)
+            self.style = style
+            if "padded" in style:
+                self.padding_scale =2
+
+        self._calculate_sizes()
+
+    def _calculate_sizes(self):
+        if self.style and "small" in self.style:
+            self.setIconSize(app_theme.icon_size_small)
+            self.setFixedSize(QSize(app_theme.button_width_small * self.padding_scale, app_theme.button_height_small * self.padding_scale))
+        elif self.style and "mini" in self.style:
+            self.setIconSize(app_theme.icon_size_mini)
+            self.setFixedSize(QSize(app_theme.button_width_mini * self.padding_scale, app_theme.button_height_mini * self.padding_scale))
+        else:
+            self.setIconSize(app_theme.icon_size)
+            self.setFixedSize(QSize(app_theme.button_width * self.padding_scale, app_theme.button_height * self.padding_scale))
+
+    def changeEvent(self, event, /):
+        if event.type() == QEvent.Type.FontChange:
+            self._calculate_sizes()
+
+class RoundButton(ToolButton):
+
+    radius:int =None
+
+    def __init__(self,*args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _calculate_sizes(self):
+        super()._calculate_sizes()
+
+        # Dynamically update radius to half of the smallest dimension
+        if app_theme.theme() != Theme.SYSTEM:
+            radius = min(self.width(), self.height()) // 2
+            if self.radius is None or self.radius != radius:
+                self.setStyleSheet(f"border-radius: {radius}px")
+                self.radius = radius
+        else:
+            self.radius = None
+            self.setStyleSheet(None)
+
+    def changeEvent(self, event, /):
+        if event.type() in [QEvent.Type.FontChange, QEvent.Type.PaletteChange]:
+            self._calculate_sizes()
 
     def resizeEvent(self, event):
-        # Dynamically update radius to half of the smallest dimension
-        radius = min(self.width(), self.height()) // 2
-        self.setStyleSheet(f"border-radius: {radius}px")
+        self._calculate_sizes()
         super().resizeEvent(event)
 
-
 class IconLabel(QFrame):
-    icon_size = QSize(16, 16)
-    horizontal_spacing = 2
+    icon_size =None
+    style: str | None = None
 
     clicked = Signal()
+
+    def _calculate_sizes(self):
+        if self.style and "small" in self.style:
+            self.icon_size = app_theme.icon_size_small
+        elif self.style and "mini" in self.style:
+            self.icon_size =app_theme.icon_size_mini
+        else:
+            self.icon_size = app_theme.icon_size
+
 
     def mousePressEvent(self, ev: QMouseEvent):
         if ev.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
 
-    def __init__(self, icon: QIcon, text: str, final_stretch: bool = True, parent: QWidget = None):
+    def __init__(self, icon: QIcon, text: str, final_stretch: bool = True, parent: QWidget = None, style:str|None = None, objectName: str | None = None):
         super(IconLabel, self).__init__(parent)
 
+        if objectName:
+            self.setObjectName(objectName)
         self.setAutoFillBackground(True)
         self.layout = QHBoxLayout(self)
         self.layout.setObjectName("IconLabel_layout")
         self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
+        self.layout.setSpacing(app_theme.padding_small)
+        self.style = style
+        self._calculate_sizes()
 
         self.icon = icon
         self.icon_label = QLabel(self)
         if icon is not None:
             self.icon_label.setPixmap(icon.pixmap(self.icon_size))
             self.icon_label.setVisible(True)
-            self.icon_label.setContentsMargins(0, 0, 4, 0)
+            self.icon_label.setContentsMargins(0, 0, 0, 0)
         else:
             self.icon_label.setVisible(False)
 
         self.layout.addWidget(self.icon_label)
-        self.layout.addSpacing(self.horizontal_spacing)
 
         self.text_label = QLabel(text, self)
         self.text_label.setOpenExternalLinks(True)
@@ -60,6 +122,7 @@ class IconLabel(QFrame):
     def changeEvent(self, event, /):
         if event.type() == QEvent.Type.PaletteChange:
             if self.icon:
+                self._calculate_sizes()
                 self.icon = QIcon.fromTheme(self.icon.name())
                 self.icon_label.setPixmap(self.icon.pixmap(self.icon_size))
 
@@ -69,8 +132,14 @@ class IconLabel(QFrame):
     def add_widget(self, widget: QWidget, stretch: int = 0):
         self.layout.addWidget(widget, stretch)
 
+    def add_spacing(self, size: int):
+        self.layout.addSpacing(size)
+
     def insert_widget(self, index: int, widget: QWidget, stretch: int = 0):
         self.layout.insertWidget(index, widget, stretch)
+
+    def insert_spacing(self, index: int, size: int):
+        self.layout.insertSpacing(index, size)
 
     def set_alignment(self, alignment: Qt.AlignmentFlag):
         self.text_label.setAlignment(alignment)
@@ -112,9 +181,13 @@ class FeatureOverlay(QWidget):
 
         # Help text label
         self.label = QLabel(self)
-        self.label.setStyleSheet("color: white;")
+
+        palette = self.label.palette()
+        palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+        self.label.setStyleSheet("color:white;")
+
         self.label.setWordWrap(True)
-        self.label.setContentsMargins(8, 8, 8, 8)
+        self.label.setContentsMargins(app_theme.margin_large)
         self.label.setTextFormat(Qt.TextFormat.RichText)
         self.label.setMinimumWidth(300)
 
@@ -237,7 +310,7 @@ class FeatureOverlay(QWidget):
 
     def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         painter.fillRect(self.rect(), QColor(0, 0, 0, 150))
 
@@ -250,7 +323,7 @@ class FeatureOverlay(QWidget):
 
         # Rounded border around highlight
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-        painter.setPen(QColor(255, 255, 255))
+        painter.setPen(Qt.GlobalColor.white)
         painter.drawRoundedRect(self._highlight_rect, 8, 8)
 
         painter.setBrush(QBrush(QColor(0, 0, 0, 150)))
@@ -263,6 +336,7 @@ class FeatureOverlay(QWidget):
             self.setGeometry(self.parent().geometry())
             self.show_step(initial=True)
         return super().eventFilter(obj, event)
+
 
 class AutoSearchHelper():
     _ignore_keys = [Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_PageDown, Qt.Key.Key_PageUp, Qt.Key.Key_Home, Qt.Key.Key_End]
@@ -299,10 +373,10 @@ class AutoSearchHelper():
         # 2. If there is a search string, draw the popup overlay
         if self.search_string:
             painter = QPainter(self.parent.viewport())
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
             # Style settings
-            font = app_theme.font_small()
+            font = app_theme.font_small
             painter.setFont(font)
             metrics = QFontMetrics(font)
 
@@ -505,7 +579,7 @@ class JumpSlider(QSlider):
     mouse_pressed = Signal(QMouseEvent)
     mouse_released = Signal(QMouseEvent)
 
-    groove_thickness:int =3
+    groove_thickness: int = 3
 
     def __init__(self, orientation: Qt.Orientation = Qt.Orientation.Horizontal, parent=None):
         super(JumpSlider, self).__init__(orientation, parent)
@@ -596,7 +670,8 @@ class JumpSlider(QSlider):
                                                        self.width(), self.invertedAppearance())
 
             self.setValue(self._roundStep(value, self.singleStep()))
-            
+
+
 class CategoryTooltip(QWidget):
     __parent: QWidget
 
@@ -613,7 +688,7 @@ class CategoryTooltip(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setPalette(parent.palette())
         self.setStyle(parent.style())
-        self.setContentsMargins(8, 8, 8, 8)
+        self.setContentsMargins(app_theme.margin_large)
         self.setHidden(True)
         self.__opacity_effect = QGraphicsOpacityEffect()
         self.setGraphicsEffect(self.__opacity_effect)
@@ -629,7 +704,7 @@ class CategoryTooltip(QWidget):
 
         self.__text_widget = QLabel(self)
         self.__text_widget.setText("")
-        self.__text_widget.setFont(app_theme.font_small())
+        self.__text_widget.setFont(app_theme.font_small)
         self.__text_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.__fade_in_animation = QPropertyAnimation(self.__opacity_effect, b'opacity')
@@ -700,13 +775,13 @@ class CategoryTooltip(QWidget):
 
         super(CategoryTooltip, self).paintEvent(event)
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         painter.setBrush(QBrush(QColor(self.palette().color(QPalette.ColorRole.Base))))
         painter.drawRoundedRect(self.rect(), 4.0, 4.0)
 
     def set_text(self, text: str):
-        self.__text_widget.setFont(app_theme.font_small())
+        self.__text_widget.setFont(app_theme.font_small)
         self.__text_widget.setText(text)
         self._update_ui()
 
@@ -912,7 +987,7 @@ class ToggleSlider(QCheckBox):
         drag.setMimeData(mime_data)
 
         # Create custom pixmap
-        font = self.font()
+        font = QFont(self.font())
         if font.pixelSize() > 2:
             font.setPixelSize(font.pixelSize() - 2)
 
@@ -928,7 +1003,7 @@ class ToggleSlider(QCheckBox):
         pixmap.fill(Qt.GlobalColor.transparent)
 
         painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setFont(font)
 
         # Draw rounded rect
@@ -1016,10 +1091,10 @@ class ToggleSlider(QCheckBox):
             handle_brush = self._get_unchecked_handle_brush()
 
         # Draw the toggle's body.
-        painter.setPen(QPen(body_brush.color().darker(110)))
+        painter.setPen(body_brush.color().darker(110))
         painter.setBrush(body_brush)
         painter.drawRoundedRect(content_rect, radius, radius)
-        painter.setPen(QPen(handle_brush.color().darker(110)))
+        painter.setPen(handle_brush.color().darker(110))
         painter.setBrush(handle_brush)
 
         # Draw the text.
@@ -1036,9 +1111,7 @@ class ToggleSlider(QCheckBox):
             text_opacity = 0.5
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
-        text_color = (QColor(self.palette().color(QPalette.ColorRole.Text)))
-        text_color.setAlphaF(text_opacity)
-
+        text_color = _alpha(self.palette().color(QPalette.ColorRole.Text),text_opacity)
         painter.setPen(QPen(text_color))
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, current_text)
         painter.restore()
@@ -1119,7 +1192,7 @@ class VolumeSliderStyle(QProxyStyle):
 
     def drawComplexControl(self, control, option, painter: QPainter, widget: JumpSlider = None):
         if control == QStyle.ComplexControl.CC_Slider:
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             with QPainterStateGuard(painter):
                 rect = option.rect
 
@@ -1135,11 +1208,8 @@ class VolumeSliderStyle(QProxyStyle):
                 triangle = QPolygon([p1, p2, p3])
 
                 # 2. Draw Background (Hollow/Empty part)
-                base = QColor(option.palette.base().color())
-                base.setAlpha(50)
-
-                border = QColor(option.palette.text().color())
-                border.setAlpha(50)
+                base = _alpha(option.palette.base().color(),50)
+                border = _alpha(option.palette.text().color(), 50)
 
                 painter.setPen(QPen(border))
                 painter.setBrush(QBrush(base))
@@ -1198,7 +1268,7 @@ class VolumeSliderStyle(QProxyStyle):
                 grow_size = handle_rect.height() - 10
 
                 if grow_size > 0:
-                    adjust_y = (grow_size *  (1/5 * bump)) // 2
+                    adjust_y = (grow_size * (1 / 5 * bump)) // 2
                 else:
                     adjust_y = 0
 
@@ -1227,7 +1297,7 @@ class VolumeSlider(QHBoxLayout):
     last_volume: int = None
     volume_changed = Signal(int)
 
-    def __init__(self,parent=None, value: int = 70, shortcut: QKeySequence | QKeyCombination | QKeySequence.StandardKey | str | int = None):
+    def __init__(self, parent=None, value: int = 70, shortcut: QKeySequence | QKeyCombination | QKeySequence.StandardKey | str | int = None, buttonStyle:str = None, sliderStyle:str = "button"):
         super(VolumeSlider, self).__init__(parent)
 
         toggle_mute_action = QAction(_("Mute"), self)
@@ -1235,22 +1305,22 @@ class VolumeSlider(QHBoxLayout):
             toggle_mute_action.setShortcut(shortcut)
         toggle_mute_action.triggered.connect(self.toggle_mute)
 
-        self.btn_volume = RoundButton()
+        self.btn_volume = RoundButton(style=buttonStyle)
         self.btn_volume.setDefaultAction(toggle_mute_action)
         self.btn_volume.setShortcutEnabled(True)
         self._update_volume_icon(value)
         self.addWidget(self.btn_volume, 0)
-        self.addSpacing(app_theme.spacing)
+        self.addSpacing(app_theme.padding_large)
 
         self.slider_vol = JumpSlider(Qt.Orientation.Horizontal)
-        self.slider_vol.setFixedHeight(app_theme._button_height_small)
+        self.slider_vol.setFixedHeight(self.btn_volume.height())
         self.slider_vol.setRange(0, 150)
         self.slider_vol.setValue(value)
         self.slider_vol.setMinimumWidth(100)
-        self.slider_vol.setProperty("cssClass", "button")
         self.slider_vol.max_glow_size = 5
         self.slider_vol.valueChanged.connect(self._on_value_changed)
-        self.slider_vol.setStyle(VolumeSliderStyle())
+        self.volume_slider_style = VolumeSliderStyle()
+        self.slider_vol.setStyle(self.volume_slider_style)
         self.slider_vol.setSingleStep(5)
 
         # Shortcut to increase slider
@@ -1330,8 +1400,8 @@ class RepeatButton(RoundButton):
 
     value_changed = Signal(RepeatMode)
 
-    def __init__(self, value: int | RepeatMode = RepeatMode.NO_REPEAT, parent=None):
-        super(RepeatButton, self).__init__(parent)
+    def __init__(self, value: int | RepeatMode = RepeatMode.NO_REPEAT, *args, **kwargs):
+        super(RepeatButton, self).__init__(*args, **kwargs)
 
         if isinstance(value, RepeatMode):
             self._repeat_mode = value
@@ -1369,6 +1439,7 @@ class RepeatButton(RoundButton):
         elif self._repeat_mode == RepeatMode.REPEAT_ALL:
             self.setIcon(self.icon_repeat_all)
 
+
 class ColorButton(QPushButton):
     '''
     Custom Qt Widget to show a chosen color.
@@ -1378,7 +1449,7 @@ class ColorButton(QPushButton):
     '''
     colorChanged = Signal(object)
 
-    def __init__(self, *args, color: QColor=None, **kwargs):
+    def __init__(self, *args, color: QColor = None, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._color: QColor = None
@@ -1393,10 +1464,18 @@ class ColorButton(QPushButton):
             self._color = color
             self.colorChanged.emit(color)
 
-        if self._color:
-            self.setStyleSheet("background-color: %s;" % self._color.name())
-        else:
-            self.setStyleSheet("")
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Button, self._color if self._color else Qt.GlobalColor.transparent)
+        palette.setColor(QPalette.ColorRole.Base, self._color if self._color else Qt.GlobalColor.transparent)
+        palette.setColor(QPalette.ColorRole.Window, self._color if self._color else Qt.GlobalColor.transparent)
+        self.setPalette(palette)
+
+    def paintEvent(self, event: QPaintEvent, /):
+        painter = QPainter(self)
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(self.palette().color(QPalette.ColorRole.Mid))
+        painter.drawRect(event.rect())
+        super().paintEvent(event)
 
     def color(self):
         return self._color
@@ -1420,9 +1499,3 @@ class ColorButton(QPushButton):
             self.setColor(self._default)
 
         return super().mousePressEvent(e)
-
-
-class TabColorStyle(QProxyStyle):
-    def drawItemText(self, painter, rect, flags, pal, enabled, text, role):
-        painter.setPen(pal.color(QPalette.ColorRole.ButtonText))
-        super().drawItemText(painter, rect, flags, pal, enabled, text, role)

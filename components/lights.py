@@ -1,12 +1,13 @@
-from PySide6.QtCore import Qt, QSize, QEvent, Signal
+from PySide6.QtCore import Qt, QSize, QEvent, Signal, QMargins
 from PySide6.QtGui import QIcon, QColor
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QListWidget, QListView, QListWidgetItem, QCheckBox, QSizePolicy, QLabel, QToolButton, QComboBox
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QListWidget, QListView, QListWidgetItem, QCheckBox, QSizePolicy, QLabel, QComboBox
 from pywizlight import SCENES
 
 from logic.lightengine import LightManager, Light, LightSetting
 from config.theme import app_theme
 from config.settings import AppSettings, SettingKeys
-from components.widgets import IconLabel, JumpSlider, ColorButton, ToggleSlider
+from components.widgets import IconLabel, JumpSlider, ColorButton, ToggleSlider, ToolButton
+
 
 class LightSettingsWidget(QFrame):
     temperature_changed = Signal(int) # 1000-10000
@@ -17,14 +18,16 @@ class LightSettingsWidget(QFrame):
     def __init__(self,settings: LightSetting = None, parent=None):
         super(LightSettingsWidget, self).__init__(parent)
 
+        padding = app_theme.padding
+
         form_layout = QVBoxLayout(self)
+        form_layout.setSpacing(0)
+        form_layout.setContentsMargins(0,0,0,0)
 
-        brightness_title = IconLabel(icon=QIcon.fromTheme("light-brightness"), text=_("Brightness"))
-        brightness_title.setObjectName("sub")
-
+        brightness_title = IconLabel(icon=QIcon.fromTheme("light-brightness"), text=_("Brightness"), style="small", objectName="sub")
         self.brightness_label = QLabel()
         brightness_title.add_widget(self.brightness_label)
-        form_layout.addSpacing(app_theme.spacing)
+        form_layout.addSpacing(padding)
         form_layout.addWidget(brightness_title)
         self.brightness_slider = JumpSlider()
         self.brightness_slider.setDisabled(settings is None)
@@ -33,15 +36,12 @@ class LightSettingsWidget(QFrame):
         self.brightness_slider.setValue(255)
         self.brightness_slider.valueChanged.connect(self.on_brightness_changed)
         self.brightness_slider.setObjectName("brightness")
-
         form_layout.addWidget(self.brightness_slider)
 
-        temperature_title = IconLabel(icon=QIcon.fromTheme("light-temperature"), text=_("Temperature"))
-        temperature_title.setObjectName("sub")
-
+        temperature_title = IconLabel(icon=QIcon.fromTheme("light-temperature"), text=_("Temperature"), style="small", objectName="sub")
         self.temperature_label = QLabel()
         temperature_title.add_widget(self.temperature_label)
-        form_layout.addSpacing(app_theme.spacing)
+        form_layout.addSpacing(padding)
         form_layout.addWidget(temperature_title)
         self.temperature_slider = JumpSlider()
         self.temperature_slider.setDisabled(settings is None)
@@ -52,9 +52,8 @@ class LightSettingsWidget(QFrame):
 
         form_layout.addWidget(self.temperature_slider)
 
-        form_layout.addSpacing(app_theme.spacing)
-        color_title = IconLabel(icon=QIcon.fromTheme("color-picker"), text=_("Color"))
-        color_title.setObjectName("sub")
+        form_layout.addSpacing(padding)
+        color_title = IconLabel(icon=QIcon.fromTheme("color-picker"), text=_("Color"), style="small", objectName="sub")
         form_layout.addWidget(color_title)
         self.color_edit = ColorButton()
         self.color_edit.setDisabled(settings is None)
@@ -62,9 +61,8 @@ class LightSettingsWidget(QFrame):
         self.color_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         form_layout.addWidget(self.color_edit)
 
-        form_layout.addSpacing(app_theme.spacing)
-        scene_title = IconLabel(icon=QIcon.fromTheme("scene"), text=_("Scene"))
-        scene_title.setObjectName("sub")
+        form_layout.addSpacing(padding)
+        scene_title = IconLabel(icon=QIcon.fromTheme("scene"), text=_("Scene"), style="small", objectName="sub")
         form_layout.addWidget(scene_title)
 
         self.scene_combo = QComboBox(editable=False)
@@ -102,21 +100,8 @@ class LightSettingsWidget(QFrame):
                 self.temperature_slider.setMinimum(light.temperature_min)
                 self.temperature_slider.setMaximum(light.temperature_max)
 
-
-
             if light.scenes:
                 scenes = light.scenes
-
-            # stop0 = kelvin_to_rgb(light.temperature_min)
-            # stop05 = kelvin_to_rgb((light.temperature_max - light.temperature_min) //2 + light.temperature_min)
-            # stop1 = kelvin_to_rgb(light.temperature_max)
-            #
-            # self.temperature_slider.setStyleSheet(f"""
-            # background: qlineargradient(x1:0, y1: 0, x2: 1, y2: 0,
-            #     stop: 0  {stop0},
-            #     stop: 0.5  {stop05},
-            #     stop: 1  {stop1})
-            # """);
 
         self.scene_combo.clear()
         self.scene_combo.addItem(_("None"), None)
@@ -204,35 +189,44 @@ class LightsWidget(QFrame):
 
         self.setAutoFillBackground(True)
         self.setGraphicsEffect(app_theme.drop_shadow(self))
-        self.setContentsMargins(app_theme.margin)
+
+        margins = QMargins(app_theme.margin_large)
+        margins.setRight(app_theme.padding_xlarge)
+        self.setContentsMargins(margins)
 
         self.directory_layout = QVBoxLayout(self)
         self.directory_layout.addStretch(1)
         self.directory_layout.setSpacing(0)
-        self.directory_layout.setContentsMargins(0, 0, app_theme.spacing, 0)
+        self.directory_layout.setContentsMargins(0, 0, 0, 0)
 
         self.headerLabel = IconLabel(QIcon.fromTheme("light"), _("Lights"), parent=self)
         self.headerLabel.set_icon_size(app_theme.icon_size)
-        self.headerLabel.set_alignment(Qt.AlignmentFlag.AlignCenter)
         self.headerLabel.text_label.setProperty("cssClass", "header")
+
+        list_view = ToolButton(style="mini", icon=QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh))
+        list_view.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        list_view.clicked.connect(self.refresh)
+        self.headerLabel.add_widget(list_view)
 
         self.directory_layout.addWidget(self.headerLabel)
 
         self.lights_list = QListWidget()
+        self.lights_list.setContentsMargins(0,0,0,0)
         self.lights_list.setObjectName("lights")
-        self.lights_list.setSpacing(app_theme.spacing)
+        self.lights_list.setSpacing(app_theme.padding)
         self.lights_list.setIconSize(QSize(64, 64))
         self.lights_list.setResizeMode(QListView.ResizeMode.Adjust)
         self.lights_list.setWordWrap(False)
-        self.lights_list.setMaximumHeight(64 + app_theme.spacing)
+        self.lights_list.setMaximumHeight(self.lights_list.iconSize().height() + app_theme.padding + 4)
         self.lights_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.lights_list.setViewMode(QListView.ViewMode.IconMode)
         self.lights_list.currentItemChanged.connect(self.current_item_changed)
 
         self.directory_layout.addWidget(self.lights_list)
+        self.directory_layout.addSpacing(app_theme.padding_large)
 
         form_layout = QVBoxLayout()
-
+        form_layout.setContentsMargins(0, 0, 0, 0)
         self.light_title = IconLabel(icon=QIcon.fromTheme("light-full"), text="")
         self.light_title.text_label.setProperty("cssClass", "header")
 
@@ -242,15 +236,14 @@ class LightsWidget(QFrame):
         self.light_toggle.setFixedSize(QSize(32, 16))
         self.light_toggle.checkStateChanged.connect(self.state_changed)
 
-        self.edit_name = QToolButton(icon=QIcon.fromTheme("pencil"))
-        self.edit_name.setProperty("cssClass", "mini")
+        self.edit_name = ToolButton(style="mini", icon=QIcon.fromTheme("pencil"))
         self.edit_name.clicked.connect(self.change_name)
         self.edit_name.setDisabled(True)
         self.light_title.add_widget(self.edit_name)
         self.light_title.add_widget(self.light_toggle)
 
         form_layout.addWidget(self.light_title)
-        form_layout.addSpacing(app_theme.spacing)
+        form_layout.addSpacing(app_theme.padding_large)
 
         self.light_settings = LightSettingsWidget(parent = self)
         self.light_settings.scene_changed.connect(self.scene_changed)
@@ -260,7 +253,7 @@ class LightsWidget(QFrame):
 
         form_layout.addWidget(self.light_settings)
 
-        form_layout.addSpacing(app_theme.spacing*2)
+        form_layout.addSpacing(app_theme.padding_large * 2)
 
         self.scenable_edit = QCheckBox()
         self.scenable_edit.setText(_("Controlled by songs"))
@@ -281,6 +274,8 @@ class LightsWidget(QFrame):
     def changeEvent(self, event, /):
         if event.type() in [QEvent.Type.FontChange, QEvent.Type.ApplicationFontChange ]:
             self.headerLabel.set_icon_size(app_theme.icon_size)
+        elif event.type() in [QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange]:
+            self.setGraphicsEffect(app_theme.drop_shadow(self))
 
     def change_name(self):
         light = self.lights_list.currentItem().data(Qt.ItemDataRole.UserRole)
@@ -295,6 +290,9 @@ class LightsWidget(QFrame):
             self.update_light(light)
             self.refresh_lights_list()
 
+    def selected_light_items(self):
+        return [item for item in self.lights_list.selectedItems() if item is not None]
+
     def apply_settings(self, settings:LightSetting):
         for i in range(self.lights_list.count()):
             item = self.lights_list.item(i)
@@ -302,44 +300,48 @@ class LightsWidget(QFrame):
             if light.scenable:
                 light.apply_settings(settings)
 
-                if item in self.lights_list.selectedItems():
+                if item in self.selected_light_items():
                     self.update_light(light)
 
     def state_changed(self, state: Qt.CheckState):
-        for item in self.lights_list.selectedItems():
+        for item in self.selected_light_items():
             light = item.data(Qt.ItemDataRole.UserRole)
             light.state = state != Qt.CheckState.Unchecked
 
         self.refresh_lights_list()
 
     def brightness_changed(self, new_value: int):
-        for item in self.lights_list.selectedItems():
+        for item in self.selected_light_items():
             light = item.data(Qt.ItemDataRole.UserRole)
             light.set_brightness(new_value)
 
     def temperature_changed(self, new_value: int):
-        for item in self.lights_list.selectedItems():
-            light = item.data(Qt.ItemDataRole.UserRole)
-            light.set_temperature(new_value)
+        for item in self.selected_light_items():
+            if item:
+                light = item.data(Qt.ItemDataRole.UserRole)
+                light.set_temperature(new_value)
 
     def color_changed(self, new_value: QColor):
-        for item in self.lights_list.selectedItems():
-            light = item.data(Qt.ItemDataRole.UserRole)
-            light.set_color(new_value)
+        for item in self.selected_light_items():
+            if item:
+                light = item.data(Qt.ItemDataRole.UserRole)
+                light.set_color(new_value)
 
     def scene_changed(self, new_value: str):
-        for item in self.lights_list.selectedItems():
+        for item in self.selected_light_items():
             light = item.data(Qt.ItemDataRole.UserRole)
             light.set_scene_id(new_value if new_value !='' else None)
 
     def current_item_changed(self, listItem: QListWidgetItem):
-        light = listItem.data(Qt.ItemDataRole.UserRole)
-        self.update_light(light)
+        if listItem:
+            light = listItem.data(Qt.ItemDataRole.UserRole)
+            self.update_light(light)
 
     def scenable_changed(self, state: Qt.CheckState):
-        for item in self.lights_list.selectedItems():
-            light = item.data(Qt.ItemDataRole.UserRole)
-            light.scenable = state != Qt.CheckState.Unchecked
+        for item in self.selected_light_items():
+            if item:
+                light = item.data(Qt.ItemDataRole.UserRole)
+                light.scenable = state != Qt.CheckState.Unchecked
 
     def refresh_lights_list(self):
         for i in range(self.lights_list.count()):

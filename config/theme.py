@@ -1,22 +1,23 @@
 import os
-from enum import Enum
+from enum import Enum, StrEnum
 
 from PySide6.QtCore import QObject, Property, Qt, QSize, QMargins
-from PySide6.QtGui import QColor, QPalette, QBrush, QIcon, QFont
-from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect
+from PySide6.QtGui import QColor, QPalette, QBrush, QIcon, QFont, QFontMetrics
+from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QStyle
 
 from config.settings import AppSettings, SettingKeys
 from config.utils import get_path
 
+_alpha_cache: dict[str, QColor] = {}
 
-def _alpha(color: QColor, alpha: int = None):
+def _alpha(color: QColor, alpha: int|float|None = None):
     if alpha is None:
         return color
 
-    new_color = QColor(color)
-    new_color.setAlpha(alpha)
-    return new_color
-
+    if isinstance(alpha, int):
+        return _alpha_cache.setdefault(f"int{color.name()}{alpha}", QColor.fromRgb(color.red(), color.green(), color.blue(), alpha))
+    else:
+        return _alpha_cache.setdefault(f"float{color.name()}{alpha}", QColor.fromRgbF(color.redF(), color.greenF(), color.blueF(), alpha))
 
 def _pt_to_px(pt):
     return int(pt * (96 / 72))
@@ -30,10 +31,16 @@ class FontSize(Enum):
     MEDIUM = 1
     LARGE = 2
 
+class Theme(StrEnum):
+    SYSTEM = "SYSTEM"
+    LIGHT ="LIGHT"
+    DARK ="DARK"
+
 
 class AppTheme(QObject):
     light_palette: QPalette = None
     dark_palette: QPalette = None
+    system_palette:QPalette = None
 
     _green = QColor("#5CB338")
     _yellow = QColor("#ECE852")
@@ -42,98 +49,105 @@ class AppTheme(QObject):
 
     font_families = None
 
+    _font_small:QFont = None
+    _font_medium:QFont = None
+    _font_large:QFont = None
+
     application: QApplication
 
     _color_cache: dict[str, QColor] = {}
     _brush_cache: dict[str, QBrush] = {}
 
-    _small_factor = 0.6
+    _icon_normal_factor = 1.0
+    _icon_small_factor = 0.8
+    _icon_mini_factor = 0.65
+
+    _size_normal_factor = 2.0
+    _size_small_factor = 1.5
+    _size_mini_factor = 1.2
+
+    spacing =0
 
     def __init__(self):
         super().__init__()
-        self._calculate_sizes(AppSettings.value(SettingKeys.FONT_SIZE, 10.5, type=int))
 
         self.light_palette = self.get_light_mode_palette()
         self.dark_palette = self.get_dark_mode_palette()
 
     def _calculate_sizes(self, base_font_size: float):
+
+        H = _pt_to_px(base_font_size) * 1.333
+
+        U = round(H / 4)
+
         self._font_size = base_font_size
         self._font_size_small = self._font_size * 0.8  # Small size
-        self._font_size_large = self._font_size * 1.1  # Large size
+        self._font_size_mini = self._font_size * 0.65  # Mini size
+        self._font_size_large = self._font_size * 1.2  # Large size
 
-        self._spacing = int(self._font_size * 0.8)
-        self._padding = int(self._font_size * 0.5)
+        self.padding_xlarge = 4 * U
+        self.padding_large = 3 * U
+        self.padding = 2 * U
+        self.padding_small = 1 * U
+        self.margin_large = QMargins(self.padding_large, self.padding_large, self.padding_large, self.padding_large)
+        self.margin = QMargins(self.padding, self.padding, self.padding, self.padding)
+        self.margin_small = QMargins(self.padding_small, self.padding_small, self.padding_small, self.padding_small)
 
-        self._icon_width = _pt_to_px(self._font_size * 1.5)
-        self._icon_height = _pt_to_px(self._font_size * 1.5)
+        self.icon_width = int(H * self._icon_normal_factor)
+        self.icon_height =int(H * self._icon_normal_factor)
+        self.icon_size = QSize(self.icon_width, self.icon_height)
 
-        self._icon_size = QSize(self._icon_width, self._icon_height)
+        self.icon_width_small = int(H * self._icon_small_factor)
+        self.icon_height_small = int(H * self._icon_small_factor)
+        self.icon_size_small = QSize(self.icon_width_small, self.icon_height_small)
 
-        self._icon_width_small = int(self._icon_width * 0.8)
-        self._icon_height_small = int(self._icon_height * 0.8)
+        self.icon_width_mini = int(H * self._icon_mini_factor)
+        self.icon_height_mini = int(H * self._icon_mini_factor)
+        self.icon_size_mini = QSize(self.icon_width_mini, self.icon_height_mini)
 
-        self._icon_width_mini = int(self._icon_width * self._small_factor)
-        self._icon_height_mini = int(self._icon_height * self._small_factor)
+        self.button_width = int(H * self._size_normal_factor)
+        self.button_height = int(H * self._size_normal_factor)
+        self.button_size = QSize(self.button_width, self.button_height)
 
-        self._icon_size_small = QSize(self._icon_width_small, self._icon_height_small)
+        self.button_height_small = int(H * self._size_small_factor)
+        self.button_width_small = int(H * self._size_small_factor)
+        self.button_size_small = QSize(self.button_width_small, self.button_height_small)
 
-        self._button_width = _pt_to_px(self._font_size * 4)
-        self._button_height = _pt_to_px(self._font_size * 4)
-        self._button_size = QSize(self._button_width, self._button_height)
+        self.button_height_mini = int(H * self._size_mini_factor)
+        self.button_width_mini = int(H * self._size_mini_factor)
+        self.button_size_mini = QSize(self.button_width_mini, self.button_height_mini)
 
-        self._button_height_small = int(self._button_height * self._small_factor)
-        self._button_width_small = int(self._button_width * self._small_factor)
-        self._button_size_small = QSize(self._button_width_small, self._button_height_small)
+        self.font_large = QFont(self.application.font())
+        self.font_large.setBold(False)
+        self.font_large.setPointSizeF(self._font_size_large)
 
-    def font_small(self, bold: bool = False) -> QFont:
-        return self.font(bold, FontSize.SMALL)
+        self.font_medium = QFont(self.application.font())
+        self.font_medium.setBold(False)
+        self.font_medium.setPointSizeF(self._font_size)
 
-    def font_large(self, bold: bool = False) -> QFont:
-        return self.font(bold, FontSize.LARGE)
+        self.font_small = QFont(self.application.font())
+        self.font_small.setBold(False)
+        self.font_small.setPointSizeF(self._font_size_small)
 
-    def font(self, bold: bool = False, size: FontSize = FontSize.MEDIUM) -> QFont:
-        font = self.application.font()
-        font.setBold(bold)
-        if size == FontSize.SMALL:
-            font.setPointSizeF(self._font_size_small)
-        elif size == FontSize.MEDIUM:
-            font.setPointSizeF(self._font_size)
-        else:
-            font.setPointSizeF(self._font_size * 1.2)
+    def init_application(self, app:QApplication):
+        self.application = app
+        self.application.setStyle("Fusion")
 
-        return font
+        self._calculate_sizes(AppSettings.value(SettingKeys.FONT_SIZE, 10, type=int))
 
-    @Property(int)
-    def spacing(self) -> int:
-        return self._spacing
+        self.system_palette = app.style().standardPalette()
+        self.system_palette.setColor(QPalette.ColorRole.Mid, self.system_palette.color(QPalette.ColorRole.Window))
 
     def drop_shadow(self, parent):
-        shadow = QGraphicsDropShadowEffect(parent)
-        shadow.setBlurRadius(20)
-        shadow.setXOffset(0)
-        shadow.setYOffset(0)
-        shadow.setColor(QColor(0, 0, 0, 160))
-        return shadow
-
-    @Property(QMargins)
-    def margin(self) -> QMargins:
-        return QMargins(self._spacing, self._spacing, self._spacing, self._spacing)
-
-    @Property(int)
-    def padding(self) -> int:
-        return self._padding
-
-    @Property(QSize)
-    def icon_size(self) -> QSize:
-        return self._icon_size
-
-    @Property(QSize)
-    def button_size(self) -> QSize:
-        return self._button_size
-
-    @Property(QSize)
-    def button_size_small(self) -> QSize:
-        return self._button_size_small
+        if self.theme() in [Theme.DARK, Theme.LIGHT]:
+            shadow = QGraphicsDropShadowEffect(parent)
+            shadow.setBlurRadius(20)
+            shadow.setXOffset(0)
+            shadow.setYOffset(0)
+            shadow.setColor(QColor(0, 0, 0, 160))
+            return shadow
+        else:
+            return None
 
     @Property(float)
     def font_size(self) -> float:
@@ -151,23 +165,8 @@ class AppTheme(QObject):
         # Re-apply the stylesheet to trigger a global update
         self.apply_stylesheet()
 
-    @icon_size.setter
-    def icon_size(self, size):
-        self._icon_size = size
-        # Re-apply the stylesheet to trigger a global update
-        self.apply_stylesheet()
-
-    @button_size.setter
-    def button_size(self, size):
-        self._button_size = size
-        # Re-apply the stylesheet to trigger a global update
-        self.apply_stylesheet()
-
-    def is_dark(self):
-        return self.theme() != "LIGHT"
-
     def is_light(self):
-        return self.theme() == "LIGHT"
+        return self.theme() in [Theme.LIGHT, Theme.SYSTEM]
 
     def get_green_brush(self, alpha: int = None):
         return self._brush_cache.setdefault(f"green{alpha}", self.get_green(alpha))
@@ -199,13 +198,211 @@ class AppTheme(QObject):
                                             _alpha(self._yellow if self.is_light() else self._yellow.darker(170),
                                                    alpha))
 
+    def get_stylesheet(self, theme:Theme | None = None) -> str:
+        if theme is None:
+            theme = self.theme()
+
+        palette: QPalette = self.get_palette(theme)
+
+        _h = _pt_to_px(self._font_size) * 1.333
+
+        _window_color = palette.color(QPalette.ColorRole.Window).name()
+
+        _base_color = palette.color(QPalette.ColorRole.Base).name()
+        _base_color2 = palette.color(QPalette.ColorRole.Base).darker(103).name()
+        _base_alt_color = palette.color(QPalette.ColorRole.Base).darker(110).name()
+        _accent_color = palette.color(QPalette.ColorRole.Accent).name()
+        _border_color = palette.color(QPalette.ColorRole.Mid).name()
+        _text_color = palette.color(QPalette.ColorRole.Text).name()
+
+        _button_color = palette.color(QPalette.ColorRole.Button).name(QColor.NameFormat.HexArgb)
+        _button_text_color = palette.color(QPalette.ColorRole.ButtonText).name()
+        _button_hover_color = palette.color(QPalette.ColorRole.Button).lighter(120).name(QColor.NameFormat.HexArgb)
+
+        _font_family = self.get_font_family()
+        style=f"""                
+            
+            QTableView {{
+                border-top:none
+            }}
+        
+            QSlider#temperature, QSlider#brightness {{
+                height: {_h}px;
+            }}
+                            
+            QSlider#temperature::groove:horizontal {{
+                height: {_h}px;
+                border:1px solid {_border_color};
+                border-radius: {_h /2}px;  
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #FF9329,   /* Warm Candlelight */
+                    stop:0.5 #FFFFFB, /* Neutral Daylight */
+                    stop:1 #C9DAFF);  /* Cold Overcast */        
+            }}
+
+            QSlider#temperature::handle:horizontal {{
+                background: {_accent_color};
+                border: 2px solid {_border_color};
+                border-radius: {(_h - 2) /2}px;
+                width: {_h - 2}px;
+                height: {_h - 2}px;
+            }}
+
+            QSlider#brightness::groove:horizontal {{
+                height: {_h}px;
+                border:1px solid {_border_color};
+                border-radius: {_h /2}px; 
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #000000, 
+                    stop:1 #FFFFFF);        
+            }}
+
+            QSlider#brightness::handle:horizontal {{
+                background: {_accent_color};
+                border: 2px solid {_border_color};
+                border-radius: {(_h - 2) /2}px;
+                width: {_h - 2}px;
+                height: {_h - 2}px;
+            }}
+
+        """
+
+        if theme in [Theme.LIGHT, Theme.DARK]:
+            style += f"""   
+            
+                QTabBar::tab {{
+                    background: {_base_alt_color};
+                    border: none;
+                    border-bottom: 2px solid transparent;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                    padding: 6px 12px;
+                    margin-right:2px;
+                    margin-bottom:1px;
+                    font-size: {self._font_size}pt;
+                }}
+                
+                QTabBar::tab:selected {{
+                    color: {_accent_color};
+                    background: {_base_color};
+                    
+                    border-bottom: 2px solid {_accent_color}; 
+                    font-weight: 600;
+                }}
+                                                               
+                .IconLabel {{
+                    border:none;
+                    border-bottom:1px solid {_border_color};
+                    padding-bottom:3px;
+                }}
+
+                .IconLabel#sub {{
+                    border:none;
+                }}
+            
+                QMenuBar, QMenuBar::item {{                                
+                    color: {_text_color};                        
+                }}
+                
+                QTreeView, QListView {{
+                    background: transparent;
+                }}
+                
+                QTreeView, QListView {{
+                    border:none
+                }}
+
+                ToolButton, RoundButton {{
+                    background-color: {_button_color};
+                }}
+
+                ToolButton::selected, RoundButton::selected {{
+                    background-color: {_button_hover_color};
+                }}
+
+                ToolButton::hover, RoundButton::hover {{
+                    background-color: {_button_hover_color};
+                }}                    
+
+                ToolButton::checked, RoundButton::checked {{
+                    background-color: {_accent_color};                        
+                }}
+                
+                RoundButton {{
+                    border:1px solid {_border_color};
+                }}
+
+                QLabel[cssClass~="header"] {{
+                    font-size: {self._font_size}pt;
+                    font-weight: 600;
+                }}
+
+                QLabel[cssClass~="small"] {{
+                    font-size: {self._font_size_small}pt;                    
+                }}
+
+                QLabel[cssClass~="mini"] {{
+                    font-size: {self._font_size_mini}pt;                    
+                }}
+
+                QListWidget#lights {{
+                    show-decoration-selected: 1;
+                    outline: 0;
+                }}
+
+                QListWidget#lights::item {{
+                    border:none;
+                    padding-bottom:2px;                        
+                }}
+                QListWidget#lights::item:selected {{
+                    padding-bottom:0px;
+                    border: none;
+                    border-bottom:2px solid {_accent_color};
+                    color: {_text_color};                        
+                }}
+                
+                QTableView {{
+                    alternate-background-color: {_base_color2};
+                }}
+                
+                QToolTip {{
+                    background-color: {palette.color(QPalette.ColorRole.ToolTipBase).name()};
+                    color: {palette.color(QPalette.ColorRole.ToolTipText).name()};
+                }}   
+
+            """
+
+        return style
+
+    def get_palette(self, theme:Theme | None = None):
+        if theme is None:
+            theme = self.theme()
+
+        if theme == Theme.DARK:
+            return self.get_dark_mode_palette()
+        elif theme == Theme.LIGHT:
+            return self.get_light_mode_palette()
+        else:
+            return self.get_system_palette()
+
+    def get_list_palette(self):
+        palette =QPalette(self.get_palette(self.theme()))
+        palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 0, 0, 10))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
+        palette.setColor(QPalette.ColorRole.HighlightedText, palette.color(QPalette.ColorRole.Text))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
+        return palette
+
+    def get_system_palette(self) -> QPalette:
+        return self.system_palette
+
     def get_dark_mode_palette(self) -> QPalette:
         if self.dark_palette is None:
             palette = QPalette()
 
+
+            _accent = QColor(0, 80, 203)
             # --- ACCENT & HIGHLIGHT ---
             # Keeping your blue accent, but slightly less vibrant for dark mode
-            palette.setColor(QPalette.ColorRole.Accent, QColor(0, 80, 203))
+            palette.setColor(QPalette.ColorRole.Accent, _accent)
             palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 102, 255))
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(80, 80, 80))
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
@@ -250,15 +447,16 @@ class AppTheme(QObject):
 
             # --- ACCENT & HIGHLIGHT ---
             # Keeping your blue accent, but slightly more vibrant for light mode
-            accent_blue = QColor(0, 102, 255)
-            palette.setColor(QPalette.ColorRole.Accent, accent_blue)
-            palette.setColor(QPalette.ColorRole.Highlight, accent_blue)
+            _accent = QColor(0, 102, 255)
+            palette.setColor(QPalette.ColorRole.Accent, _accent)
+            palette.setColor(QPalette.ColorRole.Highlight, _accent)
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorRole.Link, accent_blue)
+            palette.setColor(QPalette.ColorRole.Link, _accent)
 
             # --- BACKGROUNDS ---
+
             # Window is the main background; Base is for text inputs/lists
-            palette.setColor(QPalette.ColorRole.Window, QColor(245, 245, 247))
+            palette.setColor(QPalette.ColorRole.Window, QColor(243, 243, 243))
             palette.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorRole.AlternateBase, _alpha(QColor(235, 235, 240), 150))
             palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
@@ -272,7 +470,7 @@ class AppTheme(QObject):
             palette.setColor(QPalette.ColorRole.BrightText, QColor(105, 105, 110))
 
             # --- BUTTONS ---
-            palette.setColor(QPalette.ColorRole.Button, QColor(240, 240, 240))
+            palette.setColor( QPalette.ColorRole.Button, QColor(240, 240, 240))
             palette.setColor(QPalette.ColorRole.ButtonText, dark_text)
 
             # --- BORDERS & SHADOWS ---
@@ -322,14 +520,14 @@ class AppTheme(QObject):
 
         return combined_icon
 
-    def set_theme(self, theme: str):
+    def set_theme(self, theme: Theme):
         AppSettings.setValue(SettingKeys.THEME, theme)
         self._color_cache.clear()
         self._brush_cache.clear()
         self.apply_stylesheet()
 
-    def theme(self) -> str:
-        return AppSettings.value(SettingKeys.THEME, "LIGHT", type=str)
+    def theme(self) -> Theme:
+        return AppSettings.value(SettingKeys.THEME, Theme.LIGHT, type=str)
 
     def get_icon(self, icon_name: str, theme_name: str):
         for path in QIcon.themeSearchPaths():
@@ -338,264 +536,27 @@ class AppTheme(QObject):
                 return QIcon(full_path)
         return None
 
+    def get_font_family(self):
+        if self.font_families is not None:
+            return self.font_families[0]
+        else:
+            return QFont().family()
+
+    def get_icon_theme_name(self):
+        if self.theme() == Theme.DARK:
+            return Theme.DARK
+        else:
+            return Theme.LIGHT
+
     def apply_stylesheet(self):
         theme = self.theme()
+        QIcon.setThemeName(self.get_icon_theme_name())
+        self.application.setPalette(self.get_palette(theme))
 
-        palette: QPalette = self.get_light_mode_palette() if theme == "LIGHT" else self.get_dark_mode_palette()
+        self.font_medium.setWeight(QFont.Weight.Normal)
 
-        global_font = QFont()
-        if self.font_families is not None:
-            font_family = self.font_families[0]
-            global_font.setFamily(font_family)
-        else:
-            font_family = global_font.family()
+        self.application.setFont(self.font_medium)
 
-        global_font.setPointSizeF(self.font_size)
-        self.application.setFont(global_font)
-
-        _base_color = palette.color(QPalette.ColorRole.Base).name()
-        _base_alt_color = palette.color(QPalette.ColorRole.Base).darker(110).name()
-        _accent_color = palette.color(QPalette.ColorRole.Accent).name()
-        _border_color = palette.color(QPalette.ColorRole.Mid).name()
-        _text_color = palette.color(QPalette.ColorRole.Text).name()
-
-        _button_color = palette.color(QPalette.ColorRole.Button).name(QColor.HexArgb)
-        _button_text_color = palette.color(QPalette.ColorRole.ButtonText).name()
-        _button_hover_color = palette.color(QPalette.ColorRole.Button).lighter(120).name(QColor.HexArgb)
-
-        style = f"""                                                  
-                    .IconLabel {{
-                        border:none;
-                        border-bottom:3px solid {_border_color};
-                        padding-bottom:3px;
-                    }}
-                    
-                    .IconLabel#sub {{
-                        border:none;
-                    }}                                    
-                               
-                    QMenu {{
-                        font-family: '{font_family}';                        
-                    }}
-                    QMenuBar, QMenuBar::item {{
-                        font-family: '{font_family}';
-                        color: {_text_color};                        
-                    }}
-                    
-                    QTreeView, QListView {{
-                        border:none
-                    }}
-                    
-                    QFrame#tabs_widget {{
-                        border:none;
-                        border-top:3px solid {_border_color};
-                    }}
-                    
-                    QTabView {{
-                        margin:12px;
-                    }}
-                    
-                    QTabBar::tab:top, QTabBar::tab:bottom {{
-                        height: 30px;
-                    }}
-                    
-                    QTabBar::tab:!selected {{                                                                          
-                        font-size:{self._font_size_large}pt;
-                        
-                        background-color: {_button_color};
-                    }}                                    
-                    QTabBar::tab:selected {{                                                                        
-                        font-size:{self._font_size_large}pt;
-                        font-weight:bold;
-                        
-                        background-color: {_button_hover_color};
-                    }}
-                    
-                    QTableView {{
-                        border:none;
-                        outline: 0;                        
-                    }}
-                    QTableView::item:hover {{
-                        background-color: transparent;
-                        border: none;
-                    }}
-                    
-                    QHeaderView {{                        
-                        background-color: {_base_alt_color};
-                        border:none        
-                    }}
-                    
-                    QHeaderView::section {{
-                        font-family: '{font_family}';
-                        background-color: {_base_alt_color};
-                        border:none;
-                        border-right:1px solid {_border_color};
-                    }}
-                    
-                    QLineEdit {{
-                        color: {_text_color};
-                        background-color: {_base_color};
-                    }}                    
-                    
-                    QPushButton, QToolButton {{
-                        background-color: {_button_color};
-                    }}
-                    
-                    QPushButton::selected, QToolButton::selected {{
-                        background-color: {_button_hover_color};
-                    }}
-                    
-                    QPushButton::hover, QToolButton::hover {{
-                        background-color: {_button_hover_color};
-                    }}                    
-                    
-                    QPushButton[cssClass~="play"]::checked, QToolButton[cssClass~="play"]::checked {{
-                        background-color: {_accent_color};                        
-                    }}
-                    
-                    QLabel[cssClass~="header"] {{
-                        font-size: {self._font_size}pt;
-                        font-weight: bold;
-                    }}
-                    
-                    QLabel[cssClass~="small"] {{
-                        font-size: {self._font_size_small}pt;                    
-                    }}
-                    
-                    QLabel[cssClass~="mini"] {{
-                        font-size: {self._font_size_small * 0.8}pt;                    
-                    }}
-                    
-                    QSlider[cssClass="button"] {{                                                                        
-                        height: {self._button_height}px;
-                    }}
-                    
-                    QSlider[cssClass="buttonSmall"] {{                                                                       
-                        height: {self._button_height_small + 4}px;
-                    }}
-
-                    RoundButton {{
-                        border:1px solid {_border_color};
-                    }}
-                    
-                    QToolButton {{                                                 
-                        width: {self._button_width}px;                        
-                        height: {self._button_height}px;
-                        qproperty-iconSize: {self._icon_width}px;
-                    }}
-                    
-                    QToolButton[cssClass~="small"]  {{                        
-                        width: {self._button_width_small}px;                        
-                        height: {self._button_height_small}px;
-                        qproperty-iconSize: {self._icon_width_small}px;
-                    }}
-                    QPushButton[cssClass~="small"]  {{                                                                                                                        
-                        height: {self._button_height_small}px;
-                        qproperty-iconSize: {self._icon_width_mini}px;
-                    }}                    
-                    
-                    QToolButton[cssClass~="mini"] {{                                                                        
-                        width: {int(self._button_width_small * 0.7)}px;                        
-                        height: {int(self._button_height_small * 0.7)}px;
-                        qproperty-iconSize: {int(self._icon_width_mini)}px;
-                    }}                    
-                    
-                    QPushButton[cssClass~="mini"] {{                                                                                                                        
-                        height: {int(self._button_height_small * 0.7)}px;
-                        qproperty-iconSize: {int(self._icon_width_mini)}px;
-                    }}                
-                    
-                    QComboBox {{
-                        background-color: {_base_color};
-                        padding:2px;
-                        border: 1px solid {_border_color};
-                        border-radius:2px
-                    }}
-                    
-                    QComboBox QListView {{
-                        background-color: {_base_color};
-                    }}
-                    
-                    
-                    
-                    QSlider#temperature::groove:horizontal {{
-                        height: 16px;
-                        border:1px solid {_border_color};
-                        border-radius: 8px;  
-                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                            stop:0 #FF9329,   /* Warm Candlelight */
-                            stop:0.5 #FFFFFB, /* Neutral Daylight */
-                            stop:1 #C9DAFF);  /* Cold Overcast */        
-                    }}
-                
-                    QSlider#temperature::handle:horizontal {{
-                        background: {_accent_color};
-                        border: 2px solid {_border_color};
-                        border-radius: 7px;
-                        width: 14px;
-                        height: 14px;
-                    }}
-                    
-                    QSlider#brightness::groove:horizontal {{
-                        height: 16px;
-                        border-radius: 8px;
-                        border:1px solid {_border_color};
-                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                            stop:0 #000000, 
-                            stop:1 #FFFFFF);        
-                    }}
-                
-                    QSlider#brightness::handle:horizontal {{
-                        background: {_accent_color};
-                        border: 2px solid {_border_color};
-                        border-radius: 7px;
-                        width: 14px;
-                        height: 14px;
-                    }}
-                    
-                    QListWidget#lights {{
-                        show-decoration-selected: 1;
-                        outline: 0;
-                    }}
-                    
-                    QListWidget#lights::item {{
-                        border:none;
-                        padding-bottom:2px;                        
-                    }}
-                    QListWidget#lights::item:selected {{
-                        padding-bottom:0px;
-                        border: none;
-                        border-bottom:2px solid {_accent_color};
-                        color: {_text_color};                        
-                    }}
-                    
-                """
-
-        QIcon.setThemeName(theme)
-
-        self.application.setPalette(palette)
-        if theme == "DARK":
-            style += f"""        
-        
-        QMenu {{
-            background-color: {_base_color};
-            border: 1px solid {_border_color};                        
-        }}
-        
-        QMenu::item {{
-            padding:8px;            
-        }}
-        
-        QMenu::icon {{
-            padding:8px;         
-        }}
-        
-        QMenu::item:selected {{           
-            background: rgba(100, 100, 100, 150);            
-        }}        
-        """
-
-        self.application.setStyleSheet(style)
-
+        self.application.setStyleSheet(self.get_stylesheet(theme))
 
 app_theme: AppTheme = AppTheme()

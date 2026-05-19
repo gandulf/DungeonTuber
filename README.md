@@ -94,7 +94,7 @@ msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonT
 
 ### Using PyInstaller (Recommended)
 ```bash
-pyinstaller DungeonTuber.spec
+pyinstaller DungeonTuber.spec --noconfirm
 ```
 
 ### Using Nuitka 

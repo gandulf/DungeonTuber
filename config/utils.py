@@ -15,7 +15,8 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QColor, QIcon, QPainter
 from PySide6.QtWidgets import QApplication
 from packaging import version
 
@@ -308,3 +309,17 @@ def get_broadcast_ip():
     interface = ipaddress.IPv4Interface(f"{get_ip()}/24")
     broadcast_ip = interface.network.broadcast_address
     return str(broadcast_ip)
+
+
+def tint_icon(icon: QIcon, size:QSize, target_color:QColor):
+    # 1. Grab the icon as a pixmap matching the size of your target rect
+    icon_pixmap = icon.pixmap(size)
+
+    # 2. Create a temporary painter to tint the pixmap asset
+    temp_painter = QPainter(icon_pixmap)
+    temp_painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    temp_painter.fillRect(icon_pixmap.rect(), target_color)
+    temp_painter.end()
+
+    return icon_pixmap
+

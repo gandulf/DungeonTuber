@@ -103,7 +103,7 @@ class FakeVisualizerWidget(QWidget, Visualizer):
     def __init__(self, engine: AudioEngine):
         super().__init__(engine=engine)
         self.setMinimumHeight(40)
-        self.setContentsMargins(4, 4, 4, 4)
+        self.setContentsMargins(app_theme.margin_large)
         self.sleeping = True
         self.amplitude = 0
         self.bars = 30
@@ -149,7 +149,7 @@ class FakeVisualizerWidget(QWidget, Visualizer):
         content_rect = event.rect()
 
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         w = self.width() - self.contentsMargins().left() - self.contentsMargins().right()
         h = self.height() - self.contentsMargins().top() - self.contentsMargins().bottom()
@@ -192,8 +192,9 @@ class PlayerWidget(QFrame):
 
         self.setAutoFillBackground(True)
         self.player_layout = QVBoxLayout(self)
+        self.player_layout.setContentsMargins(app_theme.margin)
         self.player_layout.setObjectName("player_layout")
-        self.player_layout.setSpacing(app_theme.spacing)
+        self.player_layout.setSpacing(app_theme.padding)
 
         self.engine = AudioEngine()
         self.engine.state_changed.connect(self.on_playback_state_changed)
@@ -201,6 +202,7 @@ class PlayerWidget(QFrame):
         self.engine.track_finished.connect(self.on_track_finished)
 
         self.seeker_layout = QVBoxLayout()
+        self.seeker_layout.setContentsMargins(0, 0, 0, 0)
         self.seeker_layout.setObjectName("seeker_layout")
 
         self.track_label = QLabel(_("No Track Selected"))
@@ -213,7 +215,7 @@ class PlayerWidget(QFrame):
         # --- Progress Bar and Time Labels ---
         self.progress_layout = QHBoxLayout()
         self.progress_layout.setObjectName("progress_layout")
-        self.progress_layout.setSpacing(app_theme.spacing)
+        self.progress_layout.setSpacing(app_theme.padding_large)
         self.time_label = QLabel("00:00")
 
         self.progress_slider = PlayerSlider(self)
@@ -230,9 +232,7 @@ class PlayerWidget(QFrame):
         self.progress_layout.addWidget(self.progress_slider)
         self.progress_layout.addWidget(self.duration_label)
 
-
         self.seeker_layout.addLayout(self.progress_layout)
-        self.seeker_layout.setContentsMargins(0, 0, 0, 0)
         self.seeker_layout.addWidget(QLabel(""))
 
         # --- End Progress Bar ---
@@ -240,8 +240,8 @@ class PlayerWidget(QFrame):
         controls_widget = QWidget()
         self.controls_layout = QHBoxLayout(controls_widget)
         self.controls_layout.setObjectName("controls_layout")
-        self.controls_layout.setSpacing(0)
         self.controls_layout.setContentsMargins(0, 0, 0, 0)
+        self.controls_layout.setSpacing(0)
 
         prev_action = QAction(self.icon_prev, _("Previous"), self)
         prev_action.setShortcut("Ctrl+B")
@@ -256,36 +256,32 @@ class PlayerWidget(QFrame):
         next_action.setShortcut("Ctrl+N")
         next_action.triggered.connect(self.next_track)
 
-        self.btn_prev = RoundButton()
-        self.btn_prev.setProperty("cssClass", "small")
+        self.btn_prev = RoundButton(style="small padded")
         self.btn_prev.setDefaultAction(prev_action)
-        self.btn_play = RoundButton()
-        self.btn_play.setProperty("cssClass", "play")
+        self.btn_prev.setIconSize(app_theme.icon_size_small)
+        self.btn_play = RoundButton(style="play padded")
+        self.btn_play.setIconSize(app_theme.icon_size)
         self.btn_play.setDefaultAction(self.play_action)
-        self.btn_next = RoundButton()
-        self.btn_next.setProperty("cssClass", "small")
+        self.btn_next = RoundButton(style="small padded")
+        self.btn_next.setIconSize(app_theme.icon_size_small)
         self.btn_next.setDefaultAction(next_action)
 
-        self.btn_repeat = RepeatButton(AppSettings.value(SettingKeys.REPEAT_MODE, 0, type=int))
+        self.btn_repeat = RepeatButton(AppSettings.value(SettingKeys.REPEAT_MODE, 0, type=int), style="small padded")
         self.btn_repeat.value_changed.connect(self.on_repeat_mode_changed)
 
         self.repeat_mode_changed = self.btn_repeat.value_changed
 
-        self.slider_vol = VolumeSlider(value = AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M")
-        self.slider_vol.btn_volume.setProperty("cssClass", "small")
+        self.slider_vol = VolumeSlider(value = AppSettings.value(SettingKeys.VOLUME, 70, type=int), shortcut="Ctrl+M", buttonStyle="small padded")
         self.slider_vol.slider_vol.setMinimumWidth(200)
-        self.slider_vol.set_icon_size(app_theme.icon_size)
-
-
         self.slider_vol.volume_changed.connect(self.adjust_volume)
         self.volume_changed = self.slider_vol.volume_changed
 
         self.controls_layout.addWidget(self.btn_prev)
-        self.controls_layout.addSpacing(app_theme.spacing)
+        self.controls_layout.addSpacing(app_theme.padding_large)
         self.controls_layout.addWidget(self.btn_play)
-        self.controls_layout.addSpacing(app_theme.spacing)
+        self.controls_layout.addSpacing(app_theme.padding_large)
         self.controls_layout.addWidget(self.btn_next)
-        self.controls_layout.addSpacing(app_theme.spacing)
+        self.controls_layout.addSpacing(app_theme.padding_large)
 
         self.visualizer = Visualizer.get_visualizer(self.engine)
         if isinstance(self.visualizer, EmptyVisualizerWidget):
@@ -294,16 +290,16 @@ class PlayerWidget(QFrame):
             self.player_layout.insertLayout(0, self.seeker_layout)
             self.controls_layout.addWidget(self.visualizer, 2)
 
-        self.controls_layout.addSpacing(app_theme.spacing)
+        self.controls_layout.addSpacing(app_theme.padding_large)
         self.controls_layout.addLayout(self.slider_vol)
-        self.controls_layout.addSpacing(app_theme.spacing)
+        self.controls_layout.addSpacing(app_theme.padding_large)
         self.controls_layout.addWidget(self.btn_repeat)
 
         self.player_layout.addWidget(controls_widget, 1)
 
         self.adjust_volume(self.slider_vol.volume)
 
-        self.setBackgroundRole(QPalette.ColorRole.Mid)
+        self.setBackgroundRole(QPalette.ColorRole.Midlight)
 
     def setBackgroundRole(self, role, /):
         super().setBackgroundRole(role)
@@ -337,10 +333,10 @@ class PlayerWidget(QFrame):
             self.controls_layout.insertWidget(index, self.visualizer, 2)
 
     def changeEvent(self, event, /):
-        if event.type() == QEvent.Type.ApplicationFontChange:
-            self.player_layout.setSpacing(app_theme.spacing)
-            self.progress_layout.setSpacing(app_theme.spacing)
-            self.controls_layout.setSpacing(app_theme.spacing)
+        if event.type() == QEvent.Type.FontChange:
+            self.player_layout.setSpacing(app_theme.padding_large)
+            self.progress_layout.setSpacing(app_theme.padding_large)
+            self.controls_layout.setSpacing(app_theme.padding_large)
 
         if event.type() == QEvent.Type.PaletteChange:
             self._reload_icons()
@@ -587,7 +583,7 @@ class PlayerSlider(JumpSlider):
         self.style().drawComplexControl(QStyle.CC_Slider, opt, painter, self)
 
         painter.save()
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         if self.chapters and self.maximum() > 0:
 
             opt = QStyleOptionSlider()
@@ -597,7 +593,7 @@ class PlayerSlider(JumpSlider):
             groove_width = 4  # thickness of groove line width
             tick_width = 3  # width of chapter tick
 
-            chapter_font = app_theme.font_small()
+            chapter_font = app_theme.font_small
             chapter_font.setCapitalization(QFont.Capitalization.AllUppercase)
             painter.setFont(chapter_font)
 
@@ -621,11 +617,11 @@ class PlayerSlider(JumpSlider):
                 painter.drawRoundedRect(brush_rect, 2.0, 2.0)
 
                 painter.setBrush(self.palette().brush(QPalette.ColorRole.Accent))
-                painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Base)))
+                painter.setPen(self.palette().color(QPalette.ColorRole.Base))
 
                 painter.drawEllipse(brush_rect.x(), text_rect.top() + 4, 8, 8)
 
-                painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Text)))
+                painter.setPen(self.palette().color(QPalette.ColorRole.Text))
                 painter.drawText(text_rect, Qt.TextFlag.TextSingleLine, ch['title'])
 
         painter.restore()

@@ -1,15 +1,15 @@
 import logging
-import math
 import numbers
 import os
+import time
 import traceback
 from os import PathLike
 from pathlib import Path
 
 from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMimeData, QByteArray, QDataStream, QIODevice, QPersistentModelIndex, \
-    QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QPointF
+    QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QPointF, QMargins
 from PySide6.QtGui import QColor, QBrush, QIcon, QLinearGradient, QGradient, QAction, QKeyEvent, QDragMoveEvent, QDragEnterEvent, QPainter, QPalette, \
-    QFontMetrics, QDropEvent, QPolygonF, QPainterStateGuard, QPen
+    QFontMetrics, QDropEvent, QPolygonF, QPainterStateGuard, QPen, QPixmap, QFont
 from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView
 from sortedcontainers import SortedSet
 
@@ -18,9 +18,11 @@ from components.dialogs import ImagePopup
 from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_categories, CAT_VALENCE, \
     CAT_AROUSAL, FilterConfig
 from config.theme import app_theme, _alpha
+from config.utils import tint_icon
 
 from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, \
     update_mp3_category, Mp3FileLoader, save_playlist, remove_m3u, append_m3u, parse_mp3, update_mp3_tags, get_m3u_paths, update_mp3_summary
+
 
 logger = logging.getLogger(__file__)
 
@@ -37,20 +39,8 @@ def _get_bpm_background_brush(desired_value: int | None, value: int, data: Mp3En
     else:
         return app_theme.get_red(51)
 
-
 def _get_entry_background_brush(data: Mp3Entry):
-    if data.color:
-        background = QColor(data.color)
-        background.setAlphaF(0.5)
-        gradient = QLinearGradient(0, 0, 0, 1)
-        gradient.setCoordinateMode(QGradient.CoordinateMode.ObjectBoundingMode)
-        gradient.setColorAt(0.0, Qt.GlobalColor.transparent)
-        gradient.setColorAt(0.3, Qt.GlobalColor.transparent)
-        gradient.setColorAt(1.0, background)
-        return QBrush(gradient)
-    else:
-        return None
-
+    return None
 
 def _get_score_foreground_brush(score: int | None) -> QColor | Qt.GlobalColor | None:
     return Qt.GlobalColor.black
@@ -113,53 +103,6 @@ def _get_genre_background_brush(desired_values: list[str] | None, values: list[s
         return app_theme.get_orange(51)
     else:
         return app_theme.get_red(51)
-
-
-class StarRating:
-    """ Handle the actual painting of the stars themselves. """
-
-    scale_factor = 20
-
-    def __init__(self, scale_factor=20):
-        self.scale_factor = scale_factor
-        # Create the star shape we'll be drawing.
-        self._star_polygon = QPolygonF()
-        self._star_polygon.append(QPointF(1.0, 0.5))
-        for i in range(1, 5):
-            self._star_polygon.append(QPointF(0.5 + 0.5 * math.cos(0.8 * i * math.pi),
-                                              0.5 + 0.5 * math.sin(0.8 * i * math.pi)))
-
-        # Create the diamond shape we'll show in the editor
-        self._diamond_polygon = QPolygonF()
-        diamond_points = [QPointF(0.4, 0.5), QPointF(0.5, 0.4),
-                          QPointF(0.6, 0.5), QPointF(0.5, 0.6),
-                          QPointF(0.4, 0.5)]
-        self._diamond_polygon.append(diamond_points)
-
-    def size_hint(self):
-        return QSize(self.scale_factor, self.scale_factor)
-
-    def paint(self, painter: QPainter, filled: bool, rect: QRect, palette: QPalette, brush: QBrush = None):
-        """ Paint the stars (and/or diamonds if we're in editing mode). """
-        with QPainterStateGuard(painter):
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setPen(Qt.PenStyle.NoPen)
-            if brush is None:
-                painter.setBrush(palette.windowText())
-            else:
-                painter.setBrush(brush)
-
-            rect = rect.adjusted(5, 5, -5, -5)
-            y_offset = (rect.height() - self.scale_factor) / 2
-            x_offset = (rect.width() - self.scale_factor) / 2
-            painter.translate(rect.x() + x_offset, rect.y() + y_offset)
-            painter.scale(self.scale_factor, self.scale_factor)
-
-            if filled:
-                painter.drawPolygon(self._star_polygon, Qt.FillRule.WindingFill)
-            else:
-                painter.drawPolygon(self._star_polygon, Qt.FillRule.OddEvenFill)
-
 
 class SongTableModel(QAbstractTableModel):
     INDEX_COL = 0
@@ -378,18 +321,19 @@ class SongTableModel(QAbstractTableModel):
             return None
 
         if role == Qt.ItemDataRole.FontRole:
-            return app_theme.font()
+            return app_theme.font_medium
         elif role == Qt.ItemDataRole.TextAlignmentRole:
             if index.column() >= SongTableModel.SCORE_COL or index.column() in [SongTableModel.BPM_COL, SongTableModel.INDEX_COL, SongTableModel.FAV_COL]:
                 return Qt.AlignmentFlag.AlignCenter
         elif role == Qt.ItemDataRole.BackgroundRole:
-            data = index.data(Qt.ItemDataRole.UserRole)
+            data = self._data[index.row()]
+            if index.column() == SongTableModel.COVER_COL:
+                return data.cover_preview
             if index.column() == SongTableModel.SCORE_COL:
                 score = index.data(Qt.ItemDataRole.DisplayRole)
                 return _get_score_background_brush(score, data)
             elif index.column() == SongTableModel.GENRE_COL:
-                value = index.data(Qt.ItemDataRole.UserRole)
-                return _get_genre_background_brush(self.filter_config.genres, value.genres, data)
+                return _get_genre_background_brush(self.filter_config.genres, data.genres, data)
             elif index.column() == SongTableModel.BPM_COL:
                 value = index.data(Qt.ItemDataRole.DisplayRole)
                 return _get_bpm_background_brush(self.filter_config.bpm, value, data)
@@ -400,12 +344,11 @@ class SongTableModel(QAbstractTableModel):
             else:
                 return _get_entry_background_brush(data)
         elif role in [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]:
-            data = index.data(Qt.ItemDataRole.UserRole)
+            data = self._data[index.row()]
             if data is None:
                 return None
 
             if index.column() == SongTableModel.INDEX_COL:
-                data = index.data(Qt.ItemDataRole.UserRole)
                 return self._data.index(data)
             if index.column() == SongTableModel.FAV_COL:
                 if role == Qt.ItemDataRole.EditRole:
@@ -429,7 +372,6 @@ class SongTableModel(QAbstractTableModel):
             elif index.column() == SongTableModel.BPM_COL:
                 return data.bpm
             elif index.column() == SongTableModel.SCORE_COL:
-                data = index.data(Qt.ItemDataRole.UserRole)
                 return self._calculate_score(data)
             elif index.column() >= SongTableModel.CAT_COL:
                 category_key = self.get_category_key(index)
@@ -634,7 +576,6 @@ def _get_table_padding():
     else:
         return 3
 
-
 class SongTable(QTableView):
     item_double_clicked = Signal(QPersistentModelIndex, Mp3Entry)
     content_changed = Signal()
@@ -652,9 +593,12 @@ class SongTable(QTableView):
     def __init__(self, parent: QWidget | None = None, source: PathLike[str] = None, mp3_files: list[Path | Mp3Entry] = [], lazy: bool = False):
         super().__init__(parent)
 
-        palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 0, 0, 10))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
-        self.setPalette(palette)
+        self.category_delegate = CategoryDelegate(self)
+        self.cover_delegate = CoverDelegate(self)
+        self.label_item_delegate = LabelItemDelegate(self)
+        self.star_delegate = StarDelegate(self)
+
+        self._refresh_palette()
 
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
@@ -665,6 +609,7 @@ class SongTable(QTableView):
         self.setAlternatingRowColors(True)
         self.setShowGrid(False)
         self.setGridStyle(Qt.PenStyle.NoPen)
+        self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
         if os.path.isfile(source):
             self.playlist = source
@@ -685,8 +630,6 @@ class SongTable(QTableView):
 
         self.auto_search_helper = AutoSearchHelper(self.proxy_model, self)
 
-        self._update_table_sizes()
-
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
 
@@ -695,14 +638,15 @@ class SongTable(QTableView):
         self.horizontalHeader().setHighlightSections(False)
         self.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_context_menu)
-        self.horizontalHeader().setFont(app_theme.font_small())
+        self.horizontalHeader().setFont(app_theme.font_small)
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
 
-        self.setItemDelegate(CategoryDelegate(self))
-        self.setItemDelegateForColumn(SongTableModel.FILE_COL, LabelItemDelegate(self))
-        self.setItemDelegateForColumn(SongTableModel.FAV_COL, StarDelegate(self))
+        self.setItemDelegate(self.category_delegate)
+        self.setItemDelegateForColumn(SongTableModel.COVER_COL, self.cover_delegate)
+        self.setItemDelegateForColumn(SongTableModel.FILE_COL, self.label_item_delegate)
+        self.setItemDelegateForColumn(SongTableModel.FAV_COL, self.star_delegate)
 
         self.doubleClicked.connect(self.on_table_double_click)
 
@@ -787,8 +731,6 @@ class SongTable(QTableView):
         else:
             scale_factor = 6.5 if AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool) else 4.0
 
-        self.setStyleSheet("QTableView::item {padding: 0px 3px;}")
-
         self.verticalHeader().setDefaultSectionSize((app_theme.font_size * scale_factor) + 2)
 
         available_width = self.viewport().width()
@@ -843,9 +785,24 @@ class SongTable(QTableView):
         self.loader = None
         self.content_changed.emit()
 
+    def _refresh_palette(self):
+        self.setPalette(app_theme.get_list_palette())
+        self.update()
+
+    def _refresh_delegates(self):
+        for delegate in [self.category_delegate, self.star_delegate, self.label_item_delegate,self.cover_delegate]:
+            delegate.refresh_style()
+
+    def showEvent(self, event, /):
+        self.update_category_column_visibility()
+
     def changeEvent(self, event: QEvent, /):
         if event.type() == QEvent.Type.FontChange:
             self._update_table_sizes()
+            self._refresh_delegates()
+        elif event.type() == QEvent.Type.PaletteChange:
+            self._refresh_palette()
+            self._refresh_delegates()
 
     def on_sort_changed(self, column, order_by):
         self.setDragEnabled(column == 0)
@@ -989,6 +946,7 @@ class SongTable(QTableView):
 
     def _toggle_column_setting(self, key, checked):
         AppSettings.setValue(key, checked)
+        self._refresh_delegates()
         self.update_category_column_visibility()
         if key in [SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, SettingKeys.COLUMN_TAGS_VISIBLE]:
             self.viewport().update()
@@ -1005,9 +963,17 @@ class SongTable(QTableView):
             super().keyPressEvent(event)
 
     def paintEvent(self, event):
+
+        start = time.perf_counter_ns()
         # 1. Let the standard TreeView draw the folders/files first
         super().paintEvent(event)
         self.auto_search_helper.paintEvent(event)
+
+        duration_ms = (time.perf_counter_ns() - start) / 1_000_000
+        if duration_ms > 5.0:
+            logger.debug(f"Warning: Paint took too long! {duration_ms:.2f} ms")
+
+
 
     def on_table_double_click(self, index: QModelIndex):
         if index.column() == SongTableModel.FILE_COL:
@@ -1094,6 +1060,12 @@ class SongTable(QTableView):
 
         for col, category in enumerate(self.table_model.available_categories):
             self.setColumnHidden(SongTableModel.CAT_COL + col, not self.is_column_visible(category.key))
+
+        self.first_visible_column = 0
+        for i in range(self.model().columnCount()):
+            if not self.isColumnHidden(i):
+                self.first_visible_column = i
+                break
 
         self._update_table_sizes()
 
@@ -1247,17 +1219,90 @@ def get_full_pixmap(icon_path):
 
 
 class BaseStyledItemDelegate(QStyledItemDelegate):
+
+    def __init__(self, parent =None):
+        super().__init__(parent)
+        self.refresh_style()
+
+
+    def paint_selection(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+        # Check if the item is currently selected
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
+            song_table : SongTable = option.widget
+            if index.column() == song_table.first_visible_column:
+                with QPainterStateGuard(painter):
+                    painter.setPen(self.pen_accent)
+
+                    p1: QPoint = option.rect.topLeft()
+                    p1.setX(p1.x() + self.padding)
+                    p1.setY(round(p1.y() + option.rect.height() * 0.25))
+                    p2: QPoint = option.rect.bottomLeft()
+                    p2.setX(p2.x() + self.padding)
+                    p2.setY(round(p2.y() - option.rect.height() * 0.25))
+                    painter.drawLine(p1, p2)
+
+
+
+        # 2. TRICK: Remove the selected state flag so Fusion doesn't
+        # overwrite your background with its solid default color
+        if option.state & QStyle.StateFlag.State_Selected:
+            option.state &= ~QStyle.StateFlag.State_Selected
+
+        if option.state & QStyle.StateFlag.State_HasFocus:
+            option.state &= ~QStyle.StateFlag.State_HasFocus
+
+
+    def refresh_style(self):
+        self.cell_padding = _get_table_padding()
+        self.cell_margin = QMargins(self.cell_padding * 2, self.cell_padding, self.cell_padding * 2, self.cell_padding)
+        self.padding_small: int = app_theme.padding_small
+        self.padding: int = app_theme.padding
+        self.padding_large: int = app_theme.padding_large
+
+        self.pen_accent = QPen(app_theme.get_palette().color(QPalette.ColorRole.Accent), 2.0)
+
+
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
 
-        if option.state & QStyle.State_MouseOver:
-            option.state &= ~QStyle.State_MouseOver
+        if option.state & QStyle.StateFlag.State_MouseOver:
+            option.state &= ~QStyle.StateFlag.State_MouseOver
+
+        self.paint_selection(painter, option, index)
+
+class CoverDelegate(BaseStyledItemDelegate):
+
+    def __init__(self, parent: QObject = None):
+        super().__init__(parent)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+        self.initStyleOption(option, index)
+
+        data: Mp3Entry = index.data(Qt.ItemDataRole.UserRole)
+
+        rect = option.rect
+        if data.has_cover:
+            with QPainterStateGuard(painter):
+                pixmap = data.cover_preview
+                if pixmap:
+                    scaled_size = pixmap.size().scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+                    # Calculate the top-left to center the "crop"
+                    x = rect.x() + (rect.width() - scaled_size.width()) // 2
+                    y = rect.y() + (rect.height() - scaled_size.height()) // 2
+
+                    painter.setClipRect(rect)
+                    painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
 
         super().paint(painter, option, index)
 
 class CategoryDelegate(BaseStyledItemDelegate):
 
+    fallback_bg:QColor = None
+
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
+
+        self.fallback_bg = _alpha(app_theme.get_palette().color(QPalette.ColorRole.Accent), 40)
 
     def setModelData(self, editor: QWidget, model: QAbstractTableModel, index: QModelIndex | QPersistentModelIndex):
         # Grab the text directly from the editor
@@ -1270,67 +1315,62 @@ class CategoryDelegate(BaseStyledItemDelegate):
             super().setModelData(editor, model, index)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
-        self.initStyleOption(option, index)
+        if index.column() < SongTableModel.CAT_COL:
+            super().paint(painter, option, index)
+            return
 
-        if index.column() >= SongTableModel.CAT_COL:
-            score = index.data(Qt.ItemDataRole.DisplayRole)
-            if score:
-                rect: QRect = option.rect
-                rect = rect.adjusted(4,10,-4,-10)
-                bg = index.data(Qt.ItemDataRole.BackgroundRole)
-                bg = bg if isinstance(bg, QColor) else _alpha(option.palette.color(QPalette.ColorRole.Accent),40)
-                painter.fillRect(rect.x(), rect.y(), rect.width() * 1 / 10 * score, rect.height(), bg)
+        score = index.data(Qt.ItemDataRole.DisplayRole)
+        if score is not None:
+            self.initStyleOption(option, index)
+            rect: QRect = option.rect.adjusted(4,10,-4,-10)
+            bg = option.backgroundBrush if option.backgroundBrush and option.backgroundBrush.style() != Qt.BrushStyle.NoBrush else self.fallback_bg
+            painter.fillRect(rect.x(), rect.y(), rect.width() * 0.1 * score, rect.height(), bg)
+
+            # 6. Draw text/foreground ONLY (Avoids super().paint overdraw)
+            # This draws the text nicely over your custom bar without wiping out your work.
+            if option.features & QStyleOptionViewItem.ViewItemFeature.HasDisplay:
+                text_rect = option.rect.adjusted(6, 0, -6, 0)  # Adjust text padding as needed
+
+                # Draw text with proper palette state (selected vs normal)
+                painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText) if (option.state & QStyle.StateFlag.State_Selected) else option.palette.color(QPalette.ColorRole.Text))
+                painter.drawText(text_rect, option.displayAlignment, option.text)
 
         super().paint(painter, option, index)
-        #padding = _get_table_padding()
-        #option.rect = option.rect.adjusted(0, 0, 0, -padding)
-        if index.column() == SongTableModel.COVER_COL:
-            data: Mp3Entry = index.data(Qt.ItemDataRole.UserRole)
-
-            rect = option.rect
-            if data.has_cover:
-                with QPainterStateGuard(painter):
-                    pixmap = data.cover_preview
-                    scaled_size = pixmap.size().scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding)
-                    # Calculate the top-left to center the "crop"
-                    x = rect.x() + (rect.width() - scaled_size.width()) // 2
-                    y = rect.y() + (rect.height() - scaled_size.height()) // 2
-
-                    painter.setClipRect(rect)
-                    # Draw the scaled and centered pixmap
-                    # Painter's clipping (set at top of method) ensures the overflow is hidden
-                    painter.drawPixmap(x, y, scaled_size.width(), scaled_size.height(), pixmap)
-
-
-
 
 class StarDelegate(BaseStyledItemDelegate):
 
-
-
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
-
-        self.star_rating = StarRating()
-
-        self.star_off = QIcon.fromTheme("star")
-        self.star_on = QIcon.fromTheme("star-full")
+        self.star_off = QIcon.fromTheme("star").pixmap(self.size)
+        self.star_on = QIcon.fromTheme("star-full").pixmap(self.size)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
-        self.initStyleOption(option, index)
+        painter.save()
+        star_rect = option.rect.adjusted(self.padding,self.padding,-self.padding,-self.padding)
 
-        star_rect = option.rect.adjusted(app_theme.padding,app_theme.padding,-app_theme.padding,-app_theme.padding)
+        # 2. Automatically calculate the centered rectangle for your Pixmap X
+        centered_rect = QStyle.alignedRect(
+            Qt.LayoutDirection.LeftToRight,
+            Qt.AlignmentFlag.AlignCenter,
+            self.size,
+            star_rect
+        )
 
         if index.data(Qt.ItemDataRole.EditRole):
-            self.star_on.paint(painter, star_rect, alignment=Qt.AlignmentFlag.AlignCenter)
+            painter.drawPixmap(centered_rect, self.star_on)
         else:
-            self.star_off.paint(painter, star_rect, alignment=Qt.AlignmentFlag.AlignCenter)
+            painter.drawPixmap(centered_rect, self.star_off)
 
-
+        painter.restore()
         super().paint(painter,option,index)
 
+    def refresh_style(self):
+        super().refresh_style()
+        self.padding = app_theme.padding
+        self.size = app_theme.icon_size
+
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
-        return self.star_rating.size_hint()
+        return self.size
 
 
 class LabelItemDelegate(BaseStyledItemDelegate):
@@ -1340,118 +1380,128 @@ class LabelItemDelegate(BaseStyledItemDelegate):
 
         self.bulb = QIcon.fromTheme("light")
 
+
+    def refresh_style(self):
+        super().refresh_style()
+
+        self.font_small = app_theme.font_small
+        self.font_small_metrics = QFontMetrics(self.font_small)
+
+        self.font_medium = app_theme.font_medium
+        self.font_medium_metrics = QFontMetrics(self.font_medium)
+
+        self.font_medium_bold = QFont(app_theme.font_medium)
+        self.font_medium_bold_metrics = QFontMetrics(self.font_medium_bold)
+
+        self.tag_margins = QMargins(6,3,6,3)
+        self.text_margins = QMargins(4,2,4,2)
+
+        self.brush_green = app_theme.get_green_brush()
+
+        self.settings_tags_visible = AppSettings.value(SettingKeys.COLUMN_TAGS_VISIBLE, True, type=bool)
+        self.settings_title_summary_visible = AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool)
+        self.settings_row_style = AppSettings.value(SettingKeys.SONGS_ROW_STYLE, "MEDIUM", type=str)
+        self.settings_title_instead_filename = AppSettings.value(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, False, type=bool)
+
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex, /):
         self.initStyleOption(option, index)
 
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        painter.save()
+
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         data: Mp3Entry = index.data(Qt.ItemDataRole.UserRole)
 
-        padding = _get_table_padding()
-        content_rect = option.rect.adjusted(3 * 2, padding, -padding * 2, -padding)
-        pen = painter.pen()
+        content_rect = option.rect.marginsRemoved(self.cell_margin)
 
         # draw tags
         tag_left = content_rect.right()
         tag_top = content_rect.top() + 2
 
-        if AppSettings.value(SettingKeys.COLUMN_TAGS_VISIBLE, True, type=bool):
-            tags_font = app_theme.font_small()
+        if self.settings_tags_visible:
+            painter.setFont(self.font_small)
 
-            fmTitle = QFontMetrics(tags_font)
-            painter.setFont(tags_font)
-
-            green_tags = [x for x in data.tags if x in self.parent().filter_config.tags]
-            red_tags = [x for x in data.tags if x not in self.parent().filter_config.tags]
+            selected_tags: list[str] = self.parent().filter_config.tags
+            green_tags = [x for x in data.tags if x in selected_tags]
+            red_tags = [x for x in data.tags if x not in selected_tags]
 
             tag_padding_x = 6
             tag_padding_y = 3
-
-            text_padding_x = 4
-            text_padding_y = 2
-
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
             for tag in green_tags + red_tags:
-
-                bounding_rect = fmTitle.boundingRect(tag)
+                bounding_rect = self.font_small_metrics.boundingRect(tag)
 
                 # check if enough space for tag is left
                 if content_rect.left() > tag_left - bounding_rect.width() - tag_padding_x * 2:
                     break
 
-                tags_rect = QRect(tag_left - bounding_rect.width() - tag_padding_x, tag_top + tag_padding_y, bounding_rect.width(),
-                                  bounding_rect.height())
-                tags_rect.adjust(-tag_padding_x, -tag_padding_y, tag_padding_x, tag_padding_y)
+                tags_rect = QRect(tag_left - bounding_rect.width() - tag_padding_x, tag_top + tag_padding_y, bounding_rect.width(), bounding_rect.height())
+                tags_rect = tags_rect.marginsAdded(self.tag_margins)
 
-                if tag in self.parent().filter_config.tags:
-                    painter.setBrush(app_theme.get_green_brush())
+                if tag in selected_tags:
+                    painter.setBrush(self.brush_green)
                 else:
                     painter.setBrush(option.palette.accent())
 
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.drawRoundedRect(tags_rect, 6.0, 6.0)
+                painter.setPen(Qt.GlobalColor.white)
 
-                pen.setColor(option.palette.color(QPalette.ColorRole.HighlightedText))
-                painter.setPen(pen)
-
-                tags_rect.adjust(text_padding_x, text_padding_y, -text_padding_x, -text_padding_y)
+                tags_rect = tags_rect.marginsRemoved(self.text_margins)
                 painter.drawText(tags_rect, Qt.AlignmentFlag.AlignRight, tag)
 
                 tag_left = tags_rect.left() - tag_padding_x * 2
 
+
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
+
         if data.light:
-            bulb_rect = QRect(tag_left - app_theme._icon_width,tag_top, app_theme._icon_width, app_theme._icon_height)
-            self.bulb.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
+            bulb_rect = QRect(tag_left - app_theme.icon_width, tag_top, app_theme.icon_width, app_theme.icon_height)
+
+            if data.color:
+                bulb_colored: QPixmap = tint_icon(self.bulb, bulb_rect.size(), data.color)
+                painter.drawPixmap(bulb_rect, bulb_colored)
+            else:
+                self.bulb.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # draw Texts
-        summary_font = app_theme.font_small()
-        fmSummary = QFontMetrics(summary_font)
-
-        if data.summary and AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool):
-            summary_rect = fmSummary.boundingRect(0, 0, content_rect.width(), 10000, Qt.TextWordWrap, data.summary)
+        if data.summary and self.settings_title_summary_visible:
+            summary_rect = self.font_small_metrics.boundingRect(0, 0, content_rect.width(), 10000, Qt.TextFlag.TextWordWrap, data.summary)
         else:
             summary_rect = QRect(0,0,0,0)
 
+        if (self.settings_title_summary_visible and self.settings_row_style != "SMALL"):
+            title_font = self.font_medium_bold
+            title_font_metrics = self.font_medium_metrics
+        else:
+            title_font = self.font_medium
+            title_font_metrics = self.font_medium_bold_metrics
 
-        title_font = app_theme.font()
-        if (AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool)
-                and AppSettings.value(SettingKeys.SONGS_ROW_STYLE, "MEDIUM", type=str) != "SMALL"):
-            title_font.setBold(True)
-        title_font.setPointSizeF(app_theme.font_size)
-        fmTitle = QFontMetrics(title_font)
-
-        title_rect = fmTitle.boundingRect(0, 0, content_rect.width(), 10000,Qt.TextFlag.TextSingleLine, data.title)
+        title_rect = title_font_metrics.boundingRect(0, 0, content_rect.width(), 10000, Qt.TextFlag.TextSingleLine, data.title)
 
         needed_text_height = summary_rect.height() + title_rect.height()
         free_height = content_rect.height() - needed_text_height
         free_height = max(0, free_height)
 
-
         # draw rest
-        color = option.palette.color(QPalette.ColorRole.Text) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(
-            QPalette.ColorRole.WindowText)
-
-        pen.setColor(color)
-        painter.setPen(pen)
+        painter.setPen(option.palette.color(QPalette.ColorRole.Text) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(QPalette.ColorRole.WindowText))
 
         title_rect = QRect(content_rect)
         title_rect.setRight(tag_left)
-        title_rect.setTop(content_rect.top() + free_height //2)
-        title_rect.setHeight(fmTitle.height())
-
-        painter.save()
+        title_rect.setTop(content_rect.top() + free_height // 2)
+        title_rect.setHeight(title_font_metrics.height())
 
         painter.setFont(title_font)
 
-        title = data.title if AppSettings.value(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, False,
-                                                type=bool) and data.title is not None and data.title != "" else data.name
+        title = data.title if self.settings_title_instead_filename and data.title is not None and data.title != "" else data.name
         painter.drawText(title_rect, title)
 
-        if data.summary and AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool):
-            painter.setFont(summary_font)
-            pen.setColor(option.palette.color(QPalette.ColorRole.BrightText))
-            painter.setPen(pen)
+        if data.summary and self.settings_title_summary_visible:
+            painter.setFont(self.font_small)
+            painter.setPen(option.palette.color(QPalette.ColorRole.BrightText))
 
             # 2. Calculate the bounding rectangle
-            summary_rect = fmSummary.boundingRect(0, 0,  content_rect.width(), 10000, Qt.TextFlag.TextWordWrap, data.summary)
+            summary_rect = self.font_small_metrics.boundingRect(0, 0,  content_rect.width(), 10000, Qt.TextFlag.TextWordWrap, data.summary)
 
             summary_rect.moveLeft(content_rect.left())
             summary_rect.moveTop(title_rect.bottom())
