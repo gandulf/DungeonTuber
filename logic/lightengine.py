@@ -462,10 +462,8 @@ class MockControl:
         if "w" in state.pilot_params:
             self.w = state.pilot_params["w"]
 
-
-
-        print("turn on with %s" % state.pilot_params)
+        logger.debug("%s: Turn on with %s" % (self.mac,state.pilot_params))
 
     async def turn_off(self):
         self.state = False
-        print("turn off")
+        logger.debug("%s: Turn off" % self.mac)

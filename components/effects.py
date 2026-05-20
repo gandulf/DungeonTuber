@@ -2,8 +2,8 @@ import os
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, \
     Signal, QRect, QSize, QAbstractTableModel, QAbstractItemModel, QPoint, QMargins
-from PySide6.QtGui import QIcon, QAction, QColor, QPainter, QPalette, QPen, QKeyEvent, \
-    QPaintEvent, QLinearGradient, QBrush, QGradient, QPainterStateGuard,  QResizeEvent
+from PySide6.QtGui import QIcon, QAction, QPainter, QPalette, QPen, QKeyEvent, \
+    QPaintEvent,  QPainterStateGuard, QResizeEvent, QPixmap
 from PySide6.QtWidgets import QMenu, QListView, QStyleOptionViewItem, QStyle, \
     QStyledItemDelegate, QFileDialog, QPushButton, QVBoxLayout, QHBoxLayout, QFrame
 
@@ -12,7 +12,7 @@ from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
 from logic.audioengine import AudioEngine
 from logic.mp3 import EffectEntry, Mp3Entry
-
+from utils import tint_icon
 
 def _get_grid_width(total_width: int):
     if total_width < EffectList.grid_threshold:
@@ -23,20 +23,6 @@ def _get_grid_width(total_width: int):
         new_width = int(total_width / 3)
 
     return new_width
-
-
-def _get_entry_background_brush(data: Mp3Entry):
-    if data.color:
-        background = QColor(data.color)
-        background.setAlphaF(0.5)
-        gradient = QLinearGradient(0, 0, 0, 1)
-        gradient.setCoordinateMode(QGradient.CoordinateMode.ObjectBoundingMode);
-        gradient.setColorAt(0.0, Qt.GlobalColor.transparent)
-        gradient.setColorAt(0.3, Qt.GlobalColor.transparent)
-        gradient.setColorAt(1.0, background)
-        return QBrush(gradient)
-    else:
-        return None
 
 
 class EffectTableModel(QAbstractTableModel):
@@ -80,9 +66,6 @@ class EffectTableModel(QAbstractTableModel):
             return data.title if AppSettings.value(SettingKeys.EFFECTS_TITLE_INSTEAD_OF_FILE_NAME, False, type=bool) else data.name
         elif role == Qt.ItemDataRole.UserRole:
             return self._data[index.row()]
-        elif role == Qt.ItemDataRole.BackgroundRole:
-            data = index.data(Qt.ItemDataRole.UserRole)
-            return _get_entry_background_brush(data.mp3_entry)
         else:
             return None
 
@@ -154,7 +137,6 @@ class EffectList(QListView):
             return self.model().index(-1, 0)
 
     def show_context_menu(self, point):
-        index = self.indexAt(self.mapFromGlobal(self.mapToGlobal(point)))
         menu = QMenu(self)
 
         datas = [model_index.data(Qt.ItemDataRole.UserRole).mp3_entry for model_index in self.selectionModel().selectedRows()]
@@ -368,14 +350,15 @@ class EffectListItemDelegate(QStyledItemDelegate):
 
         with QPainterStateGuard(painter):
             if selected_state:
-                painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Accent), 2.0))
+                painter.setPen(QPen(option.palette.color(QPalette.ColorRole.Accent), 2.0))
 
+                line_margin = round(option.rect.height() * 0.25)
                 p1: QPoint = option.rect.topLeft()
                 p1.setX(p1.x() + padding)
-                p1.setY(p1.y() + option.rect.height() * 0.25)
+                p1.setY(p1.y() + line_margin)
                 p2: QPoint = option.rect.bottomLeft()
                 p2.setX(p2.x() + padding)
-                p2.setY(p2.y() - option.rect.height() * 0.25)
+                p2.setY(p2.y() - line_margin)
                 painter.drawLine(p1, p2)
 
     def _paint_grid_item(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
@@ -435,8 +418,6 @@ class EffectListItemDelegate(QStyledItemDelegate):
         if background:
             painter.fillRect(option.rect, background)
 
-
-
         if self.is_grid_mode():
             self._paint_grid_item(painter, option, index)
         else:
@@ -471,14 +452,15 @@ class EffectListItemDelegate(QStyledItemDelegate):
                     rect.adjust(0, 0, -1, -1)
                     painter.drawText(rect, str(idx + 1), Qt.AlignmentFlag.AlignCenter)
 
-
         if effect_entry.light:
             if self.is_grid_mode():
-                bulb_rect = QRect(option.rect.right() - app_theme.icon_width, option.rect.bottom() - app_theme.icon_height - 2, app_theme.icon_width, app_theme.icon_height)
-                self.bulb_invert.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
+                bulb_rect = QRect(option.rect.right() - app_theme.icon_width, option.rect.bottom() - app_theme.icon_height - 2 - app_theme.padding_small, app_theme.icon_width, app_theme.icon_height)
+                bulb_colored: QPixmap = tint_icon(self.bulb_invert, app_theme.icon_size, effect_entry.color)
+                painter.drawPixmap(bulb_rect, bulb_colored)
             else:
-                bulb_rect = QRect(right - app_theme.icon_width, option.rect.top(), app_theme.icon_width, option.rect.height())
-                self.bulb.paint(painter, bulb_rect, alignment=Qt.AlignmentFlag.AlignCenter)
+                bulb_rect = QRect(right - app_theme.icon_width, option.rect.top() + app_theme.padding_small, app_theme.icon_width, app_theme.icon_height)
+                bulb_colored: QPixmap = tint_icon(self.bulb, app_theme.icon_size, effect_entry.color)
+                painter.drawPixmap(bulb_rect, bulb_colored)
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         if self.is_grid_mode():

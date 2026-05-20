@@ -55,8 +55,9 @@ class RoundButton(ToolButton):
         if app_theme.theme() != Theme.SYSTEM:
             radius = min(self.width(), self.height()) // 2
             if self.radius is None or self.radius != radius:
-                self.setStyleSheet(f"border-radius: {radius}px")
                 self.radius = radius
+                self.setStyleSheet(f"border-radius: {radius}px")
+
         else:
             self.radius = None
             self.setStyleSheet(None)
@@ -429,8 +430,8 @@ class FlowLayout(QLayout):
             self.spaceX = spacing
             self.spaceY = spacing
         elif isinstance(spacing, QPoint):
-            self.spaceX: spacing.x()
-            self.spaceY: spacing.y()
+            self.spaceX = spacing.x()
+            self.spaceY = spacing.y()
 
     def addItem(self, item: QWidget):
         self.item_list.append(item)
@@ -1495,7 +1496,7 @@ class ColorButton(QPushButton):
             self.setColor(dlg.currentColor())
 
     def mousePressEvent(self, e):
-        if e.button() == Qt.RightButton:
+        if e.button() == Qt.MouseButton.RightButton:
             self.setColor(self._default)
 
         return super().mousePressEvent(e)

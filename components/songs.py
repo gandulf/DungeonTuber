@@ -7,9 +7,9 @@ from os import PathLike
 from pathlib import Path
 
 from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMimeData, QByteArray, QDataStream, QIODevice, QPersistentModelIndex, \
-    QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QPointF, QMargins
-from PySide6.QtGui import QColor, QBrush, QIcon, QLinearGradient, QGradient, QAction, QKeyEvent, QDragMoveEvent, QDragEnterEvent, QPainter, QPalette, \
-    QFontMetrics, QDropEvent, QPolygonF, QPainterStateGuard, QPen, QPixmap, QFont
+    QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QMargins
+from PySide6.QtGui import QColor, QBrush, QIcon, QAction, QKeyEvent, QDragMoveEvent, QDragEnterEvent, QPainter, QPalette, \
+    QFontMetrics, QDropEvent,  QPainterStateGuard, QPen, QPixmap, QFont
 from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView
 from sortedcontainers import SortedSet
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__file__)
 
 def _get_bpm_background_brush(desired_value: int | None, value: int, data: Mp3Entry) -> QBrush | Qt.GlobalColor | None:
     if value is None or desired_value is None or desired_value == 0:
-        return _get_entry_background_brush(data)
+        return None
 
     value_diff = abs(desired_value - value)
 
@@ -39,8 +39,7 @@ def _get_bpm_background_brush(desired_value: int | None, value: int, data: Mp3En
     else:
         return app_theme.get_red(51)
 
-def _get_entry_background_brush(data: Mp3Entry):
-    return None
+
 
 def _get_score_foreground_brush(score: int | None) -> QColor | Qt.GlobalColor | None:
     return Qt.GlobalColor.black
@@ -68,12 +67,12 @@ def _get_score_background_brush(score: int | None, data: Mp3Entry) -> QBrush | Q
         else:
             return app_theme.get_red(170)
     else:
-        return _get_entry_background_brush(data)
+        return None
 
 
 def _get_category_background_brush(desired_value: int | None, value: int, data:Mp3Entry) -> QBrush | Qt.GlobalColor | None:
     if value is None or desired_value is None:
-        return _get_entry_background_brush(data)
+        return None
 
     value_diff = abs(desired_value - value)
 
@@ -87,7 +86,7 @@ def _get_category_background_brush(desired_value: int | None, value: int, data:M
 
 def _get_genre_background_brush(desired_values: list[str] | None, values: list[str], data: Mp3Entry) -> QBrush | Qt.GlobalColor | None:
     if values is None or desired_values is None or desired_values == []:
-        return _get_entry_background_brush(data)
+        return None
 
     if isinstance(values, str):
         values = ", ".split(values)
@@ -342,7 +341,7 @@ class SongTableModel(QAbstractTableModel):
                 category_key = self.get_category_key(index)
                 return _get_category_background_brush(self.filter_config.get_category(category_key, None), value, data)
             else:
-                return _get_entry_background_brush(data)
+                return None
         elif role in [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]:
             data = self._data[index.row()]
             if data is None:
@@ -569,13 +568,6 @@ class SongTableProxyModel(QSortFilterProxyModel):
 
         return self.sourceModel().dropMimeData(data, action, source_row, column, source_parent)
 
-def _get_table_padding():
-    rowStyle = AppSettings.value(SettingKeys.SONGS_ROW_STYLE, 'MEDIUM', type=str)
-    if rowStyle == "SMALL":
-        return 1
-    else:
-        return 3
-
 class SongTable(QTableView):
     item_double_clicked = Signal(QPersistentModelIndex, Mp3Entry)
     content_changed = Signal()
@@ -722,6 +714,17 @@ class SongTable(QTableView):
                 + font_metrics.horizontalAdvance(name))
 
     def _update_table_sizes(self):
+        available_width = self.viewport().width()
+        used_width = 0
+        for index in range(self.columnCount()):
+            if not self.isColumnHidden(index):
+                used_width = used_width + self.columnWidth(index)
+
+        if used_width < available_width:
+            free_width = available_width - used_width
+            self.setColumnWidth(SongTableModel.FILE_COL, self.columnWidth(SongTableModel.FILE_COL) + free_width)
+
+    def _init_table_sizes(self):
         # heights
         rowStyle = AppSettings.value(SettingKeys.SONGS_ROW_STYLE, 'MEDIUM', type=str)
         if rowStyle == "MEDIUM":
@@ -733,8 +736,7 @@ class SongTable(QTableView):
 
         self.verticalHeader().setDefaultSectionSize((app_theme.font_size * scale_factor) + 2)
 
-        available_width = self.viewport().width()
-        used_width =0
+
 
         # widths
 
@@ -753,20 +755,13 @@ class SongTable(QTableView):
         for index in [SongTableModel.BPM_COL, SongTableModel.SCORE_COL]:
             self.setColumnWidth(index, self._calc_header_width(index))
 
-
-        for index in range(self.columnCount()):
-                if not self.isColumnHidden(index):
-                    used_width  = used_width + self.columnWidth(index)
-
         self.horizontalHeader().setSectionResizeMode(SongTableModel.INDEX_COL, QHeaderView.ResizeMode.Fixed)
         self.horizontalHeader().setSectionResizeMode(SongTableModel.FAV_COL, QHeaderView.ResizeMode.Fixed)
         self.horizontalHeader().setCascadingSectionResizes(True)
-        #self.horizontalHeader().setSectionResizeMode(SongTableModel.FILE_COL, QHeaderView.ResizeMode.Interactive)
+        # self.horizontalHeader().setSectionResizeMode(SongTableModel.FILE_COL, QHeaderView.ResizeMode.Interactive)
         # self.horizontalHeader().setStretchLastSection(True)
 
-        if used_width < available_width:
-            free_width = available_width - used_width
-            self.setColumnWidth(SongTableModel.FILE_COL, self.columnWidth(SongTableModel.FILE_COL) +free_width)
+        self._update_table_sizes()
 
     def start_lazy_loading(self):
         if self.is_loaded or self.loader is not None:
@@ -793,12 +788,12 @@ class SongTable(QTableView):
         for delegate in [self.category_delegate, self.star_delegate, self.label_item_delegate,self.cover_delegate]:
             delegate.refresh_style()
 
-    def showEvent(self, event, /):
-        self.update_category_column_visibility()
+    def resizeEvent(self, event, /):
+        self._update_table_sizes()
 
     def changeEvent(self, event: QEvent, /):
         if event.type() == QEvent.Type.FontChange:
-            self._update_table_sizes()
+            self._init_table_sizes()
             self._refresh_delegates()
         elif event.type() == QEvent.Type.PaletteChange:
             self._refresh_palette()
@@ -1067,7 +1062,7 @@ class SongTable(QTableView):
                 self.first_visible_column = i
                 break
 
-        self._update_table_sizes()
+        self._init_table_sizes()
 
     def get_raw_data(self) -> list[Mp3Entry]:
         return self.table_model._data
@@ -1224,37 +1219,38 @@ class BaseStyledItemDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self.refresh_style()
 
-
     def paint_selection(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         # Check if the item is currently selected
         if option.state & QStyle.StateFlag.State_Selected:
+            # 2. TRICK: Remove the selected state flag so Fusion doesn't
+            # overwrite your background with its solid default color
+            option.state &= ~QStyle.StateFlag.State_Selected
+
             painter.fillRect(option.rect, option.palette.highlight())
             song_table : SongTable = option.widget
             if index.column() == song_table.first_visible_column:
                 with QPainterStateGuard(painter):
                     painter.setPen(self.pen_accent)
 
+                    line_margin = option.rect.height() * 0.25
+
                     p1: QPoint = option.rect.topLeft()
                     p1.setX(p1.x() + self.padding)
-                    p1.setY(round(p1.y() + option.rect.height() * 0.25))
+                    p1.setY(round(p1.y() + line_margin))
                     p2: QPoint = option.rect.bottomLeft()
                     p2.setX(p2.x() + self.padding)
-                    p2.setY(round(p2.y() - option.rect.height() * 0.25))
+                    p2.setY(round(p2.y() - line_margin))
                     painter.drawLine(p1, p2)
 
 
 
-        # 2. TRICK: Remove the selected state flag so Fusion doesn't
-        # overwrite your background with its solid default color
-        if option.state & QStyle.StateFlag.State_Selected:
-            option.state &= ~QStyle.StateFlag.State_Selected
-
-        if option.state & QStyle.StateFlag.State_HasFocus:
-            option.state &= ~QStyle.StateFlag.State_HasFocus
 
 
     def refresh_style(self):
-        self.cell_padding = _get_table_padding()
+        self.settings_title_summary_visible = AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool)
+        self.settings_row_style = AppSettings.value(SettingKeys.SONGS_ROW_STYLE, "MEDIUM", type=str)
+
+        self.cell_padding = 1 if self.settings_row_style == "SMALL" or (self.settings_row_style != 'LARGE' and not self.settings_title_summary_visible) else 3
         self.cell_margin = QMargins(self.cell_padding * 2, self.cell_padding, self.cell_padding * 2, self.cell_padding)
         self.padding_small: int = app_theme.padding_small
         self.padding: int = app_theme.padding
@@ -1267,6 +1263,8 @@ class BaseStyledItemDelegate(QStyledItemDelegate):
 
         if option.state & QStyle.StateFlag.State_MouseOver:
             option.state &= ~QStyle.StateFlag.State_MouseOver
+        if option.state & QStyle.StateFlag.State_HasFocus:
+            option.state &= ~QStyle.StateFlag.State_HasFocus
 
         self.paint_selection(painter, option, index)
 
@@ -1316,26 +1314,26 @@ class CategoryDelegate(BaseStyledItemDelegate):
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         if index.column() < SongTableModel.CAT_COL:
-            super().paint(painter, option, index)
             return
 
         score = index.data(Qt.ItemDataRole.DisplayRole)
         if score is not None:
             self.initStyleOption(option, index)
-            rect: QRect = option.rect.adjusted(4,10,-4,-10)
+            painter.save()
+            painter.setClipRect(option.rect)
+            rect: QRect = option.rect.marginsRemoved(self.cell_margin*2)
             bg = option.backgroundBrush if option.backgroundBrush and option.backgroundBrush.style() != Qt.BrushStyle.NoBrush else self.fallback_bg
             painter.fillRect(rect.x(), rect.y(), rect.width() * 0.1 * score, rect.height(), bg)
 
             # 6. Draw text/foreground ONLY (Avoids super().paint overdraw)
             # This draws the text nicely over your custom bar without wiping out your work.
             if option.features & QStyleOptionViewItem.ViewItemFeature.HasDisplay:
-                text_rect = option.rect.adjusted(6, 0, -6, 0)  # Adjust text padding as needed
-
                 # Draw text with proper palette state (selected vs normal)
                 painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText) if (option.state & QStyle.StateFlag.State_Selected) else option.palette.color(QPalette.ColorRole.Text))
-                painter.drawText(text_rect, option.displayAlignment, option.text)
+                painter.drawText(rect, option.displayAlignment, option.text)
 
-        super().paint(painter, option, index)
+            painter.restore()
+
 
 class StarDelegate(BaseStyledItemDelegate):
 
@@ -1393,8 +1391,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         self.font_medium_bold = QFont(app_theme.font_medium)
         self.font_medium_bold_metrics = QFontMetrics(self.font_medium_bold)
 
-        self.tag_margins = QMargins(6,3,6,3)
-        self.text_margins = QMargins(4,2,4,2)
+        self.tag_margins = QMargins(self.cell_padding*2,self.cell_padding,self.cell_padding*2,self.cell_padding)
+        self.text_margins = self.tag_margins - QMargins(2,1,2,1)
 
         self.brush_green = app_theme.get_green_brush()
 
@@ -1424,8 +1422,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
             green_tags = [x for x in data.tags if x in selected_tags]
             red_tags = [x for x in data.tags if x not in selected_tags]
 
-            tag_padding_x = 6
-            tag_padding_y = 3
+            tag_padding_x = self.cell_padding*2
+            tag_padding_y = self.cell_padding
             painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
             for tag in green_tags + red_tags:
                 bounding_rect = self.font_small_metrics.boundingRect(tag)
@@ -1472,10 +1470,10 @@ class LabelItemDelegate(BaseStyledItemDelegate):
 
         if (self.settings_title_summary_visible and self.settings_row_style != "SMALL"):
             title_font = self.font_medium_bold
-            title_font_metrics = self.font_medium_metrics
+            title_font_metrics = self.font_medium_bold_metrics
         else:
             title_font = self.font_medium
-            title_font_metrics = self.font_medium_bold_metrics
+            title_font_metrics = self.font_medium_metrics
 
         title_rect = title_font_metrics.boundingRect(0, 0, content_rect.width(), 10000, Qt.TextFlag.TextSingleLine, data.title)
 
@@ -1510,4 +1508,3 @@ class LabelItemDelegate(BaseStyledItemDelegate):
 
         painter.restore()
 
-        super().paint(painter, option, index)

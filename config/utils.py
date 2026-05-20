@@ -315,11 +315,12 @@ def tint_icon(icon: QIcon, size:QSize, target_color:QColor):
     # 1. Grab the icon as a pixmap matching the size of your target rect
     icon_pixmap = icon.pixmap(size)
 
-    # 2. Create a temporary painter to tint the pixmap asset
-    temp_painter = QPainter(icon_pixmap)
-    temp_painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-    temp_painter.fillRect(icon_pixmap.rect(), target_color)
-    temp_painter.end()
+    if target_color:
+        # 2. Create a temporary painter to tint the pixmap asset
+        temp_painter = QPainter(icon_pixmap)
+        temp_painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        temp_painter.fillRect(icon_pixmap.rect(), target_color)
+        temp_painter.end()
 
     return icon_pixmap
 
