@@ -37,6 +37,12 @@ class Theme(StrEnum):
     DARK ="DARK"
 
 
+def get_list_palette(orig_palette: QPalette):
+    palette = QPalette(orig_palette)
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 0, 0, 10))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
+    palette.setColor(QPalette.ColorRole.HighlightedText, palette.color(QPalette.ColorRole.Text))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
+    return palette
+
 class AppTheme(QObject):
     light_palette: QPalette = None
     dark_palette: QPalette = None
@@ -385,11 +391,7 @@ class AppTheme(QObject):
         else:
             return self.get_system_palette()
 
-    def get_list_palette(self):
-        palette =QPalette(self.get_palette(self.theme()))
-        palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 0, 0, 10))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
-        palette.setColor(QPalette.ColorRole.HighlightedText, palette.color(QPalette.ColorRole.Text))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
-        return palette
+
 
     def get_system_palette(self) -> QPalette:
         return self.system_palette

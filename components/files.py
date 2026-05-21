@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
-    Signal, QObject, QPoint, QItemSelection, QStorageInfo
+    Signal, QObject, QPoint, QItemSelection
 from PySide6.QtGui import QIcon, QAction, QKeyEvent, QPaintEvent, QAbstractFileIconProvider, QPalette
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QWidget, \
     QVBoxLayout, QAbstractItemView, QFrame
@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeV
 from components.dialogs import EditSongDialog
 from components.widgets import IconLabel, AutoSearchHelper, ToolButton
 from config.settings import AppSettings, SettingKeys
-from config.theme import app_theme
+from config.theme import app_theme, get_list_palette
 from logic.mp3 import parse_mp3, Mp3Entry
 
 
@@ -52,7 +52,7 @@ class CustomIconProvider(QFileIconProvider):
 
         elif isinstance(info, QFileInfo):
             if self.is_drive(info):
-                return QIcon.fromTheme(QIcon.ThemeIcon.DriveHarddisk)
+                return QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical)
             elif info.isDir():
                 return self.folder_icon
 
@@ -74,6 +74,15 @@ class FileFilterProxyModel(QSortFilterProxyModel):
         # 0 is usually the 'Name' column in QFileSystemModel
         self.setFilterKeyColumn(0)
 
+        self.extensions = ["mp3","m3u"]
+        self.file_cache = {}
+        self.smart_filter = False
+
+    def set_smart_filter(self, value:bool):
+        if self.smart_filter != value:
+            self.smart_filter = value
+            self.invalidate()
+
     def data(self, index, role= Qt.ItemDataRole.DisplayRole):
         # 1. Check if we are looking at the 'Name' column and the DisplayRole
         if role == Qt.ItemDataRole.DisplayRole and index.isValid() and index.column() == 0:
@@ -93,6 +102,10 @@ class FileFilterProxyModel(QSortFilterProxyModel):
 
         # 2. Fall back to default behavior for everything else
         return super().data(index, role)
+
+    def invalidateFilter(self, /):
+        self.file_cache.clear()
+        super().invalidateFilter()
 
     def lessThan(self, left: QModelIndex | QPersistentModelIndex, right: QModelIndex | QPersistentModelIndex):
         # 1. Get a reference to the source model (QFileSystemModel)
@@ -114,15 +127,66 @@ class FileFilterProxyModel(QSortFilterProxyModel):
         # fall back to standard sorting (alphabetical, size, etc.)
         return super().lessThan(left, right)
 
+    def _dir_has_valid_contents(self, path: str) -> bool:
+        """
+        Recursively scans a directory using Python's native os.scandir.
+        Returns True if it contains at least one allowed file or non-empty folder.
+        """
+        try:
+            if path in self.file_cache:
+                return self.file_cache[path]
+
+            has_files = False
+
+            with os.scandir(path) as it:
+                for entry in it:
+                    # Always skip hidden files/folders (e.g., .git, .DS_Store)
+                    if entry.name.startswith('.'):
+                        continue
+
+                    if entry.is_file():
+                        # Otherwise, check if the file matches our extensions
+                        if any(entry.name.lower().endswith(ext) for ext in self.extensions):
+                            has_files= True
+                            break
+
+                    elif entry.is_dir():
+                        # Recursively check if the subfolder has valid contents
+                        if self._dir_has_valid_contents(entry.path):
+                            has_files= True
+                            break
+        except PermissionError:
+            has_files = False  # Drop folders we don't have permission to read
+
+        self.file_cache[path] = has_files
+        return has_files
+
+    def ignore(self, file_info: QFileInfo) -> bool:
+        if file_info.isHidden() or file_info.fileName().startswith('.'):
+            return True
+
+        if file_info.isFile() and not file_info.suffix() in self.extensions:
+            return True
+
+        return False
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex):
+        source_model: QFileSystemModel = self.sourceModel()
+        source_index = source_model.index(source_row, 0, source_parent)
+
         # This ensures that if a file matches, its parent folders remain visible
         # Otherwise, the file would be hidden because its parent is filtered out
         if super().filterAcceptsRow(source_row, source_parent):
+            file_info = source_model.fileInfo(source_index)
+            if self.ignore(file_info):
+                return False
+
+            if self.smart_filter and source_model.isDir(source_index):
+                # Only display this folder if it contains valid files/subfolders
+                return self._dir_has_valid_contents(file_info.filePath())
+
             return True
 
         # Check if any children match the filter
-        source_model = self.sourceModel()
-        source_index = source_model.index(source_row, 0, source_parent)
         for i in range(source_model.rowCount(source_index)):
             if self.filterAcceptsRow(i, source_index):
                 return True
@@ -168,17 +232,24 @@ class DirectoryTree(QTreeView):
         self.go_into_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.GoNext), _("Go Into"), self)
         self.go_into_action.triggered.connect(self.do_into_action)
 
+        self.smart_filter_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.Scanner), _("Smart Filter"), self)
+        self.smart_filter_action.setCheckable(True)
+        self.smart_filter_action.setChecked(AppSettings.value(SettingKeys.FILES_SMART_FILTER, False, type=bool))
+        self.smart_filter_action.triggered.connect(self.do_smart_filter)
+
+        self.refreh_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), _("Refresh"), self)
+        self.refreh_action.triggered.connect(self.do_refresh)
+
         self._source_root_index = QPersistentModelIndex()
 
-        self.directory_icon_provider = CustomIconProvider()
         self.directory_model = QFileSystemModel()
         self.directory_model.setReadOnly(False)
-        self.directory_model.setIconProvider(self.directory_icon_provider)
+        # self.directory_icon_provider = CustomIconProvider()
+        #self.directory_model.setIconProvider(self.directory_icon_provider)
         self.directory_model.setRootPath(QDir.rootPath())
-        self.directory_model.setNameFilters(["*.mp3", "*.m3u"])
-        self.directory_model.setNameFilterDisables(False)
 
         self.proxy_model = FileFilterProxyModel()
+        self.proxy_model.set_smart_filter(AppSettings.value(SettingKeys.FILES_SMART_FILTER, False, type=bool))
         self.proxy_model.setSourceModel(self.directory_model)
 
         self.directory_model.directoryLoaded.connect(self.on_directories_loaded)
@@ -226,7 +297,7 @@ class DirectoryTree(QTreeView):
         self._refresh_palette()
 
     def _refresh_palette(self):
-        self.setPalette(app_theme.get_list_palette())
+        self.setPalette(get_list_palette(self.palette()))
         self.update()
 
     def changeEvent(self, event: QEvent, /):
@@ -234,8 +305,8 @@ class DirectoryTree(QTreeView):
             self.setFont(app_theme.font_medium)
             self.setIconSize(app_theme.icon_size)
         elif event.type() == QEvent.Type.PaletteChange:
-            self.directory_icon_provider.refresh_icons()
-            self.directory_model.setIconProvider(self.directory_icon_provider)
+            #self.directory_icon_provider.refresh_icons()
+            #self.directory_model.setIconProvider(self.directory_icon_provider)
             self._refresh_palette()
 
     def on_directories_loaded(self):
@@ -307,6 +378,10 @@ class DirectoryTree(QTreeView):
         menu.addAction(self.go_parent_action)
         menu.addAction(self.go_into_action)
         #
+        menu.addSeparator()
+        menu.addAction(self.smart_filter_action)
+        menu.addAction(self.refreh_action)
+
         menu.show()
         menu.exec(self.mapToGlobal(point))
 
@@ -356,6 +431,12 @@ class DirectoryTree(QTreeView):
             self._set_root_index(self.history.pop())
 
         self.go_back_action.setDisabled(len(self.history) <= 1)
+
+    def do_refresh(self):
+        self.proxy_model.invalidateFilter()
+    def do_smart_filter(self, checked:bool):
+        self.proxy_model.set_smart_filter(checked)
+        AppSettings.setValue(SettingKeys.FILES_SMART_FILTER, checked)
 
     def do_into_action(self):
         if len(self.selectedIndexes()) == 0:

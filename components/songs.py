@@ -17,7 +17,7 @@ from components.widgets import AutoSearchHelper
 from components.dialogs import ImagePopup
 from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_categories, CAT_VALENCE, \
     CAT_AROUSAL, FilterConfig
-from config.theme import app_theme, _alpha
+from config.theme import app_theme, _alpha, get_list_palette
 from config.utils import tint_icon
 
 from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, \
@@ -781,7 +781,7 @@ class SongTable(QTableView):
         self.content_changed.emit()
 
     def _refresh_palette(self):
-        self.setPalette(app_theme.get_list_palette())
+        self.setPalette(get_list_palette(self.palette()))
         self.update()
 
     def _refresh_delegates(self):
@@ -965,7 +965,7 @@ class SongTable(QTableView):
         self.auto_search_helper.paintEvent(event)
 
         duration_ms = (time.perf_counter_ns() - start) / 1_000_000
-        if duration_ms > 5.0:
+        if duration_ms > 10.0:
             logger.debug(f"Warning: Paint took too long! {duration_ms:.2f} ms")
 
 

@@ -273,6 +273,8 @@ class SettingKeys(StrEnum):
     VOXALYZER_URL = "voxalyzerUrl"
     VOXALYZER_LOCAL = "voxalyzerLocal"
 
+    FILES_SMART_FILTER ="filesSmartFilter"
+
 class FilterConfig:
     categories: dict[str, int] = {}
     tags: list[str] = []

@@ -36,7 +36,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QTabWidget
     QMenu, QStatusBar, QProgressBar, QSplitter, \
     QListView, QFrame
 from PySide6.QtCore import Qt, QSize, QPersistentModelIndex, QTimer, QKeyCombination, QPoint, QFileInfo, QEvent
-from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QPalette, QShortcut, QKeySequence, QColor
+from PySide6.QtGui import QAction, QIcon, QActionGroup, QResizeEvent, QShortcut, QKeySequence
 
 from config.settings import AppSettings, SettingKeys, MusicCategory, set_music_categories, \
     get_music_categories
@@ -701,7 +701,8 @@ class MusicPlayer(QMainWindow):
         self.status_progress = QProgressBar()
         self.status_progress.setContentsMargins(0, 0, 0, 0)
         self.status_progress.setRange(0, 0)
-        self.statusBar().addPermanentWidget(self.status_progress)
+        self.status_progress.setFixedWidth(200)
+        self.statusBar().addPermanentWidget(self.status_progress,0)
 
 
         # Visibility
