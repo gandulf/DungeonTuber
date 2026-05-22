@@ -25,7 +25,7 @@ import sys
 import traceback
 
 from config import log
-from widgets import WelcomePage
+
 
 log.setup_logging()
 
@@ -45,7 +45,7 @@ from config.theme import app_theme, Theme
 from config.utils import get_path, get_latest_version, is_latest_version, get_current_version, is_frozen
 
 from components.effects import EffectList, EffectWidget
-from components.widgets import FeatureOverlay
+from components.widgets import FeatureOverlay, WelcomePage
 from components.player import PlayerWidget
 from components.dialogs import AboutDialog, EditSongDialog, SettingsDialog
 from components.filter import FilterWidget
