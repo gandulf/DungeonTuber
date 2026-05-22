@@ -14,6 +14,7 @@ from config.utils import get_path, is_latest_version, get_latest_version, DOWNLO
     get_executable_path
 from config.settings import MusicCategory, set_music_categories, SettingKeys, AppSettings, get_music_categories, has_local_voxalyzer
 from components.lights import LightSettingsWidget
+from logic.lightengine import LightSetting
 from logic.mp3 import Mp3Entry, update_mp3_data, update_mp3_cover
 
 logger = logging.getLogger(__file__)
@@ -195,6 +196,35 @@ class EditSongDialog(QDialog):
             except Exception as e:
                 logger.error("Failed to rename file: {0}", e)
                 QMessageBox.warning(self, _("Update Error"), _("Failed to rename file: {0}").format(e))
+
+        super().accept()
+
+class EditLightDialog(QDialog):
+
+    def __init__(self,data: LightSetting, name:str = "", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(_("Edit Light"))
+        self.resize(500, 250)
+
+        self.light_setting = data
+
+        layout = QFormLayout(self)
+
+        self.name_edit = QLineEdit(name)
+        layout.addRow(_("Name") + ":", self.name_edit)
+
+        self.light_settings = LightSettingsWidget(settings = self.light_setting)
+        self.light_settings.setDisabled(False)
+        layout.addRow(_("Lights"), self.light_settings)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def accept(self, /):
+        self.light_setting = self.light_settings.get_settings() if not self.light_settings.get_settings().is_empty() else None
+        self.name = self.name_edit.text()
 
         super().accept()
 

@@ -4,17 +4,18 @@ from os import PathLike
 
 from PySide6.QtCore import Signal, QSize, QTimer, QPersistentModelIndex, Qt, QEvent, QPoint, QPointF
 from PySide6.QtGui import QResizeEvent, QLinearGradient, QColor, QPainter, QPaintEvent, QFontMetrics, QIcon, QPalette, \
-    QAction, QPen, QMouseEvent, QFont
+    QAction, QMouseEvent, QFont
 from PySide6.QtWidgets import QWidget, QFrame, QLabel, QSlider, QSizePolicy, QVBoxLayout, QHBoxLayout, \
     QToolTip, QStyleOptionSlider, QStyle, QMenu
 
+from logic.lightengine import LightSetting
 from logic.audioengine import AudioEngine, EngineState
-from logic.mp3 import Mp3Entry, update_mp3_chapters
+from logic.mp3 import Mp3Entry, update_mp3_chapters, Chapter
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
 from config.utils import ms_to_promille, format_time
 from components.widgets import RepeatMode, RepeatButton, JumpSlider, VolumeSlider, RoundButton
-from components.dialogs import NameDialog
+from components.dialogs import EditLightDialog
 
 logger = logging.getLogger(__file__)
 
@@ -183,9 +184,12 @@ class PlayerWidget(QFrame):
     volume_changed = Signal(int)
     track_changed = Signal(QPersistentModelIndex, Mp3Entry)
     repeat_mode_changed = Signal(RepeatMode)
+    chapter_reached = Signal(Chapter)
 
     current_index = QPersistentModelIndex()
     current_data: Mp3Entry = None
+
+
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -227,6 +231,7 @@ class PlayerWidget(QFrame):
         self.progress_slider.valueChanged.connect(self.jump_to_position)
         self.progress_slider.add_chapter.connect(self.add_chapter)
         self.progress_slider.remove_chapter.connect(self.remove_chapter)
+        self.progress_slider.chapter_reached.connect(self.on_chapter_reached)
 
         self.progress_layout.addWidget(self.time_label)
         self.progress_layout.addWidget(self.progress_slider)
@@ -305,11 +310,13 @@ class PlayerWidget(QFrame):
         super().setBackgroundRole(role)
         self.progress_slider.setBackgroundRole(role)
 
-    def add_chapter(self, timestamp: int, title: str):
-        self.current_data.chapters.append({"time": timestamp, "title": title})
+    def add_chapter(self, timestamp: int, title: str, light_setting: LightSetting):
+        self.current_data.chapters.append({"time": timestamp, "title": title, "light": light_setting})
         update_mp3_chapters(self.current_data.path, self.current_data.chapters)
 
     def remove_chapter(self, index: int):
+        chapter = self.current_data.chapters[index]
+
         del self.current_data.chapters[index]
         update_mp3_chapters(self.current_data.path, self.current_data.chapters)
 
@@ -385,6 +392,9 @@ class PlayerWidget(QFrame):
         self.btn_prev.setEnabled(enabled)
         self.btn_play.setEnabled(enabled)
         self.btn_next.setEnabled(enabled)
+
+    def on_chapter_reached(self, chapter:Chapter):
+        self.chapter_reached.emit(chapter)
 
     def update_progress(self, current_time_ms: int, total_time_ms: int):
         if not self.progress_slider.isSliderDown():
@@ -484,7 +494,9 @@ class PlayerWidget(QFrame):
                 self.visualizer.set_state(EngineState.PLAY, self.slider_vol.volume)
                 self.elide_text(self.track_label, data.name)
 
+
                 self.engine.play(track_path)
+                self.progress_slider.setValue(0)
                 self.progress_slider.setMaximum(data.length_in_ms)
                 self.progress_slider.set_chapters(data.chapters)
 
@@ -494,8 +506,11 @@ class PlayerWidget(QFrame):
 
 
 class PlayerSlider(JumpSlider):
-    add_chapter = Signal(int, str)
+    add_chapter = Signal(int, str, LightSetting)
     remove_chapter = Signal(int)
+    chapter_reached = Signal(Chapter)
+
+    next_chapter: Chapter | None = None
 
     def __init__(self, parent=None):
         super().__init__(Qt.Orientation.Horizontal, parent)
@@ -506,13 +521,19 @@ class PlayerSlider(JumpSlider):
         self.setTickInterval(10000)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
+        self.valueChanged.connect(self.on_value_changed)
+
+    def on_value_changed(self, current_time_ms: int):
+        if self.next_chapter and current_time_ms >= self.next_chapter["time"] and abs(current_time_ms - self.next_chapter["time"]) <3000:
+            self.fire_chapter_reached(self.next_chapter)
 
     def show_context_menu(self, pos: QPoint):
         if self.maximum() > 0:
             menu = QMenu(self)
 
+            has_chapter = self._find_chapter_for_position(pos.x()) is not None
             # Add actions
-            add_action = QAction(_("Add chapter"), self)
+            add_action = QAction(_("Edit chapter" if has_chapter else "Add chapter"), self)
             add_action.setData(pos.x())
             add_action.triggered.connect(self.fire_add_chapter)
 
@@ -530,13 +551,18 @@ class PlayerSlider(JumpSlider):
         pos_x = self.sender().data()
 
         timestamp = self._get_value_from_position(pos_x)
-        add_chapter_dialog = NameDialog()
-        add_chapter_dialog.setWindowTitle(_("Add Chapter"))
+        chapter: Chapter = self._find_chapter_for_position(pos_x)
+        add_chapter_dialog = EditLightDialog(chapter['light'] if chapter is not None else None, name = chapter['title'] if chapter is not None else "", parent = self)
+        add_chapter_dialog.setWindowTitle(_("Add Chapter" if chapter is None else "Edit Chapter"))
 
         if add_chapter_dialog.exec():
-            title = add_chapter_dialog.get_name()
-            self.add_chapter.emit(timestamp, title)
-            self.chapters.append({'time': timestamp, 'title': title})
+            if chapter is None:
+                self.add_chapter.emit(timestamp, add_chapter_dialog.name, add_chapter_dialog.light_setting)
+                self.chapters.append({'time': timestamp, 'title': add_chapter_dialog.name, 'light': add_chapter_dialog.light_setting})
+                self._invalidate_next_chapter()
+            else:
+                chapter['title'] = add_chapter_dialog.name
+                chapter['light'] = add_chapter_dialog.light_setting
 
     def fire_remove_chapter(self):
         pos_x = self.sender().data()
@@ -546,14 +572,27 @@ class PlayerSlider(JumpSlider):
             index = self.chapters.index(chapter)
             self.remove_chapter.emit(index)
             del self.chapters[index]
+            self._invalidate_next_chapter()
 
-    def set_chapters(self, chapter_data: list[dict] | None):
+    def _invalidate_next_chapter(self):
+        if self.chapters:
+            self.next_chapter = self._find_next_chapter_for_time(self.value())
+        else:
+            self.next_chapter = None
+
+    def set_chapters(self, chapter_data: list[Chapter] | None):
         """Pass a list of dicts: [{'time': 0, 'title': 'Intro'}, ...]"""
         if chapter_data:
             self.chapters = chapter_data.copy()
+            self._invalidate_next_chapter()
         else:
             self.chapters = []
+            self.next_chapter = None
         self.update()
+
+    def fire_chapter_reached(self, chapter: Chapter):
+        self.chapter_reached.emit(chapter)
+        self.next_chapter = self._find_next_chapter_for_time(chapter["time"])
 
     def mousePressEvent(self, event: QMouseEvent):
         self.mouse_pressed.emit(event)
@@ -566,6 +605,7 @@ class PlayerSlider(JumpSlider):
 
             if found_chapter:
                 self.setValue(found_chapter['time'])
+                self.fire_chapter_reached(found_chapter)
             else:
                 self.setValue(self._get_value_from_position(event.pos()))
 
@@ -578,9 +618,9 @@ class PlayerSlider(JumpSlider):
         opt.rect = self.contentsRect()
 
         # Tell it exactly what to draw
-        opt.subControls = QStyle.SC_SliderGroove | QStyle.SubControl.SC_SliderTickmarks
+        opt.subControls = QStyle.SubControl.SC_SliderGroove | QStyle.SubControl.SC_SliderTickmarks
 
-        self.style().drawComplexControl(QStyle.CC_Slider, opt, painter, self)
+        self.style().drawComplexControl(QStyle.ComplexControl.CC_Slider, opt, painter, self)
 
         painter.save()
         #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -588,7 +628,7 @@ class PlayerSlider(JumpSlider):
 
             opt = QStyleOptionSlider()
             self.initStyleOption(opt)
-            gr = self.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderGroove, self)
+            gr = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
 
             groove_width = 4  # thickness of groove line width
             tick_width = 3  # width of chapter tick
@@ -616,7 +656,13 @@ class PlayerSlider(JumpSlider):
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.drawRoundedRect(brush_rect, 2.0, 2.0)
 
-                painter.setBrush(self.palette().brush(QPalette.ColorRole.Accent))
+                dot_color:QColor = self.palette().brush(QPalette.ColorRole.Accent)
+                if "light" in ch:
+                    light_setting = ch['light']
+                    if light_setting.color:
+                        dot_color = light_setting.color
+
+                painter.setBrush(dot_color)
                 painter.setPen(self.palette().color(QPalette.ColorRole.Base))
 
                 painter.drawEllipse(brush_rect.x(), text_rect.top() + 4, 8, 8)
@@ -626,13 +672,27 @@ class PlayerSlider(JumpSlider):
 
         painter.restore()
 
-        opt.subControls = QStyle.SC_SliderHandle
+        opt.subControls = QStyle.SubControl.SC_SliderHandle
 
-        self.style().drawComplexControl(QStyle.CC_Slider, opt, painter, self)
+        self.style().drawComplexControl(QStyle.ComplexControl.CC_Slider, opt, painter, self)
 
         painter.end()
 
-    def _find_chapter_for_position(self, mouse_x: int):
+    def _find_next_chapter_for_position(self, mouse_x: int)-> Chapter | None:
+        current_time = self._get_value_from_position(mouse_x)
+        return self._find_next_chapter_for_time(current_time)
+
+    def _find_next_chapter_for_time(self, time: int)-> Chapter | None:
+        found_chapter = None
+        sorted_chapters = sorted(self.chapters, key=lambda x: x["time"])
+        for ch in sorted_chapters:
+            if ch['time'] > time:
+                found_chapter = ch
+                break
+
+        return found_chapter
+
+    def _find_chapter_for_position(self, mouse_x: int)-> Chapter | None:
         threshold = 5  # Pixels of 'forgiveness' for the mouse cursor
         found_chapter = None
         for ch in self.chapters:
@@ -645,7 +705,7 @@ class PlayerSlider(JumpSlider):
 
     def mouseMoveEvent(self, event):
         # Logic to check if mouse is near a chapter line
-        found_chapter = self._find_chapter_for_position(event.pos().x())
+        found_chapter: Chapter | None = self._find_chapter_for_position(event.pos().x())
 
         if found_chapter:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -666,7 +726,7 @@ class PlayerSlider(JumpSlider):
 
         if self.orientation() == Qt.Orientation.Vertical:
             pos_y = position.y() if isinstance(position, (QPoint, QPointF)) else position
-            slider_pos = pos_y - handle_rect.height() // 2
+            slider_pos = round(pos_y - handle_rect.height() // 2)
 
             value = QStyle.sliderValueFromPosition(
                 self.minimum(), self.maximum(), slider_pos, groove_rect.height() - handle_rect.height(),
@@ -674,7 +734,7 @@ class PlayerSlider(JumpSlider):
             )
         else:  # Horizontal
             pos_x = position.x() if isinstance(position, (QPoint, QPointF)) else position
-            slider_pos = pos_x - handle_rect.width() // 2
+            slider_pos =round(pos_x - handle_rect.width() // 2)
 
             value = QStyle.sliderValueFromPosition(
                 self.minimum(), self.maximum(), slider_pos, groove_rect.width() - handle_rect.width(),

@@ -10,9 +10,10 @@ from PySide6.QtWidgets import QMenu, QListView, QStyleOptionViewItem, QStyle, \
 from components.widgets import IconLabel, AutoSearchHelper, VolumeSlider, RoundButton, ToolButton
 from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme
+from config.utils import tint_icon
 from logic.audioengine import AudioEngine
 from logic.mp3 import EffectEntry, Mp3Entry
-from utils import tint_icon
+
 
 def _get_grid_width(total_width: int):
     if total_width < EffectList.grid_threshold:

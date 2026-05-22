@@ -4,8 +4,10 @@ import sys
 import glob
 import json
 import logging
+import traceback
 from pathlib import Path
 from os import PathLike
+from typing import TypedDict, Iterator
 
 from PySide6.QtCore import Qt, QThread, Signal, QSize, QByteArray, QBuffer
 from PySide6.QtGui import QPixmap, QImageReader
@@ -17,40 +19,44 @@ from logic.lightengine import LightSetting
 
 logger = logging.getLogger(__file__)
 
+class Chapter(TypedDict):
+    title:str
+    time:int
+    light: LightSetting | None
+
 class Mp3Entry(object):
     __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags", "_cover","_cover_preview",
                  "_has_cover",
                  "bpm", "_moods", "light","chapters"]
 
-    index: int
+    index: int | None
     name: str | None
     path: Path
-    title: str
-    artist: str
-    album: str
-    summary: str
+    title: str | None
+    artist: str | None
+    album: str | None
+    summary: str | None
     genres: list[str]
     length: int
     favorite: bool
     _cover: QPixmap | None
     _cover_preview: QPixmap | None
     _has_cover: bool | None
-    bpm: int
+    bpm: int | None
     light: LightSetting | None
     duration:int
 
     categories: dict[str, int]
     _tags: list[str]
 
-    chapters: list[dict[str, str]]
+    chapters: list[Chapter]
 
-    def __init__(self, name: str = None, path: PathLike[str] = None, categories: dict[str, int] = None, tags: list[str] = [], artist: str = None,
-                 album: str = None, title: str = None, genre: list[str] | str = [], bpm: int = None):
+    def __init__(self, path: PathLike[str], name: str | None = None, categories: dict[str, int] | None = None, tags: list[str] = [], artist: str | None = None,
+                 album: str | None = None, title: str | None = None, genre: list[str] | str = [], bpm: int | None = None):
         if name is not None:
             self.name = name.removesuffix(".mp3").removesuffix(".MP3").removesuffix(".Mp3")
         else:
             self.name = None
-        self.path = path
         self.path = path if isinstance(path, Path) else Path(path)
         self.title = title
         self.artist = artist
@@ -143,7 +149,7 @@ class Mp3Entry(object):
         self._cover_preview = None
         self._has_cover = None
 
-    def _load_cover(self, audio: MP3 = None):
+    def _load_cover(self, audio: MP3 | None = None):
         if (self._has_cover is None or self._has_cover) and self._cover is None:
             if audio is None:
                 audio = MP3(self.path, ID3=ID3)
@@ -162,7 +168,7 @@ class Mp3Entry(object):
                 self._cover = self._load_image(data, None)
                 self._has_cover = True
 
-    def _load_cover_preview(self, audio: MP3 = None):
+    def _load_cover_preview(self, audio: MP3 | None = None):
         if (self._has_cover is None or self._has_cover) and self._cover_preview is None:
             if audio is None:
                 audio = MP3(self.path, ID3=ID3)
@@ -325,7 +331,7 @@ class EffectEntry(object):
 
 def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
     try:
-        entry = Mp3Entry(name=Path(file_path).name, path=file_path)
+        entry = Mp3Entry(file_path, name=Path(file_path).name)
         audio = MP3(file_path, ID3=ID3)
 
         entry.length = int(audio.info.length)
@@ -385,21 +391,30 @@ def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
             if light and light.text:
                 entry.light = LightSetting.json_load(light.text[0])
 
-            chapter_list = []
+            chapter_list: list[Chapter] = []
             for key in audio.keys():
                 if key.startswith("CHAP"):
                     frame = audio[key]
                     # sub_frames contains TIT2 (Title)
                     title = frame.sub_frames.get("TIT2", ["Unknown"])[0]
-                    chapter_list.append({
+                    light = frame.sub_frames.get("TXXX:ai_light")
+                    chapter_light: LightSetting | None = None
+                    if light and light.text:
+                        chapter_light: LightSetting = LightSetting.json_load(light.text[0])
+
+                    chapter:Chapter = {
                         "time": frame.start_time,
-                        "title": str(title)
-                    })
+                        "title": str(title),
+                        "light": chapter_light,
+                    }
+                    chapter_list.append(chapter)
+
             entry.chapters = chapter_list
 
         return entry
     except Exception as e:
         logger.error("Error reading tags for {0}: {1}", file_path, e)
+        traceback.print_exc()
     return None
 
 
@@ -594,7 +609,7 @@ def update_mp3_light(path: str | PathLike[str] | MP3, light: LightSetting, save:
         logger.debug("Updated color to {0} for {1}", light.json_dump(), path)
 
 
-def update_mp3_chapters(path: str | PathLike[str] | MP3, chapters: list[dict], save: bool = True):
+def update_mp3_chapters(path: str | PathLike[str] | MP3, chapters: list[Chapter], save: bool = True):
     audio = _audio(path)
 
     if chapters:
@@ -608,11 +623,19 @@ def update_mp3_chapters(path: str | PathLike[str] | MP3, chapters: list[dict], s
             else:
                 end_time = int(audio.info.length * 1000)
 
+            sub_frames = [TIT2(text=[chapter["title"]])]
+            if "light" in chapter:
+                sub_frames.append(TXXX(
+                    Encoding.UTF8,
+                    desc='ai_light',
+                    text=[chapter["light"].json_dump()]
+                ))
+
             audio.tags.add(CHAP(
                 element_id=f"ch{index}",
                 start_time=chapter["time"],
                 end_time=end_time,
-                sub_frames=[TIT2(text=[chapter["title"]])]
+                sub_frames=sub_frames
             ))
 
         # 3. Create the Table of Contents (Required for navigation)
@@ -799,7 +822,7 @@ class Mp3FileLoader(QThread):
     files_loaded = Signal(list)
     finished = Signal()
 
-    def __init__(self, files: list[Path], parent=None):
+    def __init__(self, files: Iterator[Path], parent=None):
         super().__init__(parent)
         self.files = files
         self.is_interrupted = False

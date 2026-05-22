@@ -2,10 +2,10 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
-    Signal, QObject, QPoint, QItemSelection
-from PySide6.QtGui import QIcon, QAction, QKeyEvent, QPaintEvent, QAbstractFileIconProvider, QPalette
+    Signal, QObject, QPoint, QItemSelection, QConcatenateTablesProxyModel
+from PySide6.QtGui import QIcon, QAction, QKeyEvent, QPaintEvent, QAbstractFileIconProvider, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QWidget, \
-    QVBoxLayout, QAbstractItemView, QFrame
+    QVBoxLayout, QAbstractItemView, QFrame, QListWidget, QListView, QSizePolicy
 
 from components.dialogs import EditSongDialog
 from components.widgets import IconLabel, AutoSearchHelper, ToolButton
@@ -13,6 +13,32 @@ from config.settings import AppSettings, SettingKeys
 from config.theme import app_theme, get_list_palette
 from logic.mp3 import parse_mp3, Mp3Entry
 
+
+class FavoritesList(QListView):
+    favorite_opened = Signal(QFileInfo)
+    favorite_removed = Signal(QFileInfo)
+
+    def __init__(self, parent: QObject = None):
+        super().__init__(parent)
+
+        self.setUniformItemSizes(True)
+        self.setWordWrap(False)
+        self.setIconSize(app_theme.icon_size)
+        self.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setPalette(get_list_palette(self.palette()))
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() in [Qt.Key.Key_Enter, Qt.Key.Key_Return]:
+            index = self.selectionModel().currentIndex()
+            file_info = index.data(QFileSystemModel.Roles.FileInfoRole)
+            self.favorite_opened.emit(file_info)
+        elif event.key() in [Qt.Key.Key_Delete, Qt.Key.Key_Backspace]:
+            index = self.selectionModel().currentIndex()
+            file_info = index.data(QFileSystemModel.Roles.FileInfoRole)
+            self.favorite_removed.emit(file_info)
+        else:
+            super().keyPressEvent(event)
 
 class CustomIconProvider(QFileIconProvider):
     def __init__(self):
@@ -84,20 +110,29 @@ class FileFilterProxyModel(QSortFilterProxyModel):
             self.invalidate()
 
     def data(self, index, role= Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+
         # 1. Check if we are looking at the 'Name' column and the DisplayRole
-        if role == Qt.ItemDataRole.DisplayRole and index.isValid() and index.column() == 0:
+        if role == Qt.ItemDataRole.DisplayRole and index.column() == 0:
             # Get the original text (the filename with extension)
             source_data = super().data(index, role)
 
-            # Use QFileInfo to determine if it's a file
-            # Note: index.data(QFileSystemModel.FilePathRole) is a handy way to get the path
-            file_info = QFileInfo(source_data)
+            if source_data:
+                # Use QFileInfo to determine if it's a file
+                # Note: index.data(QFileSystemModel.FilePathRole) is a handy way to get the path
+                file_info = QFileInfo(source_data)
 
-            # Only strip extension if it's a file, not a folder
-            # .completeBaseName() returns everything before the LAST dot
-            if len(file_info.completeBaseName()) >0:
-                return file_info.completeBaseName()
-            else:
+                # Only strip extension if it's a file, not a folder
+                # .completeBaseName() returns everything before the LAST dot
+                if len(file_info.completeBaseName()) >0:
+                    return file_info.completeBaseName()
+                else:
+                    return file_info.fileName()
+        elif role == Qt.ItemDataRole.ToolTipRole and index.column() == 0:
+            source_data = super().data(index, Qt.ItemDataRole.DisplayRole)
+            if source_data:
+                file_info = QFileInfo(source_data)
                 return file_info.fileName()
 
         # 2. Fall back to default behavior for everything else
@@ -108,12 +143,9 @@ class FileFilterProxyModel(QSortFilterProxyModel):
         super().invalidateFilter()
 
     def lessThan(self, left: QModelIndex | QPersistentModelIndex, right: QModelIndex | QPersistentModelIndex):
-        # 1. Get a reference to the source model (QFileSystemModel)
-        source_model = self.sourceModel()
-
         # 2. Check if the items are directories
-        is_left_dir = source_model.isDir(left)
-        is_right_dir = source_model.isDir(right)
+        is_left_dir = left.data(Qt.ItemDataRole.FileInfoRole).isDir()
+        is_right_dir = right.data(Qt.ItemDataRole.FileInfoRole).isDir()
 
         # 3. Logic: If one is a directory and the other isn't,
         # the directory is always "less than" (appears first)
@@ -170,17 +202,17 @@ class FileFilterProxyModel(QSortFilterProxyModel):
 
         return False
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex):
-        source_model: QFileSystemModel = self.sourceModel()
+        source_model = self.sourceModel()
         source_index = source_model.index(source_row, 0, source_parent)
 
         # This ensures that if a file matches, its parent folders remain visible
         # Otherwise, the file would be hidden because its parent is filtered out
         if super().filterAcceptsRow(source_row, source_parent):
-            file_info = source_model.fileInfo(source_index)
+            file_info: QFileInfo = source_index.data(Qt.ItemDataRole.FileInfoRole)
             if self.ignore(file_info):
                 return False
 
-            if self.smart_filter and source_model.isDir(source_index):
+            if self.smart_filter and file_info.isDir():
                 # Only display this folder if it contains valid files/subfolders
                 return self._dir_has_valid_contents(file_info.filePath())
 
@@ -198,6 +230,8 @@ class DirectoryTree(QTreeView):
     directory_opened = Signal(QFileInfo)
     analyze_file = Signal(QFileInfo)
     open_context_menu = Signal(QMenu, list)
+
+    favorite_added = Signal(QFileInfo)
 
     history: list[QPersistentModelIndex] = []
 
@@ -239,6 +273,9 @@ class DirectoryTree(QTreeView):
 
         self.refreh_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), _("Refresh"), self)
         self.refreh_action.triggered.connect(self.do_refresh)
+
+        self.add_favorite_action = QAction(QIcon.fromTheme("star"), _("Add to favorites"), self)
+        self.add_favorite_action.triggered.connect(self.do_add_favorite_action)
 
         self._source_root_index = QPersistentModelIndex()
 
@@ -381,6 +418,7 @@ class DirectoryTree(QTreeView):
         menu.addSeparator()
         menu.addAction(self.smart_filter_action)
         menu.addAction(self.refreh_action)
+        menu.addAction(self.add_favorite_action)
 
         menu.show()
         menu.exec(self.mapToGlobal(point))
@@ -438,6 +476,13 @@ class DirectoryTree(QTreeView):
         self.proxy_model.set_smart_filter(checked)
         AppSettings.setValue(SettingKeys.FILES_SMART_FILTER, checked)
 
+    def do_add_favorite_action(self):
+        for index in self.selectedIndexes():
+            source_index = self.proxy_model.mapToSource(index)
+            file_info = self.directory_model.fileInfo(source_index)
+            self.favorite_added.emit(file_info)
+
+
     def do_into_action(self):
         if len(self.selectedIndexes()) == 0:
             return
@@ -478,6 +523,7 @@ class DirectoryTree(QTreeView):
 
 
 class DirectoryWidget(QFrame):
+    favorites_list: FavoritesList = None
 
     def __init__(self, parent=None):
         super(DirectoryWidget, self).__init__(parent)
@@ -490,34 +536,147 @@ class DirectoryWidget(QFrame):
         self.directory_layout = QVBoxLayout(self)
         self.directory_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.headerLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent=self)
-        self.headerLabel.set_icon_size(app_theme.icon_size)
-        self.headerLabel.text_label.setProperty("cssClass", "header")
+        self.favHeaderLabel = IconLabel(QIcon.fromTheme("star"), _("Favorites"), parent=self)
+        self.favHeaderLabel.set_icon_size(app_theme.icon_size)
+        self.favHeaderLabel.text_label.setProperty("cssClass", "header")
+
+        self.favorites_model = QStandardItemModel()
+
+        self.favorites_list = FavoritesList(self)
+        self.favorites_list.setModel(self.favorites_model)
+        self.favorites_list.doubleClicked.connect(self.on_favorites_open)
+        self.favorites_list.favorite_opened.connect(self.on_favorite_open)
+        self.favorites_list.favorite_removed.connect(self.on_favorite_remove)
+        self.favorites_list.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
+
+        open_favorite_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Open"), self)
+        open_favorite_action.triggered.connect(self.on_favorite_open)
+
+        remove_favorite_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ListRemove), _("Remove from favorites"), self)
+        remove_favorite_action.triggered.connect(self.on_favorite_remove)
+        self.favorites_list.addAction(open_favorite_action)
+        self.favorites_list.addAction(remove_favorite_action)
+
+        self.filesHeaderLabel = IconLabel(QIcon.fromTheme(QIcon.ThemeIcon.FolderOpen), _("Files"), parent=self)
+        self.filesHeaderLabel.set_icon_size(app_theme.icon_size)
+        self.filesHeaderLabel.text_label.setProperty("cssClass", "header")
 
         self.directory_tree = DirectoryTree(self)
         self.directory_tree.setContentsMargins(0, 0, 0, 0)
+        self.directory_tree.favorite_added.connect(self.on_favorite_added)
 
         back_view_button = ToolButton(style="mini")
         back_view_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         back_view_button.setDefaultAction(self.directory_tree.go_back_action)
-        self.headerLabel.add_widget(back_view_button)
+        self.filesHeaderLabel.add_widget(back_view_button)
 
         into_view_button = ToolButton(style="mini")
         into_view_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         into_view_button.setDefaultAction(self.directory_tree.go_into_action)
-        self.headerLabel.add_widget(into_view_button)
+        self.filesHeaderLabel.add_widget(into_view_button)
 
         up_view_button = ToolButton(style="mini")
         up_view_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         up_view_button.setDefaultAction(self.directory_tree.go_parent_action)
-        self.headerLabel.add_widget(up_view_button)
+        self.filesHeaderLabel.add_widget(up_view_button)
 
-        self.directory_layout.addWidget(self.headerLabel)
-        self.directory_layout.addWidget(self.directory_tree)
+        self.directory_layout.addWidget(self.favHeaderLabel, 0)
+        self.directory_layout.addWidget(self.favorites_list,0)
+        self.directory_layout.addWidget(self.filesHeaderLabel, 0)
+        self.directory_layout.addWidget(self.directory_tree,2)
+
+        self.load_favorites()
+
+    def on_favorite_added(self, file_info:QFileInfo):
+        if not file_info in self.favorites:
+            self.favorites_model.appendRow(self.create_native_favorite_item(file_info))
+            self.store_favorites()
+            self.invalidate_favorites()
+
+    def load_favorites(self):
+
+        for f in AppSettings.value(SettingKeys.FAVORITES, [], type=list):
+            file_info = QFileInfo(f)
+            if file_info.isDir():
+                item = self.create_native_favorite_item(file_info)
+                self.favorites_model.appendRow(item)
+
+        self.invalidate_favorites()
+
+    def invalidate_favorites(self):
+        self.favorites_list.setFixedHeight(min(200, self.favorites_model.rowCount() * 35))
+
+        self.favorites_list.setVisible(self.favorites_model.rowCount()>0)
+        self.favHeaderLabel.setVisible(self.favorites_model.rowCount()>0)
+
+        self.favorites = []
+        for i in range(self.favorites_model.rowCount()):
+            item = self.favorites_model.item(i)
+            file_info = item.data(Qt.ItemDataRole.FileInfoRole)
+            self.favorites.append(file_info)
+
+    def store_favorites(self):
+        favorites_files = []
+
+        for i in range(self.favorites_model.rowCount()):
+            item = self.favorites_model.item(i)
+            file_info = item.data(Qt.ItemDataRole.FileInfoRole)
+            favorites_files.append(file_info.filePath())
+
+        AppSettings.setValue(SettingKeys.FAVORITES, favorites_files)
+
+    def on_favorites_open(self, index: QModelIndex):
+        self.directory_tree.file_opened.emit(index.data(Qt.ItemDataRole.FileInfoRole))
+
+    def on_favorite_open(self):
+        for index in self.favorites_list.selectedIndexes():
+            self.directory_tree.file_opened.emit(index.data(Qt.ItemDataRole.FileInfoRole))
+
+    def on_favorite_remove(self):
+        rows_to_remove = sorted([idx.row() for idx in self.favorites_list.selectedIndexes()], reverse=True)
+
+        for row in rows_to_remove:
+            self.favorites_model.removeRow(row)
+
+        self.invalidate_favorites()
+        self.store_favorites()
+
+    def create_native_favorite_item(self, file: str| QFileInfo) -> QStandardItem:
+
+        if isinstance(file, QFileInfo):
+            file_info = file
+        else:
+            file_info = QFileInfo(file)
+
+        icon_provider = QFileIconProvider()
+
+        # 2. Extract properties safely using QFileInfo
+
+        native_icon = icon_provider.icon(file_info)
+
+        clean_name = file_info.fileName()
+        if not clean_name:
+            clean_name = file
+
+        item = QStandardItem()
+        item.setText(clean_name)
+        item.setIcon(native_icon)
+        item.setEditable(False)
+
+        # Stash the full system path inside a custom data role
+        # so clicking it can still find the folder on disk later
+        item.setData(file, role=Qt.ItemDataRole.UserRole)
+        item.setData(file_info, role=Qt.ItemDataRole.FileInfoRole)
+        item.setData(clean_name, Qt.ItemDataRole.ToolTipRole)
+
+        return item
 
     def changeEvent(self, event, /):
         if event.type() in [QEvent.Type.FontChange, QEvent.Type.ApplicationFontChange]:
-            self.headerLabel.set_icon_size(app_theme.icon_size)
+            self.filesHeaderLabel.set_icon_size(app_theme.icon_size)
             self.directory_tree.setFont(app_theme.font_medium)
         elif event.type() in [QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange]:
             self.setGraphicsEffect(app_theme.drop_shadow(self))
+            if self.favorites_list:
+                self.favorites_list.setPalette(get_list_palette(self.palette()))
+

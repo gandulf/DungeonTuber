@@ -25,6 +25,7 @@ import sys
 import traceback
 
 from config import log
+from widgets import WelcomePage
 
 log.setup_logging()
 
@@ -52,8 +53,9 @@ from components.songs import SongTable
 from components.files import DirectoryWidget
 from components.lights import LightsWidget
 
-from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, get_m3u_paths, save_playlist
+from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, get_m3u_paths, save_playlist, Chapter
 from logic.analyzer import Analyzer, has_voxalyzer
+from logic.lightengine import LightSetting
 
 logger = logging.getLogger(__file__)
 
@@ -104,6 +106,8 @@ class MusicPlayer(QMainWindow):
             self.config_player_mode()
             QTimer.singleShot(500, lambda: self.start_tour())
 
+
+
     def toggle_fullscreen(self):
         if self.isFullScreen():
             self.showNormal()
@@ -142,7 +146,7 @@ class MusicPlayer(QMainWindow):
             self.statusBar().showMessage(version_text)
 
     def exit(self):
-        sys.exit(0)
+        self.close()
 
     def config_simple_mode(self):
         self.toggle_directory_tree_action.setChecked(True)
@@ -613,6 +617,7 @@ class MusicPlayer(QMainWindow):
         self.player.setContentsMargins(0,0,0,0)
         self.player.setGraphicsEffect(app_theme.drop_shadow(self))
         self.player.track_changed.connect(self.play_track)
+        self.player.chapter_reached.connect(self.on_chapter_reached)
 
         self.central_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.central_splitter.splitterMoved.connect(self.on_layout_splitter_moved)
@@ -655,7 +660,6 @@ class MusicPlayer(QMainWindow):
         self.table_tabs.tabBar().setMovable(True)
         self.table_tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table_tabs.tabBar().customContextMenuRequested.connect(self.show_tabs_context_menu)
-        self.table_tabs.tabBar().setAutoHide(True)
         self.table_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideMiddle)
         self.table_tabs.tabBar().setFont(app_theme.font_large)
         self.table_tabs.setTabsClosable(True)
@@ -713,9 +717,12 @@ class MusicPlayer(QMainWindow):
 
         self.init_main_menu()
 
-    def apply_light_settings(self, entry:Mp3Entry):
-        if entry.light is not None:
-            self.lights_widget.apply_settings(entry.light)
+    def apply_light_settings(self, entry:Mp3Entry | LightSetting):
+        if isinstance(entry, Mp3Entry):
+            if entry.light is not None:
+                self.lights_widget.apply_settings(entry.light)
+        else:
+            self.lights_widget.apply_settings(entry)
 
     def resizeEvent(self, event: QResizeEvent):
         AppSettings.setValue(SettingKeys.WINDOW_SIZE, event.size())
@@ -790,15 +797,16 @@ class MusicPlayer(QMainWindow):
 
     def add_table_tab(self, file_path: PathLike[str] = None, lazy: bool = False, activate: bool = True):
         if os.path.isfile(file_path):
-            mp3_files = get_m3u_paths(file_path)
+            mp3_files = iter(get_m3u_paths(file_path))
         elif os.path.isdir(file_path):
-            mp3_files = list(Path(file_path).rglob("*.mp3"))
+            mp3_files = iter(Path(file_path).rglob("*.mp3"))
         else:
             QMessageBox.warning("Invalid File Path")
             return None
 
         table = SongTable(self, file_path, mp3_files, lazy=lazy)
         index = self.table_tabs.addTab(table, table.get_icon(), table.get_name())
+        self.check_welcome_page()
 
         if activate:
             self.table_tabs.setCurrentIndex(index)
@@ -840,7 +848,9 @@ class MusicPlayer(QMainWindow):
         if self.old_table:
             self.detach_song_table(self.old_table)
 
-        table: SongTable = self.table_tabs.widget(index)
+        widget = self.table_tabs.widget(index)
+
+        table: SongTable = widget if isinstance(widget, SongTable) else None
 
         if table:
             self.old_table = table
@@ -856,6 +866,14 @@ class MusicPlayer(QMainWindow):
             self.filter_widget.attach_song_table(None)
             self.player.set_enabled(False)
 
+    def check_welcome_page(self):
+        if self.table_tabs.count() == 0:
+            self.table_tabs.setTabBarAutoHide(True)
+            self.table_tabs.addTab(WelcomePage(), "Welcome")
+        elif isinstance(self.table_tabs.widget(0), WelcomePage):
+            self.table_tabs.setTabBarAutoHide(False)
+            self.table_tabs.removeTab(0)
+
     def on_table_tab_close(self, index: int):
         table: SongTable = self.table_tabs.widget(index)
         if table:
@@ -864,8 +882,7 @@ class MusicPlayer(QMainWindow):
                 self.old_table = None
 
         self.table_tabs.removeTab(index)
-        self.table_tabs.tabBar().setVisible(self.table_tabs.count() > 1)
-
+        self.check_welcome_page()
         AppSettings.setValue(SettingKeys.OPEN_TABLES, self.get_open_tables())
 
     def on_table_tab_moved(self, fromIndex: int, toIndex: int):
@@ -963,10 +980,11 @@ class MusicPlayer(QMainWindow):
         open_tables = []
         for i in range(self.table_tabs.count()):
             table = self.table_tabs.widget(i)
-            if table.playlist is not None:
-                open_tables.append(table.playlist)
-            else:
-                open_tables.append(table.directory)
+            if isinstance(table, SongTable):
+                if table.playlist is not None:
+                    open_tables.append(table.playlist)
+                else:
+                    open_tables.append(table.directory)
 
         return open_tables
 
@@ -1014,6 +1032,8 @@ class MusicPlayer(QMainWindow):
     def close_tables_all(self):
         self.table_tabs.clear()
 
+        self.check_welcome_page()
+
     def close_tables_current(self):
         self.table_tabs.removeTab(self.table_tabs.currentIndex())
 
@@ -1041,6 +1061,8 @@ class MusicPlayer(QMainWindow):
         if self.current_table() is None:
             self.on_table_tab_changed(-1)
 
+        self.check_welcome_page()
+
     def load(self, path: PathLike[str], activate=True, lazy: bool = False):
         if Path(path).is_dir():
             self.load_directory(path, lazy=lazy, activate=activate)
@@ -1048,6 +1070,11 @@ class MusicPlayer(QMainWindow):
             self.load_playlist(path, lazy=lazy, activate=activate)
         else:
             QMessageBox.critical(self, _("Open Error"), _("Failed to load: {0}").format(path))
+
+    def on_chapter_reached(self, chapter: Chapter):
+        logger.warning("Chapter reached %s" % chapter)
+        if "light" in chapter:
+            self.apply_light_settings(chapter["light"])
 
     def play_track(self, index: QPersistentModelIndex | None, entry: Mp3Entry | None):
         table = self.current_table()

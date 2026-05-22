@@ -5,7 +5,7 @@ from PySide6.QtCore import QPointF, QSize, Qt, QRect, Signal, QPropertyAnimation
 from PySide6.QtGui import QIcon, QBrush, QPainter, QMouseEvent, QColor, \
     QPaintEvent, QFontMetrics, QKeyEvent, QPen, QPalette, QLinearGradient, QPolygon, QAction, QKeySequence, QShortcut, QDrag, QPixmap, QPainterStateGuard, QFont
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QPushButton, QAbstractScrollArea, QLayout, QSizePolicy, QSlider, QVBoxLayout, QStyle, \
-    QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QFrame
+    QCheckBox, QProxyStyle, QGraphicsOpacityEffect, QDial, QToolButton, QApplication, QColorDialog, QFrame, QTextBrowser
 
 from config.settings import MusicCategory
 from config.theme import app_theme, Theme, _alpha
@@ -1500,3 +1500,62 @@ class ColorButton(QPushButton):
             self.setColor(self._default)
 
         return super().mousePressEvent(e)
+
+
+class WelcomePage(QTextBrowser):
+    def __init__(self):
+        super().__init__()
+        self.setOpenExternalLinks(True)  # Makes standard HTTP links open in native browser
+
+        self.setMarkdown(self.get_content())
+
+        # Disable text selection highlighting to make it feel like a UI element
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.LinksAccessibleByMouse)
+
+        self.anchorClicked.connect(self.handle_internal_navigation)
+
+    def handle_internal_navigation(self, url):
+        command = url.fragment()
+        if command == "scan_media":
+            pass
+        elif command == "open_profile":
+            pass
+
+    def get_content(self) -> str:
+        return """
+
+# 📖 Tutorial: How to Use DungeonTuber
+
+<br/>
+<br/>
+
+## 1. Building Your Library
+Use the **File** menu to import your audio files or navigate through the directory tree and open directories via the context menu in the table below or play songs directly.
+The app uses **Voxalyzer** to scan your tracks, it should already be auto-detected but you can check its config under **Settings**.
+
+
+<br/>
+
+## 2. Filtering by Mood
+The power of DungeonTuber lies in the top control panel:
+* **Adjust Sliders:** Move the sliders (e.g., increase *Mystik* and *Dunkelheit* for a spooky dungeon) to filter your list for songs that match that specific "score."
+* **Toggle Tags:** Click the pill-shaped buttons (like **Fight** or **Travel**) to quickly filter for specific scene types.
+
+
+<br/>
+
+## 3. Playback & Volume
+* **Navigation:** Use the standard Play, Pause, and Skip buttons in the center console.
+* **Progress Bar:** The waveform/timeline allows you to jump to specific moments in a track.
+* **Volume Control:** Use the green wedge slider on the right to adjust audio levels smoothly.
+* **Shuffle:** Click the shuffle icon to randomize the current filtered selection.
+* **Chapters:** You can right click onto the progress bar to create markers and even attach light settings to them
+
+
+<br/>
+
+## 4. Search & Favorites
+* **Search:** Just start typing to filter in the main list or directory tree to find a specific track by name.
+* **Starring:** Click the **Star** next to any track to mark it as a favorite for quick access during your sessions.
+
+"""

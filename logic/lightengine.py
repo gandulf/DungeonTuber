@@ -21,6 +21,8 @@ from config.utils import asdict_filtered, get_broadcast_ip
 
 logger = logging.getLogger(__file__)
 
+FAKE_BULBS = True
+
 _LIGHTS = set()
 
 def set_lights(lights: list):
@@ -284,7 +286,6 @@ class LightManager(QObject):
 
 
 class DiscoveryThread(QThread):
-    FAKE_BULBS = False
     """
     A dedicated thread to run the asyncio event loop.
     """
@@ -296,7 +297,7 @@ class DiscoveryThread(QThread):
 
     def run(self):
 
-        if self.FAKE_BULBS:
+        if FAKE_BULBS:
             bulbs = []
             for n in range(3):
                 control = MockControl()

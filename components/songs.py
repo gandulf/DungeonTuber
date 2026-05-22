@@ -3,8 +3,10 @@ import numbers
 import os
 import time
 import traceback
+from itertools import chain
 from os import PathLike
 from pathlib import Path
+from typing import Iterable, Iterator
 
 from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMimeData, QByteArray, QDataStream, QIODevice, QPersistentModelIndex, \
     QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QMargins
@@ -159,10 +161,7 @@ class SongTableModel(QAbstractTableModel):
         else:
             cat_index = index.column() - SongTableModel.CAT_COL
 
-        if 0 <= cat_index < len(self.available_categories):
-            return self.available_categories[cat_index].key
-        else:
-            return None
+        return self.available_categories[cat_index].key
 
     def get_category_name(self, index: QModelIndex | int):
         if isinstance(index, int):
@@ -170,10 +169,7 @@ class SongTableModel(QAbstractTableModel):
         else:
             cat_index = index.column() - SongTableModel.CAT_COL
 
-        if 0 <= cat_index < len(self.available_categories):
-            return self.available_categories[cat_index].name
-        else:
-            return None
+        return self.available_categories[cat_index].name
 
     def set_filter_config(self, _config: FilterConfig):
         self.beginResetModel()
@@ -181,47 +177,52 @@ class SongTableModel(QAbstractTableModel):
         self.endResetModel()
 
     def setData(self, index: QModelIndex | QPersistentModelIndex, value, /, role: int = ...) -> bool:
+        if not index.isValid():
+            return None
+
+        column = index.column()
+
         if role == Qt.ItemDataRole.UserRole:
             self._data[index.row()] = value
         elif role == Qt.ItemDataRole.EditRole:
-            if index.column() == SongTableModel.FAV_COL:
+            if column == SongTableModel.FAV_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
                 data.favorite = value
                 update_mp3_favorite(data.path, bool(value))
                 return True
-            elif index.column() == SongTableModel.TITLE_COL:
+            elif column == SongTableModel.TITLE_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
                 data.title = value
                 update_mp3_title(data.path, value)
                 return True
-            elif index.column() == SongTableModel.SUMMARY_COL:
+            elif column == SongTableModel.SUMMARY_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
                 data.summary = value
                 update_mp3_summary(data.path, value)
                 return True
-            elif index.column() == SongTableModel.ALBUM_COL:
+            elif column == SongTableModel.ALBUM_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
                 data.album = value
                 update_mp3_album(data.path, value)
-            elif index.column() == SongTableModel.ARTIST_COL:
+            elif column == SongTableModel.ARTIST_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
                 data.album = value
                 update_mp3_artist(data.path, value)
-            elif index.column() == SongTableModel.GENRE_COL:
+            elif column == SongTableModel.GENRE_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
                 data.genres = list(map(str.strip, value.split(",")))
                 update_mp3_genre(data.path, data.genres)
-            elif index.column() == SongTableModel.BPM_COL:
+            elif column == SongTableModel.BPM_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
                 if value == "" or value is None:
                     data.bpm = None
                 else:
                     data.bpm = int(value)
                 update_mp3_bpm(data.path, data.bpm)
-            elif index.column() >= SongTableModel.CAT_COL:
+            elif column >= SongTableModel.CAT_COL:
                 data = index.data(Qt.ItemDataRole.UserRole)
 
-                category_key = self.get_category_key(index)
+                category_key = self.get_category_key(column)
 
                 new_value: int | float | None
                 try:
@@ -319,26 +320,29 @@ class SongTableModel(QAbstractTableModel):
         if not index.isValid():
             return None
 
+        column = index.column()
         if role == Qt.ItemDataRole.FontRole:
             return app_theme.font_medium
         elif role == Qt.ItemDataRole.TextAlignmentRole:
-            if index.column() >= SongTableModel.SCORE_COL or index.column() in [SongTableModel.BPM_COL, SongTableModel.INDEX_COL, SongTableModel.FAV_COL]:
+            if column >= SongTableModel.SCORE_COL or column in [SongTableModel.BPM_COL, SongTableModel.INDEX_COL, SongTableModel.FAV_COL]:
                 return Qt.AlignmentFlag.AlignCenter
         elif role == Qt.ItemDataRole.BackgroundRole:
             data = self._data[index.row()]
-            if index.column() == SongTableModel.COVER_COL:
+            if data is None:
+                return None
+
+            if column == SongTableModel.COVER_COL:
                 return data.cover_preview
-            if index.column() == SongTableModel.SCORE_COL:
+            if column == SongTableModel.SCORE_COL:
                 score = index.data(Qt.ItemDataRole.DisplayRole)
                 return _get_score_background_brush(score, data)
-            elif index.column() == SongTableModel.GENRE_COL:
+            elif column == SongTableModel.GENRE_COL:
                 return _get_genre_background_brush(self.filter_config.genres, data.genres, data)
-            elif index.column() == SongTableModel.BPM_COL:
-                value = index.data(Qt.ItemDataRole.DisplayRole)
-                return _get_bpm_background_brush(self.filter_config.bpm, value, data)
-            elif index.column() >= SongTableModel.CAT_COL:
-                value = index.data(Qt.ItemDataRole.DisplayRole)
-                category_key = self.get_category_key(index)
+            elif column == SongTableModel.BPM_COL:
+                return _get_bpm_background_brush(self.filter_config.bpm, data.bpm, data)
+            elif column >= SongTableModel.CAT_COL:
+                category_key = self.get_category_key(column)
+                value = data.get_category_value(category_key)
                 return _get_category_background_brush(self.filter_config.get_category(category_key, None), value, data)
             else:
                 return None
@@ -347,42 +351,37 @@ class SongTableModel(QAbstractTableModel):
             if data is None:
                 return None
 
-            if index.column() == SongTableModel.INDEX_COL:
+            if column == SongTableModel.INDEX_COL:
                 return self._data.index(data)
-            if index.column() == SongTableModel.FAV_COL:
+            if column == SongTableModel.FAV_COL:
                 if role == Qt.ItemDataRole.EditRole:
                     return data.favorite
-            elif index.column() == SongTableModel.FILE_COL:
+            elif column == SongTableModel.FILE_COL:
                 if role == Qt.ItemDataRole.EditRole:
-                    if data.summary:
-                        return data.name + " " + data.summary
-                    else:
-                        return data.name
-            elif index.column() == SongTableModel.SUMMARY_COL:
+                    return data.name + " " + data.summary if data.summary else data.name
+            elif column == SongTableModel.SUMMARY_COL:
                 return data.summary
-            elif index.column() == SongTableModel.TITLE_COL:
+            elif column == SongTableModel.TITLE_COL:
                 return data.title
-            elif index.column() == SongTableModel.ARTIST_COL:
+            elif column == SongTableModel.ARTIST_COL:
                 return data.artist
-            elif index.column() == SongTableModel.ALBUM_COL:
+            elif column == SongTableModel.ALBUM_COL:
                 return data.album
-            elif index.column() == SongTableModel.GENRE_COL:
+            elif column == SongTableModel.GENRE_COL:
                 return ", ".join(data.genres) if data.genres else ""
-            elif index.column() == SongTableModel.BPM_COL:
+            elif column == SongTableModel.BPM_COL:
                 return data.bpm
-            elif index.column() == SongTableModel.SCORE_COL:
+            elif column == SongTableModel.SCORE_COL:
                 return self._calculate_score(data)
-            elif index.column() >= SongTableModel.CAT_COL:
-                category_key = self.get_category_key(index)
+            elif column >= SongTableModel.CAT_COL:
+                category_key = self.get_category_key(column)
                 return data.get_category_value(category_key)
             else:
                 return None
 
         elif role == Qt.ItemDataRole.UserRole:
             return self._data[index.row()]
-        elif role == Qt.ItemDataRole.SizeHintRole:
-            if index.column() == SongTableModel.FILE_COL:
-                return QSize(400,0)
+
         return None
 
     def rowCount(self, /, parent: QModelIndex | QPersistentModelIndex = ...) -> int:
@@ -582,9 +581,10 @@ class SongTable(QTableView):
     table_model: SongTableModel
     proxy_model: SongTableProxyModel
 
-    def __init__(self, parent: QWidget | None = None, source: PathLike[str] = None, mp3_files: list[Path | Mp3Entry] = [], lazy: bool = False):
+    def __init__(self, parent: QWidget | None = None, source: PathLike[str] = None, mp3_files: Iterable[Path | Mp3Entry] = [], lazy: bool = False):
         super().__init__(parent)
 
+        self.text_delegate = TextDelegate(self )
         self.category_delegate = CategoryDelegate(self)
         self.cover_delegate = CoverDelegate(self)
         self.label_item_delegate = LabelItemDelegate(self)
@@ -639,10 +639,15 @@ class SongTable(QTableView):
         self.setItemDelegateForColumn(SongTableModel.COVER_COL, self.cover_delegate)
         self.setItemDelegateForColumn(SongTableModel.FILE_COL, self.label_item_delegate)
         self.setItemDelegateForColumn(SongTableModel.FAV_COL, self.star_delegate)
+        self.setItemDelegateForColumn(SongTableModel.TITLE_COL, self.text_delegate)
+        self.setItemDelegateForColumn(SongTableModel.ALBUM_COL, self.text_delegate)
+        self.setItemDelegateForColumn(SongTableModel.ARTIST_COL, self.text_delegate)
+        self.setItemDelegateForColumn(SongTableModel.GENRE_COL, self.text_delegate)
+        self.setItemDelegateForColumn(SongTableModel.SUMMARY_COL, self.text_delegate)
 
         self.doubleClicked.connect(self.on_table_double_click)
 
-        self.source_files: list[Path] = []
+        self.source_files: Iterator[Path] = iter([])
         self.is_loaded = False
         self.loader = None
 
@@ -662,12 +667,18 @@ class SongTable(QTableView):
         else:
             return QIcon.fromTheme("list-music")
 
-    def _load_files(self, mp3_files: list[Path | Mp3Entry], lazy: bool = False):
+    def _load_files(self, mp3_files: Iterable[Path | Mp3Entry], lazy: bool = False):
         if not mp3_files:
             QMessageBox.information(self, _("Scan"), _("No MP3 files found."))
             return
 
-        if isinstance(mp3_files[0], Path):
+        first_element = next(mp3_files, None)
+
+        if first_element is not None:
+            # 2. Glue the first element back onto the rest of the generator
+            mp3_files = chain([first_element], mp3_files)
+
+        if isinstance(first_element, Path):
             self.table_model.clear()
             self.source_files = mp3_files
             self.is_loaded = False
@@ -678,11 +689,11 @@ class SongTable(QTableView):
 
     def reload_files(self):
         if self.playlist:
-            mp3_files = get_m3u_paths(self.playlist)
+            mp3_files = iter(get_m3u_paths(self.playlist))
             self._load_files(mp3_files)
         else:
             base_path = Path(self.directory)
-            mp3_files = list(base_path.rglob("*.mp3", case_sensitive=False))
+            mp3_files = base_path.rglob("*.mp3", case_sensitive=False)
             self._load_files(mp3_files)
 
     def get_available_categories(self) -> list[MusicCategory]:
@@ -785,7 +796,7 @@ class SongTable(QTableView):
         self.update()
 
     def _refresh_delegates(self):
-        for delegate in [self.category_delegate, self.star_delegate, self.label_item_delegate,self.cover_delegate]:
+        for delegate in [self.text_delegate, self.category_delegate, self.star_delegate, self.label_item_delegate, self.cover_delegate]:
             delegate.refresh_style()
 
     def resizeEvent(self, event, /):
@@ -1215,9 +1226,21 @@ def get_full_pixmap(icon_path):
 
 class BaseStyledItemDelegate(QStyledItemDelegate):
 
-    def __init__(self, parent =None):
+    def __init__(self, parent = None, delegate_paint:bool = False):
         super().__init__(parent)
+        self.delegate_paint = delegate_paint
         self.refresh_style()
+
+    def paint_text(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+        rect: QRect = option.rect.marginsRemoved(self.cell_margin)
+
+        text = index.data(Qt.ItemDataRole.DisplayRole)
+        alignment = index.data(Qt.ItemDataRole.TextAlignmentRole)
+
+        painter.setPen(
+            option.palette.color(QPalette.ColorRole.HighlightedText) if (option.state & QStyle.StateFlag.State_Selected) else option.palette.color(
+                QPalette.ColorRole.Text))
+        painter.drawText(rect, alignment, str(text) if text else None)
 
     def paint_selection(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         # Check if the item is currently selected
@@ -1242,10 +1265,6 @@ class BaseStyledItemDelegate(QStyledItemDelegate):
                     p2.setY(round(p2.y() - line_margin))
                     painter.drawLine(p1, p2)
 
-
-
-
-
     def refresh_style(self):
         self.settings_title_summary_visible = AppSettings.value(SettingKeys.COLUMN_TITLE_SUMMARY_VISIBLE, True, type=bool)
         self.settings_row_style = AppSettings.value(SettingKeys.SONGS_ROW_STYLE, "MEDIUM", type=str)
@@ -1266,7 +1285,10 @@ class BaseStyledItemDelegate(QStyledItemDelegate):
         if option.state & QStyle.StateFlag.State_HasFocus:
             option.state &= ~QStyle.StateFlag.State_HasFocus
 
-        self.paint_selection(painter, option, index)
+        #self.paint_selection(painter, option, index)
+
+        if self.delegate_paint:
+            self.paint_text(painter, option, index)
 
 class CoverDelegate(BaseStyledItemDelegate):
 
@@ -1293,13 +1315,19 @@ class CoverDelegate(BaseStyledItemDelegate):
 
         super().paint(painter, option, index)
 
+class TextDelegate(BaseStyledItemDelegate):
+    def __init__(self, parent: QObject = None):
+        super().__init__(parent, True)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
+        super().paint(painter, option, index)
+
 class CategoryDelegate(BaseStyledItemDelegate):
 
     fallback_bg:QColor = None
 
     def __init__(self, parent: QObject = None):
-        super().__init__(parent)
-
+        super().__init__(parent, True)
         self.fallback_bg = _alpha(app_theme.get_palette().color(QPalette.ColorRole.Accent), 40)
 
     def setModelData(self, editor: QWidget, model: QAbstractTableModel, index: QModelIndex | QPersistentModelIndex):
@@ -1313,26 +1341,18 @@ class CategoryDelegate(BaseStyledItemDelegate):
             super().setModelData(editor, model, index)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
-        if index.column() < SongTableModel.CAT_COL:
-            return
-
         score = index.data(Qt.ItemDataRole.DisplayRole)
         if score is not None:
-            self.initStyleOption(option, index)
             painter.save()
             painter.setClipRect(option.rect)
+
+            background_brush = index.data(Qt.ItemDataRole.BackgroundRole)
             rect: QRect = option.rect.marginsRemoved(self.cell_margin*2)
-            bg = option.backgroundBrush if option.backgroundBrush and option.backgroundBrush.style() != Qt.BrushStyle.NoBrush else self.fallback_bg
+            bg = background_brush if background_brush else self.fallback_bg
             painter.fillRect(rect.x(), rect.y(), rect.width() * 0.1 * score, rect.height(), bg)
-
-            # 6. Draw text/foreground ONLY (Avoids super().paint overdraw)
-            # This draws the text nicely over your custom bar without wiping out your work.
-            if option.features & QStyleOptionViewItem.ViewItemFeature.HasDisplay:
-                # Draw text with proper palette state (selected vs normal)
-                painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText) if (option.state & QStyle.StateFlag.State_Selected) else option.palette.color(QPalette.ColorRole.Text))
-                painter.drawText(rect, option.displayAlignment, option.text)
-
             painter.restore()
+
+        super().paint(painter, option, index)
 
 
 class StarDelegate(BaseStyledItemDelegate):
@@ -1391,8 +1411,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         self.font_medium_bold = QFont(app_theme.font_medium)
         self.font_medium_bold_metrics = QFontMetrics(self.font_medium_bold)
 
-        self.tag_margins = QMargins(self.cell_padding*2,self.cell_padding,self.cell_padding*2,self.cell_padding)
-        self.text_margins = self.tag_margins - QMargins(2,1,2,1)
+        self.tag_margins = QMargins(self.cell_padding*2,self.cell_padding+1,self.cell_padding*2,self.cell_padding+1)
+        self.text_margins = self.tag_margins - QMargins(1,1,1,1)
 
         self.brush_green = app_theme.get_green_brush()
 
