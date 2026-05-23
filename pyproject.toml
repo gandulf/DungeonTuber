@@ -16,7 +16,7 @@ authors = [
 ]
 dependencies = [
     "mutagen>=1.47.0",
-    "pyside6-essentials==6.11.0",
+    "pyside6-essentials==6.11.1",
     "shiboken6>=6.11.0",
     "sortedcontainers>=2.4.0",
     "python-vlc>=3.0.21203",
