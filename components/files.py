@@ -604,7 +604,7 @@ class DirectoryWidget(QFrame):
         self.invalidate_favorites()
 
     def invalidate_favorites(self):
-        self.favorites_list.setFixedHeight(min(200, self.favorites_model.rowCount() * 35))
+        self.favorites_list.setFixedHeight(min(200, self.favorites_model.rowCount() * (app_theme.icon_height +app_theme.padding_small)))
 
         self.favorites_list.setVisible(self.favorites_model.rowCount()>0)
         self.favHeaderLabel.setVisible(self.favorites_model.rowCount()>0)

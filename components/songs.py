@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMimeData, QByteArray, QDataStream, QIODevice, QPersistentModelIndex, \
-    QAbstractTableModel, QSize, QObject, QEvent, QPoint, QFileInfo, QRect, QMargins
+    QAbstractTableModel, QObject, QEvent, QPoint, QFileInfo, QRect, QMargins
 from PySide6.QtGui import QColor, QBrush, QIcon, QAction, QKeyEvent, QDragMoveEvent, QDragEnterEvent, QPainter, QPalette, \
     QFontMetrics, QDropEvent,  QPainterStateGuard, QPen, QPixmap, QFont
 from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView
@@ -969,16 +969,14 @@ class SongTable(QTableView):
             super().keyPressEvent(event)
 
     def paintEvent(self, event):
-
-        start = time.perf_counter_ns()
+        #start = time.perf_counter_ns()
         # 1. Let the standard TreeView draw the folders/files first
         super().paintEvent(event)
         self.auto_search_helper.paintEvent(event)
 
-        duration_ms = (time.perf_counter_ns() - start) / 1_000_000
-        if duration_ms > 10.0:
-            logger.debug(f"Warning: Paint took too long! {duration_ms:.2f} ms")
-
+        #duration_ms = (time.perf_counter_ns() - start) / 1_000_000
+        #if duration_ms > 10.0:
+        #   logger.debug(f"Warning: Paint took too long! {duration_ms:.2f} ms")
 
 
     def on_table_double_click(self, index: QModelIndex):
@@ -1393,7 +1391,7 @@ class StarDelegate(BaseStyledItemDelegate):
 
 class LabelItemDelegate(BaseStyledItemDelegate):
 
-    def __init__(self, parent: QObject = None):
+    def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
 
         self.bulb = QIcon.fromTheme("light")
@@ -1504,7 +1502,7 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         # draw rest
         painter.setPen(option.palette.color(QPalette.ColorRole.Text) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(QPalette.ColorRole.WindowText))
 
-        title_rect = QRect(content_rect)
+        title_rect : QRect = QRect(content_rect)
         title_rect.setRight(tag_left)
         title_rect.setTop(content_rect.top() + free_height // 2)
         title_rect.setHeight(title_font_metrics.height())
@@ -1512,7 +1510,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         painter.setFont(title_font)
 
         title = data.title if self.settings_title_instead_filename and data.title is not None and data.title != "" else data.name
-        painter.drawText(title_rect, title)
+        if title:
+            painter.drawText(title_rect, title)
 
         if data.summary and self.settings_title_summary_visible:
             painter.setFont(self.font_small)
