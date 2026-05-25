@@ -25,6 +25,10 @@ FAKE_BULBS = True
 
 _LIGHTS = set()
 
+def fake_lights_mode():
+    global FAKE_BULBS
+    FAKE_BULBS = True
+
 def set_lights(lights: list):
     if lights is None:
         AppSettings.remove(SettingKeys.LIGHTS_CONFIG)

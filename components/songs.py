@@ -19,7 +19,7 @@ from components.widgets import AutoSearchHelper
 from components.dialogs import ImagePopup
 from config.settings import AppSettings, SettingKeys, MusicCategory, get_music_categories, CAT_VALENCE, \
     CAT_AROUSAL, FilterConfig
-from config.theme import app_theme, _alpha, get_list_palette
+from config.theme import app_theme, _alpha
 from config.utils import tint_icon
 
 from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, \
@@ -590,8 +590,6 @@ class SongTable(QTableView):
         self.label_item_delegate = LabelItemDelegate(self)
         self.star_delegate = StarDelegate(self)
 
-        self._refresh_palette()
-
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -791,10 +789,6 @@ class SongTable(QTableView):
         self.loader = None
         self.content_changed.emit()
 
-    def _refresh_palette(self):
-        self.setPalette(get_list_palette(self.palette()))
-        self.update()
-
     def _refresh_delegates(self):
         for delegate in [self.text_delegate, self.category_delegate, self.star_delegate, self.label_item_delegate, self.cover_delegate]:
             delegate.refresh_style()
@@ -807,7 +801,6 @@ class SongTable(QTableView):
             self._init_table_sizes()
             self._refresh_delegates()
         elif event.type() == QEvent.Type.PaletteChange:
-            self._refresh_palette()
             self._refresh_delegates()
 
     def on_sort_changed(self, column, order_by):
@@ -1409,7 +1402,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         self.font_medium_bold = QFont(app_theme.font_medium)
         self.font_medium_bold_metrics = QFontMetrics(self.font_medium_bold)
 
-        self.tag_margins = QMargins(self.cell_padding*2,self.cell_padding+1,self.cell_padding*2,self.cell_padding+1)
+        self.tag_margins = QMargins(self.cell_padding*2,self.cell_padding,self.cell_padding*2,self.cell_padding)
+        self.tag_margins = self.tag_margins+QMargins(1,1,1,1)
         self.text_margins = self.tag_margins - QMargins(1,1,1,1)
 
         self.brush_green = app_theme.get_green_brush()
@@ -1456,7 +1450,7 @@ class LabelItemDelegate(BaseStyledItemDelegate):
                 if tag in selected_tags:
                     painter.setBrush(self.brush_green)
                 else:
-                    painter.setBrush(option.palette.accent())
+                    painter.setBrush(option.palette.color(QPalette.ColorRole.Accent).darker(115))
 
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.drawRoundedRect(tags_rect, 6.0, 6.0)
@@ -1500,7 +1494,7 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         free_height = max(0, free_height)
 
         # draw rest
-        painter.setPen(option.palette.color(QPalette.ColorRole.Text) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(QPalette.ColorRole.WindowText))
+        painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(QPalette.ColorRole.Text))
 
         title_rect : QRect = QRect(content_rect)
         title_rect.setRight(tag_left)
@@ -1515,7 +1509,7 @@ class LabelItemDelegate(BaseStyledItemDelegate):
 
         if data.summary and self.settings_title_summary_visible:
             painter.setFont(self.font_small)
-            painter.setPen(option.palette.color(QPalette.ColorRole.BrightText))
+            painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText) if option.state & QStyle.StateFlag.State_Selected else option.palette.color(QPalette.ColorRole.BrightText))
 
             # 2. Calculate the bounding rectangle
             summary_rect = self.font_small_metrics.boundingRect(0, 0,  content_rect.width(), 10000, Qt.TextFlag.TextWordWrap, data.summary)

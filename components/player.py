@@ -659,7 +659,7 @@ class PlayerSlider(JumpSlider):
                 dot_color:QColor = self.palette().brush(QPalette.ColorRole.Accent)
                 if "light" in ch:
                     light_setting = ch['light']
-                    if light_setting.color:
+                    if light_setting and light_setting.color:
                         dot_color = light_setting.color
 
                 painter.setBrush(dot_color)

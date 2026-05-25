@@ -2,8 +2,8 @@ import os
 from enum import Enum, StrEnum
 
 from PySide6.QtCore import QObject, Property, Qt, QSize, QMargins
-from PySide6.QtGui import QColor, QPalette, QBrush, QIcon, QFont, QFontMetrics
-from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QStyle
+from PySide6.QtGui import QColor, QPalette, QBrush, QIcon, QFont
+from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect
 
 from config.settings import AppSettings, SettingKeys
 from config.utils import get_path
@@ -37,11 +37,9 @@ class Theme(StrEnum):
     DARK ="DARK"
 
 
-def get_list_palette(orig_palette: QPalette):
-    palette = QPalette(orig_palette)
-    palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 0, 0, 10))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
-    palette.setColor(QPalette.ColorRole.HighlightedText, palette.color(QPalette.ColorRole.Text))  # Set hover alpha to 0 # Set the Highlight role to the same as the Base (background) role
-    return palette
+
+
+
 
 class AppTheme(QObject):
     light_palette: QPalette = None
@@ -76,9 +74,6 @@ class AppTheme(QObject):
 
     def __init__(self):
         super().__init__()
-
-        self.light_palette = self.get_light_mode_palette()
-        self.dark_palette = self.get_dark_mode_palette()
 
     def _calculate_sizes(self, base_font_size: float):
 
@@ -147,7 +142,7 @@ class AppTheme(QObject):
     def drop_shadow(self, parent):
         if self.theme() in [Theme.DARK, Theme.LIGHT]:
             shadow = QGraphicsDropShadowEffect(parent)
-            shadow.setBlurRadius(20)
+            shadow.setBlurRadius(10)
             shadow.setXOffset(0)
             shadow.setYOffset(0)
             shadow.setColor(QColor(0, 0, 0, 160))
@@ -228,10 +223,6 @@ class AppTheme(QObject):
         _font_family = self.get_font_family()
         style=f"""                
             
-            QTableView {{
-                border-top:none
-            }}
-        
             QSlider#temperature, QSlider#brightness {{
                 height: {_h}px;
             }}
@@ -289,10 +280,10 @@ class AppTheme(QObject):
                 }}
                 
                 QTabBar::tab:selected {{
-                    color: {_accent_color};
-                    background: {_base_color};
+                    color: palette(accent);
+                    background: palette(base);
                     
-                    border-bottom: 2px solid {_accent_color}; 
+                    border-bottom: 2px solid palette(accent); 
                     font-weight: 600;
                 }}
                                                                
@@ -307,16 +298,8 @@ class AppTheme(QObject):
                 }}
             
                 QMenuBar, QMenuBar::item {{                                
-                    color: {_text_color};                        
-                }}
-                
-                QTreeView, QListView {{
-                    background: transparent;
-                }}
-                
-                QTreeView, QListView {{
-                    border:none
-                }}
+                    color: palette(text);                        
+                }}                
 
                 ToolButton, RoundButton {{
                     background-color: {_button_color};
@@ -331,7 +314,7 @@ class AppTheme(QObject):
                 }}                    
 
                 ToolButton::checked, RoundButton::checked {{
-                    background-color: {_accent_color};                        
+                    background-color: palette(accent);                        
                 }}
                 
                 RoundButton {{
@@ -363,17 +346,23 @@ class AppTheme(QObject):
                 QListWidget#lights::item:selected {{
                     padding-bottom:0px;
                     border: none;
-                    border-bottom:2px solid {_accent_color};
-                    color: {_text_color};                        
+                    border-bottom:2px solid palette(accent);
+                    color: palette(highlighted-text);
+                    background-color: palette(highlight);                        
                 }}
+                
+                QListView, QTableView, QTreeView {{
+                    background-color: palette(window);
+                    border: none;
+                }}                     
                 
                 QTableView {{
                     alternate-background-color: {_base_color2};
                 }}
                 
                 QToolTip {{
-                    background-color: {palette.color(QPalette.ColorRole.ToolTipBase).name()};
-                    color: {palette.color(QPalette.ColorRole.ToolTipText).name()};
+                    background-color: palette(toolTipBase);
+                    color: palette(ToolTipText);
                 }}   
 
             """
@@ -398,7 +387,7 @@ class AppTheme(QObject):
 
     def get_dark_mode_palette(self) -> QPalette:
         if self.dark_palette is None:
-            palette = QPalette()
+            palette = QPalette(self.system_palette)
 
 
             _accent = QColor(0, 80, 203)
@@ -406,6 +395,7 @@ class AppTheme(QObject):
             # Keeping your blue accent, but slightly less vibrant for dark mode
             palette.setColor(QPalette.ColorRole.Accent, _accent)
             palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 102, 255))
+            palette.setColor(QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight, _alpha(QColor(0, 102, 255),150))
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(80, 80, 80))
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, QColor(127, 127, 127))
@@ -445,13 +435,15 @@ class AppTheme(QObject):
 
     def get_light_mode_palette(self) -> QPalette:
         if self.light_palette is None:
-            palette = QPalette()
+            palette = QPalette(self.system_palette)
 
             # --- ACCENT & HIGHLIGHT ---
             # Keeping your blue accent, but slightly more vibrant for light mode
             _accent = QColor(0, 102, 255)
             palette.setColor(QPalette.ColorRole.Accent, _accent)
             palette.setColor(QPalette.ColorRole.Highlight, _accent)
+            palette.setColor(QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight, _alpha(QColor(0, 102, 255), 150))
+            palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(150, 150, 150))
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorRole.Link, _accent)
 

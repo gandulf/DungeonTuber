@@ -26,7 +26,6 @@ import traceback
 
 from config import log
 
-
 log.setup_logging()
 
 import gettext
@@ -55,7 +54,7 @@ from components.lights import LightsWidget
 
 from logic.mp3 import Mp3Entry, parse_mp3, create_m3u, get_m3u_paths, save_playlist, Chapter
 from logic.analyzer import Analyzer, has_voxalyzer
-from logic.lightengine import LightSetting
+from logic.lightengine import LightSetting, fake_lights_mode
 
 logger = logging.getLogger(__file__)
 
@@ -1122,9 +1121,11 @@ def hide_splash(window: QMainWindow):
 
 
 def main():
-    if "DEBUG" in os.environ:
+    if "DEBUG" in os.environ or "--debug" in sys.argv:
         logger.setLevel(logging.DEBUG)
 
+    if "--fake" in sys.argv:
+        fake_lights_mode()
     app = QApplication(sys.argv)
 
     language = AppSettings.value(SettingKeys.LOCALE, type=str)

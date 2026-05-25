@@ -1,16 +1,19 @@
+import atexit
+import json
 import os
+import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, QFileInfo, QPersistentModelIndex, QEvent, QSortFilterProxyModel, Qt, QDir, \
-    Signal, QObject, QPoint, QItemSelection, QConcatenateTablesProxyModel
-from PySide6.QtGui import QIcon, QAction, QKeyEvent, QPaintEvent, QAbstractFileIconProvider, QPalette, QStandardItem, QStandardItemModel
+    Signal, QObject, QPoint, QItemSelection
+from PySide6.QtGui import QIcon, QAction, QKeyEvent, QPaintEvent, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QMenu, QFileSystemModel, QFileIconProvider, QTreeView, QWidget, \
-    QVBoxLayout, QAbstractItemView, QFrame, QListWidget, QListView, QSizePolicy
+    QVBoxLayout, QAbstractItemView, QFrame, QListView
 
 from components.dialogs import EditSongDialog
 from components.widgets import IconLabel, AutoSearchHelper, ToolButton
 from config.settings import AppSettings, SettingKeys
-from config.theme import app_theme, get_list_palette
+from config.theme import app_theme
 from logic.mp3 import parse_mp3, Mp3Entry
 
 
@@ -26,7 +29,6 @@ class FavoritesList(QListView):
         self.setIconSize(app_theme.icon_size)
         self.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setPalette(get_list_palette(self.palette()))
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in [Qt.Key.Key_Enter, Qt.Key.Key_Return]:
@@ -40,59 +42,10 @@ class FavoritesList(QListView):
         else:
             super().keyPressEvent(event)
 
-class CustomIconProvider(QFileIconProvider):
-    def __init__(self):
-        super().__init__()
-        # Pre-load icons to save memory/processing
-        self.refresh_icons()
-
-    def refresh_icons(self):
-        self.music_icon = QIcon.fromTheme("file-mp3")
-        folder_open_icon = QIcon.fromTheme("folder-open")
-        folder_icon = QIcon.fromTheme("folder-closed")
-
-        self.folder_icon = QIcon()
-        self.folder_icon.addPixmap(folder_icon.pixmap(app_theme.icon_size), QIcon.Normal,
-                                   QIcon.Off)  # State: Off (Closed)
-        self.folder_icon.addPixmap(folder_open_icon.pixmap(app_theme.icon_size), QIcon.Normal,
-                                   QIcon.On)  # State: On (Open)
-
-        self.playlist_icon = QIcon.fromTheme("list-music")
-
-    def is_drive(self, file_info: QFileInfo) -> bool:
-        return file_info and file_info.absoluteFilePath().endswith(":/")
-
-    def icon(self, info: QFileInfo | QAbstractFileIconProvider.IconType):
-        # 1. Check if it's a directory
-        if isinstance(info,QAbstractFileIconProvider.IconType):
-            if info == QAbstractFileIconProvider.IconType.Folder:
-                return self.folder_icon
-            elif info == QAbstractFileIconProvider.IconType.Drive:
-                return QIcon.fromTheme(QIcon.ThemeIcon.DriveHarddisk)
-            elif info == QAbstractFileIconProvider.IconType.Network:
-                return QIcon.fromTheme(QIcon.ThemeIcon.NetworkWired)
-            elif info == QAbstractFileIconProvider.IconType.Computer:
-                return QIcon.fromTheme(QIcon.ThemeIcon.Computer)
-            else:
-                return super().icon(info)
-
-        elif isinstance(info, QFileInfo):
-            if self.is_drive(info):
-                return QIcon.fromTheme(QIcon.ThemeIcon.MediaOptical)
-            elif info.isDir():
-                return self.folder_icon
-
-            # 2. Check extension for specific files
-            if info.suffix().lower() == "mp3":
-                return self.music_icon
-            elif info.suffix().lower() == "m3u":
-                return self.playlist_icon
-
-            # 3. Fallback to the system default icon for everything else
-            return super().icon(info)
-
+CACHE_FILE = tempfile.gettempdir()+"/dungeon_tuber_file_cache.db"
 
 class FileFilterProxyModel(QSortFilterProxyModel):
+
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
         self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
@@ -101,12 +54,30 @@ class FileFilterProxyModel(QSortFilterProxyModel):
         self.setFilterKeyColumn(0)
 
         self.extensions = ["mp3","m3u"]
-        self.file_cache = {}
+
         self.smart_filter = False
+        self.file_cache = None
+
+        atexit.register(self.save_cache)
+
+    def save_cache(self):
+        if self.file_cache is not None:
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.file_cache, f)
+
+    def load_cache(self):
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                self.file_cache = json.load(f)
+        self.file_cache = {}
 
     def set_smart_filter(self, value:bool):
         if self.smart_filter != value:
             self.smart_filter = value
+
+            if self.smart_filter and self.file_cache is None:
+                self.load_cache()
+
             self.invalidate()
 
     def data(self, index, role= Qt.ItemDataRole.DisplayRole):
@@ -139,7 +110,10 @@ class FileFilterProxyModel(QSortFilterProxyModel):
         return super().data(index, role)
 
     def invalidateFilter(self, /):
-        self.file_cache.clear()
+        if self.file_cache is not None:
+            self.file_cache.clear()
+        if os.path.exists(CACHE_FILE):
+            os.remove(CACHE_FILE)
         super().invalidateFilter()
 
     def lessThan(self, left: QModelIndex | QPersistentModelIndex, right: QModelIndex | QPersistentModelIndex):
@@ -201,6 +175,10 @@ class FileFilterProxyModel(QSortFilterProxyModel):
             return True
 
         return False
+
+    def use_smart_filter(self):
+        return self.smart_filter and self.file_cache is not None
+
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex):
         source_model = self.sourceModel()
         source_index = source_model.index(source_row, 0, source_parent)
@@ -212,7 +190,7 @@ class FileFilterProxyModel(QSortFilterProxyModel):
             if self.ignore(file_info):
                 return False
 
-            if self.smart_filter and file_info.isDir():
+            if self.use_smart_filter() and file_info.isDir():
                 # Only display this folder if it contains valid files/subfolders
                 return self._dir_has_valid_contents(file_info.filePath())
 
@@ -271,8 +249,8 @@ class DirectoryTree(QTreeView):
         self.smart_filter_action.setChecked(AppSettings.value(SettingKeys.FILES_SMART_FILTER, False, type=bool))
         self.smart_filter_action.triggered.connect(self.do_smart_filter)
 
-        self.refreh_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), _("Refresh"), self)
-        self.refreh_action.triggered.connect(self.do_refresh)
+        self.refresh_action = QAction(QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh), _("Refresh"), self)
+        self.refresh_action.triggered.connect(self.do_refresh)
 
         self.add_favorite_action = QAction(QIcon.fromTheme("star"), _("Add to favorites"), self)
         self.add_favorite_action.triggered.connect(self.do_add_favorite_action)
@@ -331,20 +309,10 @@ class DirectoryTree(QTreeView):
             if index.isValid():
                 self.set_root_index_in_source(index)
 
-        self._refresh_palette()
-
-    def _refresh_palette(self):
-        self.setPalette(get_list_palette(self.palette()))
-        self.update()
-
     def changeEvent(self, event: QEvent, /):
         if event.type() == QEvent.Type.FontChange:
             self.setFont(app_theme.font_medium)
             self.setIconSize(app_theme.icon_size)
-        elif event.type() == QEvent.Type.PaletteChange:
-            #self.directory_icon_provider.refresh_icons()
-            #self.directory_model.setIconProvider(self.directory_icon_provider)
-            self._refresh_palette()
 
     def on_directories_loaded(self):
         self.proxy_model.beginFilterChange()
@@ -417,7 +385,7 @@ class DirectoryTree(QTreeView):
         #
         menu.addSeparator()
         menu.addAction(self.smart_filter_action)
-        menu.addAction(self.refreh_action)
+        menu.addAction(self.refresh_action)
         menu.addAction(self.add_favorite_action)
 
         menu.show()
@@ -677,6 +645,4 @@ class DirectoryWidget(QFrame):
             self.directory_tree.setFont(app_theme.font_medium)
         elif event.type() in [QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange]:
             self.setGraphicsEffect(app_theme.drop_shadow(self))
-            if self.favorites_list:
-                self.favorites_list.setPalette(get_list_palette(self.palette()))
 
