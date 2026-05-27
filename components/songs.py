@@ -11,7 +11,7 @@ from typing import Iterable, Iterator
 from PySide6.QtCore import QSortFilterProxyModel, Signal, Qt, QModelIndex, QMimeData, QByteArray, QDataStream, QIODevice, QPersistentModelIndex, \
     QAbstractTableModel, QObject, QEvent, QPoint, QFileInfo, QRect, QMargins
 from PySide6.QtGui import QColor, QBrush, QIcon, QAction, QKeyEvent, QDragMoveEvent, QDragEnterEvent, QPainter, QPalette, \
-    QFontMetrics, QDropEvent,  QPainterStateGuard, QPen, QPixmap, QFont
+    QFontMetrics, QDropEvent, QPainterStateGuard, QPen, QPixmap, QFont, QPaintEvent
 from PySide6.QtWidgets import QMessageBox, QAbstractItemView, QWidget, QHeaderView, QMenu, QStyleOptionViewItem, QStyledItemDelegate, QStyle, QTableView
 from sortedcontainers import SortedSet
 
@@ -589,7 +589,6 @@ class SongTable(QTableView):
         self.cover_delegate = CoverDelegate(self)
         self.label_item_delegate = LabelItemDelegate(self)
         self.star_delegate = StarDelegate(self)
-
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -961,7 +960,7 @@ class SongTable(QTableView):
         elif not self.auto_search_helper.keyPressEvent(event):
             super().keyPressEvent(event)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent):
         #start = time.perf_counter_ns()
         # 1. Let the standard TreeView draw the folders/files first
         super().paintEvent(event)
@@ -1231,7 +1230,8 @@ class BaseStyledItemDelegate(QStyledItemDelegate):
         painter.setPen(
             option.palette.color(QPalette.ColorRole.HighlightedText) if (option.state & QStyle.StateFlag.State_Selected) else option.palette.color(
                 QPalette.ColorRole.Text))
-        painter.drawText(rect, alignment, str(text) if text else None)
+        if text is not None:
+            painter.drawText(rect, alignment if alignment is not None else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, str(text))
 
     def paint_selection(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex):
         # Check if the item is currently selected
@@ -1413,6 +1413,8 @@ class LabelItemDelegate(BaseStyledItemDelegate):
         self.settings_row_style = AppSettings.value(SettingKeys.SONGS_ROW_STYLE, "MEDIUM", type=str)
         self.settings_title_instead_filename = AppSettings.value(SettingKeys.SONGS_TITLE_INSTEAD_OF_FILE_NAME, False, type=bool)
 
+        self.cell_margin = QMargins(self.padding, self.cell_padding, self.padding, self.cell_padding)
+
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex, /):
         self.initStyleOption(option, index)
 
@@ -1420,6 +1422,7 @@ class LabelItemDelegate(BaseStyledItemDelegate):
 
         #painter.setRenderHint(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         data: Mp3Entry = index.data(Qt.ItemDataRole.UserRole)
+
 
         content_rect = option.rect.marginsRemoved(self.cell_margin)
 

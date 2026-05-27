@@ -1193,7 +1193,7 @@ class VolumeSliderStyle(QProxyStyle):
 
     def drawComplexControl(self, control, option, painter: QPainter, widget: JumpSlider = None):
         if control == QStyle.ComplexControl.CC_Slider:
-            #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             with QPainterStateGuard(painter):
                 rect = option.rect
 
