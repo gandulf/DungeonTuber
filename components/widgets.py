@@ -149,7 +149,7 @@ class IconLabel(QFrame):
             if not isinstance(self.layout.itemAt(0), QSpacerItem):
                 self.layout.insertStretch(0)
         elif isinstance(self.layout.itemAt(0), QSpacerItem):
-            spacer = self.layout.takeAt(0)
+            self.layout.takeAt(0)
 
     def set_icon(self, icon: QIcon):
         if icon is not None:
@@ -228,7 +228,6 @@ class FeatureOverlay(QWidget):
 
         self.label.setMinimumWidth(max(300, self._highlight_rect.width()))
 
-        button_group_right = QHBoxLayout()
         if self.current_step < len(self.steps):
             self.label.setText(self.steps[self.current_step]['message'])
             self.label.adjustSize()

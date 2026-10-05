@@ -5,8 +5,9 @@ exclude = .github,.venv,.git,__pycache__,build,dist
 # Count the number of occurrences of each error
 count = True
 
-# Only check for these specific error classes (syntax, undefined names, etc.)
-select = E9,F63,F7,F82
+# Correctness checks only: syntax errors, pyflakes (F), comparison/membership pitfalls, deprecations.
+# Pure style (E1-E5, W1-W5) is intentionally not enforced yet.
+select = E9,F,E703,E711,E712,E713,E714,E721,E722,E731,W6
 
 # Define "_" as a builtin (useful for internationalization/gettext)
 builtins = _

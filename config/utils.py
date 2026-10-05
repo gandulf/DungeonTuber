@@ -115,38 +115,44 @@ def is_latest_version() -> bool:
     else:
         return True
 
-_latest_version : str | None = None
+class UpdateChecker:
+    """Looks up the latest GitHub release once and caches the result."""
 
-def get_latest_version() -> str:
-    global _latest_version
-    if _latest_version is None:
-        url = "https://api.github.com/repos/gandulf/DungeonTuber/releases/latest"
-        headers = {"User-Agent": "Python-urllib/3.x"}
-        try:
-            req = Request(url, headers=headers)
+    URL = "https://api.github.com/repos/gandulf/DungeonTuber/releases/latest"
 
-            with urlopen(req) as response:
-                # urllib raises an HTTPError for non-200 codes automatically
-                status = response.getcode()
-                raw_data = response.read().decode("utf-8")
-                data = json.loads(raw_data)
+    def __init__(self):
+        self._latest_version: str | None = None
 
-                # Check if tag_name exists and is not None
-                tag = data.get("tag_name")
-                _latest_version = tag.lstrip("v") if tag else ""
+    def get_latest_version(self) -> str | None:
+        if self._latest_version is None:
+            headers = {"User-Agent": "Python-urllib/3.x"}
+            try:
+                req = Request(self.URL, headers=headers)
 
-        except HTTPError as e:
-            logger.error("HTTP Error {0}: Unable to fetch version info", e.code)
-            _latest_version = ""
-        except Exception as e:
-            logger.error("Unable to fetch latest version info: {0}", e)
-            _latest_version = ""
+                with urlopen(req, timeout=5) as response:
+                    # urllib raises an HTTPError for non-200 codes automatically
+                    raw_data = response.read().decode("utf-8")
+                    data = json.loads(raw_data)
+
+                    # Check if tag_name exists and is not None
+                    tag = data.get("tag_name")
+                    self._latest_version = tag.lstrip("v") if tag else ""
+
+            except HTTPError as e:
+                logger.error("HTTP Error {0}: Unable to fetch version info", e.code)
+                self._latest_version = ""
+            except Exception as e:
+                logger.error("Unable to fetch latest version info: {0}", e)
+                self._latest_version = ""
+
+        return self._latest_version or None
 
 
-    if _latest_version is not None and _latest_version != "":
-        return _latest_version
-    else:
-        return None
+update_checker = UpdateChecker()
+
+
+def get_latest_version() -> str | None:
+    return update_checker.get_latest_version()
 
 
 def get_available_locales() -> list[str]:

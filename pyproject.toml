@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["logic", "config", "components"]
+py-modules = ["DungeonTuber"]
 
 [project]
 name = "DungeonTuber"
@@ -15,20 +16,20 @@ authors = [
   {name = "Gandulf Kohlweiss", email = "gandulf.k@gmail.com"}
 ]
 dependencies = [
-    "mutagen>=1.47.0",
-    "pyside6-essentials==6.11.1",
-    "shiboken6>=6.11.1",
+    "mutagen>=1.48.1",
+    "pyside6-essentials==6.11.2",
+    "shiboken6>=6.11.2",
     "sortedcontainers>=2.4.0",
     "python-vlc>=3.0.21203",
     "psutil>=7.2.2",
-    "pywizlight>=0.6.3"
+    "pywizlight>=0.6.6"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pyinstaller>=6.20.0",
-    "flake8>=7.3.0",
-    "Nuitka[app]>=4.1.1"
+    "pyinstaller>=6.22.3",
+    "flake8>=7.4.1",
+    "Nuitka[app]>=4.2.2"
 ]
 
 [project.scripts]

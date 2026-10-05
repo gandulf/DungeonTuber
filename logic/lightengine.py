@@ -21,25 +21,35 @@ from config.utils import asdict_filtered, get_broadcast_ip
 
 logger = logging.getLogger(__file__)
 
-FAKE_BULBS = True
+class LightRegistry:
+    """Known lights and the fake-bulb switch used for development without real hardware."""
 
-_LIGHTS = set()
+    def __init__(self):
+        self.fake_bulbs = False
+        self.lights: set = set()
+
+    def set_lights(self, lights: list | None):
+        if lights is None:
+            AppSettings.remove(SettingKeys.LIGHTS_CONFIG)
+            self.lights.clear()
+        else:
+            AppSettings.setValue(SettingKeys.LIGHTS_CONFIG, Light.json_dump_list(lights))
+            self.lights.update(lights)
+
+
+light_registry = LightRegistry()
+
 
 def fake_lights_mode():
-    global FAKE_BULBS
-    FAKE_BULBS = True
+    light_registry.fake_bulbs = True
+
 
 def set_lights(lights: list):
-    if lights is None:
-        AppSettings.remove(SettingKeys.LIGHTS_CONFIG)
-        _LIGHTS.clear()
-    else:
-        AppSettings.setValue(SettingKeys.LIGHTS_CONFIG, Light.json_dump_list(lights))
-        _LIGHTS.update(lights)
+    light_registry.set_lights(lights)
 
 
 def get_lights():
-    return _LIGHTS
+    return light_registry.lights
 
 
 def save_on_exit():
@@ -301,7 +311,7 @@ class DiscoveryThread(QThread):
 
     def run(self):
 
-        if FAKE_BULBS:
+        if light_registry.fake_bulbs:
             bulbs = []
             for n in range(3):
                 control = MockControl()
