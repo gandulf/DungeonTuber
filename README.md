@@ -82,8 +82,41 @@ The process involves uploading the audio file to the Voxalyzer and there use loc
 
 ---
 
+## 🌐 Desktop App & Server
+
+DungeonTuber consists of a Python server and a web frontend. It runs as a desktop app or as a server
+for other devices (tablet, phone, a second PC) – the audio is played in the browser.
+
+```bash
+pip install -e .[dev]
+npm --prefix web ci
+npm --prefix web run build
+```
+
+* **Desktop app** (native window, only this computer can connect): `python DungeonTuber.py` (`--fake` simulates WiZ bulbs)
+* **Server** for your network: set a password once with `python -m server --set-password`, then run
+  `python -m server --host 0.0.0.0 --port 8765` and open `http://<your-pc>:8765` in a browser.
+  Only folders listed under *Settings → Library* are accessible. For access over the internet put the server behind an
+  HTTPS reverse proxy (e.g. Caddy). WiZ lights can only be controlled when the server runs in the same network as the bulbs.
+* **Frontend development**: `python -m server` plus `npm --prefix web run dev` (Vite on port 5173 proxies to the server).
+
+Settings are stored in `%APPDATA%/DungeonTuber/settings.json` (settings of older versions are imported
+automatically on first start). See [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md) for the architecture.
+
+---
+
 ## 🛠️ Build Instructions
 
+### Tests
+```bash
+python -m pytest
+npm --prefix web test
+```
+
+### Full build (translations, lint, tests, web frontend, PyInstaller)
+```bash
+python build.py
+```
 
 ## Update translations:
 Edit translations in _locales/**/LC_MESSAGES/DungeonTuber.po_ files and then run the following commands to update mo files. 
@@ -93,6 +126,7 @@ msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonT
 ```
 
 ### Using PyInstaller
+Build the web frontend first (`npm --prefix web run build`).
 ```bash
 pyinstaller DungeonTuber.spec --noconfirm
 ```
@@ -101,7 +135,7 @@ pyinstaller DungeonTuber.spec --noconfirm
 The following command uses MinGW64. If you experience slow compilation, ensure your build directory is excluded from Antivirus scanning.
 
 ```bash
-python -m nuitka --jobs=16 DungeonTuber.py --product-version=0.2.0.0 --file-version=0.2.0.0
+python -m nuitka --jobs=16 --include-data-dir=web/dist=web/dist --include-data-dir=locales=locales DungeonTuber.py --product-version=0.2.0.0 --file-version=0.2.0.0
 ```
 > [!Note]
 > Add `--product-version=X.Y.Z.Q` and `--file-version=X.Y.Z.Q` to define version of created exe

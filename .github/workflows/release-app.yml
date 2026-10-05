@@ -63,12 +63,32 @@ jobs:
       run: |
         flake8
 
+    - name: Set up Node
+      uses: actions/setup-node@v5
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: web/package-lock.json
+
+    - name: Build web frontend
+      working-directory: web
+      run: |
+        npm ci
+        npm run build
+
     - name: Create Nuitka Executable
       uses: Nuitka/Nuitka-Action@main
       with:
         nuitka-version: main
         script-name: DungeonTuber.py
         mode: standalone
+        windows-console-mode: disable
+        windows-icon-from-ico: docs/icon.ico
+        include-data-dir: |
+          web/dist=web/dist
+          locales=locales
+        include-data-files: |
+          docs/icon.ico=docs/icon.ico
         low-memory: true
         output-dir: dist
         file-version: ${{ steps.vars.outputs.app_version }}

@@ -82,7 +82,37 @@ Der Prozess umfasst das Hochladen der Audiodatei an den Voxalyzer, wo lokale Ess
 
 ---
 
+## 🌐 Desktop-App & Server
+
+DungeonTuber besteht aus einem Python-Server und einer Weboberfläche. Es läuft als Desktop-App oder als Server für
+andere Geräte (Tablet, Handy, zweiter PC) – die Musik wird im Browser abgespielt.
+
+```bash
+pip install -e .[dev]
+npm --prefix web ci
+npm --prefix web run build
+```
+
+* **Desktop-App** (eigenes Fenster, nur dieser Computer kann sich verbinden): `python DungeonTuber.py` (`--fake` simuliert WiZ-Lampen)
+* **Server** im Netzwerk: einmalig ein Passwort setzen mit `python -m server --set-password`, dann
+  `python -m server --host 0.0.0.0 --port 8765` starten und `http://<dein-pc>:8765` im Browser öffnen.
+  Nur Ordner unter *Einstellungen → Bibliothek* sind erreichbar. Für den Zugriff über das Internet den Server hinter einen
+  HTTPS-Reverse-Proxy (z. B. Caddy) stellen. WiZ-Lampen lassen sich nur steuern, wenn der Server im selben Netzwerk läuft.
+
+Die Einstellungen liegen in `%APPDATA%/DungeonTuber/settings.json` (Einstellungen älterer Versionen werden beim ersten Start übernommen).
+
 ## 🛠️ Build-Anweisungen
+
+### Tests
+```bash
+python -m pytest
+npm --prefix web test
+```
+
+### Kompletter Build (Übersetzungen, Lint, Tests, Weboberfläche, PyInstaller)
+```bash
+python build.py
+```
 
 ### Übersetzungen aktualisieren:
 Bearbeite die Übersetzungen in den Dateien `_locales/**/LC_MESSAGES/DungeonTuber.po` und führe dann die folgenden Befehle aus, um die `.mo`-Dateien zu aktualisieren. 
@@ -94,6 +124,7 @@ msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonT
 
 ## Verwendung von PyInstaller (Empfohlen)
 
+Vorher die Weboberfläche bauen (`npm --prefix web run build`).
 ```bash
 pyinstaller DungeonTuber.spec
 ```
@@ -103,7 +134,7 @@ pyinstaller DungeonTuber.spec
 Der folgende Befehl nutzt MinGW64. Wenn die Kompilierung langsam ist, stelle sicher, dass dein Build-Verzeichnis vom Antiviren-Scan ausgeschlossen ist.
 
 ```bash
-python -m nuitka --jobs=16 DungeonTuber.py --product-version=0.0.1.0 --file-version=0.0.1.0
+python -m nuitka --jobs=16 --include-data-dir=web/dist=web/dist --include-data-dir=locales=locales DungeonTuber.py --product-version=0.0.1.0 --file-version=0.0.1.0
 ```
 
 > [!Note]
