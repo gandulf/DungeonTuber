@@ -258,6 +258,6 @@ jobs:
 
             **Server (Python):** `pipx install <wheel-file>` then `dungeontuber-server`.
 
-            **WiZ light agent** (runs next to the bulbs, for a server outside their network): `DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe --server <url> --token <token>` – see `agents/wiz/README.md`.
+            **WiZ light agent** (runs next to the bulbs, for a server outside their network): `DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe --token <token>` (add `--server <url>` for a server other than dungeontuber.duckdns.org) – see `agents/wiz/README.md`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

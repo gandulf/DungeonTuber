@@ -2,7 +2,7 @@
 
 Runs on a machine in the same network as the WiZ bulbs, connects *out* to the DungeonTuber server and carries out its light commands:
 
-    python dt_wiz_agent.py --server https://dungeontuber.example.com --token <agent token>
+    python dt_wiz_agent.py --token <agent token> [--server https://dungeontuber.duckdns.org]
 
 Settings can also be given as environment variables: DT_SERVER, DT_AGENT_TOKEN, DT_AGENT_NAME, DT_BROADCAST, DT_FAKE_LIGHTS=1.
 """
@@ -26,6 +26,7 @@ from websockets.exceptions import InvalidStatus, WebSocketException
 logger = logging.getLogger("dt-wiz-agent")
 
 MAX_RETRY_DELAY = 30
+DEFAULT_SERVER = "https://dungeontuber.duckdns.org"
 
 
 def agent_url(server: str) -> str:
@@ -169,7 +170,7 @@ async def run(url: str, token: str, name: str, bulbs: Bulbs, once: bool = False)
 def main(argv: list[str] | None = None) -> int:
     env = os.environ.get
     parser = argparse.ArgumentParser(prog="dt-wiz-agent", description="WiZ light agent for a DungeonTuber server")
-    parser.add_argument("--server", default=env("DT_SERVER"), help="URL of the DungeonTuber server, e.g. https://dungeontuber.example.com")
+    parser.add_argument("--server", default=env("DT_SERVER", DEFAULT_SERVER), help="URL of the DungeonTuber server (default: %(default)s)")
     parser.add_argument("--token", default=env("DT_AGENT_TOKEN"), help="Agent token (Settings > Lights in DungeonTuber)")
     parser.add_argument("--name", default=env("DT_AGENT_NAME", platform.node() or "wiz-agent"), help="Name shown in the server log")
     parser.add_argument("--broadcast", default=env("DT_BROADCAST", "255.255.255.255"), help="Broadcast address of the bulb network")
@@ -177,8 +178,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fake", action="store_true", default=env("DT_FAKE_LIGHTS") == "1", help="Simulate three bulbs")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
-    if not args.server or not args.token:
-        parser.error("--server and --token are required (or DT_SERVER and DT_AGENT_TOKEN)")
+    if not args.token:
+        parser.error("--token is required (or DT_AGENT_TOKEN)")
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:

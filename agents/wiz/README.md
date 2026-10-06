@@ -14,12 +14,12 @@ without one the server falls back to its own network.
 
    ```bash
    pip install ./agents/wiz            # or: pip install pywizlight websockets
-   dt-wiz-agent --server https://dungeontuber.example.com --token <token>
+   dt-wiz-agent --token <token>                       # server: https://dungeontuber.duckdns.org, or add --server <url>
    ```
 
    Settings can also be given as environment variables: `DT_SERVER`, `DT_AGENT_TOKEN`, `DT_AGENT_NAME`, `DT_BROADCAST`, `DT_FAKE_LIGHTS=1`.
 
-Options: `--broadcast` (broadcast address of the bulb network, e.g. `192.168.1.255`; default `255.255.255.255`), `--wait` (seconds to wait
+Options: `--server` (default `https://dungeontuber.duckdns.org`), `--broadcast` (broadcast address of the bulb network, e.g. `192.168.1.255`; default `255.255.255.255`), `--wait` (seconds to wait
 for bulbs while discovering), `--fake` (three simulated bulbs for testing), `--verbose`. The agent reconnects automatically.
 
 ## Protocol
