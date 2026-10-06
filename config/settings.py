@@ -140,79 +140,112 @@ class Preset:
         return Preset(**data)
 
 
-_PRESETS: list[Preset] = []
-
 _DEFAULT_CATEGORIES = [CAT_VALENCE, CAT_AROUSAL, CAT_ENGAGEMENT, CAT_DARKNESS, CAT_AGGRESSIVE, CAT_HAPPY, CAT_PARTY, CAT_RELAXED, CAT_SAD]
-_MUSIC_CATEGORIES = None
-_CATEGORIES = None
-
-
-def remove_preset(preset: Preset):
-    _PRESETS.remove(preset)
-    AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
-
-
-def add_preset(preset: Preset):
-    _PRESETS.append(preset)
-    AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
-
-
-def get_presets():
-    return _PRESETS
-
-
-def set_presets(presets: list[Preset]):
-    global _PRESETS
-    if presets is None:
-        _PRESETS = []
-        AppSettings.remove(SettingKeys.PRESETS)
-    else:
-        presets = [preset for preset in presets if preset.name is not None]
-        _PRESETS = presets
-        AppSettings.setValue(SettingKeys.PRESETS, Preset.json_dump_list(_PRESETS))
-
-
-def get_music_category(key: str, additional_categories: list[MusicCategory] = []) -> MusicCategory:
-    cats = [cat for cat in get_music_categories() + additional_categories if cat.key == key]
-
-    return cats[0] if cats and len(cats) > 0 else None
-
-
-def get_category_keys() -> list[str]:
-    global _CATEGORIES
-
-    if _CATEGORIES is None:
-        _CATEGORIES = [cat.key for cat in get_music_categories()]
-
-    return _CATEGORIES
-
-
-def get_music_categories() -> list[MusicCategory]:
-    global _MUSIC_CATEGORIES
-    if _MUSIC_CATEGORIES is None:
-        _MUSIC_CATEGORIES = [MusicCategory.from_key(key) for key in _DEFAULT_CATEGORIES]
-    return _MUSIC_CATEGORIES
-
-
-def set_music_categories(categories: list[MusicCategory] | None):
-    global _MUSIC_CATEGORIES
-    if categories is None:
-        AppSettings.remove(SettingKeys.CATEGORIES)
-        _CATEGORIES = None
-    else:
-        AppSettings.setValue(SettingKeys.CATEGORIES, MusicCategory.json_dump_list(categories))
-        _CATEGORIES = [cat.name for cat in categories]
-
-    _MUSIC_CATEGORIES = categories
-
 
 AppSettings: QSettings = QSettings("Gandulf", "DungeonTuber")
 
 
+class SettingsStore:
+    """Holds the presets and music categories and persists them through a QSettings instance."""
+
+    def __init__(self, backend: QSettings):
+        self._backend = backend
+        self._presets: list[Preset] = []
+        self._music_categories: list[MusicCategory] | None = None
+        self._category_keys: list[str] | None = None
+
+    # presets
+    def get_presets(self) -> list[Preset]:
+        return self._presets
+
+    def set_presets(self, presets: list[Preset] | None):
+        if presets is None:
+            self._presets = []
+            self._backend.remove(SettingKeys.PRESETS)
+        else:
+            self._presets = [preset for preset in presets if preset.name is not None]
+            self._save_presets()
+
+    def add_preset(self, preset: Preset):
+        self._presets.append(preset)
+        self._save_presets()
+
+    def remove_preset(self, preset: Preset):
+        self._presets.remove(preset)
+        self._save_presets()
+
+    def reset_presets(self):
+        self._presets = []
+        self._backend.remove(SettingKeys.PRESETS)
+
+    def _save_presets(self):
+        self._backend.setValue(SettingKeys.PRESETS, Preset.json_dump_list(self._presets))
+
+    # music categories
+    def get_music_categories(self) -> list[MusicCategory]:
+        if self._music_categories is None:
+            self._music_categories = [MusicCategory.from_key(key) for key in _DEFAULT_CATEGORIES]
+        return self._music_categories
+
+    def set_music_categories(self, categories: list[MusicCategory] | None):
+        if categories is None:
+            self._backend.remove(SettingKeys.CATEGORIES)
+        else:
+            self._backend.setValue(SettingKeys.CATEGORIES, MusicCategory.json_dump_list(categories))
+
+        self._category_keys = None  # rebuilt lazily from the music categories
+        self._music_categories = categories
+
+    def get_music_category(self, key: str, additional_categories: list[MusicCategory] | None = None) -> MusicCategory | None:
+        for cat in self.get_music_categories() + (additional_categories or []):
+            if cat.key == key:
+                return cat
+        return None
+
+    def get_category_keys(self) -> list[str]:
+        if self._category_keys is None:
+            self._category_keys = [cat.key for cat in self.get_music_categories()]
+        return self._category_keys
+
+
+# Shared application-wide store; the module-level functions below delegate to it.
+settings = SettingsStore(AppSettings)
+
+
+def get_presets() -> list[Preset]:
+    return settings.get_presets()
+
+
+def set_presets(presets: list[Preset] | None):
+    settings.set_presets(presets)
+
+
+def add_preset(preset: Preset):
+    settings.add_preset(preset)
+
+
+def remove_preset(preset: Preset):
+    settings.remove_preset(preset)
+
+
 def reset_presets():
-    global _PRESETS
-    _PRESETS = None
-    AppSettings.remove(SettingKeys.PRESETS)
+    settings.reset_presets()
+
+
+def get_music_categories() -> list[MusicCategory]:
+    return settings.get_music_categories()
+
+
+def set_music_categories(categories: list[MusicCategory] | None):
+    settings.set_music_categories(categories)
+
+
+def get_music_category(key: str, additional_categories: list[MusicCategory] | None = None) -> MusicCategory | None:
+    return settings.get_music_category(key, additional_categories)
+
+
+def get_category_keys() -> list[str]:
+    return settings.get_category_keys()
 
 
 class SettingKeys(StrEnum):

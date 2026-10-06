@@ -207,20 +207,15 @@ class AppTheme(QObject):
 
         _h = _pt_to_px(self._font_size) * 1.333
 
-        _window_color = palette.color(QPalette.ColorRole.Window).name()
 
-        _base_color = palette.color(QPalette.ColorRole.Base).name()
         _base_color2 = palette.color(QPalette.ColorRole.Base).darker(103).name()
         _base_alt_color = palette.color(QPalette.ColorRole.Base).darker(110).name()
         _accent_color = palette.color(QPalette.ColorRole.Accent).name()
         _border_color = palette.color(QPalette.ColorRole.Mid).name()
-        _text_color = palette.color(QPalette.ColorRole.Text).name()
 
         _button_color = palette.color(QPalette.ColorRole.Button).name(QColor.NameFormat.HexArgb)
-        _button_text_color = palette.color(QPalette.ColorRole.ButtonText).name()
         _button_hover_color = palette.color(QPalette.ColorRole.Button).lighter(120).name(QColor.NameFormat.HexArgb)
 
-        _font_family = self.get_font_family()
         style=f"""                
             
             QSlider#temperature, QSlider#brightness {{

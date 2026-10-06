@@ -28,71 +28,85 @@ from config.utils import get_executable_path
 
 logger = logging.getLogger(__file__)
 
-voxalyzer_port: int|None = None
-voxalyzer_port_found_event = threading.Event()
-voxalyzer_process: Popen[str]|None = None
+class VoxalyzerService:
+    """Manages the local voxalyzer child process and the port it reports."""
+
+    def __init__(self):
+        self.port: str | None = None
+        self.port_found_event = threading.Event()
+        self.process: Popen[str] | None = None
+
+    def start(self) -> str | None:
+        has_local_voxalyzer = os.path.isfile(get_executable_path("voxalyzer.exe"))
+
+        if has_local_voxalyzer and self.port is None:
+            import subprocess
+
+            self.process = subprocess.Popen([get_executable_path("voxalyzer.exe"), "--port", "0", "--host", "127.0.0.1"],
+                                            creationflags=CREATE_NO_WINDOW,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE,
+                                            stdin=subprocess.DEVNULL,
+                                            text=True
+                                            )
+            atexit.register(self.stop)
+
+            logger.info("Voxalyzer: Listening for port...")
+
+            out_thread = threading.Thread(target=self._stream_logger, args=(self.process.stdout,), daemon=True)
+            err_thread = threading.Thread(target=self._stream_logger, args=(self.process.stderr,), daemon=True)
+            out_thread.start()
+            err_thread.start()
+
+            # Wait (blocks the calling thread until the port was found)
+            logger.info("Voxalyzer: Waiting for port...")
+            is_set = self.port_found_event.wait(timeout=60)
+
+            if is_set:
+                logger.info(f"Voxalyzer is running on port {self.port}")
+            else:
+                logger.error("Voxalyzer: Timed out waiting for port!")
+
+        if self.port:
+            return f"http://localhost:{self.port}"
+        else:
+            return None
+
+    def _stream_logger(self, pipe):
+        for line in pipe:
+            logger.info(f"[Voxalyzer]: {line.strip()}")
+            match = re.search(r"http://127.0.0.1:(\d+) ", line)
+            if match:
+                self.port = match.group(1)
+                self.port_found_event.set()
+                break
+
+    # This ensures the child is killed when Python exits gracefully
+    def stop(self):
+        try:
+            if self.process is not None:
+                parent = psutil.Process(self.process.pid)
+                # Find all grandchildren (Uvicorn, etc.)
+                children = parent.children(recursive=True)
+
+                for child in children:
+                    child.terminate()
+
+                parent.terminate()
+        except psutil.NoSuchProcess:
+            pass
+
+
+voxalyzer = VoxalyzerService()
+
 
 def start_voxalyzer() -> str | None:
-    global voxalyzer_process
-    has_local_voxalyzer = os.path.isfile(get_executable_path("voxalyzer.exe"))
+    return voxalyzer.start()
 
-    if has_local_voxalyzer and voxalyzer_port is None:
-        import subprocess
 
-        voxalyzer_process = subprocess.Popen([get_executable_path("voxalyzer.exe"), "--port", "0", "--host", "127.0.0.1"],
-                                   creationflags=CREATE_NO_WINDOW,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   stdin=subprocess.DEVNULL,
-                                   text=True
-                                   )
-        atexit.register(stop_voxalyzer)
-        # 3. Define the logger function
-        def stream_logger(pipe, prefix):
-            global voxalyzer_port
-            for line in pipe:
-                logger.info(f"[Voxalyzer]: {line.strip()}")
-                match = re.search(r"http://127.0.0.1:(\d+) ", line)
-                if match:
-                    voxalyzer_port = match.group(1)
-                    voxalyzer_port_found_event.set()
-                    break
-
-        logger.info("Voxalyzer: Listening for port...")
-
-        out_thread = threading.Thread(target=stream_logger, args=(voxalyzer_process.stdout, "INFO"), daemon=True)
-        err_thread = threading.Thread(target=stream_logger, args=(voxalyzer_process.stderr, "ERROR"), daemon=True)
-        out_thread.start()
-        err_thread.start()
-
-        # 3. Wait (blocks the main thread until .set() is called)
-        logger.info("Voxalyzer: Waiting for port...")
-        is_set = voxalyzer_port_found_event.wait(timeout=60)  # Optional timeout in seconds
-
-        if is_set:
-            logger.info(f"Voxalyzer is running on port {voxalyzer_port}")
-        else:
-            logger.error("Voxalyzer: Timed out waiting for port!")
-
-    if voxalyzer_port:
-        return f"http://localhost:{voxalyzer_port}"
-    else:
-        return None
-
-# This ensures the child is killed when Python exits gracefully
 def stop_voxalyzer():
-    try:
-        if voxalyzer_process is not None:
-            parent = psutil.Process(voxalyzer_process.pid)
-            # Find all grandchildren (Uvicorn, etc.)
-            children = parent.children(recursive=True)
+    voxalyzer.stop()
 
-            for child in children:
-                child.terminate()
-
-            parent.terminate()
-    except psutil.NoSuchProcess:
-        pass
 
 def is_analyzed(file_path: PathLike[str] | Mp3Entry) -> bool:
     if isinstance(file_path, Mp3Entry):
@@ -101,7 +115,7 @@ def is_analyzed(file_path: PathLike[str] | Mp3Entry) -> bool:
         entry = parse_mp3(file_path)
 
     return (set(get_category_keys()) == set(entry.categories.keys()) and entry.summary is not None
-            and entry.summary != "This is a mock summary." and not "Voxalyzer" in entry.summary)
+            and entry.summary != "This is a mock summary." and "Voxalyzer" not in entry.summary)
 
 
 def is_voxalyzed(file_path: PathLike[str] | Mp3Entry) -> bool:

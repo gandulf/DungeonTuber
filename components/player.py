@@ -315,8 +315,6 @@ class PlayerWidget(QFrame):
         update_mp3_chapters(self.current_data.path, self.current_data.chapters)
 
     def remove_chapter(self, index: int):
-        chapter = self.current_data.chapters[index]
-
         del self.current_data.chapters[index]
         update_mp3_chapters(self.current_data.path, self.current_data.chapters)
 
@@ -649,7 +647,7 @@ class PlayerSlider(JumpSlider):
                 x = x + 9
 
                 text_rect = chapterFM.boundingRect(x, gr.center().y() - textHeight // 2, opt.rect.width(),
-                                                   opt.rect.height(), Qt.TextFlag.TextSingleLine, ch['title']);
+                                                   opt.rect.height(), Qt.TextFlag.TextSingleLine, ch['title'])
 
                 brush_rect = text_rect.adjusted(-10, -2, 2, 2)
                 painter.setBrush(self.palette().brush(self.backgroundRole()))

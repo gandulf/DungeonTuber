@@ -1,7 +1,6 @@
 import logging
 import numbers
 import os
-import time
 import traceback
 from itertools import chain
 from os import PathLike
@@ -25,7 +24,6 @@ from config.utils import tint_icon
 from logic.mp3 import Mp3Entry, update_mp3_favorite, update_mp3_title, update_mp3_album, update_mp3_artist, update_mp3_genre, update_mp3_bpm, \
     update_mp3_category, Mp3FileLoader, save_playlist, remove_m3u, append_m3u, parse_mp3, update_mp3_tags, get_m3u_paths, update_mp3_summary
 
-
 logger = logging.getLogger(__file__)
 
 def _get_bpm_background_brush(desired_value: int | None, value: int, data: Mp3Entry) -> QBrush | Qt.GlobalColor | None:
@@ -41,22 +39,8 @@ def _get_bpm_background_brush(desired_value: int | None, value: int, data: Mp3En
     else:
         return app_theme.get_red(51)
 
-
-
 def _get_score_foreground_brush(score: int | None) -> QColor | Qt.GlobalColor | None:
     return Qt.GlobalColor.black
-    # if score is not None:
-    #     if score < 50:
-    #         return _black
-    #     elif score < 100:
-    #         return _black
-    #     elif score < 150:
-    #         return _black
-    #     else:
-    #         return _black
-    # else:
-    #     return _black
-
 
 def _get_score_background_brush(score: int | None, data: Mp3Entry) -> QBrush | Qt.GlobalColor | None:
     if score is not None:
@@ -142,7 +126,7 @@ class SongTableModel(QAbstractTableModel):
                 self.available_genres.update(entry.genres)
             if entry.categories is not None:
                 for key in entry.categories.keys():
-                    if not key in available_categories_keys:
+                    if key not in available_categories_keys:
                         self.available_categories.append(MusicCategory.from_key(key))
                         available_categories_keys.append(key)
 

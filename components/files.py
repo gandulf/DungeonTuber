@@ -556,7 +556,7 @@ class DirectoryWidget(QFrame):
         self.load_favorites()
 
     def on_favorite_added(self, file_info:QFileInfo):
-        if not file_info in self.favorites:
+        if file_info not in self.favorites:
             self.favorites_model.appendRow(self.create_native_favorite_item(file_info))
             self.store_favorites()
             self.invalidate_favorites()
