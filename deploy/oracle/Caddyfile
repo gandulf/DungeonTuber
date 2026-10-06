@@ -1,0 +1,5 @@
+# {$DOMAIN} comes from .env, e.g. dungeontuber.duckdns.org; Caddy gets a Let's Encrypt certificate for it automatically.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy dungeontuber:8765
+}
