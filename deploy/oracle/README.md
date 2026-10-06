@@ -24,7 +24,7 @@ curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker $USER   #
 git clone -b web-version https://github.com/gandulf/DungeonTuber.git && cd DungeonTuber/deploy/oracle   # drop -b once merged to master
 nano .env                                                                      # see below
 mkdir -p music && sudo chown -R 1000:1000 music
-docker compose up -d --build
+docker compose up -d
 ```
 `.env` (git ignores it, do not commit it):
 ```
@@ -34,13 +34,17 @@ DUCKDNS_TOKEN=token-from-duckdns.org
 DT_PASSWORD=choose-a-password
 ```
 
-Open `https://<DOMAIN>`. The first start takes a while (the frontend is built in the image). Copy your mp3s into `music/`
+Open `https://<DOMAIN>`. Copy your mp3s into `music/`
 (or add an S3 library under Settings > Library) and use *Rescan Library* in the menu.
 
 ## Notes
-- WiZ lights are not reachable from a cloud VM (UDP broadcast into your LAN); they only work when the server runs in your network.
+- WiZ lights are not reachable from a cloud VM (UDP broadcast into your LAN): run the [WiZ light agent](../../agents/wiz/README.md) in your home network, it connects out to the server.
 - Oracle reclaims idle Always Free instances (7 days below 20 % CPU/network/memory); check the instance now and then.
 - Back up the `dt-data` volume (`library.db`, `settings.json`) now and then:
   `docker run --rm -v oracle_dt-data:/data -v $PWD:/out alpine tar czf /out/dt-data.tgz -C /data .`
   (the volume name is `<folder>_dt-data`, see `docker volume ls`).
-- Update: `git pull && docker compose up -d --build`.
+- Updates are automatic: [What's up Docker](https://getwud.github.io/wud/) (`wud` service) checks every hour whether `ghcr.io/gandulf/dungeontuber:latest`
+  has a new image, pulls it and recreates the container; the settings and the database live in the `dt-data` volume. See what it did with
+  `docker compose logs wud`. To update right away: `docker compose pull dungeontuber && docker compose up -d`. For a private image add
+  registry credentials (`WUD_REGISTRY_GHCR_PUBLIC_...`, see the WUD docs); to pin a version use that tag instead of `latest` and remove the labels.
+- Changes of the compose file or `.env`: `git pull && docker compose up -d`.
