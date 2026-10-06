@@ -1,4 +1,4 @@
-name: Lint
+name: Lint & Test
 
 on:
   push:
@@ -22,11 +22,45 @@ jobs:
         python-version: "3.12"
         cache: 'pip'
 
-    - name: Install lint dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8
+        pip install . flake8 pytest httpx
 
     - name: Lint with flake8
       run: |
         flake8
+
+    - name: Test core and server with pytest
+      run: |
+        pytest
+
+    - name: Set up Node
+      uses: actions/setup-node@v5
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: web/package-lock.json
+
+    - name: Check, test and build the web frontend
+      working-directory: web
+      run: |
+        npm ci
+        npm run check
+        npm test
+        npm run build
+
+  docker:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+    - uses: docker/setup-buildx-action@v4
+    - name: Build server image (no push)
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        push: false
+        tags: dungeontuber:ci
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+

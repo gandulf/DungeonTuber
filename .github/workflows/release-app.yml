@@ -13,124 +13,251 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
-  release:
-    runs-on: windows-latest
-
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      app_version: ${{ steps.vars.outputs.app_version }}
+      tag: ${{ steps.vars.outputs.tag }}
     steps:
-    - uses: actions/checkout@v6
+      - id: vars
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.version_tag }}"
+          else
+            echo "Unsupported trigger" >&2; exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "app_version=${tag#v}" >> "$GITHUB_OUTPUT"
 
-    - name: Update version with current tag reference
-      id: vars
-      shell: pwsh
-      run: |
-        $ref = "${{ github.ref }}"
-        $event_name = "${{ github.event_name }}"
-        $input_version = "${{ inputs.version_tag }}"
+  # --- Python wheel (server + desktop launcher, web frontend included) -------
+  wheel:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Set version
+        run: sed -i 's/^version = ".*"/version = "${{ needs.version.outputs.app_version }}"/' pyproject.toml
+      - name: Test
+        run: |
+          pip install .[dev]
+          flake8
+          pytest
+      - name: Build web frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
+      - name: Build wheel
+        run: python -m build --wheel
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel
+          path: dist/*.whl
 
-        if ($ref -like "refs/tags/v*") {
-            $version = $ref -replace "refs/tags/v", ""
-        } elseif ($ref -eq "refs/heads/devel") {
-            $version = "devel"
-        } elseif ($event_name -eq "workflow_dispatch") {
-            $version = $input_version -replace "^v", ""
-        } else {
-            Write-Error "Unsupported trigger. Exiting."
-            exit 1
-        }
+  # --- Docker image (linux/amd64 + linux/arm64, e.g. Raspberry Pi) -----------
+  docker:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set version
+        run: sed -i 's/^version = ".*"/version = "${{ needs.version.outputs.app_version }}"/' pyproject.toml
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/dungeontuber
+          tags: |
+            type=raw,value=${{ needs.version.outputs.app_version }}
+            type=raw,value=latest,enable=${{ !contains(needs.version.outputs.app_version, '-') }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-        Write-Host "Building version: $version"
+  # --- Windows desktop installer (PyInstaller + Inno Setup, signed) -----------
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
 
-        (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '" + $version + "'") | Out-File -encoding UTF8noBom version.rc
-        (Get-Content pyproject.toml) -replace 'version = "(.*?)"', ('version = "' + $version + '"') | Out-File -encoding UTF8noBom pyproject.toml
+      - name: Set version
+        shell: pwsh
+        run: |
+          $version = "${{ needs.version.outputs.app_version }}"
+          (Get-Content version.rc) -replace "'ProductVersion', '(.*?)'", ("'ProductVersion', '" + $version + "'") | Out-File -encoding UTF8noBom version.rc
+          (Get-Content pyproject.toml) -replace '^version = "(.*?)"', ('version = "' + $version + '"') | Out-File -encoding UTF8noBom pyproject.toml
 
-        # Export the tags for subsequent steps (comma-separated)        
-        echo "app_version=$version" >> $env:GITHUB_OUTPUT
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: 'pip'
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v6
-      with:
-        python-version: "3.12"
-        cache: 'pip'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install .[dev] flake8        
+      - name: Build web frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
 
-    - name: Lint with flake8
-      run: |
-        flake8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[desktop,dev]
 
-    - name: Create Nuitka Executable
-      uses: Nuitka/Nuitka-Action@main
-      with:
-        nuitka-version: main
-        script-name: DungeonTuber.py
-        mode: standalone
-        low-memory: true
-        output-dir: dist
-        file-version: ${{ steps.vars.outputs.app_version }}
-        product-version: ${{ steps.vars.outputs.app_version }}
-        jobs: 1
+      - name: Build executable
+        run: pyinstaller DungeonTuber.spec --noconfirm
 
-    - name: Create Pyinstaller Executable
-      if: false
-      run: |
-        pyinstaller DungeonTuber.spec
+      - name: Download Voxalyzer Release
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/gandulf/Voxalyzer/releases/latest/download/voxalyzer.exe" -OutFile "dist/DungeonTuber/voxalyzer.exe"
 
-    - name: Download Voxalyzer Release
-      shell: pwsh
-      run: |        
-        Invoke-WebRequest -Uri "https://github.com/gandulf/Voxalyzer/releases/latest/download/voxalyzer.exe" -OutFile "dist/DungeonTuber.dist/voxalyzer.exe"
+      - name: Compile .ISS to .EXE Installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
+        with:
+          path: DungeonTuber.iss
+          options: /O+
 
-    - name: Compile .ISS to .EXE Installer
-      uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
-      with:
-        path: DungeonTuber.iss
-        options: /O+
+      - name: Prepare Certificate for Signing
+        shell: pwsh
+        run: |
+          $certBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_BASE64 }}")
+          [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)
 
-    - name: Prepare Certificate for Signing
-      shell: pwsh
-      run: |
-        # Decode the Base64 secret into a physical .pfx file
-        $certBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_BASE64 }}")
-        [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)        
+      - name: Prepare Signtool
+        uses: KamaranL/add-signtool-action@v1
+        id: signtool
 
-    - name: Prepare Signtool
-      uses: KamaranL/add-signtool-action@v1
-      id: signtool
+      - name: Sign Executable
+        shell: pwsh
+        run: |
+          signtool sign /f "$env:TEMP\cert.pfx" /p "${{ secrets.PFX_PASSWORD }}" `
+             /fd sha256 /td sha256 `
+             /tr http://timestamp.digicert.com `
+             "DungeonTuber-${{ needs.version.outputs.app_version }}.exe"
 
-    - name: Sign Executable
-      shell: pwsh
-      run: |
-        signtool sign /f "$env:TEMP\cert.pfx" /p "${{ secrets.PFX_PASSWORD }}" `
-           /fd sha256 /td sha256 `
-           /tr http://timestamp.digicert.com `
-           "DungeonTuber-${{ steps.vars.outputs.app_version }}.exe"
+      - name: Cleanup Certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:TEMP\cert.pfx") { Remove-Item "$env:TEMP\cert.pfx" }
 
-    - name: Cleanup Certificate
-      if: always()
-      shell: pwsh
-      run: |
-        # Securely remove the certificate from the runner's temp folder
-        if (Test-Path "$env:TEMP\cert.pfx") { Remove-Item "$env:TEMP\cert.pfx" }        
-        
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: DungeonTuber-*.exe
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ steps.vars.outputs.app_version }}
-        draft: true
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: DungeonTuber-${{ steps.vars.outputs.app_version }}
-        path: DungeonTuber-*.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: DungeonTuber-*.exe
 
+  # --- WiZ light agent (single Windows executable, see agents/wiz) ---------------
+  wiz-agent:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+          cache-dependency-path: agents/wiz/pyproject.toml
+      - name: Build executable
+        working-directory: agents/wiz
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller .
+          python build.py
+      - name: Name the executable after the release
+        shell: pwsh
+        run: Move-Item agents/wiz/dist/DungeonTuberWizAgent.exe "DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe"
+
+      - name: Prepare Certificate for Signing
+        shell: pwsh
+        run: |
+          $certBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_BASE64 }}")
+          [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)
+
+      - name: Prepare Signtool
+        uses: KamaranL/add-signtool-action@v1
+        id: signtool
+
+      - name: Sign Executable
+        shell: pwsh
+        run: |
+          signtool sign /f "$env:TEMP\cert.pfx" /p "${{ secrets.PFX_PASSWORD }}" `
+             /fd sha256 /td sha256 `
+             /tr http://timestamp.digicert.com `
+             "DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe"
+
+      - name: Cleanup Certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:TEMP\cert.pfx") { Remove-Item "$env:TEMP\cert.pfx" }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wiz-agent
+          path: DungeonTuberWizAgent-*.exe
+
+  # --- GitHub release with installer, wheel and WiZ agent ----------------------
+  release:
+    needs: [version, wheel, windows, docker, wiz-agent]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            artifacts/DungeonTuber-*.exe
+            artifacts/DungeonTuberWizAgent-*.exe
+            artifacts/*.whl
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Release ${{ needs.version.outputs.app_version }}
+          draft: true
+          prerelease: ${{ contains(needs.version.outputs.app_version, '-') }}
+          body: |
+            **Windows:** download and run `DungeonTuber-${{ needs.version.outputs.app_version }}.exe`.
+
+            **Server (Docker):** `docker pull ghcr.io/${{ github.repository_owner }}/dungeontuber:${{ needs.version.outputs.app_version }}` – see `deploy/docker-compose.yml`.
+
+            **Server (Python):** `pipx install <wheel-file>` then `dungeontuber-server`.
+
+            **WiZ light agent** (runs next to the bulbs, for a server outside their network): `DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe --server <url> --token <token>` – see `agents/wiz/README.md`.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

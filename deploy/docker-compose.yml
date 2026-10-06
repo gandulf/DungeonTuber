@@ -1,0 +1,40 @@
+# DungeonTuber server with automatic HTTPS (Caddy).
+#
+#   1. Copy this folder, adjust DOMAIN in Caddyfile, the music path and the password below.
+#   2. docker compose up -d
+#
+# LAN only (no domain): remove the caddy service and publish "8765:8765" on dungeontuber instead.
+# WiZ lights: bulbs are found via UDP broadcast, which needs `network_mode: host` (Linux hosts only).
+
+services:
+  dungeontuber:
+    image: ghcr.io/gandulf/dungeontuber:latest
+    restart: unless-stopped
+    environment:
+      DT_PASSWORD: "change-me"          # login password for the web interface
+      DT_LIBRARY: /music                # several folders: /music:/effects
+      DT_FORWARDED_ALLOW_IPS: "*"       # trust X-Forwarded-* headers from Caddy
+      # DT_FAKE_LIGHTS: "1"            # simulated bulbs for testing
+    volumes:
+      - ./data:/data                    # settings.json + library.db
+      - /path/to/your/music:/music      # your mp3 library (read/write: tags, playlists, uploads)
+    # network_mode: host                # enable for WiZ light discovery (then drop caddy's link or use host networking there too)
+    expose:
+      - "8765"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - dungeontuber
+
+volumes:
+  caddy-data:
+  caddy-config:

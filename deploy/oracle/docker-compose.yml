@@ -1,0 +1,66 @@
+# DungeonTuber on an Oracle Cloud Always Free VM (Ampere A1, arm64) with a DuckDNS name and automatic HTTPS (Caddy).
+# Step by step instructions: README.md in this folder.
+#
+#   cp .env.example .env      # fill in DOMAIN, DUCKDNS_*, DT_PASSWORD
+#   docker compose up -d
+#
+# What's up Docker (wud) checks ghcr.io for a new dungeontuber:latest image every hour and recreates the container with it.
+
+services:
+  dungeontuber:
+    image: ghcr.io/gandulf/dungeontuber:latest
+    restart: unless-stopped
+    labels:
+      wud.watch: "true"                 # only labelled containers are watched (caddy and duckdns are not)
+      wud.watch.digest: "true"          # `latest` is a moving tag: update whenever its digest changes
+    environment:
+      DT_PASSWORD: ${DT_PASSWORD:?set DT_PASSWORD in .env}
+      DT_LIBRARY: /music
+      DT_FORWARDED_ALLOW_IPS: "*"       # trust X-Forwarded-* headers from Caddy (the port is not published)
+      # an OCI Object Storage / other S3 library can be added here, see docker-compose.yml in the repository root (DT_S3_*)
+    volumes:
+      - dt-data:/data                   # settings.json + library.db
+      - ./music:/music                  # sudo chown -R 1000:1000 ./music (the container runs as uid 1000)
+    expose:
+      - "8765"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data                # certificates
+      - caddy-config:/config
+    depends_on:
+      - dungeontuber
+
+  # keeps <subdomain>.duckdns.org pointing at this VM's public IP
+  duckdns:
+    image: lscr.io/linuxserver/duckdns:latest
+    restart: unless-stopped
+    environment:
+      SUBDOMAINS: ${DUCKDNS_SUBDOMAIN:?set DUCKDNS_SUBDOMAIN in .env}
+      TOKEN: ${DUCKDNS_TOKEN:?set DUCKDNS_TOKEN in .env}
+      LOG_FILE: "false"
+
+  # What's up Docker: pulls new images of the labelled containers and recreates them (data lives in volumes and survives)
+  wud:
+    image: getwud/wud:latest
+    restart: unless-stopped
+    environment:
+      WUD_WATCHER_LOCAL_CRON: "0 * * * *"            # check every hour
+      WUD_WATCHER_LOCAL_WATCHBYDEFAULT: "false"
+      WUD_TRIGGER_DOCKER_LOCAL_PRUNE: "true"         # the docker trigger updates automatically; remove the replaced image
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # optional web UI: add `ports: ["127.0.0.1:3000:3000"]` and open it through an SSH tunnel (ssh -L 3000:localhost:3000 <vm>)
+
+volumes:
+  dt-data:
+  caddy-data:
+  caddy-config:

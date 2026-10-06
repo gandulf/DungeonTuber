@@ -1,15 +1,22 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["logic", "config", "components"]
+# the data files are listed explicitly below; picking up every directory of the sdist as a package only produces warnings
+include-package-data = false
+packages = ["core", "core.storage", "server", "server.routes"]
 py-modules = ["DungeonTuber"]
+
+[tool.setuptools.package-data]
+# translations and the built web frontend (npm --prefix web run build) ship inside the packages
+core = ["locales/*.json"]
+server = ["static/*", "static/**/*"]
 
 [project]
 name = "DungeonTuber"
 version = "0.2.0.0"
-description = "RPG music player wit advanced categorization"
+description = "RPG music player with advanced categorization"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 authors = [
@@ -17,20 +24,36 @@ authors = [
 ]
 dependencies = [
     "mutagen>=1.48.1",
-    "pyside6-essentials==6.11.2",
-    "shiboken6>=6.11.2",
-    "sortedcontainers>=2.4.0",
-    "python-vlc>=3.0.21203",
     "psutil>=7.2.2",
-    "pywizlight>=0.6.6"
+    "pywizlight>=0.6.6",
+    "packaging>=24.0",
+    "fastapi>=0.142",
+    "uvicorn[standard]>=0.54",
+    "python-multipart>=0.0.32",
+    "pillow>=12.3"
 ]
 
 [project.optional-dependencies]
+# native window for the desktop launcher (DungeonTuber.py); not needed for the server
+desktop = [
+    "pywebview>=6.2"
+]
+# S3 compatible library storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, ...)
+s3 = [
+    "boto3>=1.36"
+]
 dev = [
     "pyinstaller>=6.22.3",
     "flake8>=7.4.1",
-    "Nuitka[app]>=4.2.2"
+    "pytest>=9.0",
+    "httpx>=0.28",
+    "build>=1.2"
 ]
 
 [project.scripts]
 dungeontuber = "DungeonTuber:main"
+dungeontuber-server = "server.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -82,29 +82,77 @@ The process involves uploading the audio file to the Voxalyzer and there use loc
 
 ---
 
-## 🛠️ Build Instructions
+## 🌐 Installation & Deployment
 
+DungeonTuber is a Python server with a web frontend; the music is played in the browser. Pick the variant that fits:
 
-## Update translations:
-Edit translations in _locales/**/LC_MESSAGES/DungeonTuber.po_ files and then run the following commands to update mo files. 
+| You want… | Use |
+|---|---|
+| Play on your Windows PC (optionally tablets join) | **Desktop app** – the Windows installer from the [releases](https://github.com/gandulf/DungeonTuber/releases) |
+| An always-on server (NAS, Raspberry Pi, VPS) | **Docker image** `ghcr.io/gandulf/dungeontuber` |
+| Run it on any machine with Python 3.12 | **Python package** – the wheel from the releases |
+
+### Desktop app
+Install and start *Dungeon Tuber*. Only this computer can connect. To let tablets or phones at the table join, set a
+password and enable **Settings → Security → Share on network**, restart the app and open the shown address on the
+other device.
+
+### Docker
 ```bash
-msgfmt -o locales/en/LC_MESSAGES/DungeonTuber.mo locales/en/LC_MESSAGES/DungeonTuber.po
-msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonTuber.po
+docker run -d -p 8765:8765 -e DT_PASSWORD=change-me \
+  -v /path/to/music:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
+```
+[`deploy/docker-compose.yml`](deploy/docker-compose.yml) adds automatic HTTPS with Caddy for access over the internet.
+WiZ bulbs are discovered via UDP broadcast, which only works with `network_mode: host` on Linux – on Windows use the desktop app for lights. For a server that is not in the bulbs' network, run the [WiZ light agent](agents/wiz/README.md) next to the bulbs: it connects out to the server with its own token (Settings > Lights, or `DT_AGENT_TOKEN`).
+
+### Python package
+```bash
+pipx install dungeontuber-<version>-py3-none-any.whl
+DT_PASSWORD=change-me DT_LIBRARY=/srv/music dungeontuber-server --host 0.0.0.0
+```
+See [`deploy/dungeontuber.service`](deploy/dungeontuber.service) for a systemd unit.
+
+### Server configuration
+Options can be passed as arguments (`dungeontuber-server --help`) or environment variables:
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `DT_HOST` / `DT_PORT` | interface and port | `127.0.0.1` / `8765` |
+| `DT_DATA_DIR` | `settings.json`, `library.db`, logs | `%APPDATA%/DungeonTuber` or `~/.config/DungeonTuber` |
+| `DT_LIBRARY` | music folders (separated by `:` on Linux, `;` on Windows) | `~/Music` |
+| `DT_PASSWORD` | SuperAdmin password, user name `admin` (without one only the server machine itself can connect) | – |
+| `DT_FORWARDED_ALLOW_IPS` | reverse proxies whose `X-Forwarded-*` headers are trusted | `127.0.0.1` |
+
+The SuperAdmin can add more users in **Settings → Security**; they sign in with their own name and password. Users cannot change server settings, and every uploaded song remembers who uploaded it (shown in the song details).
+
+Only files inside the library folders are accessible. Run a single server process – it keeps the analysis queue,
+lights and live updates in memory.
+
+---
+
+## 🛠️ Development & Build
+
+```bash
+pip install -e .[desktop,dev]
+npm --prefix web ci
+npm --prefix web run build        # writes server/static
+python DungeonTuber.py --fake     # desktop window with simulated bulbs
+```
+Frontend development with hot reload: `python -m server --fake-lights` and `npm --prefix web run dev` (port 5173).
+
+### Tests
+```bash
+python -m pytest
+npm --prefix web test
 ```
 
-### Using PyInstaller
-```bash
-pyinstaller DungeonTuber.spec --noconfirm
-```
+### Packages
+* Python wheel (includes the web frontend): `python -m build --wheel`
+* Docker image: `docker build -t dungeontuber .`
+* Windows desktop app (lint, tests, web frontend, PyInstaller): `python build_app.py`, then `DungeonTuber.iss` with Inno Setup
 
-### Using Nuitka (Recommended)
-The following command uses MinGW64. If you experience slow compilation, ensure your build directory is excluded from Antivirus scanning.
+Releases (`v*` tags) are built by [`release-app.yml`](.github/workflows/release-app.yml): Windows installer, wheel and multi-arch Docker image.
 
-```bash
-python -m nuitka --jobs=16 DungeonTuber.py --product-version=0.2.0.0 --file-version=0.2.0.0
-```
-> [!Note]
-> Add `--product-version=X.Y.Z.Q` and `--file-version=X.Y.Z.Q` to define version of created exe
-
-> [!Note]
-> The `--jobs` flag sets the number of parallel compilation jobs. Adjust based on your CPU cores.*
+### Translations
+Translations live in `core/locales/<lang>.json` (message id = English text) and are used by both the server and the
+web frontend. Add new strings to every locale file.

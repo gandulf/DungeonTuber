@@ -1,0 +1,107 @@
+# Local build + test stack: DungeonTuber (built from this checkout) with a RustFS bucket as S3 compatible library.
+#
+#   python scripts/make_test_library.py test-library     # optional: sample songs for the local library and the bucket
+#   docker compose up --build
+#   docker compose up --watch                            # same, and rebuilds + restarts DungeonTuber whenever web/, core/ or server/ change
+#
+#   DungeonTuber  http://localhost:8765     login password: dungeontuber (DT_PASSWORD)
+#   RustFS console http://localhost:9001     rustfsadmin / rustfsadmin
+#
+# The bucket is added as library "S3 (RustFS)" next to the local /music folder (see Settings > Library).
+# Seeding: everything in ./test-library is synced into the bucket at startup (re-running only adds/updates files).
+#
+# Direct streaming test:  DT_S3_DIRECT=1 docker compose up --build
+#   The browser then streams from http://localhost:9000 using presigned URLs. The server itself talks to RustFS as
+#   http://rustfs:9000, hence the separate public endpoint (not needed for Cloudflare R2 and other public services).
+#
+# Docker Desktop: if it reports that the music path is "not shared", add the folder under Settings > Resources > File Sharing
+# or point DT_MUSIC_DIR at a shared folder.
+#
+# Other S3 services: change the DT_S3_* variables (endpoint, region "auto" for Cloudflare R2, keys, bucket) and drop rustfs/rustfs-init.
+# Reset everything: docker compose down -v
+
+services:
+  dungeontuber:
+    build:
+      context: .
+      args:
+        EXTRAS: s3
+    image: dungeontuber:local
+    ports:
+      - "8765:8765"
+    environment:
+      DT_PASSWORD: dungeontuber
+      DT_LIBRARY: /music
+      DT_FAKE_LIGHTS: "1"                 # simulated WiZ bulbs (real discovery needs host networking on Linux)
+      DT_S3_BUCKET: music
+      DT_S3_NAME: S3 (RustFS)
+      DT_S3_ENDPOINT: http://rustfs:9000
+      DT_S3_PUBLIC_ENDPOINT: http://localhost:9000
+      DT_S3_REGION: us-east-1
+      DT_S3_ACCESS_KEY: rustfsadmin
+      DT_S3_SECRET_KEY: rustfsadmin
+      DT_S3_DIRECT: ${DT_S3_DIRECT:-0}
+    volumes:
+      - dt-data:/data                     # settings.json + library.db
+      - ${DT_MUSIC_DIR:-C:/Users/gandu/Music}:/music
+    depends_on:
+      rustfs-init:
+        condition: service_completed_successfully
+    # `docker compose watch` (or `docker compose up --watch`) rebuilds the image and recreates the container on source changes
+    develop:
+      watch:
+        - action: rebuild
+          path: ./web
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ./core
+          ignore:
+            - "**/__pycache__/"
+        - action: rebuild
+          path: ./server
+          ignore:
+            - static/
+            - "**/__pycache__/"
+        - action: rebuild
+          path: ./pyproject.toml
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"                       # S3 API
+      - "9001:9001"                       # web console
+    volumes:
+      - rustfs-data:/data
+
+  # creates the bucket and syncs the sample library into it, then exits
+  rustfs-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - rustfs
+    environment:
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      AWS_ENDPOINT_URL: http://rustfs:9000
+    volumes:
+      - ${DT_MUSIC_DIR:-./test-library}:/seed:ro
+    entrypoint: >
+      /bin/sh -c "
+      until aws s3 ls >/dev/null 2>&1; do echo 'waiting for rustfs...'; sleep 1; done;
+      aws s3 mb s3://music 2>/dev/null || true;
+      aws s3api put-bucket-cors --bucket music --cors-configuration '{\"CORSRules\":[{\"AllowedOrigins\":[\"*\"],\"AllowedMethods\":[\"GET\",\"HEAD\"],\"AllowedHeaders\":[\"*\"],\"ExposeHeaders\":[\"Content-Length\",\"Content-Range\",\"Accept-Ranges\"]}]}' || echo 'CORS rule not applied';
+      aws s3 sync /seed s3://music --only-show-errors;
+      echo 'bucket ready';
+      "
+
+volumes:
+  dt-data:
+  rustfs-data:
