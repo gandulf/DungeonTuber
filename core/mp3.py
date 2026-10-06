@@ -1,4 +1,4 @@
-"""MP3 data model, ID3 tag reading/writing and M3U playlists (Qt-free)."""
+"""MP3 data model, ID3 tag reading/writing and M3U playlists."""
 import glob
 import json
 import logging

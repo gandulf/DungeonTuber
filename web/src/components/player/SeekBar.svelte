@@ -113,9 +113,9 @@
   .seek { display: flex; align-items: center; gap: 10px; }
   .time { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; width: 38px; text-align: center; }
   .bar { position: relative; flex: 1; height: 26px; cursor: pointer; touch-action: none; }
-  .rail { position: absolute; left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-  .progress { height: 100%; background: var(--accent); }
-  .knob { position: absolute; top: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; background: var(--surface); border: 3px solid var(--accent); opacity: 0; transition: opacity 0.15s; }
+  .rail { position: absolute; left: 0; right: 0; top: 50%; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .progress { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow: 0 0 10px var(--accent-glow); }
+  .knob { position: absolute; top: 50%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); opacity: 0; transition: opacity 0.15s; }
   .bar:hover .knob { opacity: 1; }
   .chapter { position: absolute; top: 0; bottom: 0; width: 0; }
   .tick { position: absolute; top: 7px; height: 12px; width: 2px; margin-left: -1px; background: var(--text); opacity: 0.5; }

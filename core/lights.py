@@ -1,4 +1,4 @@
-"""WiZ light model, persistence and discovery (Qt-free)."""
+"""WiZ light model, persistence and discovery."""
 import asyncio
 import json
 import logging

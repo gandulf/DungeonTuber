@@ -3,19 +3,43 @@
   import Icon from './Icon.svelte';
 
   let menuEl = $state<HTMLDivElement | null>(null);
-  let position = $state({ x: 0, y: 0 });
+  let position = $state<{ x: number; y: number } | null>(null);
   let openSub = $state<number | null>(null);
+  const MARGIN = 8;
 
+  // keeps the menu completely inside the window (it is shown once it has been measured)
   $effect(() => {
     const menu = ui.menu;
-    if (!menu || !menuEl) return;
+    if (!menu) {
+      position = null;
+      return;
+    }
+    if (!menuEl) return;
     openSub = null;
     const rect = menuEl.getBoundingClientRect();
     position = {
-      x: Math.min(menu.x, window.innerWidth - rect.width - 8),
-      y: Math.min(menu.y, window.innerHeight - rect.height - 8),
+      x: Math.max(MARGIN, Math.min(menu.x, window.innerWidth - rect.width - MARGIN)),
+      y: Math.max(MARGIN, Math.min(menu.y, window.innerHeight - rect.height - MARGIN)),
     };
   });
+
+  /** A submenu opens to the left when there is no room on the right, and moves up when it would leave the window at the bottom. */
+  function fit(node: HTMLElement) {
+    const rect = node.getBoundingClientRect();
+    if (rect.right > window.innerWidth - MARGIN) {
+      node.style.left = 'auto';
+      node.style.right = '100%';
+      node.style.marginLeft = '0';
+      node.style.marginRight = '2px';
+    }
+    const placed = node.getBoundingClientRect();
+    if (placed.left < MARGIN) node.style.transform = `translateX(${MARGIN - placed.left}px)`; // neither side has room: overlap the parent menu
+    if (rect.bottom > window.innerHeight - MARGIN) {
+      const parentTop = node.parentElement?.getBoundingClientRect().top ?? rect.top;
+      const top = Math.max(MARGIN, window.innerHeight - MARGIN - rect.height);
+      node.style.top = `${top - parentTop}px`;
+    }
+  }
 
   function run(item: MenuItem) {
     if (item.disabled || item.children) return;
@@ -45,7 +69,7 @@
           {#if item.children}<Icon name="chevron-right" size={14} />{/if}
         </button>
         {#if item.children && openSub === i && level === 0}
-          <div class="menu sub">{@render items(item.children, 1)}</div>
+          <div class="menu sub" use:fit>{@render items(item.children, 1)}</div>
         {/if}
       </div>
     {/if}
@@ -53,7 +77,7 @@
 {/snippet}
 
 {#if ui.menu}
-  <div class="menu" bind:this={menuEl} style:left="{position.x || ui.menu.x}px" style:top="{position.y || ui.menu.y}px"
+  <div class="menu" bind:this={menuEl} style:left="{position?.x ?? ui.menu.x}px" style:top="{position?.y ?? ui.menu.y}px" style:visibility={position ? 'visible' : 'hidden'}
        role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()} oncontextmenu={(e) => e.preventDefault()}
        onkeydown={() => {}}>
     {@render items(ui.menu.items, 0)}
@@ -68,13 +92,14 @@
     max-width: 320px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: 12px;
     box-shadow: var(--shadow);
-    padding: 5px;
+    padding: 6px;
+    backdrop-filter: blur(12px);
   }
   .sub { position: absolute; left: 100%; top: -5px; margin-left: 2px; }
   .item-wrap { position: relative; }
-  .item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px 6px 6px; border-radius: var(--radius-sm); text-align: left; }
+  .item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px 7px 7px; border-radius: 8px; text-align: left; }
   .item:hover:not(:disabled) { background: var(--accent-soft); }
   .ic { width: 18px; display: flex; justify-content: center; color: var(--muted); }
   .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -1,0 +1,5 @@
+# Replace with your domain – Caddy obtains a Let's Encrypt certificate automatically.
+music.example.com {
+	encode gzip
+	reverse_proxy dungeontuber:8765
+}

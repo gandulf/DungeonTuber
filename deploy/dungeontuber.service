@@ -1,0 +1,20 @@
+# systemd unit for a pip/pipx installation on Linux (e.g. a Raspberry Pi in the gaming room).
+#   pipx install dungeontuber            (or: pip install dungeontuber-<version>-py3-none-any.whl)
+#   sudo cp dungeontuber.service /etc/systemd/system/ && sudo systemctl enable --now dungeontuber
+[Unit]
+Description=DungeonTuber music server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=dungeontuber
+Environment=DT_HOST=0.0.0.0
+Environment=DT_PORT=8765
+Environment=DT_DATA_DIR=/var/lib/dungeontuber
+Environment=DT_LIBRARY=/srv/music
+Environment=DT_PASSWORD=change-me
+ExecStart=/home/dungeontuber/.local/bin/dungeontuber-server
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

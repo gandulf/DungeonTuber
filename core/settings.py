@@ -32,68 +32,30 @@ _MOOD_CATEGORIES = [CAT_SAD, CAT_AGGRESSIVE, CAT_RELAXED, CAT_HAPPY, CAT_PARTY]
 
 
 class SettingKeys(StrEnum):
-    DEBUG = "debug"
-    WINDOW_SIZE = "windowSize"
-    REPEAT_MODE = "repeatMode"
-    VOLUME = "volume"
-    NORMALIZE_VOLUME = "normalizeVolume"
-    EFFECTS_DIRECTORY = "effectsDirectory"
-    EFFECTS_TREE = "effectsTree"
-    EFFECTS_LIST_VIEW_MODE = "effectsListViewMode"
-    LAST_DIRECTORY = "lastDirectory"
-    FAVORITES = "favorites"
-    SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
-    EXPANDED_DIRS = "expandedDirs"
-    ROOT_DIRECTORY = "rootDirectory"
-    DIRECTORY_TREE = "directoryTree"
-    RUSSEL_WIDGET = "russelWidget"
-    CATEGORY_WIDGETS = "categoryWidgets"
-    PRESET_WIDGETS = "presetWidgets"
-    BPM_WIDGET = "bpmWidget"
-    TAGS_WIDGET = "tagsWidget"
-    GENRES_WIDGET = "genresWidget"
-    FONT_SIZE = "fontSize"
-    VISUALIZER = "visualizer"
-    THEME = "theme"
+    """Keys of the per-server settings document (settings.json)."""
     LOCALE = "locale"
-    START_TOUR = "startTour"
-    OPEN_TABLES = "openTables"
-    LIGHTS_WIDGET = "lightsWidget"
-
-    TABLE_COLUMNS = "tableColumns"
-    DYNAMIC_TABLE_COLUMNS = "dynamicTableColumns"
-    DYNAMIC_SCORE_COLUMN = "dynamicScoreColumn"
-    COLUMN_INDEX_VISIBLE = "columnIndexVisible"
-    COLUMN_FAVORITE_VISIBLE = "columnFavoriteVisible"
-    COLUMN_COVER_VISIBLE = "columnCoverVisible"
-    COLUMN_SCORE_VISIBLE = "columnScoreVisible"
-    COLUMN_TITLE_VISIBLE = "columnTitleVisible"
-    COLUMN_SUMMARY_VISIBLE = "columnSummaryVisible"
-    COLUMN_ALBUM_VISIBLE = "columnAlbumVisible"
-    COLUMN_GENRE_VISIBLE = "columnGenreVisible"
-    COLUMN_ARTIST_VISIBLE = "columnArtistVisible"
-    COLUMN_BPM_VISIBLE = "columnBPMVisible"
-    COLUMN_TITLE_SUMMARY_VISIBLE = "columnTitleSummaryVisible"
-    COLUMN_TAGS_VISIBLE = "columnTagsVisible"
-    SONGS_ROW_STYLE = "songsRowStyle"
-
-    SONGS_TITLE_INSTEAD_OF_FILE_NAME = "songsTitleInsteadOfFilename"
-
-    EFFECTS_TITLE_INSTEAD_OF_FILE_NAME = "effectsTitleInsteadOfFilename"
+    LIBRARY_ROOTS = "libraryRoots"
+    # Non-local library roots, e.g. S3 buckets: list of dicts accepted by core.storage.create_storage (+ "id", "direct")
+    STORAGE_ROOTS = "storageRoots"
+    FAVORITES = "favorites"
+    EFFECTS_DIRECTORY = "effectsDirectory"
+    # Accounts besides the SuperAdmin (see server/users.py): list of dicts with name, hash, created
+    USERS = "users"
 
     CATEGORIES = "categories"
     PRESETS = "presets"
+
+    SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
+    VOXALYZER_URL = "voxalyzerUrl"
+    VOXALYZER_LOCAL = "voxalyzerLocal"
+
+    LIGHTS_ENABLED = "lightsEnabled"
     LIGHTS_CONFIG = "lightsConfig"
     LIGHTS_BROADCAST_IP = "lightsBroadcastIP"
     LIGHTS_TIMEOUT = "lightsTimeout"
 
-    VOXALYZER_URL = "voxalyzerUrl"
-    VOXALYZER_LOCAL = "voxalyzerLocal"
-
-    FILES_SMART_FILTER = "filesSmartFilter"
-
-    # server
-    LIBRARY_ROOTS = "libraryRoots"
+    SHARE_ON_NETWORK = "shareOnNetwork"
+    SHARE_PORT = "sharePort"
     SERVER_PASSWORD_HASH = "serverPasswordHash"
     SERVER_SECRET = "serverSecret"
 

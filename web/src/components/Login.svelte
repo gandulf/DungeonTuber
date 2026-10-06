@@ -4,6 +4,7 @@
   import { t } from '../lib/i18n.svelte';
 
   let { onLogin }: { onLogin: () => void } = $props();
+  let username = $state('');
   let password = $state('');
   let error = $state<string | null>(null);
   let busy = $state(false);
@@ -13,7 +14,7 @@
     busy = true;
     error = null;
     try {
-      await api.login(password);
+      await api.login(username.trim(), password);
       onLogin();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -31,9 +32,13 @@
       <p class="muted">{t('No password is set on the server. Only the server machine can connect – run "python -m server --set-password".')}</p>
     {:else}
       <label>
-        <span class="label-xs">{t('Password')}</span>
+        <span class="label-xs">{t('User name')}</span>
         <!-- svelte-ignore a11y_autofocus -->
-        <input type="password" bind:value={password} autocomplete="current-password" autofocus />
+        <input type="text" bind:value={username} placeholder="admin" autocomplete="username" autofocus />
+      </label>
+      <label>
+        <span class="label-xs">{t('Password')}</span>
+        <input type="password" bind:value={password} autocomplete="current-password" />
       </label>
       {#if error}<p class="error">{error}</p>{/if}
       <button class="btn primary" type="submit" disabled={busy || !password}>{t('Login')}</button>

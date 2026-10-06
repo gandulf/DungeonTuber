@@ -45,7 +45,7 @@
     const width = 320;
     const below = rect.bottom + 14 + 140 < window.innerHeight;
     const right = rect.right + 14 + width < window.innerWidth;
-    if (rect.width < window.innerWidth * 0.5 && right) return { left: rect.right + 14, top: Math.max(10, rect.top) };
+    if (rect.width < window.innerWidth * 0.5 && right) return { left: rect.right + 14, top: Math.min(Math.max(10, rect.top), Math.max(10, window.innerHeight - 190)) };
     if (below) return { left: Math.min(Math.max(10, rect.left), window.innerWidth - width - 10), top: rect.bottom + 14 };
     return { left: Math.min(Math.max(10, rect.left), window.innerWidth - width - 10), top: Math.max(10, rect.top - 160) };
   });

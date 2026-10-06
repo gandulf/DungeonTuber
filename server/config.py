@@ -1,5 +1,4 @@
 """Server runtime configuration (library roots, auth secrets, local mode)."""
-import os
 import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,9 +8,9 @@ from core.settings import AppSettings, SettingKeys
 
 @dataclass
 class ServerConfig:
-    # Local mode (desktop app): only loopback clients, no login required.
+    # Local mode (desktop app): loopback clients never need to log in; other devices need the password.
     local_mode: bool = False
-    # Directory with the built web frontend (index.html + assets).
+    # Directory with the built web frontend (default: server/static, built by `npm --prefix web run build`).
     web_dir: Path | None = None
     extra_roots: list[Path] = field(default_factory=list)
     # Directory for settings.json and library.db (default: per-user app data directory).
@@ -39,25 +38,11 @@ def get_secret() -> bytes:
 
 
 def default_library_roots() -> list[str]:
-    root = AppSettings.value(SettingKeys.ROOT_DIRECTORY, type=str)
-    if root and os.path.isdir(root):
-        return [root]
-    music = os.path.expanduser("~/Music")
-    return [music if os.path.isdir(music) else os.path.expanduser("~")]
+    from server.roots import default_library_roots as default_roots
+    return default_roots()
 
 
 def get_library_roots() -> list[Path]:
-    """Directories the server may expose. Everything outside is rejected."""
-    roots = AppSettings.value(SettingKeys.LIBRARY_ROOTS, type=list) or default_library_roots()
-    result = []
-    for root in roots:
-        path = Path(root).expanduser()
-        if path.is_dir():
-            result.append(path.resolve())
-    effects_dir = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, type=str)
-    if effects_dir and Path(effects_dir).is_dir():
-        result.append(Path(effects_dir).resolve())
-    result.extend(p.resolve() for p in _config.extra_roots if p.is_dir())
-    # unique, keep order
-    seen = set()
-    return [p for p in result if not (str(p).lower() in seen or seen.add(str(p).lower()))]
+    """Local directories the server may expose."""
+    from server.roots import get_local_roots
+    return [root.storage.root for root in get_local_roots()]

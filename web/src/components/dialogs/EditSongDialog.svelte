@@ -83,6 +83,11 @@
         <span class="label-xs">{t('Lights')}</span>
         <LightEditor bind:value={light} />
       </div>
+      {#if track.uploaded_by}
+        <span class="wide muted small">
+          {t('Uploaded by {0}', track.uploaded_by)}{track.uploaded_at ? ` · ${new Date(track.uploaded_at * 1000).toLocaleString()}` : ''}
+        </span>
+      {/if}
       <span class="wide path muted" title={track.path}>{track.path}</span>
     </div>
     <button type="submit" hidden aria-label={t('Save')}></button>
@@ -104,6 +109,7 @@
   .fields input, .fields textarea { color: var(--text); }
   .wide { grid-column: 1 / -1; }
   .check { display: flex; align-items: center; gap: 6px; }
+  .small { font-size: var(--fs-xs); }
   .path { font-size: var(--fs-xs); overflow-wrap: anywhere; }
   @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
 </style>

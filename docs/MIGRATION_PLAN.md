@@ -204,7 +204,7 @@ Decision: the server runs on the bulbs' LAN; the agent is not planned for now.
 
 ## 8. Desktop & server packaging
 
-- **Desktop**: pywebview window + embedded uvicorn on `127.0.0.1` (random port, auth bypass for local mode), WebView2 runtime (preinstalled on Win 10/11). Build with Nuitka/PyInstaller as today; voxalyzer.exe bundling and Inno Setup/signing pipeline reused.
+- **Desktop**: pywebview window + embedded uvicorn on `127.0.0.1` (random port, auth bypass for local mode), WebView2 runtime (preinstalled on Win 10/11). Built with PyInstaller (Nuitka dropped); voxalyzer.exe bundling and Inno Setup/signing pipeline reused.
 - **Server**: `pip install` / Docker image; HTTPS via Caddy reverse proxy; config file for library roots and password.
 - CI: add `npm ci && npm run build` (web assets bundled into the Python package), pytest for `core/` and API, Playwright smoke test.
 
@@ -229,9 +229,11 @@ Decision: the server runs on the bulbs' LAN; the agent is not planned for now.
 ## 9a. Implementation status (2026-10-05)
 
 - `server/` – FastAPI app (`python -m server`): auth (password + signed cookie, loopback-only without password, `--local` desktop mode), library-root boundary for every path, browse/smart filter, tracks (SQLite tag cache), PATCH edits incl. rename, chapters, cover upload + Pillow thumbnails, range streaming, playlists (create/add/insert/reorder/remove), move, folders, mp3 upload, effects, settings/categories/presets, analysis queue with WebSocket progress, WiZ lights (discover, patch, cues), version/locales. 16 API tests in `tests/test_server.py`.
-- `web/` – Svelte 5 + TypeScript SPA: file tree (drag-move, upload drop, favorites, smart filter), tabs (lazy, persisted, context menu), virtualized song table (all columns/options of the Qt table, score colors, inline edit, type-to-search, multi-select, reorder, tag drop, tree/file drop), filter panel (presets, grouped sliders, circumplex, BPM, chips), player (Web Audio crossfade, normalize, repeat none/all/single, chapters with light cues and editing, in-memory copy of the current song, MediaSession), effects bus (grid/list, intensities), lights panel, edit/settings/about dialogs, tour, light/dark/system theme, font size, de/en i18n (catalogs generated from the .po files), responsive drawer layout for phones. Vitest parity tests for scoring and ids.
-- `DungeonTuber.py` – pywebview window + embedded local server; packaged by `DungeonTuber.spec` / `python build.py` and the Nuitka release workflow.
-- `core/legacy.py` – Qt-free import of the old QSettings registry values.
+- `web/` – Svelte 5 + TypeScript SPA: file tree (drag-move, upload drop, favorites, smart filter), tabs (lazy, persisted, context menu), virtualized song table (all columns/options of the Qt table, score colors, inline edit, type-to-search, multi-select, reorder, tag drop, tree/file drop), filter panel (presets, grouped sliders, circumplex, BPM, chips), player (Web Audio crossfade, normalize, repeat none/all/single, chapters with light cues and editing, in-memory copy of the current song, MediaSession), effects bus (grid/list, intensities), lights panel, edit/settings/about dialogs, tour, light/dark/system theme, font size, de/en i18n (`locales/*.json`, shared with the server), responsive drawer layout for phones. Vitest parity tests for scoring and ids.
+- `DungeonTuber.py` – pywebview window + embedded local server; packaged by `DungeonTuber.spec` / `python build_app.py`; "Share on network" lets other devices join.
+- Deployment: Python wheel (frontend + translations inside the packages), Docker image on GHCR (amd64/arm64, `deploy/docker-compose.yml` with Caddy), systemd example; the release workflow builds installer, wheel and image.
+- Legacy QSettings migration was dropped (fresh start with `settings.json`).
+- gettext `.po`/`.mo` files were replaced by `locales/<lang>.json` as the single translation source.
 
 ### Switch-over (done)
 - The Qt UI (`components/`, `config/`, `logic/`, VLC, PySide6) was removed. `DungeonTuber.py` is now the desktop launcher (pywebview + embedded server); `DungeonTuber.spec`, `build.py` and `release-app.yml` build it (web frontend included). The exe name and the Inno Setup installer are unchanged.

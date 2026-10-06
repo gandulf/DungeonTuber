@@ -8,9 +8,9 @@ from pydantic import BaseModel
 from core import i18n
 from core.settings import AppSettings, MusicCategory, Preset, SettingKeys, get_music_categories, get_presets, set_music_categories, \
     set_presets, has_local_voxalyzer, settings
-from core.utils import DOWNLOAD_LINK, get_available_locales, get_executable_path, get_broadcast_ip, get_current_version, get_latest_version, \
+from core.utils import DOWNLOAD_LINK, get_executable_path, get_broadcast_ip, get_ip, get_current_version, get_latest_version, \
     is_newer_version_available
-from server.auth import require_auth
+from server.auth import require_admin, require_auth
 from server.config import default_library_roots, get_library_roots
 
 router = APIRouter(dependencies=[Depends(require_auth)])
@@ -21,12 +21,13 @@ SERVER_SETTINGS: dict[str, tuple[type, object]] = {
     SettingKeys.VOXALYZER_URL: (str, ""),
     SettingKeys.VOXALYZER_LOCAL: (bool, True),
     SettingKeys.SKIP_ANALYZED_MUSIC: (bool, True),
-    SettingKeys.LIGHTS_WIDGET: (bool, True),
+    SettingKeys.LIGHTS_ENABLED: (bool, True),
     SettingKeys.LIGHTS_BROADCAST_IP: (str, None),
     SettingKeys.LIGHTS_TIMEOUT: (float, 5.0),
     SettingKeys.EFFECTS_DIRECTORY: (str, ""),
     SettingKeys.LIBRARY_ROOTS: (list, None),
-    SettingKeys.FAVORITES: (list, []),
+    SettingKeys.SHARE_ON_NETWORK: (bool, False),
+    SettingKeys.SHARE_PORT: (int, 8765),
 }
 
 
@@ -36,6 +37,7 @@ def _settings_dict() -> dict:
         result[str(key)] = AppSettings.value(key, default, type=value_type)
     result[str(SettingKeys.LIGHTS_BROADCAST_IP)] = result[str(SettingKeys.LIGHTS_BROADCAST_IP)] or get_broadcast_ip()
     result[str(SettingKeys.LIBRARY_ROOTS)] = result[str(SettingKeys.LIBRARY_ROOTS)] or default_library_roots()
+    result["networkUrl"] = f"http://{get_ip()}:{result[str(SettingKeys.SHARE_PORT)]}"
     result["localVoxalyzerAvailable"] = os.path.isfile(get_executable_path("voxalyzer.exe"))
     result["voxalyzerActive"] = has_local_voxalyzer() or bool(result[str(SettingKeys.VOXALYZER_URL)])
     return result
@@ -43,12 +45,7 @@ def _settings_dict() -> dict:
 
 def apply_locale():
     """Uses the configured language for server generated texts (category names, messages)."""
-    import gettext
-    from core.utils import get_path
-
-    language = AppSettings.value(SettingKeys.LOCALE, type=str) or None
-    translation = gettext.translation("DungeonTuber", get_path("locales"), fallback=True, languages=[language] if language else None)
-    i18n.set_translation(translation)
+    i18n.set_language(AppSettings.value(SettingKeys.LOCALE, type=str) or None)
     settings.reload()
 
 
@@ -57,7 +54,7 @@ def get_settings():
     return _settings_dict()
 
 
-@router.put("/api/settings")
+@router.put("/api/settings", dependencies=[Depends(require_admin)])
 def put_settings(values: dict):
     allowed = {str(key): spec for key, spec in SERVER_SETTINGS.items()}
     for key, value in values.items():
@@ -74,6 +71,10 @@ def put_settings(values: dict):
                     raise ValueError
             elif value_type is bool:
                 value = bool(value)
+            elif value_type is int:
+                value = int(value)
+                if not 1024 <= value <= 65535:
+                    raise ValueError
             elif value_type is list:
                 if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
                     raise ValueError
@@ -151,7 +152,7 @@ def version_info():
 
 @router.get("/api/locales")
 def locales():
-    return get_available_locales()
+    return i18n.available_locales()
 
 
 @router.get("/api/library/roots")

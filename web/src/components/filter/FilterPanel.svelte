@@ -3,9 +3,9 @@
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { emptyFilter } from '../../lib/scoring';
   import { data, savePresets } from '../../lib/stores/data.svelte';
-  import { availableGenres, availableTags, filter, onFilterChanged } from '../../lib/stores/library.svelte';
+  import { filter, onFilterChanged } from '../../lib/stores/library.svelte';
   import { askConfirm, askText, openMenu } from '../../lib/stores/ui.svelte';
-  import type { Preset } from '../../lib/types';
+  import type { MusicCategory, Preset } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import BpmDial from './BpmDial.svelte';
   import CategorySlider from './CategorySlider.svelte';
@@ -14,35 +14,26 @@
   const VALENCE = 'Valence';
   const AROUSAL = 'Arousal';
 
+  const hasCircumplex = $derived(prefs.filter.circumplex && data.categories.some((c) => c.key === VALENCE) && data.categories.some((c) => c.key === AROUSAL));
+  const visible = $derived(prefs.filter.presets || prefs.filter.sliders || hasCircumplex || prefs.filter.bpm);
+  const showMap = $derived(prefs.showMoodMap && hasCircumplex);
+
   const groups = $derived.by(() => {
-    const map = new Map<string, typeof data.categories>();
+    const map = new Map<string, MusicCategory[]>();
     for (const category of data.categories) {
+      if (showMap && (category.key === VALENCE || category.key === AROUSAL)) continue;
       const group = category.group || '';
       if (!map.has(group)) map.set(group, []);
       map.get(group)!.push(category);
     }
     return [...map.entries()];
   });
-
-  let activeGroup = $state('');
-  const current = $derived(groups.find(([group]) => group === activeGroup) ?? groups[0]);
-  const hasCircumplex = $derived(prefs.filter.circumplex && data.categories.some((c) => c.key === VALENCE) && data.categories.some((c) => c.key === AROUSAL));
-  const showSliderArea = $derived(prefs.filter.sliders || hasCircumplex || prefs.filter.bpm);
-  const tags = $derived(availableTags());
-  const genres = $derived(availableGenres());
+  let activeGroup = $state<string | null>(null);
+  const current = $derived<[string, MusicCategory[]] | undefined>(groups.find(([group]) => group === activeGroup) ?? groups[0]);
+  const active = $derived(!emptyFilter(filter));
 
   function setCategory(key: string, value: number | null) {
     filter.categories[key] = value;
-    onFilterChanged();
-  }
-
-  function toggleTag(tag: string) {
-    filter.tags = filter.tags.includes(tag) ? filter.tags.filter((t) => t !== tag) : [...filter.tags, tag];
-    onFilterChanged();
-  }
-
-  function toggleGenre(genre: string) {
-    filter.genres = filter.genres.includes(genre) ? filter.genres.filter((g) => g !== genre) : [...filter.genres, genre];
     onFilterChanged();
   }
 
@@ -86,117 +77,115 @@
     ]);
   }
 
-  function panelMenu(event: MouseEvent) {
-    openMenu(event, [
-      { label: t('Presets'), children: data.presets.map((p) => ({ label: p.name, action: () => applyPreset(p) })) },
-      { label: t('Save as Preset'), icon: 'plus', action: savePreset },
-      { label: t('Clear Values'), icon: 'close', action: clearFilter },
-      { label: t('Reset Presets'), action: resetPresets },
-      { separator: true },
-      { label: t('Toggle Filter'), checked: !collapsed, action: () => { collapsed = !collapsed; } },
-    ]);
-  }
-
-  let collapsed = $state(false);
-
-  function onTagDragStart(event: DragEvent, tag: string) {
-    event.dataTransfer?.setData('application/x-dungeontuber-tag', tag);
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy';
-  }
-
-  $effect(() => {
-    void prefs.filter;
+  function toggleMap() {
+    prefs.showMoodMap = !prefs.showMoodMap;
+    prefs.moodCollapsed = false;
     savePrefs();
-  });
+  }
+
+  function toggleCollapsed() {
+    prefs.moodCollapsed = !prefs.moodCollapsed;
+    savePrefs();
+  }
 </script>
 
-<div class="filter" oncontextmenu={panelMenu} role="region" aria-label={t('Filter')}>
-  <div class="top">
-    {#if prefs.filter.presets}
-      <div class="presets" data-tour="presets">
-        {#each data.presets as preset (preset.name)}
-          <button class="btn preset" onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)}>{preset.name}</button>
-        {/each}
-        <button class="icon-btn" title={t('Save as Preset')} onclick={savePreset}><Icon name="plus" size={15} /></button>
-      </div>
-    {/if}
-    <span class="grow"></span>
-    {#if !emptyFilter(filter)}
-      <button class="btn clear" onclick={clearFilter}><Icon name="close" size={13} /> {t('Clear Values')}</button>
-    {/if}
-    {#if showSliderArea}
-      <button class="icon-btn" title={t('Toggle Filter')} onclick={() => (collapsed = !collapsed)}>
-        <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={15} />
-      </button>
+{#snippet sliders(list: MusicCategory[])}
+  <div class="slider-list" class:wide={!showMap}>
+    {#each list as category (category.key)}
+      <CategorySlider {category} value={filter.categories[category.key] ?? null} onchange={(v) => setCategory(category.key, v)} />
+    {/each}
+    {#if prefs.filter.bpm && (current?.[0] ?? '') === ''}
+      <div data-tour="bpm"><BpmDial value={filter.bpm} onchange={(v) => { filter.bpm = v; onFilterChanged(); }} /></div>
     {/if}
   </div>
+{/snippet}
 
-  {#if showSliderArea && !collapsed}
-    {#if groups.length > 1 && prefs.filter.sliders}
-      <div class="group-tabs">
-        {#each groups as [group] (group)}
-          <button class="group" class:active={(current?.[0] ?? '') === group} onclick={() => (activeGroup = group)}>{group || t('General')}</button>
-        {/each}
-      </div>
-    {/if}
-    <div class="sliders">
-      {#if hasCircumplex && (current?.[0] ?? '') === ''}
-        <div data-tour="russel">
-          <Circumplex valence={filter.categories[VALENCE] ?? null} arousal={filter.categories[AROUSAL] ?? null}
-                      onchange={(v, a) => { filter.categories[VALENCE] = v; filter.categories[AROUSAL] = a; onFilterChanged(); }} />
-        </div>
+{#if visible}
+  <section class="mood" aria-label={t('Filter')}>
+    <div class="head">
+      {#if hasCircumplex}
+        <button class="btn sm map-toggle" class:on={prefs.showMoodMap} aria-pressed={prefs.showMoodMap} onclick={toggleMap}>
+          <Icon name="compass" size={14} /> {t('Mood Explorer')}
+        </button>
+      {:else}
+        <span class="card-title">{t('Mood')}</span>
       {/if}
-      {#if prefs.filter.sliders && current}
-        <div class="slider-row" data-tour="slider">
-          {#each current[1] as category (category.key)}
-            {#if !(hasCircumplex && (category.key === VALENCE || category.key === AROUSAL))}
-              <CategorySlider {category} value={filter.categories[category.key] ?? null} onchange={(v) => setCategory(category.key, v)} />
-            {/if}
+
+      {#if prefs.filter.presets}
+        <div class="presets" data-tour="presets">
+          {#each data.presets as preset (preset.name)}
+            <button class="preset" onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')}>
+              <Icon name="bookmark" size={13} /> {preset.name}
+            </button>
           {/each}
         </div>
       {/if}
-      {#if prefs.filter.bpm && (current?.[0] ?? '') === ''}
-        <div data-tour="bpm"><BpmDial value={filter.bpm} onchange={(v) => { filter.bpm = v; onFilterChanged(); }} /></div>
+      <span class="grow"></span>
+      {#if active}
+        <button class="btn sm ghost" onclick={clearFilter}><Icon name="refresh" size={13} /> {t('Reset')}</button>
       {/if}
+      <button class="icon-btn" title={t('Toggle Filter')} onclick={toggleCollapsed}>
+        <Icon name={prefs.moodCollapsed ? 'chevron-down' : 'chevron-up'} size={16} />
+      </button>
     </div>
-  {/if}
 
-  {#if prefs.filter.tags && tags.length}
-    <div class="chips-block" data-tour="tags">
-      <span class="label-xs">{t('Tags')}</span>
-      <div class="chips">
-        {#each tags as tag (tag)}
-          <button class="chip" class:on={filter.tags.includes(tag)} draggable="true" ondragstart={(e) => onTagDragStart(e, tag)} onclick={() => toggleTag(tag)}>{tag}</button>
-        {/each}
+    {#if !prefs.moodCollapsed && (prefs.filter.sliders || hasCircumplex || prefs.filter.bpm)}
+      <div class="cards" class:single={!showMap}>
+        {#if showMap}
+          <div class="card vibe" data-tour="russel">
+            <div class="card-head">
+              <div>
+                <h3 class="card-title">{t('Select the vibe')}</h3>
+                <p class="card-sub">{t('Drag in the mood map')}</p>
+              </div>
+            </div>
+            <Circumplex valence={filter.categories[VALENCE] ?? null} arousal={filter.categories[AROUSAL] ?? null}
+                        onchange={(v, a) => { filter.categories[VALENCE] = v; filter.categories[AROUSAL] = a; onFilterChanged(); }} />
+          </div>
+        {/if}
+        {#if prefs.filter.sliders || prefs.filter.bpm}
+          <div class="card fine" data-tour="slider">
+            <div class="card-head">
+              <div>
+                <h3 class="card-title">{t('Mood Sliders')}</h3>
+                <p class="card-sub">{t('Fine tune the sound')}</p>
+              </div>
+              {#if groups.length > 1}
+                <div class="seg small">
+                  {#each groups as [group] (group)}
+                    <button class:on={(current?.[0] ?? '') === group} onclick={() => (activeGroup = group)}>{group || t('General')}</button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+            {#if current}{@render sliders(prefs.filter.sliders ? current[1] : [])}{/if}
+            <div class="card-foot">
+              <button class="btn sm" onclick={savePreset}><Icon name="bookmark" size={14} /> {t('Save as Preset')}</button>
+              {#if active}<button class="btn sm ghost" onclick={clearFilter}>{t('Reset')}</button>{/if}
+            </div>
+          </div>
+        {/if}
       </div>
-    </div>
-  {/if}
-  {#if prefs.filter.genres && genres.length}
-    <div class="chips-block">
-      <span class="label-xs">{t('Genres')}</span>
-      <div class="chips">
-        {#each genres as genre (genre)}
-          <button class="chip genre" class:on={filter.genres.includes(genre)} onclick={() => toggleGenre(genre)}>{genre}</button>
-        {/each}
-      </div>
-    </div>
-  {/if}
-</div>
+    {/if}
+  </section>
+{/if}
 
 <style>
-  .filter { display: flex; flex-direction: column; gap: 8px; padding: 6px 2px 8px; max-height: 46vh; overflow-y: auto; flex: none; }
-  .top { display: flex; align-items: center; gap: 6px; min-height: 28px; }
-  .presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .preset { border-radius: 14px; padding: 4px 12px; font-size: var(--fs-sm); }
-  .clear { border-radius: 14px; padding: 3px 10px; font-size: var(--fs-sm); }
+  .mood { display: flex; flex-direction: column; gap: 10px; flex: none; padding-right: 2px; }
+  .head { display: flex; align-items: center; gap: 10px; min-height: 36px; flex-wrap: wrap; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .preset { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 9px; font-size: var(--fs-sm); color: var(--gold); background: var(--gold-soft); border: 1px solid transparent; }
+  .preset:hover { border-color: var(--gold); }
   .grow { flex: 1; }
-  .group-tabs { display: flex; gap: 4px; }
-  .group { padding: 4px 12px; border-radius: 14px; color: var(--muted); font-size: var(--fs-sm); }
-  .group:hover { background: var(--hover); color: var(--text); }
-  .group.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  .sliders { display: flex; gap: 14px; align-items: stretch; overflow-x: auto; padding-bottom: 2px; }
-  .slider-row { display: flex; gap: 2px; flex: 1; justify-content: flex-start; }
-  .chips-block { display: flex; flex-direction: column; gap: 5px; }
-  @media (max-width: 900px) { .filter { max-height: 32vh; } }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 64px; overflow-y: auto; }
+  .cards { display: grid; grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 1.2fr); gap: 12px; height: min(36vh, 290px); }
+  .cards.single { grid-template-columns: 1fr; }
+  .card { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .map-toggle.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .seg.small button { padding: 3px 10px; font-size: var(--fs-xs); }
+  .slider-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 26px; row-gap: 2px; overflow-y: auto; padding-right: 4px; align-content: start; }
+  .slider-list.wide { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .card-foot { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+  @media (max-width: 1100px) { .cards { grid-template-columns: 1fr; } .vibe { display: none; } }
+  @media (max-width: 900px) { .cards { max-height: 30vh; } }
 </style>

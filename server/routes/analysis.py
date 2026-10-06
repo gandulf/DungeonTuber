@@ -15,8 +15,8 @@ class AnalysisRequest(BaseModel):
 
 @router.post("/api/analysis")
 def analyze(body: AnalysisRequest):
-    paths = [safe_path(path) for path in body.paths]
-    count = analysis_queue.submit(paths)
+    locations = [safe_path(path) for path in body.paths]
+    count = analysis_queue.submit(locations)
     return {"queued": count, **analysis_queue.status()}
 
 

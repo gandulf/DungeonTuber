@@ -1,5 +1,6 @@
 """DungeonTuber desktop app: the web frontend in a native window (pywebview / WebView2)
-backed by an embedded server that only accepts connections from this computer.
+backed by an embedded server. By default only this computer can connect; with
+"Share on network" (Settings → Security, needs a password) other devices can join.
 
 Usage: python DungeonTuber.py [--fake] [--debug] [--port N]
 """
@@ -13,15 +14,15 @@ import urllib.request
 
 import uvicorn
 
-from core.legacy import migrate_legacy_settings
 from core.lights import fake_lights_mode
 from core.log import setup_logging
+from core.settings import AppSettings, SettingKeys
 from core.utils import get_current_version, get_path
 from server.app import create_app
+from server.auth import password_set
 from server.config import ServerConfig
 
 APP_TITLE = "Dungeon Tuber"
-
 
 def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -29,8 +30,30 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def start_server(port: int) -> uvicorn.Server:
-    config = uvicorn.Config(create_app(ServerConfig(local_mode=True)), host="127.0.0.1", port=port, log_level="warning")
+def port_available(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def choose_binding(requested_port: int) -> tuple[str, int]:
+    """Loopback on a random port, or all interfaces on the configured port when sharing is enabled."""
+    if AppSettings.value(SettingKeys.SHARE_ON_NETWORK, False, type=bool):
+        if not password_set():
+            print("Share on network needs a password – staying local.", file=sys.stderr)
+        else:
+            port = requested_port or AppSettings.value(SettingKeys.SHARE_PORT, 8765, type=int)
+            if port_available("0.0.0.0", port):
+                return "0.0.0.0", port
+            print(f"Port {port} is in use – staying local.", file=sys.stderr)
+    return "127.0.0.1", requested_port or free_port()
+
+
+def start_server(host: str, port: int) -> uvicorn.Server:
+    config = uvicorn.Config(create_app(ServerConfig(local_mode=True)), host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, name="server", daemon=True)
     thread.start()
@@ -59,13 +82,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.debug:
         os.environ["DEBUG"] = "1"
     setup_logging()
-    migrate_legacy_settings()
     if args.fake:
         fake_lights_mode()
 
-    port = args.port or free_port()
+    host, port = choose_binding(args.port)
     url = f"http://127.0.0.1:{port}"
-    server = start_server(port)
+    server = start_server(host, port)
     if not wait_until_ready(url):
         print("Embedded server did not start.", file=sys.stderr)
         return 1

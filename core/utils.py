@@ -161,22 +161,6 @@ def is_newer_version_available(current_version: str) -> bool:
         return False
 
 
-def get_available_locales() -> list[str]:
-    locales_path = get_path("locales")
-    if not os.path.exists(locales_path):
-        return ["de", "en"]
-
-    locales = []
-    for lang_code in os.listdir(locales_path):
-        mo_file = os.path.join(locales_path, lang_code, 'LC_MESSAGES', 'DungeonTuber.mo')
-
-        # Only add the language if it contains a compiled .mo file
-        if os.path.isfile(mo_file):
-            locales.append(lang_code)
-
-    return locales
-
-
 def restart_application():
     """Restarts the current program, compatible with PyInstaller."""
     try:

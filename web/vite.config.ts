@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [svelte()],
   server: {
     port: 5173,
+    fs: { allow: ['..'] }, // translations live in ../core/locales
     proxy: {
       '/api': backend,
       '/media': backend,
@@ -14,7 +15,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: '../server/static', // shipped inside the server package
     emptyOutDir: true,
     chunkSizeWarningLimit: 800,
   },

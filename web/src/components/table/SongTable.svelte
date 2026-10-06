@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, coverUrl, pathToId } from '../../lib/api';
   import { toggleFavorite, trackMenu, uploadFiles } from '../../lib/actions';
+  import { itemsFromDrop } from '../../lib/upload';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { bpmLevel, categoryLevel, emptyFilter, genreLevel, scoreLevel } from '../../lib/scoring';
@@ -24,7 +25,7 @@
     title?: string;
   }
 
-  const ROW_HEIGHT = { small: 30, medium: 44, large: 62 } as const;
+  const ROW_HEIGHT = { small: 38, medium: 52, large: 68 } as const;
   const rowHeight = $derived(ROW_HEIGHT[prefs.rowStyle]);
 
   const rows = $derived(visibleRows());
@@ -40,8 +41,8 @@
     const list: Column[] = [];
     if (tab.type === 'playlist' && c.index) list.push({ id: 'index', label: '#', width: '42px', sort: 'index', align: 'right' });
     if (c.favorite) list.push({ id: 'favorite', label: '', width: '30px', sort: 'favorite', align: 'center', title: t('Favorite') });
-    if (c.cover) list.push({ id: 'cover', label: '', width: `${Math.round(rowHeight * 1.33)}px`, title: t('Cover') });
-    list.push({ id: 'name', label: prefs.titleInsteadOfFile ? t('Title') : t('Name'), width: 'minmax(260px, 1fr)', sort: 'name', edit: prefs.titleInsteadOfFile ? 'text' : undefined });
+    list.push({ id: 'name', label: prefs.titleInsteadOfFile ? t('Title') : t('Name'), width: 'minmax(240px, 1.5fr)', sort: 'name', edit: prefs.titleInsteadOfFile ? 'text' : undefined });
+    if (c.tags) list.push({ id: 'mood', label: t('Mood'), width: 'minmax(130px, 0.7fr)' });
     if (c.title && !prefs.titleInsteadOfFile) list.push({ id: 'title', label: t('Title'), width: 'minmax(120px, 0.6fr)', sort: 'title', edit: 'text' });
     if (c.summary && !prefs.summaryUnderTitle) list.push({ id: 'summary', label: t('Summary'), width: 'minmax(160px, 0.8fr)', sort: 'summary', edit: 'text' });
     if (c.artist) list.push({ id: 'artist', label: t('Artist'), width: '130px', sort: 'artist', edit: 'text' });
@@ -54,8 +55,9 @@
       const value = filter.categories[key];
       if (prefs.dynamicColumns && (value === null || value === undefined || value < 0)) continue;
       const category = data.categories.find((cat) => cat.key === key);
-      list.push({ id: `cat:${key}`, label: category?.name ?? key, width: '88px', sort: `cat:${key}`, edit: 'category', title: category?.description });
+      list.push({ id: `cat:${key}`, label: category?.name ?? key, width: '108px', sort: `cat:${key}`, edit: 'category', title: category?.description });
     }
+    if (c.duration) list.push({ id: 'duration', label: t('Duration'), width: '70px', sort: 'length', align: 'right' });
     return list;
   });
 
@@ -83,16 +85,20 @@
   $effect(() => {
     void tab.key;
     if (viewport) viewport.scrollTop = 0;
-    anchor = null;
+    anchor = cursor = null;
   });
 
   // --- selection ---
+  // anchor: where a shift-selection starts, cursor: the row the keyboard moves from
   let anchor: number | null = null;
+  let cursor: number | null = null;
+  let table = $state<HTMLDivElement | null>(null);
   const selected = $derived(new Set(library.selection));
 
   function select(index: number, event: MouseEvent | KeyboardEvent) {
     const id = rows[index]?.track.id;
     if (!id) return;
+    cursor = index;
     if (event.shiftKey && anchor !== null) {
       const [a, b] = [Math.min(anchor, index), Math.max(anchor, index)];
       library.selection = rows.slice(a, b + 1).map((row) => row.track.id);
@@ -116,6 +122,7 @@
     const visibleHeight = viewport.clientHeight - header;
     if (top < viewport.scrollTop) viewport.scrollTop = top;
     else if (top + rowHeight > viewport.scrollTop + visibleHeight) viewport.scrollTop = top + rowHeight - visibleHeight;
+    scrollTop = viewport.scrollTop; // render the new window right away instead of waiting for the scroll event
   }
 
   // when a filter is set the best match is selected (like the desktop app)
@@ -124,7 +131,7 @@
       const best = rows[0].track.id;
       if (library.selection[0] !== best) {
         library.selection = [best];
-        anchor = 0;
+        anchor = cursor = 0;
         if (viewport) viewport.scrollTop = 0;
       }
     }
@@ -133,18 +140,23 @@
   // --- keyboard (navigation, type-to-search) ---
   function onKeydown(event: KeyboardEvent) {
     if (editing) return;
-    const current = anchor ?? -1;
+    const current = Math.min(cursor ?? anchor ?? -1, rows.length - 1);
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const target = Math.max(0, Math.min(rows.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
       select(target, event);
       scrollIntoView(target);
+      table?.focus({ preventScroll: true }); // a focused row can be recycled by the virtual list, which would end the keyboard navigation
+    } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && viewport && viewport.scrollWidth > viewport.clientWidth) {
+      event.preventDefault(); // many columns: scroll the whole table sideways
+      viewport.scrollBy({ left: (event.key === 'ArrowRight' ? 1 : -1) * (event.ctrlKey ? viewport.clientWidth * 0.8 : 120) });
     } else if (event.key === 'PageDown' || event.key === 'PageUp') {
       event.preventDefault();
       const step = Math.floor(viewportHeight / rowHeight);
       const target = Math.max(0, Math.min(rows.length - 1, current + (event.key === 'PageDown' ? step : -step)));
       select(target, event);
       scrollIntoView(target);
+      table?.focus({ preventScroll: true });
     } else if (event.key === 'Enter' && current >= 0) {
       void playTrack(rows[current].track);
     } else if (event.key === 'Delete' && tab.type === 'playlist' && library.selection.length) {
@@ -220,7 +232,7 @@
   function onCellDblClick(event: MouseEvent, track: Track, column: Column) {
     event.stopPropagation();
     if (column.id === 'favorite') return void toggleFavorite(track);
-    if (column.id === 'cover') {
+    if (column.id === 'name' && (event.target as HTMLElement).closest('.thumb')) {
       if (track.has_cover) openDialog(ImagePopup, { src: coverUrl(track.id, 0), title: track.title || track.name });
       return;
     }
@@ -309,17 +321,20 @@
     }
     fileDrop = false;
     dropIndex = null;
-    const files = [...(event.dataTransfer?.files ?? [])];
-    if (!files.length) return;
+    if (!event.dataTransfer?.types.includes('Files')) return;
     event.preventDefault();
-    if (tab.type === 'dir') await uploadFiles(tab.path, files);
+    const items = await itemsFromDrop(event.dataTransfer);
+    if (!items.length) return;
+    if (tab.type === 'dir') await uploadFiles(tab.path, items);
     else {
       const dir = tab.path.slice(0, tab.path.lastIndexOf('/'));
-      try {
-        const result = await api.upload(dir, files.filter((f) => f.name.toLowerCase().endsWith('.mp3')));
-        await api.addToPlaylist(tab.path, result.tracks.map((tr) => tr.id));
-      } catch (e) {
-        errorToast(e);
+      const tracks = await uploadFiles(dir, items);
+      if (tracks.length) {
+        try {
+          await api.addToPlaylist(tab.path, tracks.map((tr) => tr.id));
+        } catch (e) {
+          errorToast(e);
+        }
       }
     }
   }
@@ -353,7 +368,8 @@
       { label: t('Genre'), checked: c.genre, action: () => toggleColumn('genre') },
       { label: t('BPM'), checked: c.bpm, action: () => toggleColumn('bpm') },
       { label: t('Score'), checked: c.score, action: () => toggleColumn('score') },
-      { label: t('Tags'), checked: c.tags, action: () => toggleColumn('tags') },
+      { label: t('Mood'), checked: c.tags, action: () => toggleColumn('tags') },
+      { label: t('Duration'), checked: c.duration, action: () => toggleColumn('duration') },
       { label: t('Categories'), children: categoryKeys.map((key) => ({
         label: data.categories.find((cat) => cat.key === key)?.name ?? key, checked: !prefs.hiddenCategories.includes(key), action: () => toggleCategory(key),
       })) },
@@ -394,9 +410,21 @@
     const tags = track.tags.map((tag) => ({ tag, match: filter.tags.includes(tag) }));
     return tags.sort((a, b) => Number(b.match) - Number(a.match));
   }
+
+  const PILL_TONES = ['', 'gold', 'violet'];
+  function tone(tag: string): string {
+    let hash = 0;
+    for (const ch of tag) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+    return PILL_TONES[Math.abs(hash) % PILL_TONES.length];
+  }
+
+  function duration(seconds: number) {
+    if (!seconds || seconds < 0) return '';
+    return `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
+  }
 </script>
 
-<div class="table panel" class:filedrop={fileDrop} role="grid" tabindex="0" onkeydown={onKeydown}
+<div class="table card" style:--row-h="{rowHeight}px" class:filedrop={fileDrop} role="grid" tabindex="0" bind:this={table} onkeydown={onKeydown}
      ondragover={(e) => { const types = e.dataTransfer?.types ?? []; if (types.includes('Files') || (tab.type === 'playlist' && types.includes('application/x-dungeontuber-path'))) { e.preventDefault(); fileDrop = true; } }}
      ondragleave={(e) => { if (e.currentTarget === e.target) fileDrop = false; }} ondrop={onTableDrop}>
   <div class="viewport" bind:this={viewport} onscroll={() => (scrollTop = viewport!.scrollTop)}>
@@ -404,7 +432,7 @@
     {#each columns as column (column.id)}
       <button class="th" class:right={column.align === 'right'} class:center={column.align === 'center'} title={column.title ?? column.label}
               onclick={() => column.sort && setSort(column.sort)}>
-        {#if column.id === 'favorite'}<Icon name="star" size={13} />{:else if column.id === 'cover'}<Icon name="image" size={13} />{:else}<span class="ellipsis">{column.label}</span>{/if}
+        {#if column.id === 'favorite'}<Icon name="heart" size={13} />{:else}<span class="ellipsis">{column.label}</span>{/if}
         {#if library.sortKey === column.sort}<span class="sort">{library.sortAsc ? '▲' : '▼'}</span>{/if}
       </button>
     {/each}
@@ -424,7 +452,7 @@
         <div class="tr" class:selected={selected.has(track.id)} class:playing={player.track?.id === track.id} class:drop-above={dropIndex === index}
              style:transform="translateY({index * rowHeight}px)" style:height="{rowHeight}px" style:grid-template-columns={template}
              role="row" tabindex="-1" aria-selected={selected.has(track.id)} draggable="true"
-             onclick={(e) => select(index, e)} onkeydown={() => {}}
+             onclick={(e) => { select(index, e); table?.focus({ preventScroll: true }); }} onkeydown={() => {}}
              oncontextmenu={(e) => { if (!selected.has(track.id)) select(index, e); openMenu(e, trackMenu(selectedTracks())); }}
              ondragstart={(e) => onDragStart(e, track)} ondragover={(e) => onRowDragOver(e, index)} ondragleave={() => (dropIndex = null)}
              ondrop={(e) => onRowDrop(e, track, index)}>
@@ -435,28 +463,33 @@
                 <input class="edit" type="text" bind:value={editing.value} use:focusInput onblur={commitEdit}
                        onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') editing = null; }} />
               {:else if column.id === 'index'}
-                <span class="muted">{(track.index ?? 0) + 1}</span>
+                {#if player.track?.id === track.id}<span class="now"><Icon name={player.playing ? 'volume' : 'pause'} size={14} /></span>{:else}<span class="muted">{(track.index ?? 0) + 1}</span>{/if}
               {:else if column.id === 'favorite'}
-                <span class="fav" class:on={track.favorite}><Icon name="star" size={15} filled={track.favorite} /></span>
-              {:else if column.id === 'cover'}
-                {#if track.has_cover}<img class="cover" src={coverUrl(track.id, rowHeight > 40 ? 128 : 64)} alt="" loading="lazy" />{/if}
+                <span class="fav" class:on={track.favorite}><Icon name="heart" size={16} filled={track.favorite} /></span>
               {:else if column.id === 'name'}
                 <div class="name-cell">
-                  <div class="texts">
-                    <span class="title-text ellipsis">
-                      {#if player.track?.id === track.id}<span class="now"><Icon name={player.playing ? 'volume' : 'pause'} size={13} /></span>{/if}
-                      {displayName(track)}
+                  {#if prefs.columns.cover}
+                    <span class="thumb" class:playing={player.track?.id === track.id}>
+                      {#if track.has_cover}<img src={coverUrl(track.id, rowHeight > 44 ? 128 : 64)} alt="" loading="lazy" />{:else}<Icon name="music" size={16} />{/if}
+                      {#if player.track?.id === track.id}<span class="thumb-play"><Icon name={player.playing ? 'volume' : 'play'} size={14} /></span>{/if}
                     </span>
-                    {#if prefs.summaryUnderTitle && track.summary && prefs.rowStyle !== 'small'}<span class="summary ellipsis">{track.summary}</span>{/if}
-                  </div>
-                  {#if prefs.columns.tags && track.tags.length}
-                    <div class="tags">
-                      {#each sortedTags(track).slice(0, 4) as { tag, match } (tag)}<span class="pill" class:match>{tag}</span>{/each}
-                    </div>
                   {/if}
+                  <div class="texts">
+                    <span class="title-text ellipsis">{displayName(track)}</span>
+                    {#if prefs.rowStyle !== 'small'}
+                      <span class="sub ellipsis">{prefs.summaryUnderTitle && track.summary ? track.summary : track.artist || track.album || ''}</span>
+                    {/if}
+                  </div>
                   {#if track.light?.color}<span class="bulb" style:color={track.light.color} title={t('Lights')}><Icon name="bulb" size={15} filled /></span>{/if}
                   {#if track.chapters.length}<span class="muted" title={t('Chapters')}><Icon name="marker" size={14} /></span>{/if}
                 </div>
+              {:else if column.id === 'mood'}
+                <div class="tags">
+                  {#each sortedTags(track).slice(0, 2) as { tag, match } (tag)}<span class="pill {match ? 'match' : tone(tag)}">{tag}</span>{/each}
+                  {#if track.tags.length > 2}<span class="more-tags" title={track.tags.join(', ')}>+{track.tags.length - 2}</span>{/if}
+                </div>
+              {:else if column.id === 'duration'}
+                <span class="muted num">{duration(track.length)}</span>
               {:else if column.id === 'title'}
                 <span class="ellipsis">{track.title ?? ''}</span>
               {:else if column.id === 'summary'}
@@ -470,11 +503,11 @@
               {:else if column.id === 'bpm'}
                 {track.bpm ?? ''}
               {:else if column.id === 'score'}
-                <strong>{row.score ?? ''}</strong>
+                {#if row.score !== null}<span class="score">{row.score}</span>{/if}
               {:else}
                 {@const value = track.categories[column.id.slice(4)]}
                 {#if value !== undefined && value !== null}
-                  <div class="bar"><div class="fill" style:width="{Math.min(100, Number(value) * 10)}%"></div><span>{Number.isInteger(value) ? value : Number(value).toFixed(1)}</span></div>
+                  <div class="bar-cell"><div class="bar"><div class="fill" style:width="{Math.min(100, Number(value) * 10)}%"></div></div><span class="num">{Number.isInteger(value) ? value : Number(value).toFixed(1)}</span></div>
                 {/if}
               {/if}
             </div>
@@ -491,50 +524,61 @@
 </div>
 
 <style>
-  .table { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; overflow: hidden; border-top-left-radius: 0; border-top-right-radius: 0; border-top: none; }
+  .table { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; overflow: hidden; margin-right: 2px; }
   .table:focus { outline: none; }
   .table.filedrop { box-shadow: inset 0 0 0 2px var(--accent); }
-  .header { display: grid; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 2; }
-  .th { display: flex; align-items: center; gap: 4px; padding: 8px 8px; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); text-align: left; min-width: 0; }
-  .th:hover { color: var(--text); background: var(--hover); }
+  .header { display: grid; background: var(--surface); position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--border); }
+  .th { display: flex; align-items: center; gap: 4px; padding: 12px 10px 10px; font-size: var(--fs-xs); font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); text-align: left; min-width: 0; }
+  .th:hover { color: var(--text); }
   .th.right { justify-content: flex-end; }
   .th.center { justify-content: center; }
-  .sort { font-size: 9px; }
-  .viewport { flex: 1; overflow: auto; position: relative; }
+  .sort { font-size: 8px; color: var(--accent); }
+  .viewport { flex: 1; overflow: auto; position: relative; padding: 0 6px; }
   .spacer { position: relative; min-width: 100%; }
-  .tr { position: absolute; left: 0; right: 0; top: 0; display: grid; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); cursor: default; }
+  .tr { position: absolute; left: 0; right: 0; top: 0; display: grid; align-items: center; cursor: default; border-radius: 10px; transition: background 0.12s; }
   .tr:hover { background: var(--hover); }
   .tr.selected { background: var(--accent-soft); }
-  .tr.playing { box-shadow: inset 3px 0 0 var(--accent); }
+  .tr.playing { background: linear-gradient(90deg, rgba(var(--ambient), 0.22), transparent 75%); }
+  .tr.playing.selected { background: linear-gradient(90deg, rgba(var(--ambient), 0.26), var(--accent-soft) 75%); }
   .tr.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
-  .td { padding: 0 8px; min-width: 0; height: 100%; display: flex; align-items: center; overflow: hidden; }
+  .td { padding: 0 10px; min-width: 0; height: 100%; display: flex; align-items: center; overflow: hidden; }
   .td.right { justify-content: flex-end; }
   .td.center { justify-content: center; }
-  .td.lvl-0 { background: var(--green-soft); }
-  .td.lvl-1 { background: var(--orange-soft); }
-  .td.lvl-2 { background: var(--red-soft); }
-  .td.score-0 { background: var(--score-0); }
-  .td.score-1 { background: var(--score-1); }
-  .td.score-2 { background: var(--score-2); }
-  .td.score-3 { background: var(--score-3); }
-  .cover { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .td:has(.cover) { padding: 0; }
-  .fav { color: var(--border-strong); display: flex; }
-  .fav.on { color: #f5b400; }
-  .name-cell { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
-  .texts { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-  .title-text { font-weight: 600; display: flex; align-items: center; gap: 5px; }
-  .now { color: var(--accent); display: inline-flex; }
-  .summary { font-size: var(--fs-xs); color: var(--muted); }
-  .tags { display: flex; gap: 4px; flex: none; max-width: 45%; overflow: hidden; }
-  .bulb { display: flex; }
-  .bar { position: relative; width: 100%; height: 18px; border-radius: 4px; background: var(--surface-3); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
-  .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 35%, transparent); }
-  .bar span { position: relative; }
-  .edit { width: 100%; padding: 3px 6px; }
-  .empty { padding: 40px; text-align: center; position: absolute; left: 0; right: 0; top: 40px; }
+  .td.lvl-0 .num, .td.lvl-0 > span { color: var(--green); font-weight: 600; }
+  .td.lvl-1 .num, .td.lvl-1 > span { color: var(--gold); font-weight: 600; }
+  .td.lvl-2 .num, .td.lvl-2 > span { color: var(--red); font-weight: 600; }
+  .td.lvl-0 .fill { background: var(--green); }
+  .td.lvl-1 .fill { background: var(--gold); }
+  .td.lvl-2 .fill { background: var(--red); }
+  .score { font-weight: 700; font-variant-numeric: tabular-nums; padding: 2px 9px; border-radius: 7px; }
+  .td.score-0 .score { color: var(--score-0); background: color-mix(in srgb, var(--score-0) 16%, transparent); }
+  .td.score-1 .score { color: var(--score-1); background: color-mix(in srgb, var(--score-1) 16%, transparent); }
+  .td.score-2 .score { color: var(--score-2); background: color-mix(in srgb, var(--score-2) 16%, transparent); }
+  .td.score-3 .score { color: var(--score-3); background: color-mix(in srgb, var(--score-3) 16%, transparent); }
+  .num { font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
+  .now { color: var(--accent); display: flex; }
+  .fav { color: var(--faint); display: flex; opacity: 0.5; }
+  .tr:hover .fav { opacity: 1; }
+  .fav.on { color: var(--rose); opacity: 1; filter: drop-shadow(0 0 6px var(--rose-soft)); }
+  .name-cell { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+  .thumb { position: relative; width: calc(var(--row-h) - 14px); height: calc(var(--row-h) - 14px); border-radius: 8px; overflow: hidden; flex: none; background: var(--surface-3); display: grid; place-items: center; color: var(--faint); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.playing { box-shadow: 0 0 0 2px var(--accent), 0 0 14px var(--accent-glow); }
+  .thumb-play { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 8, 20, 0.5); color: #fff; }
+  .texts { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+  .title-text { font-weight: 600; }
+  .sub { font-size: var(--fs-xs); color: var(--muted); }
+  .tags { display: flex; gap: 5px; min-width: 0; overflow: hidden; align-items: center; }
+  .more-tags { font-size: var(--fs-xs); color: var(--faint); }
+  .bulb { display: flex; filter: drop-shadow(0 0 4px currentColor); }
+  .bar-cell { display: flex; align-items: center; gap: 8px; width: 100%; }
+  .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .bar-cell .num { width: 22px; text-align: right; color: var(--muted); }
+  .edit { width: 100%; padding: 4px 7px; }
+  .empty { padding: 40px; text-align: center; position: absolute; left: 0; right: 0; top: 44px; }
   .error { color: var(--red); }
-  .search-pill { position: absolute; top: 44px; right: 18px; padding: 4px 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--accent); box-shadow: var(--shadow); display: flex; align-items: center; gap: 5px; }
+  .search-pill { position: absolute; top: 50px; right: 18px; padding: 5px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--accent); box-shadow: var(--shadow); display: flex; align-items: center; gap: 6px; }
   .search-pill.none { border-color: var(--red); }
-  .footer { padding: 4px 10px; font-size: var(--fs-xs); border-top: 1px solid var(--border); }
+  .footer { padding: 7px 16px; font-size: var(--fs-xs); border-top: 1px solid var(--border); }
 </style>

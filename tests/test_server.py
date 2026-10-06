@@ -166,6 +166,22 @@ def test_upload_and_move(client, library):
     assert (library["root"] / "Battle" / "new song.mp3").exists()
 
 
+def test_upload_keeps_directory_structure(client, library):
+    tavern = (library["root"] / "Tavern").as_posix()
+    mp3_bytes = write_mp3(library["root"].parent / "tmp_upload.mp3").read_bytes()
+    files = [("files", ("a.mp3", mp3_bytes, "audio/mpeg")), ("files", ("b.mp3", mp3_bytes, "audio/mpeg"))]
+
+    response = client.post("/api/upload", data={"dir": tavern, "paths": ["Album/Disc 1/a.mp3", "Album/b.mp3"]}, files=files)
+    assert response.status_code == 200
+    assert (library["root"] / "Tavern" / "Album" / "Disc 1" / "a.mp3").exists()
+    assert (library["root"] / "Tavern" / "Album" / "b.mp3").exists()
+
+    escape = client.post("/api/upload", data={"dir": tavern, "paths": ["../evil/a.mp3", "b.mp3"]}, files=files)
+    assert escape.status_code == 400
+    assert not (library["root"] / "evil").exists()
+    assert client.post("/api/upload", data={"dir": tavern, "paths": ["only-one.mp3"]}, files=files).status_code == 400
+
+
 def test_settings_categories_presets(client):
     settings = client.get("/api/settings").json()
     assert settings["lightsTimeout"] == 5.0
@@ -262,3 +278,199 @@ def test_auth_required_once_password_is_set(client):
 def test_spa_fallback_without_build(client):
     assert client.get("/").status_code == 404
     assert client.get("/api/nope").status_code == 404
+
+
+def test_health_needs_no_login(client):
+    set_password("secret")
+    assert client.get("/api/health").json()["status"] == "ok"
+    assert client.get("/api/settings").status_code == 401
+
+
+def test_desktop_mode_never_asks_this_computer_for_a_password(client):
+    from server.config import configure, get_config
+
+    previous = get_config()
+    configure(ServerConfig(local_mode=True, web_dir=previous.web_dir))
+    try:
+        set_password("secret")
+        assert client.get("/api/settings").status_code == 200  # TestClient counts as this computer
+        assert client.get("/api/auth/me").json()["local"] is True
+    finally:
+        configure(previous)
+
+
+def test_share_on_network_settings(client):
+    assert client.get("/api/settings").json()["shareOnNetwork"] is False
+    assert client.put("/api/settings", json={"sharePort": 80}).status_code == 400
+    data = client.put("/api/settings", json={"shareOnNetwork": True, "sharePort": 9000}).json()
+    assert data["shareOnNetwork"] is True
+    assert data["networkUrl"].endswith(":9000")
+
+
+def test_environment_library_paths(monkeypatch, tmp_path):
+    import os
+    from server.__main__ import _env_paths
+
+    monkeypatch.setenv("DT_LIBRARY", os.pathsep.join([str(tmp_path / "a"), str(tmp_path / "b")]))
+    assert _env_paths("DT_LIBRARY") == [tmp_path / "a", tmp_path / "b"]
+    monkeypatch.delenv("DT_LIBRARY")
+    assert _env_paths("DT_LIBRARY") is None
+
+
+def test_effects_directory_inside_library_is_no_extra_root(client, library):
+    AppSettings.setValue(SettingKeys.EFFECTS_DIRECTORY, (library["root"] / "Battle").as_posix())
+    assert len(client.get("/api/roots").json()) == 1
+
+
+def test_users_are_managed_by_the_superadmin(client, library):
+    assert client.post("/api/users", json={"name": "anna", "password": "pw1234"}).status_code == 400  # no admin password yet
+    set_password("secret")
+    assert client.post("/api/auth/login", json={"password": "secret"}).json()["is_admin"] is True
+
+    assert client.post("/api/users", json={"name": "anna", "password": "pw1234"}).status_code == 200
+    assert client.post("/api/users", json={"name": "Anna", "password": "pw1234"}).status_code == 409
+    assert client.post("/api/users", json={"name": "admin", "password": "pw1234"}).status_code == 409
+    assert client.post("/api/users", json={"name": "x y", "password": "pw1234"}).status_code == 400
+    assert client.post("/api/users", json={"name": "bob", "password": "12"}).status_code == 400
+    assert [u["name"] for u in client.get("/api/users").json()] == ["admin", "anna"]
+    assert "hash" not in client.get("/api/users").json()[1]
+    assert client.put("/api/auth/password", json={"password": None}).status_code == 400  # users still exist
+
+    # a regular user can sign in, but not administrate
+    client.post("/api/auth/logout")
+    assert client.get("/api/users").status_code == 401
+    assert client.post("/api/auth/login", json={"username": "anna", "password": "secret"}).status_code == 401
+    assert client.post("/api/auth/login", json={"username": "ANNA", "password": "pw1234"}).json() == {"authenticated": True, "user": "anna", "is_admin": False}
+    assert client.get("/api/auth/me").json()["user"] == "anna"
+    assert client.get("/api/users").status_code == 403
+    assert client.put("/api/settings", json={"locale": "en"}).status_code == 403
+    assert client.get("/api/roots").status_code == 200
+    assert client.put("/api/auth/me/password", json={"password": "newpass"}).status_code == 200
+
+    # deleting the user ends the session
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"password": "secret"})
+    assert client.delete("/api/users/anna").status_code == 200
+    assert client.post("/api/auth/login", json={"username": "anna", "password": "newpass"}).status_code == 401
+
+
+def test_upload_remembers_the_user(client, library):
+    set_password("secret")
+    tavern = (library["root"] / "Tavern").as_posix()
+    mp3_bytes = write_mp3(library["root"].parent / "tmp_upload.mp3").read_bytes()
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+
+    def upload(name):
+        return client.post("/api/upload", data={"dir": tavern}, files=[("files", (name, mp3_bytes, "audio/mpeg"))]).json()["tracks"][0]
+
+    assert upload("by admin.mp3")["uploaded_by"] == "admin"
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    track = upload("by anna.mp3")
+    assert track["uploaded_by"] == "anna" and track["uploaded_at"]
+
+    listing = {t["name"]: t for t in client.get("/api/tracks", params={"dir": tavern}).json()["tracks"]}
+    assert listing["by anna"]["uploaded_by"] == "anna" and listing["by admin"]["uploaded_by"] == "admin"
+    assert "uploaded_by" not in listing["inn"]
+
+    # edits keep the uploader, and a move follows the file
+    assert client.patch(f"/api/tracks/{track['id']}", json={"title": "x"}).json()["uploaded_by"] == "anna"
+    moved = client.post("/api/files/move", json={"source": f"{tavern}/by anna.mp3", "target_dir": (library["root"] / "Battle").as_posix()}).json()
+    assert client.get(f"/api/tracks/{moved['id']}").json()["uploaded_by"] == "anna"
+
+
+def test_favorites_and_open_tabs_are_per_user(client, library):
+    set_password("secret")
+    song = library["root"] / "Battle" / "fight.mp3"
+    root = library["root"].as_posix()
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+
+    assert client.patch(f"/api/tracks/{_id(song)}", json={"favorite": True}).json()["favorite"] is True
+    assert client.put("/api/user/state", json={"favorites": [f"{root}/Battle", f"{root}/Battle"],
+                                               "tabs": {"open": [{"type": "dir", "path": f"{root}/Battle"}], "active": f"dir:{root}/Battle"}}).status_code == 200
+    state = client.get("/api/user/state").json()
+    assert state["favorites"] == [f"{root}/Battle"] and state["tabs"]["open"][0]["path"] == f"{root}/Battle"
+
+    # anna starts with nothing and her changes do not touch the SuperAdmin's
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert client.get(f"/api/tracks/{_id(song)}").json()["favorite"] is False
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None}
+    assert client.patch(f"/api/tracks/{_id(song)}", json={"favorite": True}).json()["favorite"] is True
+    client.put("/api/user/state", json={"favorites": [f"{root}/Tavern"]})
+    drums = library["root"] / "Battle" / "drums.mp3"
+    assert client.patch(f"/api/tracks/{_id(drums)}", json={"favorite": True}).status_code == 200
+    assert client.patch(f"/api/tracks/{_id(song)}", json={"favorite": False}).json()["favorite"] is False
+
+    client.post("/api/auth/login", json={"password": "secret"})
+    assert client.get(f"/api/tracks/{_id(song)}").json()["favorite"] is True
+    assert client.get(f"/api/tracks/{_id(drums)}").json()["favorite"] is False
+    assert client.get("/api/user/state").json()["favorites"] == [f"{root}/Battle"]
+    listing = {t["name"]: t["favorite"] for t in client.get("/api/tracks", params={"dir": f"{root}/Battle"}).json()["tracks"]}
+    assert listing == {"fight": True, "drums": False}
+
+    # a deleted user takes the personal data along
+    client.delete("/api/users/anna")
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None}
+    assert client.get(f"/api/tracks/{_id(drums)}").json()["favorite"] is False
+
+
+def test_adding_a_song_twice_to_a_playlist_is_ignored(client, library):
+    fight, drums = library["root"] / "Battle" / "fight.mp3", library["root"] / "Battle" / "drums.mp3"
+    created = client.post("/api/playlists", json={"path": (library["root"] / "Mix.m3u").as_posix(), "ids": [_id(fight)]}).json()
+
+    def add(*ids, index=-1):
+        return client.post("/api/playlists/entries", json={"playlist": created["path"], "ids": list(ids), "index": index}).json()["added"]
+
+    assert add(_id(fight)) == 0
+    assert add(_id(fight), _id(drums), _id(drums), index=0) == 1
+    names = [t["name"] for t in client.get("/api/tracks", params={"playlist": created["path"]}).json()["tracks"]]
+    assert names == ["drums", "fight"]
+
+
+def test_users_delete_only_what_they_uploaded(client, library):
+    set_password("secret")
+    root = library["root"]
+    tavern = (root / "Tavern").as_posix()
+    mp3_bytes = write_mp3(root.parent / "tmp_upload.mp3").read_bytes()
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    client.post("/api/users", json={"name": "bob", "password": "pw1234"})
+
+    def upload(path):
+        return client.post("/api/upload", data={"dir": tavern, "paths": [path]}, files=[("files", ("x.mp3", mp3_bytes, "audio/mpeg"))])
+
+    def delete(path):
+        return client.delete("/api/files", params={"path": path})
+
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert upload("Album/one.mp3").status_code == 200
+    assert upload("single.mp3").status_code == 200
+    listing = {i["name"]: i.get("uploaded_by") for i in client.get("/api/browse", params={"path": tavern}).json()["items"]}
+    assert listing == {"Album": "anna", "inn": None, "single": "anna"}
+
+    # somebody else's and pre-existing files are protected
+    client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})
+    assert delete(f"{tavern}/single.mp3").status_code == 403
+    assert delete(f"{tavern}/Album").status_code == 403
+    assert delete(f"{tavern}/inn.mp3").status_code == 403
+    assert client.post("/api/files/folder", data={"parent": tavern, "name": "Bobs"}).status_code == 200
+    assert delete(f"{tavern}/Bobs").status_code == 200
+    assert delete(root.as_posix()).status_code in (400, 403)
+
+    # a folder anna filled together with somebody else is not hers to delete
+    assert upload("Album/two.mp3").status_code == 200
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert delete(f"{tavern}/Album").status_code == 403
+    assert delete(f"{tavern}/Album/one.mp3").status_code == 200
+    assert not (root / "Tavern" / "Album" / "one.mp3").exists()
+    assert delete(f"{tavern}/single.mp3").status_code == 200
+    assert "single" not in [t["name"] for t in client.get("/api/tracks", params={"dir": tavern}).json()["tracks"]]
+
+    # the SuperAdmin may delete anything
+    client.post("/api/auth/login", json={"password": "secret"})
+    assert delete(f"{tavern}/Album").status_code == 200
+    assert delete(f"{tavern}/inn.mp3").status_code == 200
+    assert not (root / "Tavern" / "Album").exists()

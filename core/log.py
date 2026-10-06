@@ -1,7 +1,8 @@
 import collections
 import logging
+import os
+from pathlib import Path
 
-from core.settings import AppSettings, SettingKeys
 from core.utils import get_user_data_dir
 
 class StrFormatLogRecord(logging.LogRecord):
@@ -34,14 +35,15 @@ class StrFormatLogRecord(logging.LogRecord):
         return msg
 
 def setup_logging():
-    log_dir = get_user_data_dir() / "logs"
+    data_dir = os.environ.get("DT_DATA_DIR")
+    log_dir = (Path(data_dir) if data_dir else get_user_data_dir()) / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     file_handler = logging.FileHandler(log_dir.joinpath('debug.log'), encoding="utf-8")
     console_handler = logging.StreamHandler()
 
     logging.basicConfig(
-        level=logging.DEBUG if AppSettings.value(SettingKeys.DEBUG, False, type=bool) else logging.WARNING,
+        level=logging.DEBUG if os.environ.get("DEBUG") else logging.WARNING,
         style='{',
         format='[{levelname}] {message}',
         force=True,

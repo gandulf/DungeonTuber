@@ -33,6 +33,8 @@ class EventHub:
 
     def publish(self, event: str, data=None):
         """Schedules a broadcast; callable from any thread."""
+        if event == "track.updated" and isinstance(data, dict):
+            data = {key: value for key, value in data.items() if key != "favorite"}  # favorites are per user, clients keep their own
         if self._loop is None or self._loop.is_closed():
             return
         try:

@@ -49,3 +49,18 @@ jobs:
         npm run check
         npm test
         npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: docker/setup-buildx-action@v3
+    - name: Build server image (no push)
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: false
+        tags: dungeontuber:ci
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+

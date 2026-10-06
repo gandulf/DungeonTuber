@@ -32,7 +32,7 @@
       applyAudioPrefs();
       restoreTabs();
       void loadEffects();
-      if (data.settings?.lightsWidget) void loadLights().catch(() => undefined);
+      if (data.settings?.lightsEnabled) void loadLights().catch(() => undefined);
       connectEvents();
       ready = true;
     } catch (e) {

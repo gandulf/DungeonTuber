@@ -1,10 +1,15 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["core", "server", "server.routes"]
+packages = ["core", "core.storage", "server", "server.routes"]
 py-modules = ["DungeonTuber"]
+
+[tool.setuptools.package-data]
+# translations and the built web frontend (npm --prefix web run build) ship inside the packages
+core = ["locales/*.json"]
+server = ["static/*", "static/**/*"]
 
 [project]
 name = "DungeonTuber"
@@ -23,17 +28,24 @@ dependencies = [
     "fastapi>=0.142",
     "uvicorn[standard]>=0.54",
     "python-multipart>=0.0.32",
-    "pillow>=12.3",
-    "pywebview>=6.2"
+    "pillow>=12.3"
 ]
 
 [project.optional-dependencies]
+# native window for the desktop launcher (DungeonTuber.py); not needed for the server
+desktop = [
+    "pywebview>=6.2"
+]
+# S3 compatible library storage (AWS S3, Cloudflare R2, Backblaze B2, MinIO, ...)
+s3 = [
+    "boto3>=1.36"
+]
 dev = [
     "pyinstaller>=6.22.3",
     "flake8>=7.4.1",
     "pytest>=9.0",
     "httpx>=0.28",
-    "Nuitka[app]>=4.2.2"
+    "build>=1.2"
 ]
 
 [project.scripts]

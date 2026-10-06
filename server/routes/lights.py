@@ -26,13 +26,13 @@ def _broadcast():
 
 @router.get("/api/lights")
 def lights():
-    return {"enabled": AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool), "lights": _lights(),
+    return {"enabled": AppSettings.value(SettingKeys.LIGHTS_ENABLED, True, type=bool), "lights": _lights(),
             "scenes": list(SCENES.values())}
 
 
 @router.post("/api/lights/discover")
 async def discover():
-    if not AppSettings.value(SettingKeys.LIGHTS_WIDGET, True, type=bool):
+    if not AppSettings.value(SettingKeys.LIGHTS_ENABLED, True, type=bool):
         raise HTTPException(status_code=409, detail="Lights are disabled")
     try:
         await light_registry.discover()

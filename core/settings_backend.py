@@ -1,8 +1,4 @@
-"""JSON file backed key/value store with a QSettings-compatible subset of the API.
-
-Older versions used QSettings (Windows registry); ``core.legacy`` imports those
-values once through ``import_values``.
-"""
+"""JSON file backed key/value store (settings.json)."""
 import json
 import logging
 import os
@@ -86,8 +82,8 @@ class JsonSettings:
                 json.dump(self._data, f, ensure_ascii=False, indent=2)
             os.replace(tmp, self._path)
 
-    # --- QSettings-like API -------------------------------------------
-    def value(self, key: str, defaultValue: Any = None, type: type | None = None) -> Any:  # noqa: A002 - mirrors QSettings
+    # --- key/value API -------------------------------------------------
+    def value(self, key: str, defaultValue: Any = None, type: type | None = None) -> Any:  # noqa: A002 - typed lookup
         with self._lock:
             raw = self._data.get(str(key))
         if raw is None:
@@ -119,11 +115,4 @@ class JsonSettings:
     def clear(self):
         with self._lock:
             self._data.clear()
-            self.sync()
-
-    def import_values(self, values: dict[str, Any]):
-        """Bulk import (e.g. a one-time migration from QSettings); existing keys win."""
-        with self._lock:
-            for key, value in values.items():
-                self._data.setdefault(str(key), value)
             self.sync()

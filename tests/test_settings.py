@@ -11,13 +11,13 @@ def test_json_settings_persist_and_coerce(tmp_path):
     store.setValue("flag", "true")
     store.setValue("count", "3")
     store.setValue("items", "single")
-    store.setValue(SettingKeys.VOLUME, 70)
+    store.setValue(SettingKeys.LIGHTS_TIMEOUT, 70)
 
     reopened = JsonSettings(path)
     assert reopened.value("flag", type=bool) is True
     assert reopened.value("count", type=int) == 3
     assert reopened.value("items", type=list) == ["single"]
-    assert reopened.value("volume", type=int) == 70
+    assert reopened.value("lightsTimeout", type=int) == 70
     assert reopened.value("missing", 5, type=int) == 5
     assert reopened.value("missing", defaultValue="x") == "x"
 
@@ -29,13 +29,10 @@ def test_json_settings_invalid_value_falls_back_to_default(tmp_path):
     assert store.value("count", 7, type=int) == 7
 
 
-def test_json_settings_remove_and_import(tmp_path):
+def test_json_settings_remove(tmp_path):
     store = JsonSettings(tmp_path / "s.json")
     store.setValue("a", 1)
-    store.import_values({"a": 2, "b": 3})
-
-    assert store.value("a") == 1  # existing values win
-    assert store.value("b") == 3
+    store.setValue("b", 3)
 
     store.remove("a")
     assert not store.contains("a")
@@ -123,3 +120,21 @@ def test_filter_config_toggle_and_empty():
     config.clear()
     assert config.empty()
     assert config.get_category("Valence") is None
+
+
+def test_translations_from_json_locales():
+    from core import i18n
+    from core.i18n import _
+
+    assert {"de", "en"} <= set(i18n.available_locales())
+    i18n.set_language("de_DE")
+    try:
+        assert i18n.language() == "de"
+        assert _("Analyzing {0}...") != "Analyzing {0}..."
+        assert _("not a known message") == "not a known message"
+        i18n.set_language(None)  # falls back to English texts
+        assert i18n.language() == "en"
+        assert _("Valence Description") != "Valence Description"
+    finally:
+        i18n.set_language("xx")
+    assert i18n.language() == "en"

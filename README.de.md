@@ -82,26 +82,53 @@ Der Prozess umfasst das Hochladen der Audiodatei an den Voxalyzer, wo lokale Ess
 
 ---
 
-## 🌐 Desktop-App & Server
+## 🌐 Installation & Betrieb
 
-DungeonTuber besteht aus einem Python-Server und einer Weboberfläche. Es läuft als Desktop-App oder als Server für
-andere Geräte (Tablet, Handy, zweiter PC) – die Musik wird im Browser abgespielt.
+DungeonTuber besteht aus einem Python-Server und einer Weboberfläche; die Musik wird im Browser abgespielt. Wähle die passende Variante:
+
+| Du möchtest… | Verwende |
+|---|---|
+| Auf deinem Windows-PC spielen (optional mit Tablets) | **Desktop-App** – den Windows-Installer aus den [Releases](https://github.com/gandulf/DungeonTuber/releases) |
+| Einen dauerhaft laufenden Server (NAS, Raspberry Pi, VPS) | **Docker-Image** `ghcr.io/gandulf/dungeontuber` |
+| Es auf einem beliebigen Rechner mit Python 3.12 betreiben | **Python-Paket** – das Wheel aus den Releases |
+
+### Desktop-App
+Installieren und *Dungeon Tuber* starten. Nur dieser Computer kann sich verbinden. Damit Tablets oder Handys am
+Spieltisch mitmachen können, ein Passwort setzen und **Einstellungen → Sicherheit → Im Netzwerk freigeben** aktivieren,
+die App neu starten und die angezeigte Adresse auf dem anderen Gerät öffnen.
+
+### Docker
+```bash
+docker run -d -p 8765:8765 -e DT_PASSWORD=aendern \
+  -v /pfad/zur/musik:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
+```
+[`deploy/docker-compose.yml`](deploy/docker-compose.yml) ergänzt automatisches HTTPS mit Caddy für den Zugriff über das Internet.
+WiZ-Lampen werden per UDP-Broadcast gefunden – das funktioniert nur mit `network_mode: host` unter Linux; unter Windows für Licht die Desktop-App nutzen.
+
+### Python-Paket
+```bash
+pipx install dungeontuber-<version>-py3-none-any.whl
+DT_PASSWORD=aendern DT_LIBRARY=/srv/music dungeontuber-server --host 0.0.0.0
+```
+Eine systemd-Unit liegt unter [`deploy/dungeontuber.service`](deploy/dungeontuber.service).
+
+### Server-Konfiguration
+Als Argumente (`dungeontuber-server --help`) oder Umgebungsvariablen: `DT_HOST`, `DT_PORT`, `DT_DATA_DIR`
+(Einstellungen, Bibliotheks-Cache, Logs), `DT_LIBRARY` (Musikordner), `DT_PASSWORD` (SuperAdmin-Passwort, Benutzername `admin`; ohne Passwort kann
+sich nur der Server-Rechner selbst verbinden), `DT_FORWARDED_ALLOW_IPS` (vertrauenswürdige Reverse-Proxys).
+Der SuperAdmin kann unter **Einstellungen → Sicherheit** weitere Benutzer anlegen, die sich mit eigenem Namen und Passwort anmelden. Benutzer können keine Servereinstellungen ändern, und jeder hochgeladene Song merkt sich, wer ihn hochgeladen hat (sichtbar in den Song-Details).
+Nur Dateien in den Bibliotheksordnern sind erreichbar. Es läuft genau ein Server-Prozess.
+
+---
+
+## 🛠️ Entwicklung & Build
 
 ```bash
-pip install -e .[dev]
+pip install -e .[desktop,dev]
 npm --prefix web ci
-npm --prefix web run build
+npm --prefix web run build        # schreibt server/static
+python DungeonTuber.py --fake     # Desktop-Fenster mit simulierten Lampen
 ```
-
-* **Desktop-App** (eigenes Fenster, nur dieser Computer kann sich verbinden): `python DungeonTuber.py` (`--fake` simuliert WiZ-Lampen)
-* **Server** im Netzwerk: einmalig ein Passwort setzen mit `python -m server --set-password`, dann
-  `python -m server --host 0.0.0.0 --port 8765` starten und `http://<dein-pc>:8765` im Browser öffnen.
-  Nur Ordner unter *Einstellungen → Bibliothek* sind erreichbar. Für den Zugriff über das Internet den Server hinter einen
-  HTTPS-Reverse-Proxy (z. B. Caddy) stellen. WiZ-Lampen lassen sich nur steuern, wenn der Server im selben Netzwerk läuft.
-
-Die Einstellungen liegen in `%APPDATA%/DungeonTuber/settings.json` (Einstellungen älterer Versionen werden beim ersten Start übernommen).
-
-## 🛠️ Build-Anweisungen
 
 ### Tests
 ```bash
@@ -109,36 +136,13 @@ python -m pytest
 npm --prefix web test
 ```
 
-### Kompletter Build (Übersetzungen, Lint, Tests, Weboberfläche, PyInstaller)
-```bash
-python build.py
-```
+### Pakete
+* Python-Wheel (inklusive Weboberfläche): `python -m build --wheel`
+* Docker-Image: `docker build -t dungeontuber .`
+* Windows-Desktop-App (Lint, Tests, Weboberfläche, PyInstaller): `python build_app.py`, danach `DungeonTuber.iss` mit Inno Setup
 
-### Übersetzungen aktualisieren:
-Bearbeite die Übersetzungen in den Dateien `_locales/**/LC_MESSAGES/DungeonTuber.po` und führe dann die folgenden Befehle aus, um die `.mo`-Dateien zu aktualisieren. 
-```bash
-msgfmt -o locales/en/LC_MESSAGES/DungeonTuber.mo locales/en/LC_MESSAGES/DungeonTuber.po
-msgfmt -o locales/de/LC_MESSAGES/DungeonTuber.mo locales/de/LC_MESSAGES/DungeonTuber.po
-```
+Releases (`v*`-Tags) baut [`release-app.yml`](.github/workflows/release-app.yml): Windows-Installer, Wheel und Docker-Image (amd64/arm64).
 
-
-## Verwendung von PyInstaller (Empfohlen)
-
-Vorher die Weboberfläche bauen (`npm --prefix web run build`).
-```bash
-pyinstaller DungeonTuber.spec
-```
-
-## Verwendung von Nuitka
-
-Der folgende Befehl nutzt MinGW64. Wenn die Kompilierung langsam ist, stelle sicher, dass dein Build-Verzeichnis vom Antiviren-Scan ausgeschlossen ist.
-
-```bash
-python -m nuitka --jobs=16 --include-data-dir=web/dist=web/dist --include-data-dir=locales=locales DungeonTuber.py --product-version=0.0.1.0 --file-version=0.0.1.0
-```
-
-> [!Note]
-> Füge --product-version=X.Y.Z.Q und --file-version=X.Y.Z.Q hinzu, um die Version der erstellten .exe zu definieren.
-
-> [!Note]
-> Das Flag --jobs legt die Anzahl der parallelen Kompilierungsprozesse fest. Passe dies basierend auf deinen CPU-Kernen an.
+### Übersetzungen
+Die Übersetzungen liegen in `core/locales/<sprache>.json` (Schlüssel = englischer Text) und werden von Server und
+Weboberfläche gemeinsam genutzt. Neue Texte in jede Sprachdatei eintragen.

@@ -7,16 +7,49 @@
   import { loadLights } from '../../lib/stores/lights.svelte';
   import { setNormalize } from '../../lib/stores/player.svelte';
   import { askConfirm, closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
-  import type { MusicCategory, ServerSettings } from '../../lib/types';
+  import type { MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
+  import UsersPanel from './UsersPanel.svelte';
 
   type Section = 'general' | 'library' | 'categories' | 'lights' | 'player' | 'security';
-  let section = $state<Section>('general');
+  const admin = data.auth?.is_admin !== false;
+  let section = $state<Section>(admin ? 'general' : 'player');
 
   const s = data.settings!;
   let form = $state<ServerSettings>(structuredClone($state.snapshot(s)) as ServerSettings);
   let roots = $state(form.libraryRoots.join('\n'));
+
+  interface StorageRow extends StorageConfig { access_key: string; secret_key: string; testing: boolean }
+  let storages = $state<StorageRow[]>([]);
+  let storagesAvailable = $state(true);
+  let storagesDirty = $state(false);
+  void api.storages().then((result) => {
+    storagesAvailable = result.available;
+    storages = result.storages.map((c) => ({ ...c, access_key: '', secret_key: '', testing: false }));
+  }).catch(errorToast);
+
+  const storagePayload = (row: StorageRow): StorageConfig => ({
+    id: row.id, name: row.name, bucket: row.bucket, prefix: row.prefix, endpoint_url: row.endpoint_url, public_endpoint_url: row.public_endpoint_url, region: row.region, direct: row.direct,
+    ...(row.access_key ? { access_key: row.access_key } : {}), ...(row.secret_key ? { secret_key: row.secret_key } : {}),
+  });
+
+  function addStorage() {
+    storages.push({ name: '', bucket: '', prefix: '', endpoint_url: '', public_endpoint_url: '', region: '', direct: false, access_key: '', secret_key: '', testing: false });
+    storagesDirty = true;
+  }
+
+  async function testStorage(row: StorageRow) {
+    row.testing = true;
+    try {
+      const result = await api.testStorage(storagePayload(row));
+      toast(t('Connection successful ({0} entries in the root)', result.entries), 'success');
+    } catch (e) {
+      errorToast(e);
+    } finally {
+      row.testing = false;
+    }
+  }
 
   interface CategoryRow { key: string; name: string; group: string; description: string; levels: string }
   const toRow = (c: MusicCategory): CategoryRow => ({
@@ -42,13 +75,17 @@
     saving = true;
     try {
       const changed: Partial<Record<keyof ServerSettings, unknown>> = {};
-      const keys: (keyof ServerSettings)[] = ['locale', 'voxalyzerUrl', 'voxalyzerLocal', 'skipAnalyzedMusic', 'lightsWidget', 'lightsBroadcastIP', 'lightsTimeout', 'effectsDirectory'];
+      const keys: (keyof ServerSettings)[] = ['locale', 'voxalyzerUrl', 'voxalyzerLocal', 'skipAnalyzedMusic', 'lightsEnabled', 'lightsBroadcastIP', 'lightsTimeout', 'effectsDirectory', 'shareOnNetwork', 'sharePort'];
       for (const key of keys) if (form[key] !== s[key]) changed[key] = form[key];
       const rootList = roots.split('\n').map((r) => r.trim()).filter(Boolean);
       if (rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
       if (Object.keys(changed).length) await saveSettings(changed);
       if ('effectsDirectory' in changed || 'libraryRoots' in changed) void loadEffects();
-      if ('lightsWidget' in changed && form.lightsWidget) void loadLights();
+      if ('lightsEnabled' in changed && form.lightsEnabled) void loadLights();
+      if (storagesDirty) {
+        if (storages.some((row) => !row.bucket.trim())) throw new Error(t('Every storage needs a bucket name.'));
+        await api.putStorages(storages.map(storagePayload));
+      }
       if (categoriesDirty) {
         const keysSeen = new Set<string>();
         const list: MusicCategory[] = [];
@@ -87,8 +124,11 @@
       return;
     }
     try {
-      const result = await api.setPassword(remove ? null : password);
-      if (data.auth) data.auth.password_set = result.password_set;
+      if (!admin) await api.setOwnPassword(password);
+      else {
+        const result = await api.setPassword(remove ? null : password);
+        if (data.auth) data.auth.password_set = result.password_set;
+      }
       password = password2 = '';
       toast(remove ? t('Password removed') : t('Password changed'), 'success');
     } catch (e) {
@@ -109,7 +149,7 @@
 <Modal title={t('Settings')} onclose={closeDialog} width="820px">
   <div class="layout">
     <nav>
-      {#each sections as [key, label, icon] (key)}
+      {#each sections.filter(([key]) => admin || ['categories', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
         <button class:active={section === key} onclick={() => (section = key)}><Icon name={icon} size={16} /> {t(label)}</button>
       {/each}
     </nav>
@@ -133,6 +173,29 @@
         <label class="field">{t('Select Effects Directory')}
           <input type="text" bind:value={form.effectsDirectory} placeholder="C:/Music/Effects" /></label>
         <p class="muted small">{t('Only files inside these folders are accessible through the web interface.')}</p>
+        <h4>{t('Cloud storage (S3 compatible)')}</h4>
+        <p class="muted small">{t('Buckets of AWS S3, Cloudflare R2, Backblaze B2, MinIO and others. Song data is kept in the library database; the files in the bucket are never modified. Use s3://<id>/folder as effects directory.')}</p>
+        {#if !storagesAvailable}<p class="warn small">{t('The S3 client is not installed on the server (pip install DungeonTuber[s3]).')}</p>{/if}
+        {#each storages as row, i (i)}
+          <div class="storage" oninput={() => (storagesDirty = true)} onchange={() => (storagesDirty = true)} role="group">
+            <input type="text" placeholder={t('Name')} bind:value={row.name} />
+            <input type="text" placeholder={t('Bucket')} bind:value={row.bucket} />
+            <input type="text" placeholder={t('Folder in bucket (optional)')} bind:value={row.prefix} />
+            <input type="url" placeholder={t('Endpoint URL (empty for AWS)')} bind:value={row.endpoint_url} />
+            <input type="text" placeholder={t('Region (optional)')} bind:value={row.region} />
+            <input type="url" placeholder={t('Public endpoint URL for browsers (optional)')} title={t('Used for direct streaming when browsers reach the storage under another address than the server does.')} bind:value={row.public_endpoint_url} />
+            <span class="muted small id">{row.id ? `s3://${row.id}` : ''}</span>
+            <input type="text" autocomplete="off" placeholder={row.has_credentials ? t('Access key (unchanged)') : t('Access key')} bind:value={row.access_key} />
+            <input type="password" autocomplete="new-password" placeholder={row.has_credentials ? t('Secret key (unchanged)') : t('Secret key')} bind:value={row.secret_key} />
+            <label class="check small" title={t('The browser streams directly from the bucket. Needs a CORS rule on the bucket.')}>
+              <input type="checkbox" bind:checked={row.direct} /> {t('Direct streaming')}</label>
+            <div class="row actions">
+              <button class="btn" disabled={row.testing || !row.bucket.trim()} onclick={() => testStorage(row)}>{t('Test connection')}</button>
+              <button class="icon-btn" title={t('Remove')} onclick={() => { storages.splice(i, 1); storagesDirty = true; }}><Icon name="trash" size={15} /></button>
+            </div>
+          </div>
+        {/each}
+        <div class="row"><button class="btn" onclick={addStorage}><Icon name="plus" size={14} /> {t('Add storage')}</button></div>
       {:else if section === 'categories'}
         <div class="cat-head">
           <span class="muted small">{t('Levels: one "value: description" per line')}</span>
@@ -153,7 +216,7 @@
           {/each}
         </div>
       {:else if section === 'lights'}
-        <label class="check"><input type="checkbox" bind:checked={form.lightsWidget} /> {t('Enabled')} ({t('Wiz Lights')})</label>
+        <label class="check"><input type="checkbox" bind:checked={form.lightsEnabled} /> {t('Enabled')} ({t('Wiz Lights')})</label>
         <label class="field">{t('Broadcast Space')}<input type="text" bind:value={form.lightsBroadcastIP} />
           <span class="muted small">{t('Take the ip address of you local wlan network and replace the last number with 255.')}</span></label>
         <label class="field">{t('Timeout')} (s)<input type="number" min="1" max="60" step="0.5" bind:value={form.lightsTimeout} />
@@ -166,16 +229,28 @@
         <label class="check"><input type="checkbox" checked={prefs.dynamicScore} onchange={(e) => { prefs.dynamicScore = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Dynamic Score Column')}</label>
         <label class="check"><input type="checkbox" checked={prefs.dynamicColumns} onchange={(e) => { prefs.dynamicColumns = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Dynamic Category Columns')}</label>
       {:else if section === 'security'}
-        {#if data.auth?.local}
-          <p class="muted">{t('The desktop app only accepts connections from this computer. A password is needed when running as a server for other devices.')}</p>
+        {#if !admin}
+          <p>{t('Signed in as {0}', data.auth?.user ?? '')}</p>
+        {:else}
+          {#if data.auth?.local}
+            <p class="muted">{t('The desktop app only accepts connections from this computer. A password is needed when running as a server for other devices.')}</p>
+          {/if}
+          <p>{data.auth?.password_set ? t('A password is set.') : t('No password is set – only this computer can connect.')}</p>
         {/if}
-        <p>{data.auth?.password_set ? t('A password is set.') : t('No password is set – only this computer can connect.')}</p>
         <label class="field">{t('New password')}<input type="password" bind:value={password} autocomplete="new-password" /></label>
         <label class="field">{t('Repeat password')}<input type="password" bind:value={password2} autocomplete="new-password" /></label>
         <div class="row">
           <button class="btn primary" onclick={() => changePassword()}>{t('Set password')}</button>
-          {#if data.auth?.password_set}<button class="btn danger" onclick={() => changePassword(true)}>{t('Remove password')}</button>{/if}
+          {#if admin && data.auth?.password_set}<button class="btn danger" onclick={() => changePassword(true)}>{t('Remove password')}</button>{/if}
         </div>
+        {#if admin}<UsersPanel />{/if}
+        {#if admin && data.auth?.local}
+          <h4>{t('Share on network')}</h4>
+          <label class="check"><input type="checkbox" bind:checked={form.shareOnNetwork} disabled={!data.auth?.password_set} />
+            {t('Let tablets and phones in this network connect (requires a password and a restart)')}</label>
+          <label class="field">{t('Port')}<input type="number" min="1024" max="65535" bind:value={form.sharePort} disabled={!form.shareOnNetwork} /></label>
+          {#if form.shareOnNetwork}<p class="muted small">{t('After restarting, open {0} on the other device.', form.networkUrl)}</p>{/if}
+        {/if}
       {/if}
     </div>
   </div>
@@ -198,6 +273,10 @@
   .small { font-size: var(--fs-xs); }
   .row { display: flex; gap: 8px; }
   .grow { flex: 1; }
+  .storage { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); align-items: center; }
+  .storage .id { align-self: center; }
+  .storage .actions { justify-content: flex-end; }
+  .warn { color: var(--danger, #d9534f); }
   .cat-head { display: flex; align-items: center; gap: 8px; }
   .cats { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow: auto; padding-right: 4px; }
   .cat { display: grid; grid-template-columns: 1fr 1.3fr 1fr auto; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); }

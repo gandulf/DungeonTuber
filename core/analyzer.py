@@ -1,6 +1,6 @@
 """Music analysis backends (voxalyzer local/remote, mock) without any threading framework.
 
-Callers decide how to run ``analyze_file`` (Qt thread pool, asyncio.to_thread, ...).
+Callers decide how to run ``analyze_file`` (thread pool, asyncio.to_thread, ...).
 """
 import atexit
 import json
