@@ -1,6 +1,7 @@
 """FastAPI application factory."""
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -80,8 +81,9 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
     async def spa(full_path: str):
         if full_path.startswith(("api/", "media/")):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
-        candidate = (web_dir / full_path).resolve() if full_path else None
-        if candidate and candidate.is_file() and candidate.is_relative_to(web_dir.resolve()):
+        root = os.path.realpath(web_dir)
+        candidate = os.path.realpath(os.path.join(root, full_path)) if full_path else None
+        if candidate and candidate.startswith(root + os.sep) and os.path.isfile(candidate):  # never serve anything outside the web directory
             return FileResponse(candidate)
         if index_file.is_file():
             return FileResponse(index_file, headers={"Cache-Control": "no-cache"})

@@ -474,3 +474,16 @@ def test_users_delete_only_what_they_uploaded(client, library):
     assert delete(f"{tavern}/Album").status_code == 200
     assert delete(f"{tavern}/inn.mp3").status_code == 200
     assert not (root / "Tavern" / "Album").exists()
+
+
+def test_static_files_stay_inside_the_web_directory(tmp_path):
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<html>app</html>")
+    (web / "icon.png").write_bytes(b"png")
+    (tmp_path / "secret.txt").write_text("secret")
+    with TestClient(create_app(ServerConfig(web_dir=web))) as test_client:
+        assert test_client.get("/icon.png").content == b"png"
+        assert test_client.get("/some/route").text == "<html>app</html>"
+        for attack in ("/%2e%2e/secret.txt", "/..%2fsecret.txt", "/%2e%2e%2fsecret.txt"):
+            assert "secret" not in test_client.get(attack).text

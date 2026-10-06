@@ -91,7 +91,7 @@ class JsonSettings:
         try:
             return _coerce(raw, type)
         except (TypeError, ValueError):
-            logger.warning("Setting {0} has invalid value {1!r}", key, raw)
+            logger.warning("Setting {0} has an invalid value of type {1}", key, raw.__class__.__name__)  # never log the value: it may be a secret
             return defaultValue
 
     def setValue(self, key: str, value: Any):
