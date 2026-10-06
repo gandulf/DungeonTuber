@@ -58,6 +58,8 @@ class SettingKeys(StrEnum):
     SHARE_PORT = "sharePort"
     SERVER_PASSWORD_HASH = "serverPasswordHash"
     SERVER_SECRET = "serverSecret"
+    # SHA-256 of the token that agents (WiZ lights, analysis) use to connect; see server/agents.py
+    AGENT_TOKEN_HASH = "agentTokenHash"
 
 
 def default_settings_path() -> str:

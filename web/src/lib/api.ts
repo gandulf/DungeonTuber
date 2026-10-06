@@ -115,10 +115,14 @@ export const api = {
   analysisStatus: () => get<{ backend: string; pending: number; done: number; failed: number }>('/api/analysis'),
 
   // lights
-  lights: () => get<{ enabled: boolean; lights: Light[]; scenes: string[] }>('/api/lights'),
+  lights: () => get<{ enabled: boolean; lights: Light[]; scenes: string[]; agent: boolean }>('/api/lights'),
   discoverLights: () => request<{ enabled: boolean; lights: Light[]; scenes: string[] }>('POST', '/api/lights/discover'),
   patchLight: (mac: string, patch: Partial<Light> & { clear_color?: boolean }) => request<Light>('PATCH', `/api/lights/${encodeURIComponent(mac)}`, patch),
   cue: (setting: LightSetting) => request<{ applied: number }>('POST', '/api/lights/cue', setting),
+
+  // agents (WiZ light agent, ...)
+  agents: () => get<{ tokenSet: boolean; connected: { kind: string; name: string }[] }>('/api/agents'),
+  createAgentToken: () => request<{ token: string }>('POST', '/api/agents/token'),
 };
 
 /** Same opaque id the server derives from a path (urlsafe base64 without padding). */

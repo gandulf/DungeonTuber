@@ -6,6 +6,7 @@ Every option can also be given as environment variable (used by the Docker image
 DT_HOST, DT_PORT, DT_DATA_DIR, DT_LIBRARY (paths separated by the OS path separator),
 DT_S3_BUCKET (+ DT_S3_PREFIX, DT_S3_ENDPOINT, DT_S3_PUBLIC_ENDPOINT, DT_S3_REGION, DT_S3_ACCESS_KEY, DT_S3_SECRET_KEY, DT_S3_NAME, DT_S3_ID, DT_S3_DIRECT=1) adds an
 S3 compatible library (needs the boto3 extra), DT_PASSWORD (sets/updates the login password on start), DT_FAKE_LIGHTS=1,
+DT_AGENT_TOKEN (token for agents such as the WiZ light agent, see agents/wiz),
 DT_FORWARDED_ALLOW_IPS (proxies whose X-Forwarded-* headers are trusted, default 127.0.0.1).
 """
 import argparse
@@ -20,6 +21,7 @@ from core.lights import fake_lights_mode
 from core.log import setup_logging
 from core.settings import AppSettings, SettingKeys, settings
 from server.app import create_app
+from server.agents import set_agent_token, valid_agent_token
 from server.auth import password_set, set_password, verify_password
 from server.config import ServerConfig
 from server.roots import slugify
@@ -87,6 +89,10 @@ def main(argv: list[str] | None = None):
     env_password = env("DT_PASSWORD")
     if env_password and not verify_password(env_password, AppSettings.value(SettingKeys.SERVER_PASSWORD_HASH, type=str)):
         set_password(env_password)
+
+    env_agent_token = env("DT_AGENT_TOKEN")
+    if env_agent_token and not valid_agent_token(env_agent_token):
+        set_agent_token(env_agent_token)
 
     if args.fake_lights:
         fake_lights_mode()

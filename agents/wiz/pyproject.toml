@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dungeontuber-wiz-agent"
+version = "0.1.0"
+description = "WiZ light agent for a DungeonTuber server: runs next to the bulbs and connects out to the server"
+requires-python = ">=3.12"
+dependencies = [
+    "pywizlight>=0.6.6",
+    "websockets>=14",
+]
+
+[project.scripts]
+dt-wiz-agent = "dt_wiz_agent:main"
+
+[tool.setuptools]
+py-modules = ["dt_wiz_agent"]

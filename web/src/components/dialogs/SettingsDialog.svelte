@@ -58,6 +58,20 @@
   });
   let categories = $state<CategoryRow[]>(data.categories.map(toRow));
   let categoriesDirty = $state(false);
+  let agents = $state<{ tokenSet: boolean; connected: { kind: string; name: string }[] } | null>(null);
+  let agentToken = $state('');
+  void api.agents().then((result) => (agents = result)).catch(() => {});
+
+  async function createAgentToken() {
+    if (agents?.tokenSet && !(await askConfirm(t('A new token locks out agents that use the current one. Continue?')))) return;
+    try {
+      agentToken = (await api.createAgentToken()).token;
+      agents = await api.agents();
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   let password = $state('');
   let password2 = $state('');
   let saving = $state(false);
@@ -221,6 +235,18 @@
           <span class="muted small">{t('Take the ip address of you local wlan network and replace the last number with 255.')}</span></label>
         <label class="field">{t('Timeout')} (s)<input type="number" min="1" max="60" step="0.5" bind:value={form.lightsTimeout} />
           <span class="muted small">{t('Time to search for bulbs in seconds')}</span></label>
+        <div class="field">
+          <span>{t('Light agent')}</span>
+          <span class="muted small">{t('Lets a program in the network of the bulbs control them, for a server that cannot reach them itself (see agents/wiz).')}</span>
+          <span class="small">{agents?.connected.find((a) => a.kind === 'lights') ? t('Connected: {0}', agents.connected.find((a) => a.kind === 'lights')!.name) : t('No agent connected')}</span>
+          {#if admin}
+            {#if agentToken}
+              <input type="text" readonly value={agentToken} onfocus={(e) => e.currentTarget.select()} />
+              <span class="muted small">{t('Copy this token now, it is only shown once. Start the agent with --token.')}</span>
+            {/if}
+            <div class="row"><button class="btn" onclick={createAgentToken}>{agents?.tokenSet ? t('New agent token') : t('Create agent token')}</button></div>
+          {/if}
+        </div>
       {:else if section === 'player'}
         <p class="muted small">{t('These settings are stored in this browser.')}</p>
         <label class="check"><input type="checkbox" checked={prefs.crossfade} onchange={(e) => { prefs.crossfade = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Crossfade')}</label>

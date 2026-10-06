@@ -224,5 +224,13 @@
   "New Playlist": "New Playlist",
   "New folder…": "New folder…",
   "Create": "Create",
-  "More tabs": "More tabs"
+  "More tabs": "More tabs",
+  "Light agent": "Light agent",
+  "Lets a program in the network of the bulbs control them, for a server that cannot reach them itself (see agents/wiz).": "Lets a program in the network of the bulbs control them, for a server that cannot reach them itself (see agents/wiz).",
+  "Connected: {0}": "Connected: {0}",
+  "No agent connected": "No agent connected",
+  "New agent token": "New agent token",
+  "Create agent token": "Create agent token",
+  "Copy this token now, it is only shown once. Start the agent with --token.": "Copy this token now, it is only shown once. Start the agent with --token.",
+  "A new token locks out agents that use the current one. Continue?": "A new token locks out agents that use the current one. Continue?"
 }

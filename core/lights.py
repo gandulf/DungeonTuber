@@ -5,7 +5,7 @@ import logging
 import random
 from dataclasses import dataclass, field
 from functools import partial
-from typing import List, Optional
+from typing import Awaitable, Callable, List, Optional
 
 from pywizlight import wizlight, PilotBuilder, PilotParser, BulbType
 from pywizlight.discovery import DEFAULT_WAIT_TIME, BroadcastProtocol, PORT
@@ -110,6 +110,8 @@ class Light(LightSetting):
 
     async def refresh_state(self):
         state = await self.control.updateState()
+        if isinstance(state, list):  # newer pywizlight versions return one state per bulb head
+            state = next((s for s in state if s is not None), None)
 
         self.mac = state.get_mac()
 
@@ -269,6 +271,8 @@ class LightRegistry:
     def __init__(self):
         self.fake_bulbs = False
         self.lights: set[Light] = set()
+        # Set by the server: bulbs found by a connected light agent (None when no agent is connected), takes precedence over local discovery.
+        self.remote_bulbs: Callable[[], Awaitable[list | None]] | None = None
 
     def load(self):
         """Loads the persisted light names/settings."""
@@ -300,7 +304,10 @@ class LightRegistry:
 
     async def discover(self) -> list[Light]:
         """Discovers bulbs on the LAN (or creates mock bulbs in fake mode) and merges them with known lights."""
-        if self.fake_bulbs:
+        remote = await self.remote_bulbs() if self.remote_bulbs else None
+        if remote is not None:
+            bulbs = remote
+        elif self.fake_bulbs:
             bulbs = []
             for n in range(3):
                 control = MockControl()

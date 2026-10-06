@@ -6,6 +6,7 @@ from pywizlight.scenes import SCENES
 
 from core.lights import LightSetting, light_registry
 from core.settings import AppSettings, SettingKeys
+from server.agents import agent_hub
 from server.auth import require_auth
 from server.events import hub
 
@@ -27,7 +28,7 @@ def _broadcast():
 @router.get("/api/lights")
 def lights():
     return {"enabled": AppSettings.value(SettingKeys.LIGHTS_ENABLED, True, type=bool), "lights": _lights(),
-            "scenes": list(SCENES.values())}
+            "scenes": list(SCENES.values()), "agent": agent_hub.get("lights") is not None}
 
 
 @router.post("/api/lights/discover")

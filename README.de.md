@@ -103,7 +103,7 @@ docker run -d -p 8765:8765 -e DT_PASSWORD=aendern \
   -v /pfad/zur/musik:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
 ```
 [`deploy/docker-compose.yml`](deploy/docker-compose.yml) ergänzt automatisches HTTPS mit Caddy für den Zugriff über das Internet.
-WiZ-Lampen werden per UDP-Broadcast gefunden – das funktioniert nur mit `network_mode: host` unter Linux; unter Windows für Licht die Desktop-App nutzen.
+WiZ-Lampen werden per UDP-Broadcast gefunden – das funktioniert nur mit `network_mode: host` unter Linux; unter Windows für Licht die Desktop-App nutzen. Für einen Server außerhalb des Lampen-Netzwerks läuft der [WiZ-Licht-Agent](agents/wiz/README.md) neben den Lampen: er verbindet sich mit einem eigenen Token (Einstellungen > Lichter oder `DT_AGENT_TOKEN`) nach außen zum Server.
 
 ### Python-Paket
 ```bash

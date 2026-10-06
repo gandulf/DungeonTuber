@@ -103,7 +103,7 @@ docker run -d -p 8765:8765 -e DT_PASSWORD=change-me \
   -v /path/to/music:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
 ```
 [`deploy/docker-compose.yml`](deploy/docker-compose.yml) adds automatic HTTPS with Caddy for access over the internet.
-WiZ bulbs are discovered via UDP broadcast, which only works with `network_mode: host` on Linux – on Windows use the desktop app for lights.
+WiZ bulbs are discovered via UDP broadcast, which only works with `network_mode: host` on Linux – on Windows use the desktop app for lights. For a server that is not in the bulbs' network, run the [WiZ light agent](agents/wiz/README.md) next to the bulbs: it connects out to the server with its own token (Settings > Lights, or `DT_AGENT_TOKEN`).
 
 ### Python package
 ```bash
