@@ -3,6 +3,8 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
+# the data files are listed explicitly below; picking up every directory of the sdist as a package only produces warnings
+include-package-data = false
 packages = ["core", "core.storage", "server", "server.routes"]
 py-modules = ["DungeonTuber"]
 
