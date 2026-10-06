@@ -359,7 +359,9 @@ class TrackIndex:
             self._conn.commit()
 
     def close(self):
-        self._conn.close()
+        # worker threads (remote imports) may still be writing: closing the connection under them crashes the interpreter
+        with self._lock:
+            self._conn.close()
 
 
 def entry_from_dict(data: dict) -> Mp3Entry:
