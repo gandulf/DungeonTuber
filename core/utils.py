@@ -1,4 +1,5 @@
 import ctypes
+import importlib.metadata
 import ipaddress
 import json
 import logging
@@ -55,6 +56,20 @@ def get_user_data_dir() -> Path:
     return Path(base) / APP_NAME
 
 
+def _is_source_checkout() -> bool:
+    return (Path(__file__).resolve().parent.parent / "pyproject.toml").is_file()
+
+
+def installed_version() -> str | None:
+    """The version of the installed package (wheel / Docker image: the release tag, see the release workflow); None when run from a checkout."""
+    if _is_source_checkout():  # the version in pyproject.toml is a placeholder there
+        return None
+    try:
+        return importlib.metadata.version("dungeontuber")
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
 def get_current_version() -> str:
     # Get the path to the current running .exe
     if "__compiled__" in globals():
@@ -63,7 +78,7 @@ def get_current_version() -> str:
     elif getattr(sys, 'frozen', False):
         exe_path = sys.executable
     else:
-        return "Dev"
+        return installed_version() or "Dev"
 
     if sys.platform != "win32":
         return "Unknown"
