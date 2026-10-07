@@ -1,5 +1,5 @@
 import type {
-  AgentInfo, AuthState, BrowseItem, BrowseResult, Chapter, Effect, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
+  AgentInfo, AuthState, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -89,6 +89,12 @@ export const api = {
     paths?.forEach((path) => form.append('paths', path));
     return request<{ tracks: Track[] }>('POST', '/api/upload', form);
   },
+
+  // import of YouTube links
+  resolveImport: (url: string, whole?: boolean) => request<ImportPreview>('POST', '/api/import/resolve', { url, whole }),
+  startImport: (body: { dir: string; entries: { url: string; title: string }[]; album?: string; playlist?: string; folder?: string; analyze?: boolean; split?: boolean }) =>
+    request<{ queued: number; pending: number }>('POST', '/api/import', body),
+  importStatus: () => get<{ pending: number; done: number; failed: number; items: DownloadItem[] }>('/api/import'),
 
   // settings
   userState: () => get<UserState>('/api/user/state'),

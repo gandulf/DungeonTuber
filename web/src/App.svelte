@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { setUnauthorizedHandler } from './lib/api';
+  import { api, setUnauthorizedHandler } from './lib/api';
+  import { t } from './lib/i18n.svelte';
   import { prefs } from './lib/prefs.svelte';
   import { data, loadAuth, loadData } from './lib/stores/data.svelte';
+  import { downloads, setDownloads } from './lib/stores/downloads.svelte';
   import { loadEffects, updateEffectTrack } from './lib/stores/effects.svelte';
   import { reloadDirTabs, reloadPlaylistTabs, restoreTabs, updateTrack } from './lib/stores/library.svelte';
   import { loadLights, setLightState } from './lib/stores/lights.svelte';
@@ -32,6 +34,7 @@
       applyAudioPrefs();
       restoreTabs();
       void loadEffects();
+      void api.importStatus().then(setDownloads).catch(() => undefined);
       if (data.settings?.lightsEnabled) void loadLights().catch(() => undefined);
       connectEvents();
       ready = true;
@@ -59,6 +62,12 @@
       onEvent('analysis.status', ({ pending }) => pending === 0 && (ui.progress = null)),
       onEvent('analysis.available', ({ active }) => data.settings && (data.settings.voxalyzerActive = active)),
       onEvent('analysis.error', ({ message }) => toast(message, 'error')),
+      onEvent('import.items', (status) => {
+        if (!setDownloads(status)) return;
+        if (status.done) toast(t('Import finished: {0} songs', status.done), 'success');
+        if (status.failed) toast(t('{0} songs could not be imported', status.failed), 'error');
+      }),
+      onEvent('import.error', ({ message }) => toast(message, 'error')),
       onEvent('connection', ({ connected }) => (ui.connected = connected)),
     ];
     void start();

@@ -43,6 +43,11 @@ RUN pip install --no-cache-dir "$(ls /tmp/*.whl)${EXTRAS:+[$EXTRAS]}" \
     && useradd --create-home --uid 1000 dungeontuber \
     && mkdir -p /data /music && chown dungeontuber:dungeontuber /data
 
+# Static builds copied from small images (no package installation): ffmpeg/ffprobe convert the audio of imported YouTube links,
+# deno runs the JavaScript yt-dlp needs for YouTube
+COPY --from=mwader/static-ffmpeg:7.1.1 /ffmpeg /ffprobe /usr/local/bin/
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 USER dungeontuber
 VOLUME ["/data"]
 EXPOSE 8765

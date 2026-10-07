@@ -40,6 +40,8 @@ export interface Prefs {
   openTabs: { type: 'dir' | 'playlist'; path: string }[];
   activeTab: string | null;
   tourDone: boolean;
+  /** The options of the last YouTube import, preselected the next time. */
+  importOptions: { makePlaylist: boolean; makeFolder: boolean; split: boolean; analyze: boolean };
 }
 
 const defaults: Prefs = {
@@ -75,6 +77,7 @@ const defaults: Prefs = {
   openTabs: [],
   activeTab: null,
   tourDone: false,
+  importOptions: { makePlaylist: false, makeFolder: false, split: false, analyze: false },
 };
 
 const KEY = 'dungeontuber.prefs';
@@ -83,7 +86,8 @@ function load(): Prefs {
   try {
     const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}');
     if (stored.theme !== 'light' && stored.theme !== 'dark') delete stored.theme; // e.g. the former 'system' mode
-    return { ...defaults, ...stored, filter: { ...defaults.filter, ...stored.filter }, columns: { ...defaults.columns, ...stored.columns } };
+    return { ...defaults, ...stored, filter: { ...defaults.filter, ...stored.filter }, columns: { ...defaults.columns, ...stored.columns },
+      importOptions: { ...defaults.importOptions, ...stored.importOptions } };
   } catch {
     return structuredClone(defaults);
   }

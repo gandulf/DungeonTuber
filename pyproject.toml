@@ -30,7 +30,8 @@ dependencies = [
     "fastapi>=0.142",
     "uvicorn[standard]>=0.54",
     "python-multipart>=0.0.32",
-    "pillow>=12.3"
+    "pillow>=12.3",
+    "yt-dlp[default]>=2026.8.19"
 ]
 
 [project.optional-dependencies]

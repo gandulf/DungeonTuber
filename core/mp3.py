@@ -523,6 +523,19 @@ def update_mp3_tags(path: str | PathLike[str] | MP3, tags: list[str] | None, sav
         logger.debug("Updated tags to {0} for {1}", tags, path)
 
 
+def update_mp3_source(path: str | PathLike[str] | MP3, url: str | None, save: bool = True):
+    """The web address a file was imported from."""
+    audio = _audio(path)
+
+    if url:
+        audio.tags.add(TXXX(Encoding.UTF8, desc="source_url", text=[url]))
+    else:
+        audio.tags.delall("TXXX:source_url")
+
+    if save:
+        audio.save()
+
+
 def update_mp3_light(path: str | PathLike[str] | MP3, light: LightSetting | None, save: bool = True):
     audio = _audio(path)
 

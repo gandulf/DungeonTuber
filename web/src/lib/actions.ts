@@ -9,6 +9,8 @@ import { askConfirm, askText, errorToast, openDialog, toast, ui, type MenuItem }
 import type { BrowseItem, Track } from './types';
 import { isMp3, itemsFromDrop, type UploadItem } from './upload';
 import EditSongDialog from '../components/dialogs/EditSongDialog.svelte';
+import DownloadsDialog from '../components/dialogs/DownloadsDialog.svelte';
+import ImportDialog from '../components/dialogs/ImportDialog.svelte';
 import NewPlaylistDialog from '../components/dialogs/NewPlaylistDialog.svelte';
 import UploadDialog from '../components/dialogs/UploadDialog.svelte';
 
@@ -69,16 +71,6 @@ export function newPlaylist(ids: string[] = [], directory?: string) {
   const current = tab?.type === 'dir' ? tab.path : tab ? dirname(tab.path) : null;
   const dir = directory ?? current ?? prefs.treeRoot ?? data.settings?.libraryRoots[0];
   if (dir) openDialog(NewPlaylistDialog, { directory: dir, ids });
-}
-
-export async function saveFavoritesAsPlaylist() {
-  const tab = activeTab();
-  const favorites = tab?.tracks.filter((track) => track.favorite) ?? [];
-  if (!favorites.length) {
-    toast(t('No favorites found.'), 'error');
-    return;
-  }
-  await newPlaylist(favorites.map((track) => track.id), tab?.type === 'dir' ? tab.path : undefined);
 }
 
 /** Uploads mp3 files one request at a time (folders below `directory` are created from the item paths); returns the stored tracks. */
@@ -154,6 +146,15 @@ export async function deleteItems(items: { path: string; name: string; dir?: boo
 export function openUploadDialog(directory?: string, initial: UploadItem[] = []) {
   const target = directory ?? uploadTarget();
   if (target) openDialog(UploadDialog, { directory: target, initial });
+}
+
+export function openDownloadsDialog() {
+  openDialog(DownloadsDialog, {});
+}
+
+export function openImportDialog(directory?: string) {
+  const target = directory ?? uploadTarget();
+  if (target) openDialog(ImportDialog, { directory: target });
 }
 
 function uploadTarget(): string | null {

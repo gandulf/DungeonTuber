@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '../lib/api';
-  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, newPlaylist, openItem, openUploadDialog, uploadFiles } from '../lib/actions';
+  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, newPlaylist, openImportDialog, openItem, openUploadDialog, uploadFiles } from '../lib/actions';
   import { itemsFromDrop } from '../lib/upload';
   import { t } from '../lib/i18n.svelte';
   import { openSettings, setTheme } from '../lib/menus';
@@ -68,6 +68,7 @@
         { label: t('New Playlist…'), icon: 'playlist', action: () => newPlaylist([], item.path) },
         { label: t('New folder…'), icon: 'plus', action: () => createFolder(item.path) },
         { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog(item.path) },
+        { label: t('Import from YouTube…'), icon: 'cloud', action: () => openImportDialog(item.path) },
       );
     }
     if (item.type !== 'm3u' && data.settings?.voxalyzerActive !== false) {
@@ -84,6 +85,7 @@
     openMenu(event, [
       { label: t('Smart Filter'), checked: prefs.smartFilter, action: () => { prefs.smartFilter = !prefs.smartFilter; savePrefs(); refresh(); } },
       { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog() },
+      { label: t('Import from YouTube…'), icon: 'cloud', action: () => openImportDialog() },
       { label: t('Refresh'), icon: 'refresh', action: refresh },
     ]);
   }
@@ -117,6 +119,7 @@
                 oncontextmenu={(e) => openMenu(e, [
                   { label: t('Open'), icon: 'folder', action: () => openTab('dir', path) },
                   { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog(path) },
+                  { label: t('Import from YouTube…'), icon: 'cloud', action: () => openImportDialog(path) },
                   { label: t('Remove from favorites'), icon: 'trash', action: () => removeFavoriteFolder(path) },
                 ])}>
           <Icon name="bookmark" size={16} /><span class="ellipsis">{lastPart(path)}</span>

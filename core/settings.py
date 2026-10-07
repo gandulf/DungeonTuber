@@ -45,6 +45,7 @@ class SettingKeys(StrEnum):
     PRESETS = "presets"
 
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
+    IMPORT_MAX_MINUTES = "importMaxMinutes"
 
     LIGHTS_ENABLED = "lightsEnabled"
     LIGHTS_CONFIG = "lightsConfig"

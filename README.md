@@ -7,7 +7,7 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/gandulf/DungeonTuber)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**DungeonTuber** is a specialized music player designed for Role-Playing Game Masters, streamers, and storytellers who need the perfect atmosphere at their fingertips. Unlike standard players, DungeonTuber allows you to categorize and filter your music based on emotional weight, intensity, and genre-specific metadata.
+**DungeonTuber** is a self-hosted music player for Role-Playing Game Masters, streamers, and storytellers who need the perfect atmosphere at their fingertips. It runs as a small web server (a Docker container on a NAS, a Raspberry Pi or a cheap cloud VM) and plays your music **in the browser** on any device: laptop, tablet or phone at the table. Unlike standard players, DungeonTuber lets you categorize and filter your music by emotional weight, intensity, tempo and genre-specific metadata, and it can control your lights while you play.
 
 ![Screenshot of application](docs/screen2.png)
 
@@ -15,40 +15,80 @@
 
 ## 🚀 Key Features
 
-* **Atmospheric Sliders:** Fine-tune your search using sliders for  **customizable categories/features**.
-* **Quick-Tag Filtering:** Instant toggles for common RPG scenarios like *Emotionale*, *Kampf* (Combat), *Magisches Ritual*, and *Reise* (Travel).
-* **Intuitive Library View:** See your entire collection with its associated scores and tags in a single, scannable list.
+* **Web app, any device:** Open the server address in a browser; playback happens in the browser (crossfade between songs, normalized volume).
+* **Mood filtering:** A mood map (valence/arousal), **customizable category sliders**, BPM, genre and quick-tag filters (*Combat*, *Travel*, *Magical Ritual*, ...) narrow a large library down to the right song in seconds. Save a combination as a preset.
+* **Library with scores and tags:** Songs show their scores, tags, genres, BPM, cover and chapters in one scannable table. Everything is stored in the mp3 tags, so your files stay portable.
+* **Playlists and favorites:** Create `.m3u` playlists, fill them by drag and drop, mark favorites with a star.
+* **Effects rack:** Layer ambient effects (rain, bonfire, ...) on top of the music; they run independently of the main player.
+* **Smart lights:** Control **WiZ** bulbs from a song or chapter, even when the server runs in the cloud (see the light agent below).
+* **AI analysis:** The **Voxalyzer** agent analyses your songs on a machine with the models (a GPU is recommended) and writes categories, tags, genres and BPM into the library.
+* **Several users:** The administrator adds users with their own name and password; uploads are attributed to their uploader.
+* **Local folders or S3:** Keep the music on the server's disk or in an S3 compatible bucket (AWS S3, Cloudflare R2, Backblaze B2, MinIO, ...).
+* **English and German, light and dark theme.**
 
 ---
 
-## 📥 Installation note
+## 🌐 Quick Start
 
-> [!Tip]
->You will probably get the blue "Windows Smart Screen Notification" once you run the installer, this is because I do not _(yet)_ have a valid >signature to sign the installer. 
->Just click on *"More Info"* and then *"Run anyway"*
+The easiest way is the Docker image:
+
+```bash
+docker run -d -p 8765:8765 -e DT_PASSWORD=change-me \
+  -v /path/to/music:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
+```
+
+Open `http://<server>:8765` and sign in as `admin` with the password you set. Drop mp3 files or folders on the file tree to upload them, or copy them into the music folder and choose *Rescan Library* in the menu.
+
+For access over the internet use [`deploy/docker-compose.yml`](deploy/docker-compose.yml) (automatic HTTPS with Caddy) or follow the step-by-step guide for a free Oracle Cloud VM with a DuckDNS name: [`deploy/oracle`](deploy/oracle/README.md). Details for all variants are in [Installation & Deployment](#-installation--deployment).
+
+---
 
 ## 📖 Tutorial: How to Use DungeonTuber
 
 ### 1. Building Your Library
-Use the **File** menu to import your audio files or navigate through the directory tree and open directories in the table below or play songs directly.
-The app uses **Voxalyzer** to scan your tracks. Run the Voxalyzer agent (`agents/voxalyzer`) on a machine with the models and connect it to your server with the agent token (`voxalyzer --token <token>`). Without a connected agent analysis is disabled.
-> [!Tip]
->If you want to analyze a huge library of mp3s locally have a look at a side project [Voxalyzer](https://github.com/gandulf/Voxalyzer).
+* **Upload:** Drag mp3 files or whole folders onto the file tree, or use *Upload songs…* in the menu or the context menu of a folder. Folder structures are kept.
+* **Existing music:** Copy files into the library folder of the server (or add an S3 bucket under **Settings → Library**) and choose *Rescan Library*.
+* **Analysis:** If a Voxalyzer agent is connected (see [Agents](#-agents)), choose *Analyze* on a song or folder, or tick *Analyze after import*. Without an agent the analysis functions are disabled.
+
+> [!Note]
+> Only YouTube links are accepted and videos longer than 4 hours are skipped (`importMaxMinutes` in `settings.json`). YouTube often blocks downloads from data center addresses, so the import may fail on a hosted server. Respect the terms of YouTube and the copyright of the music you import.
 
 ### 2. Filtering by Mood
-The power of DungeonTuber lies in the top control panel:
-* **Adjust Sliders:** Move the sliders (e.g., increase *Mystik* and *Dunkelheit* for a spooky dungeon) to filter your list for songs that match that specific "score."
-* **Toggle Tags:** Click the pill-shaped buttons (like **Fight** or **Travel**) to quickly filter for specific scene types.
+The power of DungeonTuber lies in the filter panel above the song table:
+* **Mood map:** Drag the blue dot toward *Angry/Excited* for a boss fight or toward *Happy/Relaxed* for a peaceful town.
+* **Category sliders:** Fine-tune the search (e.g., increase *Mystik* and *Darkness* for a spooky dungeon); the list filters automatically.
+* **BPM:** Match the heartbeat of the scene, e.g. a high BPM for a chase.
+* **Tags and genres:** One-click filters like **Drums** or **Dark**. Drag a tag onto a song to tag it.
+* **Presets:** Type a name (like *Epic Boss*), click the save icon and recall the exact filter later from the dropdown.
 
-### 3. Playback & Volume
-* **Navigation:** Use the standard Play, Pause, and Skip buttons in the center console.
-* **Progress Bar:** The waveform/timeline allows you to jump to specific moments in a track.
-* **Volume Control:** Use the green wedge slider on the right to adjust audio levels smoothly.
-* **Shuffle:** Click the shuffle icon to randomize the current filtered selection.
+### 3. Playback & Effects
+* **Play:** Double-click a song or use the player bar (also `Ctrl`+`P` play/pause, `Ctrl`+`N` next, `Ctrl`+`B` previous). Songs crossfade and are played at a normalized volume (configurable under **Settings → Player**).
+* **Shuffle & repeat:** Shuffle randomizes the current filtered selection.
+* **Chapters and lights:** Songs can have chapters, and a song or chapter can carry its own light setting.
+* **Effects:** Open a folder with effect sounds in the effects rack and click an effect to start it. Effects run next to the music, e.g. *Rain* under a *Tavern* song.
+* **Layout:** The view menu hides the widgets you do not need, so a small screen can show just the track list.
 
-### 4. Search & Favorites
-* **Search:** Just start typing to filter in the main list or directory tree to find a specific track by name.
-* **Starring:** Click the **Gold Star** next to any track to mark it as a favorite for quick access during your sessions.
+### 4. Search, Favorites & Playlists
+* **Search:** Start typing to filter the song table or the directory tree.
+* **Favorites:** Click the **star** next to a track. Favorite folders appear in the sidebar.
+* **Playlists:** *New Playlist…* creates an `.m3u` file in the folder of your choice; add songs from the context menu or by drag and drop.
+
+---
+
+## 🤖 Agents
+
+Agents are small programs on other machines that connect *out* to your server, so the server itself can run anywhere. Create the agent token in **Settings → Agents** (administrator); it is shown once, and the server only keeps a hash. Connected agents are listed there and can be removed again.
+
+| Agent | Where it runs | What it does |
+|---|---|---|
+| **WiZ light agent** ([`agents/wiz`](agents/wiz/README.md)) | In the network of your WiZ bulbs | Discovers the bulbs and sends light commands over the connection, because a cloud server cannot reach the bulbs by UDP. |
+| **Voxalyzer** ([`agents/voxalyzer`](agents/voxalyzer/README.md)) | On a machine with the models, ideally a GPU | Downloads songs from the server, analyses them and returns categories, tags, genres and BPM. |
+
+```bash
+dt-wiz-agent --token <token> --server https://music.example.com
+voxalyzer    --token <token> --server https://music.example.com
+```
+Both are available as Windows executables on the [releases page](https://github.com/gandulf/DungeonTuber/releases); Voxalyzer is also a Docker image (`ghcr.io/gandulf/dungeontuber-voxalyzer`). The analysis models are downloaded on the first start.
 
 ---
 
@@ -75,58 +115,62 @@ The power of DungeonTuber lies in the top control panel:
 
 ## 🧠 AI Analysis Details
 
-> [!Update]
->  AI API Calls to public models were removed in favor of local analyzer (Voxalyzer) 
+> [!Note]
+> AI API calls to public models were removed in favor of the local analyzer (Voxalyzer). Analysis only runs through a connected Voxalyzer agent.
 
-The process involves uploading the audio file to the Voxalyzer and there use local essentia models to analyze the provided files.
+The server hands each song to the Voxalyzer agent, which analyses it with local models and returns categories, tags, genres and BPM. The server stores them in the mp3 tags. The agent works on one song at a time. To analyze a huge library without a server, have a look at the side project [Voxalyzer](https://github.com/gandulf/Voxalyzer).
 
 ---
 
-## 🌐 Installation & Deployment
+## 📥 Installation & Deployment
 
-DungeonTuber is a Python server with a web frontend; the music is played in the browser. Pick the variant that fits:
+DungeonTuber is a Python server with a web frontend. Pick the variant that fits:
 
 | You want… | Use |
 |---|---|
-| Play on your Windows PC (optionally tablets join) | **Desktop app** – the Windows installer from the [releases](https://github.com/gandulf/DungeonTuber/releases) |
-| An always-on server (NAS, Raspberry Pi, VPS) | **Docker image** `ghcr.io/gandulf/dungeontuber` |
-| Run it on any machine with Python 3.12 | **Python package** – the wheel from the releases |
-
-### Desktop app
-Install and start *Dungeon Tuber*. Only this computer can connect. To let tablets or phones at the table join, set a
-password and enable **Settings → Security → Share on network**, restart the app and open the shown address on the
-other device.
+| An always-on server (NAS, Raspberry Pi, VPS, cloud VM) | **Docker image** `ghcr.io/gandulf/dungeontuber` |
+| Run it on any machine with Python 3.12 | **Python package** – the wheel from the [releases](https://github.com/gandulf/DungeonTuber/releases) |
+| Play on a single Windows PC without a server | **Desktop app** – the Windows installer from the releases |
 
 ### Docker
 ```bash
 docker run -d -p 8765:8765 -e DT_PASSWORD=change-me \
   -v /path/to/music:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
 ```
-[`deploy/docker-compose.yml`](deploy/docker-compose.yml) adds automatic HTTPS with Caddy for access over the internet.
-WiZ bulbs are discovered via UDP broadcast, which only works with `network_mode: host` on Linux – on Windows use the desktop app for lights. For a server that is not in the bulbs' network, run the [WiZ light agent](agents/wiz/README.md) next to the bulbs: it connects out to the server with its own token (Settings > Lights, or `DT_AGENT_TOKEN`).
+[`deploy/docker-compose.yml`](deploy/docker-compose.yml) adds automatic HTTPS with Caddy for access over the internet; [`deploy/oracle`](deploy/oracle/README.md) describes a free Oracle Cloud VM with DuckDNS. The image contains ffmpeg and deno for the YouTube import. Run a single server container: it keeps the analysis queue, downloads, lights and live updates in memory.
+
+WiZ bulbs are discovered via UDP broadcast, which only works inside the bulbs' network. A server in the cloud (or a container without `network_mode: host` on Linux) therefore uses the [WiZ light agent](agents/wiz/README.md) next to the bulbs.
 
 ### Python package
 ```bash
 pipx install dungeontuber-<version>-py3-none-any.whl
 DT_PASSWORD=change-me DT_LIBRARY=/srv/music dungeontuber-server --host 0.0.0.0
 ```
-See [`deploy/dungeontuber.service`](deploy/dungeontuber.service) for a systemd unit.
+See [`deploy/dungeontuber.service`](deploy/dungeontuber.service) for a systemd unit. The YouTube import needs ffmpeg and deno (or node); if they are not installed they are downloaded once on first use (Windows and Linux).
+
+### Desktop app (optional)
+The Windows installer starts the same server inside a window; only this computer can connect. To let tablets or phones at the table join, set a password and enable **Settings → Security → Share on network**, restart the app and open the shown address on the other device.
+
+> [!Tip]
+> You will probably get the blue "Windows Smart Screen Notification" once you run the installer, this is because I do not _(yet)_ have a valid signature to sign the installer. Just click on *"More Info"* and then *"Run anyway"*.
 
 ### Server configuration
 Options can be passed as arguments (`dungeontuber-server --help`) or environment variables:
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `DT_HOST` / `DT_PORT` | interface and port | `127.0.0.1` / `8765` |
-| `DT_DATA_DIR` | `settings.json`, `library.db`, logs | `%APPDATA%/DungeonTuber` or `~/.config/DungeonTuber` |
-| `DT_LIBRARY` | music folders (separated by `:` on Linux, `;` on Windows) | `~/Music` |
+| `DT_HOST` / `DT_PORT` | interface and port | `127.0.0.1` / `8765` (the Docker image uses `0.0.0.0`) |
+| `DT_DATA_DIR` | `settings.json`, `library.db`, logs | `%APPDATA%/DungeonTuber` or `~/.config/DungeonTuber` (Docker: `/data`) |
+| `DT_LIBRARY` | music folders (separated by `:` on Linux, `;` on Windows) | `~/Music` (Docker: `/music`) |
 | `DT_PASSWORD` | SuperAdmin password, user name `admin` (without one only the server machine itself can connect) | – |
 | `DT_FORWARDED_ALLOW_IPS` | reverse proxies whose `X-Forwarded-*` headers are trusted | `127.0.0.1` |
+| `DT_AGENT_TOKEN` | fixed agent token (otherwise create one in Settings → Agents) | – |
+| `DT_S3_BUCKET`, `DT_S3_ENDPOINT`, `DT_S3_ACCESS_KEY`, `DT_S3_SECRET_KEY`, ... | an S3 compatible library (can also be added under Settings → Library) | – |
+| `DT_FAKE_LIGHTS` | `1` simulates WiZ bulbs for testing | – |
 
-The SuperAdmin can add more users in **Settings → Security**; they sign in with their own name and password. Users cannot change server settings, and every uploaded song remembers who uploaded it (shown in the song details).
+The SuperAdmin can add more users in **Settings → Security**; they sign in with their own name and password. Users cannot change server settings, and every uploaded song remembers who uploaded it (shown in the song details); users can only delete what they uploaded themselves.
 
-Only files inside the library folders are accessible. Run a single server process – it keeps the analysis queue,
-lights and live updates in memory.
+Only files inside the library folders are accessible. Serve the server over HTTPS when it is reachable from the internet (the compose files do that with Caddy).
 
 ---
 
@@ -136,6 +180,7 @@ lights and live updates in memory.
 pip install -e .[desktop,dev]
 npm --prefix web ci
 npm --prefix web run build        # writes server/static
+python -m server --fake-lights    # the server on http://127.0.0.1:8765 with simulated bulbs
 python DungeonTuber.py --fake     # desktop window with simulated bulbs
 ```
 Frontend development with hot reload: `python -m server --fake-lights` and `npm --prefix web run dev` (port 5173).
@@ -151,7 +196,7 @@ npm --prefix web test
 * Docker image: `docker build -t dungeontuber .`
 * Windows desktop app (lint, tests, web frontend, PyInstaller): `python build_app.py`, then `DungeonTuber.iss` with Inno Setup
 
-Releases (`v*` tags) are built by [`release-app.yml`](.github/workflows/release-app.yml): Windows installer, wheel and multi-arch Docker image.
+Releases (`v*` tags) are built by [`release-app.yml`](.github/workflows/release-app.yml): Windows installer, Python wheel, multi-arch Docker image, and the WiZ and Voxalyzer agents (Windows executables and the Voxalyzer Docker image).
 
 ### Translations
 Translations live in `core/locales/<lang>.json` (message id = English text) and are used by both the server and the

@@ -17,8 +17,9 @@ from server.agents import agent_hub
 from server.auth import websocket_authenticated
 from server.config import ServerConfig, configure, get_config
 from server.events import hub
+from server.downloads import download_queue
 from server.jobs import analysis_queue, import_queue
-from server.routes import agents, analysis, auth, effects, library, lights, settings, storages
+from server.routes import agents, analysis, auth, effects, imports, library, lights, settings, storages
 
 logger = logging.getLogger(__file__)
 
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
     light_registry.save()
     analysis_queue.shutdown()
     import_queue.shutdown()
+    download_queue.shutdown()
 
 
 def create_app(config: ServerConfig | None = None) -> FastAPI:
@@ -49,7 +51,7 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
     app = FastAPI(title="DungeonTuber", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=2048)
 
-    for module in (auth, library, settings, effects, analysis, lights, storages, agents):
+    for module in (auth, library, settings, effects, analysis, lights, storages, agents, imports):
         app.include_router(module.router)
 
     @app.get("/api/health", include_in_schema=False)

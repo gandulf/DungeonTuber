@@ -153,6 +153,31 @@ export interface UserInfo {
   created: number | null;
 }
 
+export interface ImportEntry {
+  url: string;
+  title: string;
+  duration?: number | null;
+  uploader?: string | null;
+  chapters?: number | null;
+}
+
+export interface DownloadItem {
+  id: number;
+  url: string;
+  title: string;
+  state: 'queued' | 'downloading' | 'done' | 'skipped' | 'failed';
+  percent: number;
+  message: string;
+}
+
+export interface ImportPreview {
+  title: string;
+  playlist: boolean;
+  hasVideo: boolean;
+  maxMinutes: number;
+  entries: ImportEntry[];
+}
+
 export interface VersionInfo {
   current: string;
   latest: string | null;

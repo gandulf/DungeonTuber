@@ -1,6 +1,6 @@
 // Application menu (former File / View / Help menus).
 import { api } from './api';
-import { analyze, newPlaylist, openUploadDialog, rescanLibrary, saveFavoritesAsPlaylist } from './actions';
+import { analyze, newPlaylist, openImportDialog, openUploadDialog, rescanLibrary } from './actions';
 import { t } from './i18n.svelte';
 import { applyViewMode, prefs, savePrefs, type ThemeMode } from './prefs.svelte';
 import { data } from './stores/data.svelte';
@@ -37,8 +37,8 @@ export function appMenu(): MenuItem[] {
   const tab = activeTab();
   return [
     { label: t('New Playlist…'), icon: 'playlist', action: () => newPlaylist() },
-    { label: t('Save Favorites'), icon: 'heart', action: saveFavoritesAsPlaylist, disabled: !tab },
     { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog() },
+    { label: t('Import from YouTube…'), icon: 'cloud', action: () => openImportDialog() },
     { label: t('Analyze Directory'), icon: 'sparkles', disabled: !tab || tab.type !== 'dir' || data.settings?.voxalyzerActive === false,
       action: () => tab && analyze([tab.path]) },
     { label: t('Rescan Library'), icon: 'refresh', action: () => rescanLibrary(tab?.type === 'dir' ? tab.path : undefined) },

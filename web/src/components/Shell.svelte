@@ -2,7 +2,10 @@
   import { coverUrl } from '../lib/api';
   import { applyAmbient } from '../lib/ambient';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
+  import { openDownloadsDialog } from '../lib/actions';
+  import { t } from '../lib/i18n.svelte';
   import { data } from '../lib/stores/data.svelte';
+  import { downloads } from '../lib/stores/downloads.svelte';
   import { activeTab, library } from '../lib/stores/library.svelte';
   import { cycleRepeat, next, player, previous, setVolume, toggleEffect, toggleMute, togglePlay } from '../lib/stores/player.svelte';
   import { closeMenu, ui } from '../lib/stores/ui.svelte';
@@ -118,10 +121,17 @@
   </div>
 
   <PlayerBar />
-  {#if ui.progress || !ui.connected}
+  {#if ui.progress || !ui.connected || downloads.pending}
     <div class="status">
       {#if !ui.connected}<span class="offline">● offline – reconnecting…</span>{/if}
       {#if ui.progress}<span class="spinner"></span><span class="ellipsis">{ui.progress}</span>{/if}
+      {#if downloads.pending}
+        {@const current = downloads.items.find((item) => item.state === 'downloading')}
+        <button class="downloads" onclick={openDownloadsDialog} title={t('Show downloads')}>
+          <span class="spinner"></span>
+          <span class="ellipsis">{t('Downloads: {0} remaining', downloads.pending)}{current ? ` · ${current.title} ${current.percent}%` : ''}</span>
+        </button>
+      {/if}
     </div>
   {/if}
 </div>
@@ -155,6 +165,8 @@
   .drawer.right-drawer { left: auto; right: 0; padding: 12px; }
   .status { display: flex; align-items: center; gap: 8px; padding: 4px 16px; font-size: var(--fs-sm); color: var(--muted); background: var(--bg-2); border-top: 1px solid var(--border); }
   .offline { color: var(--red); }
+  .downloads { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; padding: 0 6px; border-radius: 6px; color: inherit; font: inherit; cursor: pointer; }
+  .downloads:hover { background: var(--accent-soft); }
   .spinner { width: 10px; height: 10px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; flex: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (max-width: 900px) { .main { padding: 8px 0; gap: 8px; } }
