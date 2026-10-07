@@ -324,13 +324,17 @@
   "New folder…": "Neuer Ordner…",
   "Create": "Erstellen",
   "More tabs": "Weitere Tabs",
-  "Light agent": "Licht-Agent",
-  "Lets a program in the network of the bulbs control them, for a server that cannot reach them itself (see agents/wiz).": "Ein Programm im Netzwerk der Lampen steuert sie für einen Server, der sie selbst nicht erreicht (siehe agents/wiz).",
-  "Connected: {0}": "Verbunden: {0}",
   "No agent connected": "Kein Agent verbunden",
   "New agent token": "Neuer Agent-Token",
   "Create agent token": "Agent-Token erstellen",
   "Copy this token now, it is only shown once. Start the agent with --token.": "Kopiere diesen Token jetzt, er wird nur einmal angezeigt. Starte den Agenten mit --token.",
   "A new token locks out agents that use the current one. Continue?": "Ein neuer Token sperrt Agenten aus, die den aktuellen verwenden. Fortfahren?",
-  "No analysis agent connected": "Kein Analyse-Agent verbunden"
+  "No analysis agent connected": "Kein Analyse-Agent verbunden",
+  "Agents": "Agenten",
+  "Connected agents": "Verbundene Agenten",
+  "Agent token": "Agent-Token",
+  "WiZ light agent": "WiZ-Licht-Agent",
+  "Voxalyzer analysis agent": "Voxalyzer-Analyse-Agent",
+  "Remove {0}? It disconnects and does not reconnect.": "{0} entfernen? Er wird getrennt und verbindet sich nicht erneut.",
+  "Programs on other machines that connect to this server: WiZ light agents (see agents/wiz) and Voxalyzer analysis agents (see agents/voxalyzer).": "Programme auf anderen Rechnern, die sich mit diesem Server verbinden: WiZ-Licht-Agenten (siehe agents/wiz) und Voxalyzer-Analyse-Agenten (siehe agents/voxalyzer)."
 }

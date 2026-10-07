@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
@@ -7,12 +8,13 @@
   import { loadLights } from '../../lib/stores/lights.svelte';
   import { setNormalize } from '../../lib/stores/player.svelte';
   import { askConfirm, closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
-  import type { MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
+  import type { AgentInfo, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
   import Icon from '../Icon.svelte';
+  import { onEvent } from '../../lib/ws';
   import Modal from './Modal.svelte';
   import UsersPanel from './UsersPanel.svelte';
 
-  type Section = 'general' | 'library' | 'categories' | 'lights' | 'player' | 'security';
+  type Section = 'general' | 'library' | 'categories' | 'lights' | 'agents' | 'player' | 'security';
   const admin = data.auth?.is_admin !== false;
   let section = $state<Section>(admin ? 'general' : 'player');
 
@@ -58,9 +60,23 @@
   });
   let categories = $state<CategoryRow[]>(data.categories.map(toRow));
   let categoriesDirty = $state(false);
-  let agents = $state<{ tokenSet: boolean; connected: { kind: string; name: string }[] } | null>(null);
+  let agents = $state<{ tokenSet: boolean; connected: AgentInfo[] } | null>(null);
   let agentToken = $state('');
   void api.agents().then((result) => (agents = result)).catch(() => {});
+  const stopAgentEvents = onEvent('agents.state', (connected) => agents && (agents = { ...agents, connected }));
+  onDestroy(stopAgentEvents);
+  const agentLabels: Record<string, string> = { lights: 'WiZ light agent', voxalyzer: 'Voxalyzer analysis agent' };
+
+  async function removeAgent(agent: AgentInfo) {
+    const label = t(agentLabels[agent.kind] ?? agent.kind);
+    if (!(await askConfirm(t('Remove {0}? It disconnects and does not reconnect.', `${label} (${agent.name})`)))) return;
+    try {
+      const result = await api.removeAgent(agent.kind);
+      if (agents) agents = { ...agents, connected: result.connected };
+    } catch (e) {
+      errorToast(e);
+    }
+  }
 
   async function createAgentToken() {
     if (agents?.tokenSet && !(await askConfirm(t('A new token locks out agents that use the current one. Continue?')))) return;
@@ -155,6 +171,7 @@
     ['library', 'Library', 'folder'],
     ['categories', 'Categories', 'sliders'],
     ['lights', 'Lights', 'bulb'],
+    ['agents', 'Agents', 'cloud'],
     ['player', 'Player', 'play'],
     ['security', 'Security', 'power'],
   ];
@@ -231,17 +248,26 @@
           <span class="muted small">{t('Take the ip address of you local wlan network and replace the last number with 255.')}</span></label>
         <label class="field">{t('Timeout')} (s)<input type="number" min="1" max="60" step="0.5" bind:value={form.lightsTimeout} />
           <span class="muted small">{t('Time to search for bulbs in seconds')}</span></label>
+      {:else if section === 'agents'}
+        <span class="muted small">{t('Programs on other machines that connect to this server: WiZ light agents (see agents/wiz) and Voxalyzer analysis agents (see agents/voxalyzer).')}</span>
         <div class="field">
-          <span>{t('Light agent')}</span>
-          <span class="muted small">{t('Lets a program in the network of the bulbs control them, for a server that cannot reach them itself (see agents/wiz).')}</span>
-          <span class="small">{agents?.connected.find((a) => a.kind === 'lights') ? t('Connected: {0}', agents.connected.find((a) => a.kind === 'lights')!.name) : t('No agent connected')}</span>
-          {#if admin}
-            {#if agentToken}
-              <input type="text" readonly value={agentToken} onfocus={(e) => e.currentTarget.select()} />
-              <span class="muted small">{t('Copy this token now, it is only shown once. Start the agent with --token.')}</span>
-            {/if}
-            <div class="row"><button class="btn" onclick={createAgentToken}>{agents?.tokenSet ? t('New agent token') : t('Create agent token')}</button></div>
+          <span>{t('Connected agents')}</span>
+          {#each agents?.connected ?? [] as agent (agent.kind)}
+            <div class="row agent">
+              <span class="grow">{t(agentLabels[agent.kind] ?? agent.kind)} <span class="muted small">{agent.name}</span></span>
+              <button class="icon-btn" title={t('Remove')} onclick={() => removeAgent(agent)}><Icon name="trash" size={14} /></button>
+            </div>
+          {:else}
+            <span class="muted small">{t('No agent connected')}</span>
+          {/each}
+        </div>
+        <div class="field">
+          <span>{t('Agent token')}</span>
+          {#if agentToken}
+            <input type="text" readonly value={agentToken} onfocus={(e) => e.currentTarget.select()} />
+            <span class="muted small">{t('Copy this token now, it is only shown once. Start the agent with --token.')}</span>
           {/if}
+          <div class="row"><button class="btn" onclick={createAgentToken}>{agents?.tokenSet ? t('New agent token') : t('Create agent token')}</button></div>
         </div>
       {:else if section === 'player'}
         <p class="muted small">{t('These settings are stored in this browser.')}</p>
@@ -294,6 +320,8 @@
   h4 { margin: 8px 0 0; }
   .small { font-size: var(--fs-xs); }
   .row { display: flex; gap: 8px; }
+  .row.agent { align-items: center; }
+  .grow { flex: 1; }
   .grow { flex: 1; }
   .storage { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); align-items: center; }
   .storage .id { align-self: center; }

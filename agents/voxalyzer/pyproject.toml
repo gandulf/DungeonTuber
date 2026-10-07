@@ -2,7 +2,7 @@
 name = "voxalyzer"
 version = "0.1.0"
 description = "MP3 analysis tool using Essentia and FastAPI"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "numpy>=2.3.5",
     "mutagen>=1.47.0",

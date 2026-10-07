@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     hub.bind_loop(asyncio.get_running_loop())
     settings.apply_locale()
     light_registry.load()
+    agent_hub.on_change = lambda: hub.publish("agents.state", agent_hub.status())
     lightagent.install()
     voxagent.install()
     yield

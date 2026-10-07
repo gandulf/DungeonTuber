@@ -31,11 +31,14 @@ def log_dir() -> Path:
 
 
 def setup_logging():
+    for stream in (sys.stdout, sys.stderr):  # the Windows console (cp1252) cannot encode symbols like the check mark in log messages
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     handlers: list[logging.Handler] = [logging.StreamHandler()]
     try:
         directory = log_dir()
         directory.mkdir(parents=True, exist_ok=True)
-        handlers.append(logging.FileHandler(directory / "voxalyzer.log"))
+        handlers.append(logging.FileHandler(directory / "voxalyzer.log", encoding="utf-8"))
     except OSError:
         pass  # read-only file system: console logging only
     logging.basicConfig(level=logging.INFO, handlers=handlers, force=True)

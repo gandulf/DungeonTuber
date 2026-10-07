@@ -20,6 +20,14 @@ def create_token():
     return {"token": new_agent_token()}
 
 
+@router.delete("/api/agents/{kind}", dependencies=[Depends(require_admin)])
+async def remove_agent(kind: str):
+    """Disconnects an agent; it is told not to reconnect (a new token locks out agents for good)."""
+    if not await agent_hub.remove(kind):
+        raise HTTPException(404, "No such agent connected")
+    return {"connected": agent_hub.status()}
+
+
 @router.get("/api/agents/files/{ticket}")
 def agent_file(ticket: str, request: Request):
     """Download of a file the server asked an agent to process; the ticket is valid for the duration of that request only."""

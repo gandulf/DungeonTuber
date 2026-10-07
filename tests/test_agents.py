@@ -151,3 +151,35 @@ def test_agent_url():
     assert dt_wiz_agent.agent_url("https://dt.example.com") == "wss://dt.example.com/ws/agent"
     assert dt_wiz_agent.agent_url("localhost:8765/") == "ws://localhost:8765/ws/agent"
     assert dt_wiz_agent.agent_url("http://host/prefix/") == "ws://host/prefix/ws/agent"
+
+
+def test_admin_removes_a_connected_agent(client):
+    set_agent_token("secret-agent-token")
+    assert client.delete("/api/agents/voxalyzer").status_code == 404
+
+    with _connect(client, "secret-agent-token") as websocket:
+        websocket.send_text(json.dumps({"type": "hello", "kind": "voxalyzer", "name": "gpu-box"}))
+        assert json.loads(websocket.receive_text()) == {"type": "welcome"}
+        assert client.get("/api/agents").json()["connected"] == [{"kind": "voxalyzer", "name": "gpu-box"}]
+
+        assert client.delete("/api/agents/voxalyzer").status_code == 200
+        with pytest.raises(WebSocketDisconnect) as closed:
+            websocket.receive_text()
+        assert closed.value.code == 4403  # the agent must not reconnect
+
+    assert _wait(lambda: client.get("/api/agents").json()["connected"] == [])
+
+
+def test_agent_changes_are_published_to_the_ui(client):
+    set_agent_token("secret-agent-token")
+    with client.websocket_connect("/ws") as events:
+        with _connect(client, "secret-agent-token") as websocket:
+            websocket.send_text(json.dumps({"type": "hello", "kind": "voxalyzer", "name": "gpu-box"}))
+            websocket.receive_text()
+            seen = []
+            for _ in range(10):
+                message = json.loads(events.receive_text())
+                seen.append(message)
+                if message.get("event") == "agents.state":
+                    break
+            assert any(m.get("event") == "agents.state" and m.get("data") == [{"kind": "voxalyzer", "name": "gpu-box"}] for m in seen), seen

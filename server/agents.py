@@ -22,6 +22,7 @@ logger = logging.getLogger(__file__)
 HELLO_TIMEOUT = 10
 CALL_TIMEOUT = 15
 CLOSE_UNAUTHORIZED = 4401
+CLOSE_REMOVED = 4403  # an administrator removed the agent: it must not reconnect
 
 
 class AgentError(OSError):
@@ -106,12 +107,25 @@ class AgentHub:
         self._agents: dict[str, Agent] = {}
         self._on_connect: dict[str, Hook] = {}
         self._on_disconnect: dict[str, Hook] = {}
+        self.on_change: Callable[[], None] | None = None  # the list of connected agents changed
 
     def get(self, kind: str) -> Agent | None:
         return self._agents.get(kind)
 
     def status(self) -> list[dict]:
         return [{"kind": agent.kind, "name": agent.name} for agent in self._agents.values()]
+
+    async def remove(self, kind: str) -> bool:
+        """Disconnects the agent of a kind and tells it to stay away; False when none is connected."""
+        agent = self._agents.get(kind)
+        if agent is None:
+            return False
+        await agent.websocket.close(code=CLOSE_REMOVED)
+        return True
+
+    def _changed(self):
+        if self.on_change is not None:
+            self.on_change()
 
     def on(self, kind: str, connect: Hook | None = None, disconnect: Hook | None = None):
         if connect:
@@ -135,6 +149,7 @@ class AgentHub:
             agent = Agent(websocket, kind, str(hello.get("name") or kind))
             previous = self._agents.get(kind)
             self._agents[kind] = agent
+            self._changed()
             if previous is not None:
                 previous.fail_all()
                 await previous.websocket.close(code=1000)
@@ -154,6 +169,7 @@ class AgentHub:
                 agent.fail_all()
                 if self._agents.get(agent.kind) is agent:
                     del self._agents[agent.kind]
+                    self._changed()
                     await self._run(self._on_disconnect.get(agent.kind), agent)
                 logger.info("Agent %s (%s) disconnected", agent.name, agent.kind)
 

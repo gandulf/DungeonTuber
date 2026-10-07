@@ -99,6 +99,11 @@ export interface Light extends LightSetting {
   scenes: string[];
 }
 
+export interface AgentInfo {
+  kind: string;
+  name: string;
+}
+
 export interface ServerSettings {
   locale: string;
   skipAnalyzedMusic: boolean;

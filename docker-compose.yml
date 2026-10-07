@@ -17,6 +17,10 @@
 # Docker Desktop: if it reports that the music path is "not shared", add the folder under Settings > Resources > File Sharing
 # or point DT_MUSIC_DIR at a shared folder.
 #
+# Analysis: the Voxalyzer agent (agents/voxalyzer) connects to DungeonTuber with DT_AGENT_TOKEN and analyzes the tracks the server sends it.
+# By default it analyzes for real, on the CPU (slow). DT_VOX_FAKE=1 returns mock values instead (no models needed). On an NVIDIA GPU:
+#   DT_VOX_GPU=all docker compose up --build       (and uncomment the GPU reservation of the voxalyzer service)
+#
 # Other S3 services: change the DT_S3_* variables (endpoint, region "auto" for Cloudflare R2, keys, bucket) and drop rustfs/rustfs-init.
 # Reset everything: docker compose down -v
 
@@ -33,6 +37,7 @@ services:
       DT_PASSWORD: dungeontuber
       DT_LIBRARY: /music
       DT_FAKE_LIGHTS: "1"                 # simulated WiZ bulbs (real discovery needs host networking on Linux)
+      DT_AGENT_TOKEN: dev-agent-token     # shared with the voxalyzer agent below (development only)
       DT_S3_BUCKET: music
       DT_S3_NAME: S3 (RustFS)
       DT_S3_ENDPOINT: http://rustfs:9000
@@ -66,6 +71,31 @@ services:
             - "**/__pycache__/"
         - action: rebuild
           path: ./pyproject.toml
+
+  voxalyzer:
+    build:
+      context: agents/voxalyzer
+    image: voxalyzer:local
+    command: ["--server", "http://dungeontuber:8765", "--name", "compose"]
+    environment:
+      DT_AGENT_TOKEN: dev-agent-token
+      DT_FAKE_ANALYSIS: ${DT_VOX_FAKE:-1}
+    depends_on:
+      - dungeontuber
+    restart: unless-stopped               # reconnects by itself when DungeonTuber restarts
+    deploy:                             # real analysis on an NVIDIA GPU (needs the NVIDIA container toolkit)
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    develop:
+      watch:
+        - action: rebuild
+          path: ./agents/voxalyzer/voxalyzer
+          ignore:
+            - "**/__pycache__/"
 
   rustfs:
     image: rustfs/rustfs:latest

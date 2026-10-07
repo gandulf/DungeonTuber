@@ -1,5 +1,5 @@
 import type {
-  AuthState, BrowseItem, BrowseResult, Chapter, Effect, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
+  AgentInfo, AuthState, BrowseItem, BrowseResult, Chapter, Effect, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -121,7 +121,8 @@ export const api = {
   cue: (setting: LightSetting) => request<{ applied: number }>('POST', '/api/lights/cue', setting),
 
   // agents (WiZ light agent, ...)
-  agents: () => get<{ tokenSet: boolean; connected: { kind: string; name: string }[] }>('/api/agents'),
+  agents: () => get<{ tokenSet: boolean; connected: AgentInfo[] }>('/api/agents'),
+  removeAgent: (kind: string) => request<{ connected: AgentInfo[] }>('DELETE', `/api/agents/${encodeURIComponent(kind)}`),
   createAgentToken: () => request<{ token: string }>('POST', '/api/agents/token'),
 };
 

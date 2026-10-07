@@ -21,11 +21,12 @@ from pywizlight.models import BulbRegistry
 from pywizlight.scenes import SCENES
 from pywizlight.utils import create_udp_broadcast_socket
 from websockets.asyncio.client import connect
-from websockets.exceptions import InvalidStatus, WebSocketException
+from websockets.exceptions import ConnectionClosed, InvalidStatus, WebSocketException
 
 logger = logging.getLogger("dt-wiz-agent")
 
 MAX_RETRY_DELAY = 30
+CLOSE_REMOVED = 4403  # the server's administrator removed this agent
 DEFAULT_SERVER = "https://dungeontuber.duckdns.org"
 
 
@@ -153,6 +154,11 @@ async def run(url: str, token: str, name: str, bulbs: Bulbs, once: bool = False)
                     task = asyncio.create_task(answer(websocket, bulbs, raw))
                     tasks.add(task)
                     task.add_done_callback(tasks.discard)
+        except ConnectionClosed as e:
+            if e.rcvd is not None and e.rcvd.code == CLOSE_REMOVED:
+                logger.error("The agent was removed on the server")
+                return 3
+            logger.warning("Connection lost: %s", e)
         except InvalidStatus as e:
             if e.response.status_code in (401, 403):
                 logger.error("The server rejected the agent token")
