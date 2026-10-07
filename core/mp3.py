@@ -585,13 +585,18 @@ def list_mp3s(path: PathLike[str], recursive: bool = True) -> list[str]:
     return sorted(glob.glob(pattern, root_dir=path, recursive=recursive))
 
 
-def update_categories_and_tags(path: PathLike[str] | MP3, summary: str, categories: dict[str, int] | list[dict] = None, tags: list[str] = None):
-    """Adds categories and summary as MP3 tags to the file."""
+def update_categories_and_tags(path: PathLike[str] | MP3, summary: str, categories: dict[str, int] | list[dict] = None, tags: list[str] = None,
+                               genres: list[str] | None = None, bpm: int | None = None):
+    """Adds categories and summary as MP3 tags to the file; genres and bpm are only replaced when the analysis found some."""
     audio = _audio(path)
 
     update_mp3_summary(audio, summary, False)
     update_mp3_categories(audio, categories, False)
     update_mp3_tags(audio, tags, False)
+    if genres:
+        update_mp3_genre(audio, genres, False)
+    if bpm:
+        update_mp3_bpm(audio, int(round(bpm)), False)
 
     audio.save()
     logger.debug("Tags added to {0}", path)

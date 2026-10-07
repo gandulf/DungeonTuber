@@ -101,8 +101,6 @@ export interface Light extends LightSetting {
 
 export interface ServerSettings {
   locale: string;
-  voxalyzerUrl: string;
-  voxalyzerLocal: boolean;
   skipAnalyzedMusic: boolean;
   lightsEnabled: boolean;
   lightsBroadcastIP: string;
@@ -112,7 +110,6 @@ export interface ServerSettings {
   shareOnNetwork: boolean;
   sharePort: number;
   networkUrl: string;
-  localVoxalyzerAvailable: boolean;
   voxalyzerActive: boolean;
 }
 

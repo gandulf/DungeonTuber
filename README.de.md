@@ -31,7 +31,7 @@
 
 ### 1. Bibliothek aufbauen
 Nutze das **Datei**-Menü, um deine Audiodateien zu importieren, oder navigiere durch den Verzeichnisbaum, um Ordner in der Tabelle unten zu öffnen oder Songs direkt abzuspielen.
-Die App nutzt **Voxalyzer**, um deine Tracks zu scannen. Um dies zu verwenden, musst du eine lokale Instanz davon ausführen und die Basis-URL unter **Einstellungen** hinterlegen.
+Die App nutzt **Voxalyzer**, um deine Tracks zu scannen. Starte den Voxalyzer-Agenten (`agents/voxalyzer`) auf einem Rechner mit den Modellen und verbinde ihn mit dem Agenten-Token mit deinem Server (`voxalyzer --token <token>`). Ohne verbundenen Agenten ist die Analyse deaktiviert.
 > [!Tip]
 > Wenn du eine große MP3-Bibliothek lokal analysieren möchtest, schau dir das Nebenprojekt [Voxalyzer](https://github.com/gandulf/Voxalyzer) an.
 

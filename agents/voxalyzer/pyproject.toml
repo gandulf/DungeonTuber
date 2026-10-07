@@ -1,0 +1,39 @@
+[project]
+name = "voxalyzer"
+version = "0.1.0"
+description = "MP3 analysis tool using Essentia and FastAPI"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.3.5",
+    "mutagen>=1.47.0",
+    "numba>=0.63.1",
+    "librosa>=0.11.0",
+    "pydub>=0.25.1",
+    "websockets>=14"
+]
+
+[project.optional-dependencies]
+dev = [
+    "flake8>=7.3.0",
+    "pyinstaller>=6.18.0",
+    "zstandard>=0.25.0"
+]
+
+windows = [
+    "onnxruntime-directml>=1.24.1"
+]
+
+nvidia = [
+    "onnxruntime-gpu>=1.24.1"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["voxalyzer*"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+voxalyzer = "voxalyzer.cli:main"

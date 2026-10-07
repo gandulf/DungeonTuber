@@ -6,7 +6,6 @@ from PIL import Image
 
 from conftest import write_mp3
 from core.lights import fake_lights_mode, light_registry
-from core.mp3 import parse_mp3
 from core.settings import AppSettings, SettingKeys
 from server.app import create_app
 from server.auth import set_password
@@ -188,7 +187,7 @@ def test_settings_categories_presets(client):
 
     assert client.put("/api/settings", json={"lightsTimeout": "abc"}).status_code == 400
     assert client.put("/api/settings", json={"unknown": 1}).status_code == 400
-    assert client.put("/api/settings", json={"lightsTimeout": 3, "voxalyzerUrl": "http://x"}).json()["lightsTimeout"] == 3.0
+    assert client.put("/api/settings", json={"lightsTimeout": 3}).json()["lightsTimeout"] == 3.0
 
     categories = client.get("/api/categories").json()
     assert len(categories) == 9
@@ -219,17 +218,12 @@ def test_effects(client, library, tmp_path):
     assert client.get(f"/media/tracks/{rain['intensities'][0]['id']}").status_code == 200
 
 
-def test_analysis_with_mock_backend(client, library):
+def test_analysis_needs_an_agent(client, library):
     song = library["root"] / "Battle" / "fight.mp3"
-    response = client.post("/api/analysis", json={"paths": [song.as_posix()]})
-    assert response.json()["queued"] == 1
 
-    import time
-    for _ in range(50):
-        if client.get("/api/analysis").json()["pending"] == 0:
-            break
-        time.sleep(0.05)
-    assert parse_mp3(song).categories
+    assert client.get("/api/analysis").json()["backend"] is None
+    assert client.get("/api/settings").json()["voxalyzerActive"] is False
+    assert client.post("/api/analysis", json={"paths": [song.as_posix()]}).status_code == 409
 
 
 def test_fake_lights(client):

@@ -31,7 +31,7 @@
 
 ### 1. Building Your Library
 Use the **File** menu to import your audio files or navigate through the directory tree and open directories in the table below or play songs directly.
-The app uses **Voxalyzer** to scan your tracks, to use it you have to run a local instance of it  and insert is base url under **Settings**.
+The app uses **Voxalyzer** to scan your tracks. Run the Voxalyzer agent (`agents/voxalyzer`) on a machine with the models and connect it to your server with the agent token (`voxalyzer --token <token>`). Without a connected agent analysis is disabled.
 > [!Tip]
 >If you want to analyze a huge library of mp3s locally have a look at a side project [Voxalyzer](https://github.com/gandulf/Voxalyzer).
 

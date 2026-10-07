@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from conftest import write_mp3
+from core.analyzer import AnalyzerBackend
 from core.settings import AppSettings, SettingKeys
 from core.storage.s3 import S3Storage
 from fake_s3 import FakeS3Client
@@ -168,7 +169,16 @@ def test_cannot_move_between_roots(client, tmp_path):
     assert client.post("/api/files/move", json={"source": f"{BASE}/Tavern/inn.mp3", "target_dir": local.as_posix()}).status_code == 400
 
 
-def test_analysis_is_stored_in_the_database(client, s3):
+class _FixedBackend(AnalyzerBackend):
+    name = "fixed"
+
+    def analyze_mp3(self, file_path):
+        return {"categories": {"Energy": 6}, "tags": ["Epic"], "genres": ["Rock"], "bpm": 128.2}
+
+
+def test_analysis_is_stored_in_the_database(client, s3, monkeypatch):
+    monkeypatch.setattr("server.jobs.current_backend", _FixedBackend)
+    monkeypatch.setattr("server.routes.analysis.current_backend", _FixedBackend)
     song = f"{BASE}/Battle/fight.mp3"
     before = s3.objects["rpg/Battle/fight.mp3"]
     assert client.post("/api/analysis", json={"paths": [f"{BASE}/Battle"]}).json()["queued"] == 2
@@ -177,7 +187,8 @@ def test_analysis_is_stored_in_the_database(client, s3):
         if client.get("/api/analysis").json()["pending"] == 0:
             break
         time.sleep(0.05)
-    assert client.get(f"/api/tracks/{_id(song)}").json()["categories"]
+    track = client.get(f"/api/tracks/{_id(song)}").json()
+    assert track["categories"] == {"Energy": 6} and track["genres"] == ["Rock"] and track["bpm"] == 128
     assert s3.objects["rpg/Battle/fight.mp3"] == before
 
 

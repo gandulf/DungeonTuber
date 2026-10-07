@@ -57,6 +57,7 @@
       onEvent('lights.state', (list) => setLightState(list)),
       onEvent('analysis.progress', ({ message }) => (ui.progress = message)),
       onEvent('analysis.status', ({ pending }) => pending === 0 && (ui.progress = null)),
+      onEvent('analysis.available', ({ active }) => data.settings && (data.settings.voxalyzerActive = active)),
       onEvent('analysis.error', ({ message }) => toast(message, 'error')),
       onEvent('connection', ({ connected }) => (ui.connected = connected)),
     ];

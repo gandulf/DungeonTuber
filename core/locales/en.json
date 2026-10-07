@@ -155,7 +155,6 @@
   "Tour Russel Widget": "This is the heart of the app. Drag the blue dot to find music that matchesthe current emotional beat of your game. Want something tense for a boss? Drag it toward <strong>Angry/Excited</strong>.Want a peaceful town theme? Move it toward <strong>Happy/Relaxed</strong>.",
   "Tour Song Table": "This shows the songs currently available based on your filters. Double-click a row to play a song, or glance at the tags to see ifit’s 'Sad' or 'Energetic'. Right click non the headers to customize their visibility.",
   "Tour Tags Widget": "These are one-click filters. Use them to quickly narrow down your library by genre or instrument.For example, toggle <strong>Drums</strong> and <strong>Dark</strong> to instantly find percussive combat tracks.",
-  "Use Local Voxalyzer": "Use Local Voxalyzer",
   "Use mp3 title instead of file name": "Use title instead of file name",
   "Valence": "Valence",
   "Valence Description": "The intrinsic attractiveness (positive) or averseness (negative) of an event, object, or situation.",
@@ -163,7 +162,6 @@
   "Valence Low": "Negative, sad, angry, stressed",
   "Valence Medium": "Neutral",
   "View": "View",
-  "Voxalyzer BaseUrl": "Voxalyzer BaseUrl",
   "Wiz Lights": "Wiz Lights",
   "calm": "calm",
   "de": "German",
@@ -232,5 +230,6 @@
   "New agent token": "New agent token",
   "Create agent token": "Create agent token",
   "Copy this token now, it is only shown once. Start the agent with --token.": "Copy this token now, it is only shown once. Start the agent with --token.",
-  "A new token locks out agents that use the current one. Continue?": "A new token locks out agents that use the current one. Continue?"
+  "A new token locks out agents that use the current one. Continue?": "A new token locks out agents that use the current one. Continue?",
+  "No analysis agent connected": "No analysis agent connected"
 }

@@ -3,12 +3,13 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from core.analyzer import analyze_file, get_backend, is_analyzed
+from core.analyzer import analyze_file, is_analyzed
 from core.i18n import _
 from core.settings import AppSettings, SettingKeys
 from server.events import hub
 from server.index import entry_from_dict, get_index
 from server.paths import Location
+from server.voxagent import current_backend
 
 logger = logging.getLogger(__file__)
 
@@ -37,7 +38,9 @@ class AnalysisQueue:
             return {"pending": self.pending, "done": self.done, "failed": self.failed}
 
     def submit(self, locations: list[Location]) -> int:
-        backend = get_backend()
+        backend = current_backend()
+        if backend is None:
+            raise ConnectionError(_("No analysis agent connected"))
         files = [file for location in locations for file in collect_locations(location)]
         with self._lock:
             if self.pending == 0:
@@ -68,7 +71,12 @@ class AnalysisQueue:
             response = backend.analyze_mp3(tmp)
         if not response or not response.get("categories"):
             return False
-        index.update(location, {"summary": response.get("summary"), "categories": response["categories"], "tags": response.get("tags")})
+        changes = {"summary": response.get("summary"), "categories": response["categories"], "tags": response.get("tags")}
+        if response.get("genres"):
+            changes["genres"] = response["genres"]
+        if response.get("bpm"):
+            changes["bpm"] = int(round(response["bpm"]))
+        index.update(location, changes)
         progress(_("File {0} processed.").format(location.name))
         return True
 

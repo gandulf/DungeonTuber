@@ -1,13 +1,12 @@
 import json
 import logging
-import os
 from dataclasses import dataclass, asdict
 from enum import StrEnum
 from functools import total_ordering
 
 from core.i18n import _
 from core.settings_backend import JsonSettings
-from core.utils import get_executable_path, get_user_data_dir
+from core.utils import get_user_data_dir
 
 logger = logging.getLogger(__file__)
 
@@ -46,8 +45,6 @@ class SettingKeys(StrEnum):
     PRESETS = "presets"
 
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
-    VOXALYZER_URL = "voxalyzerUrl"
-    VOXALYZER_LOCAL = "voxalyzerLocal"
 
     LIGHTS_ENABLED = "lightsEnabled"
     LIGHTS_CONFIG = "lightsConfig"
@@ -68,14 +65,6 @@ def default_settings_path() -> str:
 
 # Shared application-wide key/value store. Point it elsewhere with AppSettings.set_path().
 AppSettings: JsonSettings = JsonSettings(default_settings_path())
-
-
-def has_voxalyzer():
-    return has_local_voxalyzer() or AppSettings.value(SettingKeys.VOXALYZER_URL, type=str, defaultValue='') != ''
-
-
-def has_local_voxalyzer():
-    return os.path.isfile(get_executable_path("voxalyzer.exe")) and AppSettings.value(SettingKeys.VOXALYZER_LOCAL, True, type=bool)
 
 
 @total_ordering

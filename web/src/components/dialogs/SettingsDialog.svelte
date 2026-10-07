@@ -89,7 +89,7 @@
     saving = true;
     try {
       const changed: Partial<Record<keyof ServerSettings, unknown>> = {};
-      const keys: (keyof ServerSettings)[] = ['locale', 'voxalyzerUrl', 'voxalyzerLocal', 'skipAnalyzedMusic', 'lightsEnabled', 'lightsBroadcastIP', 'lightsTimeout', 'effectsDirectory', 'shareOnNetwork', 'sharePort'];
+      const keys: (keyof ServerSettings)[] = ['locale', 'skipAnalyzedMusic', 'lightsEnabled', 'lightsBroadcastIP', 'lightsTimeout', 'effectsDirectory', 'shareOnNetwork', 'sharePort'];
       for (const key of keys) if (form[key] !== s[key]) changed[key] = form[key];
       const rootList = roots.split('\n').map((r) => r.trim()).filter(Boolean);
       if (rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
@@ -176,10 +176,6 @@
           </select>
         </label>
         <h4>{t('Analyzer')}</h4>
-        <label class="check"><input type="checkbox" bind:checked={form.voxalyzerLocal} disabled={!form.localVoxalyzerAvailable} /> {t('Use Local Voxalyzer')}
-          {#if !form.localVoxalyzerAvailable}<span class="muted">(voxalyzer.exe {t('not found')})</span>{/if}</label>
-        <label class="field">{t('Voxalyzer BaseUrl')}
-          <input type="url" placeholder="http://localhost:8000" bind:value={form.voxalyzerUrl} disabled={form.voxalyzerLocal && form.localVoxalyzerAvailable} /></label>
         <label class="check"><input type="checkbox" bind:checked={form.skipAnalyzedMusic} /> {t('Skip Analyzed Music')}</label>
       {:else if section === 'library'}
         <label class="field">{t('Library folders (one per line, paths on the server)')}

@@ -1,7 +1,7 @@
 import pytest
 
 from conftest import write_mp3
-from core.analyzer import MockBackend, AnalyzerBackend, analyze_file, collect_files, is_analyzed, _analyze_url
+from core.analyzer import AnalyzerBackend, analyze_file, collect_files, is_analyzed
 from core.mp3 import parse_mp3
 from core.settings import get_category_keys
 
@@ -20,14 +20,24 @@ def _full_response(summary="Analyzed with Voxalyzer 1.0"):
     return {"summary": summary, "categories": [{"category": key, "scale": 5} for key in get_category_keys()], "tags": ["Calm"]}
 
 
-def test_mock_backend_writes_categories(mp3_file):
+def test_analysis_writes_categories_genres_and_bpm(mp3_file):
     messages = []
+    response = {"categories": {key: 4 for key in get_category_keys()}, "tags": ["Calm"], "genres": ["Ambient"], "bpm": 97.4}
 
-    assert analyze_file(mp3_file, MockBackend(), progress=messages.append, skip_analyzed=False) is True
+    assert analyze_file(mp3_file, _StaticBackend(response), progress=messages.append, skip_analyzed=False) is True
 
     entry = parse_mp3(mp3_file)
     assert set(entry.categories) == set(get_category_keys())
+    assert entry.genres == ["Ambient"] and entry.bpm == 97
     assert len(messages) == 2
+
+
+def test_missing_genres_and_bpm_keep_existing_values(mp3_file):
+    analyze_file(mp3_file, _StaticBackend({"categories": {"Energy": 1}, "genres": ["Rock"], "bpm": 120}), skip_analyzed=False)
+    analyze_file(mp3_file, _StaticBackend({"categories": {"Energy": 2}, "genres": [], "bpm": None}), skip_analyzed=False)
+
+    entry = parse_mp3(mp3_file)
+    assert entry.categories == {"Energy": 2} and entry.genres == ["Rock"] and entry.bpm == 120
 
 
 def test_already_analyzed_files_are_skipped(mp3_file):
@@ -39,10 +49,7 @@ def test_already_analyzed_files_are_skipped(mp3_file):
     assert backend.calls == 1
 
 
-def test_mock_and_voxalyzer_summaries_are_not_final(mp3_file):
-    analyze_file(mp3_file, MockBackend(), skip_analyzed=False)
-    assert not is_analyzed(mp3_file)
-
+def test_voxalyzer_summaries_are_not_final(mp3_file):
     analyze_file(mp3_file, _StaticBackend(_full_response()), skip_analyzed=False)
     assert not is_analyzed(mp3_file)
 
@@ -68,15 +75,3 @@ def test_collect_files(tmp_path):
 
     assert collect_files(a) == [a]
     assert sorted(p.name for p in collect_files(tmp_path)) == ["a.mp3", "b.mp3"]
-
-
-@pytest.mark.parametrize("url, expected", [
-    ("http://host:8000", "http://host:8000/analyze"),
-    ("http://host:8000/", "http://host:8000/analyze"),
-    ("http://host:8000/analyze", "http://host:8000/analyze"),
-    ("", None),
-    (None, None),
-    ("None", None),
-])
-def test_analyze_url(url, expected):
-    assert _analyze_url(url) == expected

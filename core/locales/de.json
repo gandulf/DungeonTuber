@@ -249,7 +249,6 @@
   "Upload complete": "Upload abgeschlossen",
   "Upload songs…": "Lieder hochladen…",
   "Uploading {0} files...": "Lade {0} Dateien hoch...",
-  "Use Local Voxalyzer": "Lokalen Voxalyzer verwenden",
   "Use mp3 title instead of file name": "Titel statt Dateinamen verwenden",
   "Valence": "Valenz",
   "Valence Description": "Die Wertigkeit bzw. die Ausprägung von angenehmen (positiven) oder unangenehmen (negativen) Empfindungen.",
@@ -259,7 +258,6 @@
   "Version": "Version",
   "View": "Ansicht",
   "Volume": "Lautstärke",
-  "Voxalyzer BaseUrl": "Voxalyzer Basis-URL",
   "Warm": "Warm",
   "Welcome to Dungeon Tuber": "Willkommen bei Dungeon Tuber",
   "Wiz Lights": "Wiz Lichter",
@@ -333,5 +331,6 @@
   "New agent token": "Neuer Agent-Token",
   "Create agent token": "Agent-Token erstellen",
   "Copy this token now, it is only shown once. Start the agent with --token.": "Kopiere diesen Token jetzt, er wird nur einmal angezeigt. Starte den Agenten mit --token.",
-  "A new token locks out agents that use the current one. Continue?": "Ein neuer Token sperrt Agenten aus, die den aktuellen verwenden. Fortfahren?"
+  "A new token locks out agents that use the current one. Continue?": "Ein neuer Token sperrt Agenten aus, die den aktuellen verwenden. Fortfahren?",
+  "No analysis agent connected": "Kein Analyse-Agent verbunden"
 }

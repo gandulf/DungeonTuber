@@ -13,6 +13,7 @@ import secrets
 from collections.abc import Awaitable, Callable
 
 from fastapi import WebSocket, WebSocketDisconnect
+from starlette.requests import HTTPConnection
 
 from core.settings import AppSettings, SettingKeys
 
@@ -54,8 +55,8 @@ def valid_agent_token(token: str | None) -> bool:
     return bool(token and stored and hmac.compare_digest(_digest(token), stored))
 
 
-def bearer_token(websocket: WebSocket) -> str | None:
-    header = websocket.headers.get("authorization", "")
+def bearer_token(connection: HTTPConnection) -> str | None:
+    header = connection.headers.get("authorization", "")
     return header[7:].strip() if header.lower().startswith("bearer ") else None
 
 

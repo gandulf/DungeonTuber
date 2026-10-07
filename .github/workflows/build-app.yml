@@ -64,3 +64,16 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
+  voxalyzer-docker:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+    - uses: docker/setup-buildx-action@v4
+    - name: Build Voxalyzer image (no push)
+      uses: docker/build-push-action@v7
+      with:
+        context: agents/voxalyzer
+        push: false
+        tags: voxalyzer:ci
+        cache-from: type=gha,scope=voxalyzer
+        cache-to: type=gha,mode=max,scope=voxalyzer

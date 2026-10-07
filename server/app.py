@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core.lights import light_registry
 from core.utils import get_current_version
-from server import lightagent
+from server import lightagent, voxagent
 from server.agents import agent_hub
 from server.auth import websocket_authenticated
 from server.config import ServerConfig, configure, get_config
@@ -33,6 +33,7 @@ async def lifespan(app: FastAPI):
     settings.apply_locale()
     light_registry.load()
     lightagent.install()
+    voxagent.install()
     yield
     light_registry.save()
     analysis_queue.shutdown()

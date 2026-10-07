@@ -1,5 +1,4 @@
 """Server-side (per GM) settings, categories, presets, version and locales."""
-import os
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,19 +6,18 @@ from pydantic import BaseModel
 
 from core import i18n
 from core.settings import AppSettings, MusicCategory, Preset, SettingKeys, get_music_categories, get_presets, set_music_categories, \
-    set_presets, has_local_voxalyzer, settings
-from core.utils import DOWNLOAD_LINK, get_executable_path, get_broadcast_ip, get_ip, get_current_version, get_latest_version, \
+    set_presets, settings
+from core.utils import DOWNLOAD_LINK, get_broadcast_ip, get_ip, get_current_version, get_latest_version, \
     is_newer_version_available
 from server.auth import require_admin, require_auth
 from server.config import default_library_roots, get_library_roots
+from server.voxagent import current_backend
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 
 # key -> (type, default)
 SERVER_SETTINGS: dict[str, tuple[type, object]] = {
     SettingKeys.LOCALE: (str, ""),
-    SettingKeys.VOXALYZER_URL: (str, ""),
-    SettingKeys.VOXALYZER_LOCAL: (bool, True),
     SettingKeys.SKIP_ANALYZED_MUSIC: (bool, True),
     SettingKeys.LIGHTS_ENABLED: (bool, True),
     SettingKeys.LIGHTS_BROADCAST_IP: (str, None),
@@ -38,8 +36,7 @@ def _settings_dict() -> dict:
     result[str(SettingKeys.LIGHTS_BROADCAST_IP)] = result[str(SettingKeys.LIGHTS_BROADCAST_IP)] or get_broadcast_ip()
     result[str(SettingKeys.LIBRARY_ROOTS)] = result[str(SettingKeys.LIBRARY_ROOTS)] or default_library_roots()
     result["networkUrl"] = f"http://{get_ip()}:{result[str(SettingKeys.SHARE_PORT)]}"
-    result["localVoxalyzerAvailable"] = os.path.isfile(get_executable_path("voxalyzer.exe"))
-    result["voxalyzerActive"] = has_local_voxalyzer() or bool(result[str(SettingKeys.VOXALYZER_URL)])
+    result["voxalyzerActive"] = current_backend() is not None
     return result
 
 
