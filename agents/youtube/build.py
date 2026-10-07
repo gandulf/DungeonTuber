@@ -1,4 +1,4 @@
-"""Builds the YouTube download agent into a single executable: dist/DungeonTuberYouTubeAgent(.exe).
+"""Builds the YouTube download agent into a single executable: dist/dt-youtube(.exe).
 
     pip install pyinstaller .
     python build.py

@@ -33,9 +33,13 @@ class TabsState(BaseModel):
     active: str | None = None
 
 
+ACCENTS = ("violet", "blue", "teal", "green", "amber", "orange", "red", "pink")  # the colours of web/src/lib/accent.ts
+
+
 class UserStateRequest(BaseModel):
     favorites: list[str] | None = None
     tabs: TabsState | None = None
+    accent: str | None = None  # one of ACCENTS, "" for the default
 
 
 class NewUserRequest(BaseModel):
@@ -133,12 +137,12 @@ def delete_user(name: str):
 
 @router.get("/api/user/state")
 def get_user_state(user: str = Depends(current_user)):
-    """Favorite folders and the open tabs (folders and playlists) of the signed in user."""
+    """Favorite folders, open tabs (folders and playlists) and accent color of the signed in user."""
     index = get_index()
     favorites = index.user_state(user, "favorites")
     if favorites is None and user == ADMIN:  # the favorites from before they were per user
         favorites = AppSettings.value(SettingKeys.FAVORITES, [], type=list)
-    return {"favorites": favorites or [], "tabs": index.user_state(user, "tabs")}
+    return {"favorites": favorites or [], "tabs": index.user_state(user, "tabs"), "accent": index.user_state(user, "accent") or ""}
 
 
 @router.put("/api/user/state")
@@ -148,4 +152,8 @@ def put_user_state(body: UserStateRequest, user: str = Depends(current_user)):
         index.set_user_state(user, "favorites", list(dict.fromkeys(body.favorites)))
     if body.tabs is not None:
         index.set_user_state(user, "tabs", body.tabs.model_dump())
+    if body.accent is not None:
+        if body.accent and body.accent not in ACCENTS:
+            raise HTTPException(status_code=400, detail="Unknown accent color")
+        index.set_user_state(user, "accent", body.accent)
     return get_user_state(user)

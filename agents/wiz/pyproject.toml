@@ -16,4 +16,4 @@ dependencies = [
 dt-wiz-agent = "dt_wiz_agent:main"
 
 [tool.setuptools]
-py-modules = ["dt_wiz_agent"]
+py-modules = ["dt_wiz_agent", "agentconfig"]

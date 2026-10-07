@@ -325,7 +325,6 @@
   "No agent connected": "Kein Agent verbunden",
   "New agent token": "Neuer Agent-Token",
   "Create agent token": "Agent-Token erstellen",
-  "Copy this token now, it is only shown once. Start the agent with --token.": "Kopiere diesen Token jetzt, er wird nur einmal angezeigt. Starte den Agenten mit --token.",
   "A new token locks out agents that use the current one. Continue?": "Ein neuer Token sperrt Agenten aus, die den aktuellen verwenden. Fortfahren?",
   "No analysis agent connected": "Kein Analyse-Agent verbunden",
   "Agents": "Agenten",
@@ -399,5 +398,17 @@
   "The agent did not upload {0}": "Der Agent hat {0} nicht hochgeladen",
   "YouTube download agent": "YouTube-Download-Agent",
   "YouTube rejected the cookies of the download agent. Sign in to YouTube on the agent machine or export fresh cookies there.": "YouTube hat die Cookies des Download-Agenten abgelehnt. Melde dich auf dem Agenten-Rechner bei YouTube an oder exportiere dort neue Cookies.",
-  "Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube).": "Programme auf anderen Rechnern, die sich mit diesem Server verbinden: WiZ-Licht-Agenten (siehe agents/wiz), Voxalyzer-Analyse-Agenten (siehe agents/voxalyzer) und YouTube-Download-Agenten (siehe agents/youtube)."
+  "Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube).": "Programme auf anderen Rechnern, die sich mit diesem Server verbinden: WiZ-Licht-Agenten (siehe agents/wiz), Voxalyzer-Analyse-Agenten (siehe agents/voxalyzer) und YouTube-Download-Agenten (siehe agents/youtube).",
+  "Accent color": "Akzentfarbe",
+  "Only for you: the color is kept with your account.": "Nur für dich: Die Farbe wird in deinem Konto gespeichert.",
+  "Violet": "Violett",
+  "Blue": "Blau",
+  "Teal": "Türkis",
+  "Green": "Grün",
+  "Amber": "Bernstein",
+  "Orange": "Orange",
+  "Red": "Rot",
+  "Pink": "Rosa",
+  "Copy this token now, it is only shown once. Or download agents.json and put it next to the agents: all agents on a machine then start without arguments.": "Kopiere diesen Token jetzt, er wird nur einmal angezeigt. Oder lade agents.json herunter und lege sie neben die Agenten: Alle Agenten auf einem Rechner starten dann ohne Argumente.",
+  "Download agents.json": "agents.json herunterladen"
 }

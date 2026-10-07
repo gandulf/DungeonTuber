@@ -195,7 +195,7 @@ jobs:
           python build.py
       - name: Name the executable after the release
         shell: pwsh
-        run: Move-Item agents/wiz/dist/DungeonTuberWizAgent.exe "DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe"
+        run: Move-Item agents/wiz/dist/dt-wiz-light.exe dt-wiz-light.exe
 
       - name: Prepare Certificate for Signing
         shell: pwsh
@@ -213,7 +213,7 @@ jobs:
           signtool sign /f "$env:TEMP\cert.pfx" /p "${{ secrets.PFX_PASSWORD }}" `
              /fd sha256 /td sha256 `
              /tr http://timestamp.digicert.com `
-             "DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe"
+             "dt-wiz-light.exe"
 
       - name: Cleanup Certificate
         if: always()
@@ -224,7 +224,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: wiz-agent
-          path: DungeonTuberWizAgent-*.exe
+          path: dt-wiz-light.exe
 
   # --- YouTube download agent (single Windows executable, see agents/youtube) ---
   youtube-agent:
@@ -245,7 +245,7 @@ jobs:
           python build.py
       - name: Name the executable after the release
         shell: pwsh
-        run: Move-Item agents/youtube/dist/DungeonTuberYouTubeAgent.exe "DungeonTuberYouTubeAgent-${{ needs.version.outputs.app_version }}.exe"
+        run: Move-Item agents/youtube/dist/dt-youtube.exe dt-youtube.exe
 
       - name: Prepare Certificate for Signing
         shell: pwsh
@@ -263,7 +263,7 @@ jobs:
           signtool sign /f "$env:TEMP\cert.pfx" /p "${{ secrets.PFX_PASSWORD }}" `
              /fd sha256 /td sha256 `
              /tr http://timestamp.digicert.com `
-             "DungeonTuberYouTubeAgent-${{ needs.version.outputs.app_version }}.exe"
+             "dt-youtube.exe"
 
       - name: Cleanup Certificate
         if: always()
@@ -274,7 +274,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: youtube-agent
-          path: DungeonTuberYouTubeAgent-*.exe
+          path: dt-youtube.exe
 
   youtube-agent-docker:
     needs: version
@@ -324,7 +324,7 @@ jobs:
           pyinstaller voxalyzer.spec --noconfirm
       - name: Name the executable after the release
         shell: pwsh
-        run: Move-Item agents/voxalyzer/dist/voxalyzer.exe "voxalyzer-${{ needs.version.outputs.app_version }}.exe"
+        run: Move-Item agents/voxalyzer/dist/dt-voxalyzer.exe dt-voxalyzer.exe
 
       - name: Prepare Certificate for Signing
         shell: pwsh
@@ -342,7 +342,7 @@ jobs:
           signtool sign /f "$env:TEMP\cert.pfx" /p "${{ secrets.PFX_PASSWORD }}" `
              /fd sha256 /td sha256 `
              /tr http://timestamp.digicert.com `
-             "voxalyzer-${{ needs.version.outputs.app_version }}.exe"
+             "dt-voxalyzer.exe"
 
       - name: Cleanup Certificate
         if: always()
@@ -353,7 +353,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: voxalyzer
-          path: voxalyzer-*.exe
+          path: dt-voxalyzer.exe
 
   # --- Voxalyzer Docker image (CUDA, linux/amd64, see agents/voxalyzer/Dockerfile) --------
   voxalyzer-docker:
@@ -399,6 +399,7 @@ jobs:
     needs: [version, wheel, windows, docker, wiz-agent, youtube-agent, youtube-agent-docker, voxalyzer, voxalyzer-docker]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v6  # start-agents.cmd
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
@@ -408,9 +409,10 @@ jobs:
         with:
           files: |
             artifacts/DungeonTuber-*.exe
-            artifacts/DungeonTuberWizAgent-*.exe
-            artifacts/DungeonTuberYouTubeAgent-*.exe
-            artifacts/voxalyzer-*.exe
+            artifacts/dt-wiz-light.exe
+            artifacts/dt-youtube.exe
+            artifacts/dt-voxalyzer.exe
+            agents/start-agents.cmd
             artifacts/*.whl
           tag_name: ${{ needs.version.outputs.tag }}
           name: Release ${{ needs.version.outputs.app_version }}
@@ -423,10 +425,12 @@ jobs:
 
             **Server (Python):** `pipx install <wheel-file>` then `dungeontuber-server`.
 
-            **Voxalyzer** (analysis agent, run next to your GPU): `voxalyzer-${{ needs.version.outputs.app_version }}.exe` – see `agents/voxalyzer/README.md`. Docker (NVIDIA GPU): `docker pull ghcr.io/${{ github.repository_owner }}/dungeontuber-voxalyzer:${{ needs.version.outputs.app_version }}`.
+            **Voxalyzer** (analysis agent, run next to your GPU): `dt-voxalyzer.exe` – see `agents/voxalyzer/README.md`. Docker (NVIDIA GPU): `docker pull ghcr.io/${{ github.repository_owner }}/dungeontuber-voxalyzer:${{ needs.version.outputs.app_version }}`.
 
-            **YouTube download agent** (runs yt-dlp on a PC that YouTube does not block and uploads to the server): `DungeonTuberYouTubeAgent-${{ needs.version.outputs.app_version }}.exe --token <token>` – see `agents/youtube/README.md`. Docker: `docker pull ghcr.io/${{ github.repository_owner }}/dungeontuber-youtube-agent:${{ needs.version.outputs.app_version }}`.
+            **YouTube download agent** (runs yt-dlp on a PC that YouTube does not block and uploads to the server): `dt-youtube.exe --token <token>` – see `agents/youtube/README.md`. Docker: `docker pull ghcr.io/${{ github.repository_owner }}/dungeontuber-youtube-agent:${{ needs.version.outputs.app_version }}`.
 
-            **WiZ light agent** (runs next to the bulbs, for a server outside their network): `DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe --token <token>` (add `--server <url>` for a server other than dungeontuber.duckdns.org) – see `agents/wiz/README.md`.
+            **All agents on one machine:** put the agent programs, `start-agents.cmd` and the `agents.json` from Settings > Agents > Download agents.json into one folder and run `start-agents.cmd` – see `agents/README.md`.
+
+            **WiZ light agent** (runs next to the bulbs, for a server outside their network): `dt-wiz-light.exe --token <token>` (add `--server <url>` for a server other than dungeontuber.duckdns.org) – see `agents/wiz/README.md`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -29,6 +29,7 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from core import ytimport  # noqa: E402
+from core.agentconfig import agent_config  # noqa: E402
 from core.i18n import _  # noqa: E402
 from core.ytimport import DEFAULT_MAX_MINUTES, ImportFailed  # noqa: E402
 
@@ -162,10 +163,11 @@ async def run(server: str, token: str, name: str, worker: Worker | None = None, 
 
 def build_parser() -> argparse.ArgumentParser:
     env = os.environ.get
+    config = agent_config()
     parser = argparse.ArgumentParser(prog="dt-youtube-agent", description=(__doc__ or "").split("\n\n")[0])
-    parser.add_argument("--server", default=env("DT_SERVER", DEFAULT_SERVER), help="URL of the DungeonTuber server (default: %(default)s)")
-    parser.add_argument("--token", default=env("DT_AGENT_TOKEN"), help="agent token created in the DungeonTuber settings")
-    parser.add_argument("--name", default=env("DT_AGENT_NAME", platform.node() or "youtube"), help="name shown in the server log")
+    parser.add_argument("--server", default=env("DT_SERVER") or config.get("server") or DEFAULT_SERVER, help="URL of the DungeonTuber server (default: %(default)s)")
+    parser.add_argument("--token", default=env("DT_AGENT_TOKEN") or config.get("token"), help="agent token created in the DungeonTuber settings")
+    parser.add_argument("--name", default=env("DT_AGENT_NAME") or config.get("name") or platform.node() or "youtube", help="name shown in the server log")
     parser.add_argument("--cookies", default=env("DT_COOKIES"), help="cookies.txt of a signed-in YouTube session")
     parser.add_argument("--cookies-from-browser", default=env("DT_COOKIES_FROM_BROWSER"), metavar="BROWSER",
                         help="take the YouTube cookies from a browser profile (firefox, chrome, edge, ...)")
@@ -179,7 +181,7 @@ def main(argv: list[str] | None = None):
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.token:
-        parser.error("--token is required (or DT_AGENT_TOKEN)")
+        parser.error("--token is required (or DT_AGENT_TOKEN, or the token in agents.json)")
     logging.setLogRecordFactory(StrFormatLogRecord)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ytimport.use_cookies(args.cookies, args.cookies_from_browser)

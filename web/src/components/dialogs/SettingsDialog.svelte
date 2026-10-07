@@ -3,7 +3,8 @@
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
-  import { data, saveCategories, saveSettings } from '../../lib/stores/data.svelte';
+  import { ACCENTS, DEFAULT_ACCENT } from '../../lib/accent';
+  import { data, saveCategories, saveSettings, setAccent } from '../../lib/stores/data.svelte';
   import { loadEffects } from '../../lib/stores/effects.svelte';
   import { loadLights } from '../../lib/stores/lights.svelte';
   import { setNormalize } from '../../lib/stores/player.svelte';
@@ -16,7 +17,7 @@
 
   type Section = 'general' | 'library' | 'categories' | 'lights' | 'agents' | 'player' | 'security';
   const admin = data.auth?.is_admin !== false;
-  let section = $state<Section>(admin ? 'general' : 'player');
+  let section = $state<Section>('general');
 
   const s = data.settings!;
   let form = $state<ServerSettings>(structuredClone($state.snapshot(s)) as ServerSettings);
@@ -101,6 +102,16 @@
     } catch (e) {
       errorToast(e);
     }
+  }
+
+  /** The settings all agents of a machine share (agents.json, see agents/README.md); the token only passes through this browser. */
+  function downloadAgentConfig() {
+    const config = { server: location.origin, token: agentToken };
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2) + '\n'], { type: 'application/json' }));
+    link.download = 'agents.json';
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
 
   async function createAgentToken() {
@@ -205,20 +216,34 @@
 <Modal title={t('Settings')} onclose={closeDialog} width="820px">
   <div class="layout">
     <nav>
-      {#each sections.filter(([key]) => admin || ['categories', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
+      {#each sections.filter(([key]) => admin || ['general', 'categories', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
         <button class:active={section === key} onclick={() => (section = key)}><Icon name={icon} size={16} /> {t(label)}</button>
       {/each}
     </nav>
     <div class="body">
       {#if section === 'general'}
-        <label class="field">{t('Language')}
-          <select bind:value={form.locale}>
-            <option value="">{t('System Default')}</option>
-            {#each data.locales as locale (locale)}<option value={locale}>{t(locale)}</option>{/each}
-          </select>
-        </label>
-        <h4>{t('Analyzer')}</h4>
-        <label class="check"><input type="checkbox" bind:checked={form.skipAnalyzedMusic} /> {t('Skip Analyzed Music')}</label>
+        <h4>{t('Accent color')}</h4>
+        <div class="swatches" role="radiogroup" aria-label={t('Accent color')}>
+          {#each ACCENTS as accent (accent.key)}
+            {@const current = (data.user.accent || DEFAULT_ACCENT) === accent.key}
+            <button class="swatch" class:selected={current} role="radio" aria-checked={current} title={t(accent.name)} aria-label={t(accent.name)}
+                    style:background="linear-gradient(135deg, {accent.light[0]}, {accent.light[1]})"
+                    onclick={() => setAccent(accent.key === DEFAULT_ACCENT ? '' : accent.key)}>
+              {#if current}<Icon name="check" size={16} />{/if}
+            </button>
+          {/each}
+        </div>
+        <p class="muted small">{t('Only for you: the color is kept with your account.')}</p>
+        {#if admin}
+          <label class="field">{t('Language')}
+            <select bind:value={form.locale}>
+              <option value="">{t('System Default')}</option>
+              {#each data.locales as locale (locale)}<option value={locale}>{t(locale)}</option>{/each}
+            </select>
+          </label>
+          <h4>{t('Analyzer')}</h4>
+          <label class="check"><input type="checkbox" bind:checked={form.skipAnalyzedMusic} /> {t('Skip Analyzed Music')}</label>
+        {/if}
       {:else if section === 'library'}
         <label class="field">{t('Library folders (one per line, paths on the server)')}
           <textarea rows="5" bind:value={roots}></textarea></label>
@@ -298,7 +323,8 @@
           <span>{t('Agent token')}</span>
           {#if agentToken}
             <input type="text" readonly value={agentToken} onfocus={(e) => e.currentTarget.select()} />
-            <span class="muted small">{t('Copy this token now, it is only shown once. Start the agent with --token.')}</span>
+            <span class="muted small">{t('Copy this token now, it is only shown once. Or download agents.json and put it next to the agents: all agents on a machine then start without arguments.')}</span>
+            <div class="row"><button class="btn" onclick={downloadAgentConfig}><Icon name="download" size={14} /> {t('Download agents.json')}</button></div>
           {/if}
           <div class="row"><button class="btn" onclick={createAgentToken}>{agents?.tokenSet ? t('New agent token') : t('Create agent token')}</button></div>
         </div>
@@ -353,6 +379,10 @@
   h4 { margin: 8px 0 0; }
   .small { font-size: var(--fs-xs); }
   .row { display: flex; gap: 8px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+  .swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; display: grid; place-items: center; color: #fff; cursor: pointer; box-shadow: var(--shadow-sm); }
+  .swatch:hover { transform: scale(1.08); }
+  .swatch.selected { border-color: var(--text); }
   .row.agent { align-items: center; }
   .grow { flex: 1; }
   .grow { flex: 1; }

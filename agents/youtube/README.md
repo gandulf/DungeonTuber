@@ -16,7 +16,7 @@ The agent uses the same download code as the server (`core/ytimport.py` of this 
    * **Windows executable** from the [releases](https://github.com/gandulf/DungeonTuber/releases):
 
      ```bash
-     DungeonTuberYouTubeAgent-<version>.exe --token <token> --server https://music.example.com
+     dt-youtube.exe --token <token> --server https://music.example.com
      ```
 
    * **Docker** (the image contains ffmpeg and deno):
@@ -42,9 +42,11 @@ ffmpeg and deno (or node) are needed by yt-dlp; the Docker image contains them, 
 ```bash
 cd agents/youtube
 pip install pyinstaller .
-python build.py          # dist/DungeonTuberYouTubeAgent.exe
+python build.py          # dist/dt-youtube.exe
 docker build -f agents/youtube/Dockerfile -t dungeontuber-youtube-agent .     # from the repository root
 ```
+
+The server, token and name can also come from the `agents.json` that all DungeonTuber agents share (see [`agents/README.md`](../README.md)).
 
 ## Options
 

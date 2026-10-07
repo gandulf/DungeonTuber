@@ -1,4 +1,4 @@
-"""Builds the WiZ light agent into a single executable: dist/DungeonTuberWizAgent(.exe).
+"""Builds the WiZ light agent into a single executable: dist/dt-wiz-light(.exe).
 
     pip install pyinstaller pywizlight websockets
     python build.py

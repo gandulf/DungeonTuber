@@ -17,7 +17,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='DungeonTuberWizAgent',
+    name='dt-wiz-light',
     debug=False,
     strip=False,
     upx=False,

@@ -40,6 +40,8 @@ export interface Prefs {
   openTabs: { type: 'dir' | 'playlist'; path: string }[];
   activeTab: string | null;
   tourDone: boolean;
+  /** Accent colour of the signed in user (a key of lib/accent.ts), cached from the server. */
+  accent: string;
   /** The options of the last YouTube import, preselected the next time. */
   importOptions: { makePlaylist: boolean; makeFolder: boolean; split: boolean; analyze: boolean };
 }
@@ -77,6 +79,7 @@ const defaults: Prefs = {
   openTabs: [],
   activeTab: null,
   tourDone: false,
+  accent: '',
   importOptions: { makePlaylist: false, makeFolder: false, split: false, analyze: false },
 };
 

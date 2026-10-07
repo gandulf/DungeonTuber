@@ -14,6 +14,7 @@ import traceback
 from pathlib import Path
 
 from voxalyzer.agent import DEFAULT_SERVER, Analyzer, run
+from voxalyzer.agentconfig import agent_config
 from voxalyzer.models import ensure_models
 from voxalyzer.mp3 import clean_mp3, list_mp3s, update_mp3_results
 from voxalyzer.utils import AnalyzeResult
@@ -50,10 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force", action="store_true", help="analyze files again even if they already have results")
     parser.add_argument("--clean", action="store_true", help="remove existing analysis results instead of analyzing")
     env = os.environ.get
-    parser.add_argument("--server", default=env("DT_SERVER", DEFAULT_SERVER), help="agent: URL of the DungeonTuber server (default: %(default)s)")
-    parser.add_argument("--token", default=env("DT_AGENT_TOKEN"), help="agent: agent token created in the DungeonTuber settings")
+    config = agent_config()
+    parser.add_argument("--server", default=env("DT_SERVER") or config.get("server") or DEFAULT_SERVER, help="agent: URL of the DungeonTuber server (default: %(default)s)")
+    parser.add_argument("--token", default=env("DT_AGENT_TOKEN") or config.get("token"), help="agent: agent token created in the DungeonTuber settings")
     parser.add_argument("--fake", action="store_true", default=env("DT_FAKE_ANALYSIS") == "1", help="agent: return mock values instead of analyzing")
-    parser.add_argument("--name", default=env("DT_AGENT_NAME", platform.node() or "voxalyzer"), help="agent: name shown in the server log")
+    parser.add_argument("--name", default=env("DT_AGENT_NAME") or config.get("name") or platform.node() or "voxalyzer", help="agent: name shown in the server log")
     return parser
 
 
@@ -94,7 +96,7 @@ def process_paths(paths: list[str], force: bool = False, clean: bool = False):
 
 def run_agent(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if not args.token:
-        parser.error("--token is required (or DT_AGENT_TOKEN)")
+        parser.error("--token is required (or DT_AGENT_TOKEN, or the token in agents.json)")
     if not args.fake:
         ensure_models()
     analyzer = Analyzer(args.server, args.token, fake=args.fake)

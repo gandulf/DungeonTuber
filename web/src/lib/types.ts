@@ -145,6 +145,7 @@ export interface AuthState {
 export interface UserState {
   favorites: string[];
   tabs: { open: { type: 'dir' | 'playlist'; path: string }[]; active: string | null } | null;
+  accent: string;
 }
 
 export interface UserInfo {

@@ -224,7 +224,6 @@
   "No agent connected": "No agent connected",
   "New agent token": "New agent token",
   "Create agent token": "Create agent token",
-  "Copy this token now, it is only shown once. Start the agent with --token.": "Copy this token now, it is only shown once. Start the agent with --token.",
   "A new token locks out agents that use the current one. Continue?": "A new token locks out agents that use the current one. Continue?",
   "No analysis agent connected": "No analysis agent connected",
   "Agents": "Agents",
@@ -298,5 +297,17 @@
   "The agent did not upload {0}": "The agent did not upload {0}",
   "YouTube download agent": "YouTube download agent",
   "YouTube rejected the cookies of the download agent. Sign in to YouTube on the agent machine or export fresh cookies there.": "YouTube rejected the cookies of the download agent. Sign in to YouTube on the agent machine or export fresh cookies there.",
-  "Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube).": "Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube)."
+  "Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube).": "Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube).",
+  "Accent color": "Accent color",
+  "Only for you: the color is kept with your account.": "Only for you: the color is kept with your account.",
+  "Violet": "Violet",
+  "Blue": "Blue",
+  "Teal": "Teal",
+  "Green": "Green",
+  "Amber": "Amber",
+  "Orange": "Orange",
+  "Red": "Red",
+  "Pink": "Pink",
+  "Copy this token now, it is only shown once. Or download agents.json and put it next to the agents: all agents on a machine then start without arguments.": "Copy this token now, it is only shown once. Or download agents.json and put it next to the agents: all agents on a machine then start without arguments.",
+  "Download agents.json": "Download agents.json"
 }

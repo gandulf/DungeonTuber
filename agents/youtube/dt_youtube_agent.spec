@@ -21,7 +21,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='DungeonTuberYouTubeAgent',
+    name='dt-youtube',
     debug=False,
     strip=False,
     upx=False,

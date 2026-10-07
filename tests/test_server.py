@@ -389,7 +389,7 @@ def test_favorites_and_open_tabs_are_per_user(client, library):
     # anna starts with nothing and her changes do not touch the SuperAdmin's
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
     assert client.get(f"/api/tracks/{_id(song)}").json()["favorite"] is False
-    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None}
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": ""}
     assert client.patch(f"/api/tracks/{_id(song)}", json={"favorite": True}).json()["favorite"] is True
     client.put("/api/user/state", json={"favorites": [f"{root}/Tavern"]})
     drums = library["root"] / "Battle" / "drums.mp3"
@@ -407,7 +407,7 @@ def test_favorites_and_open_tabs_are_per_user(client, library):
     client.delete("/api/users/anna")
     client.post("/api/users", json={"name": "anna", "password": "pw1234"})
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
-    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None}
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": ""}
     assert client.get(f"/api/tracks/{_id(drums)}").json()["favorite"] is False
 
 
@@ -481,3 +481,19 @@ def test_static_files_stay_inside_the_web_directory(tmp_path):
         assert test_client.get("/some/route").text == "<html>app</html>"
         for attack in ("/%2e%2e/secret.txt", "/..%2fsecret.txt", "/%2e%2e%2fsecret.txt"):
             assert "secret" not in test_client.get(attack).text
+
+
+def test_accent_color_is_kept_per_user(client):
+    set_password("secret")
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+
+    assert client.put("/api/user/state", json={"accent": "blue"}).json()["accent"] == "blue"
+    assert client.put("/api/user/state", json={"accent": "#ff0000"}).status_code == 400
+    assert client.put("/api/user/state", json={"favorites": []}).json()["accent"] == "blue"  # other changes keep it
+
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert client.get("/api/user/state").json()["accent"] == ""
+    assert client.put("/api/user/state", json={"accent": "red"}).json()["accent"] == "red"
+    assert client.put("/api/user/state", json={"accent": ""}).json()["accent"] == ""

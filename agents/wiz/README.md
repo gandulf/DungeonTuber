@@ -22,6 +22,8 @@ without one the server falls back to its own network.
 Options: `--server` (default `https://dungeontuber.duckdns.org`), `--broadcast` (broadcast address of the bulb network, e.g. `192.168.1.255`; default `255.255.255.255`), `--wait` (seconds to wait
 for bulbs while discovering), `--fake` (three simulated bulbs for testing), `--verbose`. The agent reconnects automatically.
 
+The server, token and name can also come from the `agents.json` that all DungeonTuber agents share (see [`agents/README.md`](../README.md)).
+
 ## Protocol
 
 WebSocket `/ws/agent` with `Authorization: Bearer <token>`. The agent sends `{"type": "hello", "kind": "lights", "name": "..."}`, the
@@ -39,5 +41,5 @@ server answers `{"type": "welcome"}` and then sends requests `{"id": 1, "op": ..
 
 ```bash
 pip install pyinstaller pywizlight websockets
-python build.py          # -> dist/DungeonTuberWizAgent(.exe), settings via the same options / DT_* variables
+python build.py          # -> dist/dt-wiz-light(.exe), settings via the same options / DT_* variables
 ```

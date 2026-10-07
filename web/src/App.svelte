@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { applyAccent } from './lib/accent';
   import { api, setUnauthorizedHandler } from './lib/api';
   import { t } from './lib/i18n.svelte';
   import { prefs } from './lib/prefs.svelte';
@@ -20,6 +21,7 @@
   // theme & font scale
   $effect(() => {
     document.documentElement.dataset.theme = prefs.theme === 'dark' ? 'dark' : 'light';
+    applyAccent(prefs.accent, prefs.theme === 'dark');
     document.documentElement.style.setProperty('--scale', String(prefs.fontScale));
   });
 

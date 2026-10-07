@@ -87,6 +87,8 @@ voxalyzer    --token <token> --server https://music.example.com
 ```
 Both are available as Windows executables on the [releases page](https://github.com/gandulf/DungeonTuber/releases); Voxalyzer is also a Docker image (`ghcr.io/gandulf/dungeontuber-voxalyzer`). The analysis models are downloaded on the first start.
 
+**Several agents on one machine:** click **Download agents.json** after creating the token and put the file next to the agent programs; all agents read their server and token from it and start without arguments, and `start-agents.cmd` (attached to every release) starts them together on Windows. See [`agents/README.md`](agents/README.md).
+
 ---
 
 ## 🛠 Category Reference 

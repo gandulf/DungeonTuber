@@ -36,7 +36,7 @@ result, which the server stores. Without a connected agent analysis is disabled 
 voxalyzer --token <token> [--server https://dungeontuber.duckdns.org] [--name gpu-box]
 docker run --gpus all ghcr.io/gandulf/dungeontuber-voxalyzer:latest --token <token> --server https://my.server
 ```
-`DT_SERVER`, `DT_AGENT_TOKEN` and `DT_AGENT_NAME` can be used instead of the options. `--fake` (or `DT_FAKE_ANALYSIS=1`) skips the models and returns
+`DT_SERVER`, `DT_AGENT_TOKEN` and `DT_AGENT_NAME` can be used instead of the options, and so can the `agents.json` that all DungeonTuber agents share (see [`agents/README.md`](../README.md)). `--fake` (or `DT_FAKE_ANALYSIS=1`) skips the models and returns
 mock categories, tags, genres and bpm, for testing without a GPU.
 
 ## Models

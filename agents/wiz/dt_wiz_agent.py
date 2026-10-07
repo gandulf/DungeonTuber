@@ -4,7 +4,8 @@ Runs on a machine in the same network as the WiZ bulbs, connects *out* to the Du
 
     python dt_wiz_agent.py --token <agent token> [--server https://dungeontuber.duckdns.org]
 
-Settings can also be given as environment variables: DT_SERVER, DT_AGENT_TOKEN, DT_AGENT_NAME, DT_BROADCAST, DT_FAKE_LIGHTS=1.
+Settings can also be given as environment variables: DT_SERVER, DT_AGENT_TOKEN, DT_AGENT_NAME, DT_BROADCAST, DT_FAKE_LIGHTS=1, and server,
+token and name in the agents.json shared with the other DungeonTuber agents (see agentconfig.py).
 """
 import argparse
 import asyncio
@@ -22,6 +23,8 @@ from pywizlight.scenes import SCENES
 from pywizlight.utils import create_udp_broadcast_socket
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus, WebSocketException
+
+from agentconfig import agent_config
 
 logger = logging.getLogger("dt-wiz-agent")
 
@@ -175,17 +178,18 @@ async def run(url: str, token: str, name: str, bulbs: Bulbs, once: bool = False)
 
 def main(argv: list[str] | None = None) -> int:
     env = os.environ.get
+    config = agent_config()
     parser = argparse.ArgumentParser(prog="dt-wiz-agent", description="WiZ light agent for a DungeonTuber server")
-    parser.add_argument("--server", default=env("DT_SERVER", DEFAULT_SERVER), help="URL of the DungeonTuber server (default: %(default)s)")
-    parser.add_argument("--token", default=env("DT_AGENT_TOKEN"), help="Agent token (Settings > Lights in DungeonTuber)")
-    parser.add_argument("--name", default=env("DT_AGENT_NAME", platform.node() or "wiz-agent"), help="Name shown in the server log")
+    parser.add_argument("--server", default=env("DT_SERVER") or config.get("server") or DEFAULT_SERVER, help="URL of the DungeonTuber server (default: %(default)s)")
+    parser.add_argument("--token", default=env("DT_AGENT_TOKEN") or config.get("token"), help="Agent token (Settings > Lights in DungeonTuber)")
+    parser.add_argument("--name", default=env("DT_AGENT_NAME") or config.get("name") or platform.node() or "wiz-agent", help="Name shown in the server log")
     parser.add_argument("--broadcast", default=env("DT_BROADCAST", "255.255.255.255"), help="Broadcast address of the bulb network")
     parser.add_argument("--wait", type=float, default=DEFAULT_WAIT_TIME, help="Seconds to wait for bulbs to answer a discovery")
     parser.add_argument("--fake", action="store_true", default=env("DT_FAKE_LIGHTS") == "1", help="Simulate three bulbs")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
     if not args.token:
-        parser.error("--token is required (or DT_AGENT_TOKEN)")
+        parser.error("--token is required (or DT_AGENT_TOKEN, or the token in agents.json)")
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:

@@ -1,18 +1,31 @@
 // Server-side (per GM) data: auth, settings, categories, presets.
 import { api } from '../api';
 import { setLocale } from '../i18n.svelte';
+import { prefs, savePrefs } from '../prefs.svelte';
 import type { AuthState, MusicCategory, Preset, ServerSettings, UserState, VersionInfo } from '../types';
 import { errorToast } from './ui.svelte';
 
 export const data = $state({
   auth: null as AuthState | null,
   settings: null as ServerSettings | null,
-  user: { favorites: [], tabs: null } as UserState,
+  user: { favorites: [], tabs: null, accent: '' } as UserState,
   categories: [] as MusicCategory[],
   presets: [] as Preset[],
   version: null as VersionInfo | null,
   locales: [] as string[],
 });
+
+/** Picks the accent colour of the signed in user ('' for the default); applied at once and kept on the server. */
+export async function setAccent(accent: string) {
+  prefs.accent = accent;
+  savePrefs();
+  data.user.accent = accent;
+  try {
+    data.user = await api.putUserState({ accent });
+  } catch (e) {
+    errorToast(e);
+  }
+}
 
 export async function loadAuth() {
   data.auth = await api.me();
@@ -23,6 +36,8 @@ export async function loadData() {
   const [settings, categories, presets, locales, user] = await Promise.all([api.settings(), api.categories(), api.presets(), api.locales(), api.userState()]);
   data.settings = settings;
   data.user = user;
+  prefs.accent = user.accent; // the browser remembers it, so the next start has the colour before the server answers
+  savePrefs();
   data.categories = categories;
   data.presets = presets;
   data.locales = locales;
