@@ -301,7 +301,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/voxalyzer
+          images: ghcr.io/${{ github.repository_owner }}/dungeontuber-voxalyzer
           tags: |
             type=raw,value=${{ needs.version.outputs.app_version }}
             type=raw,value=latest,enable=${{ !contains(needs.version.outputs.app_version, '-') }}
@@ -343,7 +343,7 @@ jobs:
 
             **Server (Python):** `pipx install <wheel-file>` then `dungeontuber-server`.
 
-            **Voxalyzer** (analysis agent, run next to your GPU): `voxalyzer-${{ needs.version.outputs.app_version }}.exe` – see `agents/voxalyzer/README.md`. Docker (NVIDIA GPU): `docker pull ghcr.io/${{ github.repository_owner }}/voxalyzer:${{ needs.version.outputs.app_version }}`.
+            **Voxalyzer** (analysis agent, run next to your GPU): `voxalyzer-${{ needs.version.outputs.app_version }}.exe` – see `agents/voxalyzer/README.md`. Docker (NVIDIA GPU): `docker pull ghcr.io/${{ github.repository_owner }}/dungeontuber-voxalyzer:${{ needs.version.outputs.app_version }}`.
 
             **WiZ light agent** (runs next to the bulbs, for a server outside their network): `DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe --token <token>` (add `--server <url>` for a server other than dungeontuber.duckdns.org) – see `agents/wiz/README.md`.
         env:

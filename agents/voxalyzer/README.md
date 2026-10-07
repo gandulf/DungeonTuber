@@ -17,7 +17,7 @@ pyinstaller voxalyzer.spec
 
 To use latest docker image to analyze local directory
 ```bash
-docker run --gpus all -v C:/Users/gandu/Music/Test:/music ghcr.io/gandulf/voxalyzer:latest /music --force
+docker run --gpus all -v C:/Users/gandu/Music/Test:/music ghcr.io/gandulf/dungeontuber-voxalyzer:latest /music --force
 ```
 
 cd
@@ -34,7 +34,7 @@ connected the server sends all analysis requests to it: the agent downloads each
 result, which the server stores. Without a connected agent analysis is disabled in the UI.
 ```bash
 voxalyzer --token <token> [--server https://dungeontuber.duckdns.org] [--name gpu-box]
-docker run --gpus all ghcr.io/gandulf/voxalyzer:latest --token <token> --server https://my.server
+docker run --gpus all ghcr.io/gandulf/dungeontuber-voxalyzer:latest --token <token> --server https://my.server
 ```
 `DT_SERVER`, `DT_AGENT_TOKEN` and `DT_AGENT_NAME` can be used instead of the options. `--fake` (or `DT_FAKE_ANALYSIS=1`) skips the models and returns
 mock categories, tags, genres and bpm, for testing without a GPU.
