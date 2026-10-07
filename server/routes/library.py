@@ -3,7 +3,6 @@ import contextlib
 import io
 import logging
 import mimetypes
-import os
 import tempfile
 from functools import lru_cache
 from pathlib import Path
@@ -48,39 +47,6 @@ def storage_errors():
 
 # --- browsing --------------------------------------------------------------
 
-def _dir_has_music(path: str, depth: int = 0) -> bool:
-    try:
-        mtime = os.stat(path).st_mtime
-    except OSError:
-        return False
-    return _dir_has_music_cached(path, mtime, depth)
-
-
-@lru_cache(maxsize=4096)
-def _dir_has_music_cached(path: str, mtime: float, depth: int) -> bool:
-    if depth > 12:
-        return False
-    try:
-        with os.scandir(path) as it:
-            subdirs = []
-            for entry in it:
-                if entry.name.startswith("."):
-                    continue
-                if entry.is_file() and entry.name.lower().endswith((".mp3", ".m3u")):
-                    return True
-                if entry.is_dir():
-                    subdirs.append(entry.path)
-    except OSError:
-        return False
-    return any(_dir_has_music(sub, depth + 1) for sub in subdirs)
-
-
-def has_music(location: Location) -> bool:
-    if location.root.is_local:
-        return _dir_has_music(str(location.local_path))
-    return any(e.name.lower().endswith((".mp3", ".m3u")) and not e.name.startswith(".") for e in location.storage.walk(location.rel))
-
-
 def _item(location: Location, kind: str) -> dict:
     return {"name": location.name if kind == "dir" else location.stem, "file": location.name, "path": location.client_path,
             "id": location.id, "type": kind}
@@ -97,7 +63,7 @@ def roots():
 
 
 @router.get("/api/browse")
-def browse(path: str, smart: bool = False):
+def browse(path: str):
     directory = safe_path(path, kind="dir")
     dirs, files = [], []
     with storage_errors():
@@ -107,8 +73,7 @@ def browse(path: str, smart: bool = False):
             continue
         location = Location(directory.root, entry.path)
         if entry.is_dir:
-            if not smart or has_music(location):
-                dirs.append(_item(location, "dir"))
+            dirs.append(_item(location, "dir"))
         else:
             lower = entry.name.lower()
             if lower.endswith(".mp3"):

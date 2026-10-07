@@ -32,7 +32,6 @@ export interface Prefs {
   rowStyle: RowStyle;
   effectsGrid: boolean;
   effectsTitle: boolean;
-  smartFilter: boolean;
   treeRoot: string | null;
   expanded: string[];
   /** Library roots that were already expanded once by default. */
@@ -72,7 +71,6 @@ const defaults: Prefs = {
   rowStyle: 'medium',
   effectsGrid: true,
   effectsTitle: false,
-  smartFilter: false,
   treeRoot: null,
   expanded: [],
   seenRoots: [],

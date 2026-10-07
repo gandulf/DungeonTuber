@@ -25,7 +25,7 @@
 
   async function load() {
     try {
-      children = (await api.browse(item.path, prefs.smartFilter)).items;
+      children = (await api.browse(item.path)).items;
     } catch (e) {
       errorToast(e);
       children = [];

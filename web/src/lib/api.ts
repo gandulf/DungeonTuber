@@ -56,7 +56,7 @@ export const api = {
 
   // library
   roots: () => get<BrowseItem[]>('/api/roots'),
-  browse: (path: string, smart = false) => get<BrowseResult>(`/api/browse?${qs({ path, smart })}`),
+  browse: (path: string) => get<BrowseResult>(`/api/browse?${qs({ path })}`),
   tracksOfDir: (dir: string) => get<TrackList>(`/api/tracks?${qs({ dir })}`),
   tracksOfPlaylist: (playlist: string) => get<TrackList>(`/api/tracks?${qs({ playlist })}`),
   track: (id: string) => get<Track>(`/api/tracks/${id}`),

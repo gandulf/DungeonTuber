@@ -83,7 +83,6 @@
 
   function treeMenu(event: MouseEvent) {
     openMenu(event, [
-      { label: t('Smart Filter'), checked: prefs.smartFilter, action: () => { prefs.smartFilter = !prefs.smartFilter; savePrefs(); refresh(); } },
       { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog() },
       { label: t('Import from YouTube…'), icon: 'cloud', action: () => openImportDialog() },
       { label: t('Refresh'), icon: 'refresh', action: refresh },
