@@ -68,12 +68,16 @@ class Agent:
         self.name = name
         self._ids = itertools.count(1)
         self._pending: dict[int, asyncio.Future] = {}
+        self._progress: dict[int, Callable[[dict], None]] = {}
 
-    async def call(self, op: str, timeout: float = CALL_TIMEOUT, **args):
-        """Sends a request and waits for the answer; raises TimeoutError, AgentError or ConnectionError (both OSError)."""
+    async def call(self, op: str, timeout: float = CALL_TIMEOUT, on_progress: Callable[[dict], None] | None = None, **args):
+        """Sends a request and waits for the answer; raises TimeoutError, AgentError or ConnectionError (both OSError).
+        A long running agent may report on the way: {"type": "progress", "id": 1, ...} messages are passed to `on_progress`."""
         request_id = next(self._ids)
         future = asyncio.get_running_loop().create_future()
         self._pending[request_id] = future
+        if on_progress is not None:
+            self._progress[request_id] = on_progress
         try:
             await self.websocket.send_text(json.dumps({"id": request_id, "op": op, **args}))
             return await asyncio.wait_for(future, timeout)
@@ -81,8 +85,17 @@ class Agent:
             raise ConnectionError(f"Agent {self.name} is not connected") from e
         finally:
             self._pending.pop(request_id, None)
+            self._progress.pop(request_id, None)
 
     def resolve(self, message: dict):
+        if message.get("type") == "progress":
+            handler = self._progress.get(message.get("id"))
+            if handler is not None:
+                try:
+                    handler(message)
+                except Exception as e:  # a faulty handler must not end the connection
+                    logger.warning("Progress handler failed: %s", e)
+            return
         future = self._pending.get(message.get("id"))
         if future is None or future.done():
             return

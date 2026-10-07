@@ -196,3 +196,37 @@ def test_import_splits_chapters_into_a_folder(client, monkeypatch):
     assert wait_until_idle()["done"] == 1
     assert sorted(p.name for p in (client.root / "Long Video").glob("*.mp3")) == ["01 Part 1.mp3", "02 Part 2.mp3"]
     assert (client.root / "Long.m3u").read_text(encoding="utf-8").count(".mp3") == 2
+
+
+COOKIES = "\n".join([
+    "# Netscape HTTP Cookie File",
+    "\t".join([".youtube.com", "TRUE", "/", "TRUE", "1999999999", "SID", "secret1"]),
+    "\t".join(["#HttpOnly_.google.com", "TRUE", "/", "TRUE", "1999999999", "SAPISID", "secret2"]),
+    "\t".join([".example.com", "TRUE", "/", "FALSE", "1999999999", "other", "not-wanted"]),
+    "\t".join([".notyoutube.com", "TRUE", "/", "FALSE", "1999999999", "evil", "not-wanted"]),
+    "garbage line",
+])
+
+
+def test_cookies_keep_only_youtube():
+    cleaned = ytimport.clean_cookies(COOKIES)
+    assert "secret1" in cleaned and "secret2" in cleaned and "not-wanted" not in cleaned and cleaned.startswith("# Netscape HTTP Cookie File")
+    with pytest.raises(ImportFailed):
+        ytimport.clean_cookies("nothing useful here")
+
+
+def test_cookies_are_stored_and_used_by_yt_dlp(client, monkeypatch):
+    monkeypatch.setattr(ytimport, "_runtime", lambda progress: {})
+    assert client.get("/api/import/cookies").json() == {"set": False, "updated": None}
+    assert "cookiefile" not in ytimport._options(None)
+
+    assert client.put("/api/import/cookies", json={"content": "garbage"}).status_code == 400
+    state = client.put("/api/import/cookies", json={"content": COOKIES}).json()
+    assert state["set"] and state["updated"]
+    assert "secret1" in ytimport.cookies_file().read_text(encoding="utf-8")
+    assert "secret" not in client.get("/api/import/cookies").text
+    assert ytimport._options(None)["cookiefile"] == str(ytimport.cookies_file())
+    assert "stored cookies" in ytimport._clean_error(Exception("ERROR: [youtube] x: Sign in to confirm you’re not a bot"))
+
+    assert client.delete("/api/import/cookies").json()["set"] is False
+    assert "administrator" in ytimport._clean_error(Exception("ERROR: [youtube] x: Sign in to confirm you’re not a bot"))

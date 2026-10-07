@@ -16,6 +16,7 @@ from server import playlists
 from server.events import hub
 from server.index import get_index
 from server.jobs import analysis_queue
+from server import ytagent
 from server.paths import Location
 
 logger = logging.getLogger(__file__)
@@ -138,7 +139,7 @@ class DownloadQueue:
 
         self._update(item, state=DOWNLOADING, message="")
         with tempfile.TemporaryDirectory(prefix="dt-import-") as tmp:
-            result = download(item.url, Path(tmp), lambda message: self._update(item, message=message), max_minutes(), batch.album, percent,
+            result = (ytagent.download if ytagent.available() else download)(item.url, Path(tmp), lambda message: self._update(item, message=message), max_minutes(), batch.album, percent,
                               batch.split)
             self._update(item, title=result.title, message=_("Saving..."))
             directory = make_folder(batch.directory, result.title, batch.user) if result.parts else batch.directory
@@ -167,7 +168,7 @@ class DownloadQueue:
 
     def _run(self, batch: Batch):
         imported: list[Location] = []
-        for item in batch.items:
+        for index, item in enumerate(batch.items):
             try:
                 imported.extend(self._item(batch, item))
                 with self._lock:
@@ -181,11 +182,11 @@ class DownloadQueue:
                 self._update(item, state=FAILED, message=message)
                 hub.publish("import.error", {"url": item.url, "message": message})
             finally:
+                if batch.playlist and imported and index == len(batch.items) - 1:
+                    self._playlist(batch, imported)  # before the queue counts as finished
                 with self._lock:
                     self.pending -= 1
                 self._publish()
-        if batch.playlist and imported:
-            self._playlist(batch, imported)
 
     @staticmethod
     def _playlist(batch: Batch, tracks: list[Location]):

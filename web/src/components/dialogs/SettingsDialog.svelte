@@ -60,12 +60,37 @@
   });
   let categories = $state<CategoryRow[]>(data.categories.map(toRow));
   let categoriesDirty = $state(false);
+  let cookies = $state<{ set: boolean; updated: number | null }>({ set: false, updated: null });
+  if (admin) void api.youtubeCookies().then((result) => (cookies = result)).catch(() => {});
+
+  async function uploadCookies(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      cookies = await api.putYoutubeCookies(await file.text());
+      toast(t('YouTube cookies saved'), 'success');
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  async function removeCookies() {
+    if (!(await askConfirm(t('Remove the stored YouTube cookies?')))) return;
+    try {
+      cookies = await api.deleteYoutubeCookies();
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   let agents = $state<{ tokenSet: boolean; connected: AgentInfo[] } | null>(null);
   let agentToken = $state('');
   void api.agents().then((result) => (agents = result)).catch(() => {});
   const stopAgentEvents = onEvent('agents.state', (connected) => agents && (agents = { ...agents, connected }));
   onDestroy(stopAgentEvents);
-  const agentLabels: Record<string, string> = { lights: 'WiZ light agent', voxalyzer: 'Voxalyzer analysis agent' };
+  const agentLabels: Record<string, string> = { lights: 'WiZ light agent', voxalyzer: 'Voxalyzer analysis agent', youtube: 'YouTube download agent' };
 
   async function removeAgent(agent: AgentInfo) {
     const label = t(agentLabels[agent.kind] ?? agent.kind);
@@ -223,6 +248,14 @@
           </div>
         {/each}
         <div class="row"><button class="btn" onclick={addStorage}><Icon name="plus" size={14} /> {t('Add storage')}</button></div>
+        <h4>{t('YouTube import')}</h4>
+        <p class="muted small">{t('YouTube often blocks downloads from servers. Export the cookies of a signed-in YouTube session as cookies.txt (Netscape format, e.g. with a browser extension) and upload them here. Only the YouTube cookies are kept, and they are never sent back to the browser.')}</p>
+        <div class="row">
+          <span class="small">{cookies.set ? t('Cookies stored ({0})', new Date((cookies.updated ?? 0) * 1000).toLocaleString()) : t('No cookies stored')}</span>
+          <span class="grow"></span>
+          <label class="btn"><Icon name="upload" size={14} /> {t('Upload cookies.txt…')}<input type="file" accept=".txt,text/plain" hidden onchange={uploadCookies} /></label>
+          {#if cookies.set}<button class="btn danger" onclick={removeCookies}>{t('Remove')}</button>{/if}
+        </div>
       {:else if section === 'categories'}
         <div class="cat-head">
           <span class="muted small">{t('Levels: one "value: description" per line')}</span>
@@ -249,7 +282,7 @@
         <label class="field">{t('Timeout')} (s)<input type="number" min="1" max="60" step="0.5" bind:value={form.lightsTimeout} />
           <span class="muted small">{t('Time to search for bulbs in seconds')}</span></label>
       {:else if section === 'agents'}
-        <span class="muted small">{t('Programs on other machines that connect to this server: WiZ light agents (see agents/wiz) and Voxalyzer analysis agents (see agents/voxalyzer).')}</span>
+        <span class="muted small">{t('Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube).')}</span>
         <div class="field">
           <span>{t('Connected agents')}</span>
           {#each agents?.connected ?? [] as agent (agent.kind)}

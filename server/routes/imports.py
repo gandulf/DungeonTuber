@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from core.i18n import _
-from core.ytimport import ImportFailed, check_url, resolve
-from server.auth import current_user, require_auth
+from core.ytimport import ImportFailed, check_url, cookies_file, delete_cookies, resolve, save_cookies
+from server.auth import current_user, require_admin, require_auth
+from server import ytagent
 from server.downloads import Batch, download_queue, make_folder, max_minutes
 from server.paths import safe_path
 from server.routes.library import storage_errors
@@ -39,7 +40,7 @@ class ImportRequest(BaseModel):
 def resolve_link(body: ResolveRequest):
     """The videos behind a link (a playlist link lists all of them), without downloading anything."""
     try:
-        result = resolve(body.url, whole=body.whole)
+        result = (ytagent.resolve if ytagent.available() else resolve)(body.url, whole=body.whole)
     except ImportFailed as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"title": result.title, "playlist": result.is_playlist, "hasVideo": result.has_video, "maxMinutes": max_minutes(),
@@ -67,3 +68,33 @@ def start_import(body: ImportRequest, user: str = Depends(current_user)):
 @router.get("/api/import")
 def status():
     return download_queue.status()
+
+
+class CookiesRequest(BaseModel):
+    content: str
+
+
+def _cookies_state() -> dict:
+    path = cookies_file()
+    return {"set": path.is_file(), "updated": path.stat().st_mtime if path.is_file() else None}
+
+
+@router.get("/api/import/cookies")
+def cookies_status():
+    """Whether YouTube cookies are stored (their content is never sent back)."""
+    return _cookies_state()
+
+
+@router.put("/api/import/cookies", dependencies=[Depends(require_admin)])
+def put_cookies(body: CookiesRequest):
+    try:
+        save_cookies(body.content)
+    except ImportFailed as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return _cookies_state()
+
+
+@router.delete("/api/import/cookies", dependencies=[Depends(require_admin)])
+def remove_cookies():
+    delete_cookies()
+    return _cookies_state()

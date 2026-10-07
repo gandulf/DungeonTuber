@@ -48,10 +48,7 @@ For access over the internet use [`deploy/docker-compose.yml`](deploy/docker-com
 ### 1. Building Your Library
 * **Upload:** Drag mp3 files or whole folders onto the file tree, or use *Upload songs…* in the menu or the context menu of a folder. Folder structures are kept.
 * **Existing music:** Copy files into the library folder of the server (or add an S3 bucket under **Settings → Library**) and choose *Rescan Library*.
-* **Analysis:** If a Voxalyzer agent is connected (see [Agents](#-agents)), choose *Analyze* on a song or folder, or tick *Analyze after import*. Without an agent the analysis functions are disabled.
-
-> [!Note]
-> Only YouTube links are accepted and videos longer than 4 hours are skipped (`importMaxMinutes` in `settings.json`). YouTube often blocks downloads from data center addresses, so the import may fail on a hosted server. Respect the terms of YouTube and the copyright of the music you import.
+* **Analysis:** If a Voxalyzer agent is connected (see [Agents](#-agents)), choose *Analyze* on a song or folder. Without an agent the analysis functions are disabled.
 
 ### 2. Filtering by Mood
 The power of DungeonTuber lies in the filter panel above the song table:
@@ -137,7 +134,7 @@ DungeonTuber is a Python server with a web frontend. Pick the variant that fits:
 docker run -d -p 8765:8765 -e DT_PASSWORD=change-me \
   -v /path/to/music:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
 ```
-[`deploy/docker-compose.yml`](deploy/docker-compose.yml) adds automatic HTTPS with Caddy for access over the internet; [`deploy/oracle`](deploy/oracle/README.md) describes a free Oracle Cloud VM with DuckDNS. The image contains ffmpeg and deno for the YouTube import. Run a single server container: it keeps the analysis queue, downloads, lights and live updates in memory.
+[`deploy/docker-compose.yml`](deploy/docker-compose.yml) adds automatic HTTPS with Caddy for access over the internet; [`deploy/oracle`](deploy/oracle/README.md) describes a free Oracle Cloud VM with DuckDNS. Run a single server container: it keeps the analysis queue, lights and live updates in memory.
 
 WiZ bulbs are discovered via UDP broadcast, which only works inside the bulbs' network. A server in the cloud (or a container without `network_mode: host` on Linux) therefore uses the [WiZ light agent](agents/wiz/README.md) next to the bulbs.
 
@@ -146,7 +143,7 @@ WiZ bulbs are discovered via UDP broadcast, which only works inside the bulbs' n
 pipx install dungeontuber-<version>-py3-none-any.whl
 DT_PASSWORD=change-me DT_LIBRARY=/srv/music dungeontuber-server --host 0.0.0.0
 ```
-See [`deploy/dungeontuber.service`](deploy/dungeontuber.service) for a systemd unit. The YouTube import needs ffmpeg and deno (or node); if they are not installed they are downloaded once on first use (Windows and Linux).
+See [`deploy/dungeontuber.service`](deploy/dungeontuber.service) for a systemd unit.
 
 ### Desktop app (optional)
 The Windows installer starts the same server inside a window; only this computer can connect. To let tablets or phones at the table join, set a password and enable **Settings → Security → Share on network**, restart the app and open the shown address on the other device.

@@ -226,6 +226,85 @@ jobs:
           name: wiz-agent
           path: DungeonTuberWizAgent-*.exe
 
+  # --- YouTube download agent (single Windows executable, see agents/youtube) ---
+  youtube-agent:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+          cache-dependency-path: agents/youtube/pyproject.toml
+      - name: Build executable
+        working-directory: agents/youtube
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller .
+          python build.py
+      - name: Name the executable after the release
+        shell: pwsh
+        run: Move-Item agents/youtube/dist/DungeonTuberYouTubeAgent.exe "DungeonTuberYouTubeAgent-${{ needs.version.outputs.app_version }}.exe"
+
+      - name: Prepare Certificate for Signing
+        shell: pwsh
+        run: |
+          $certBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_BASE64 }}")
+          [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $certBytes)
+
+      - name: Prepare Signtool
+        uses: KamaranL/add-signtool-action@v1
+        id: signtool
+
+      - name: Sign Executable
+        shell: pwsh
+        run: |
+          signtool sign /f "$env:TEMP\cert.pfx" /p "${{ secrets.PFX_PASSWORD }}" `
+             /fd sha256 /td sha256 `
+             /tr http://timestamp.digicert.com `
+             "DungeonTuberYouTubeAgent-${{ needs.version.outputs.app_version }}.exe"
+
+      - name: Cleanup Certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:TEMP\cert.pfx") { Remove-Item "$env:TEMP\cert.pfx" }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: youtube-agent
+          path: DungeonTuberYouTubeAgent-*.exe
+
+  youtube-agent-docker:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/dungeontuber-youtube-agent
+          tags: |
+            type=raw,value=${{ needs.version.outputs.app_version }}
+            type=raw,value=latest,enable=${{ !contains(needs.version.outputs.app_version, '-') }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: agents/youtube/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=youtube-agent
+          cache-to: type=gha,mode=max,scope=youtube-agent
+
   # --- Voxalyzer analyzer (single Windows executable, models are downloaded on first start, see agents/voxalyzer) ---
   voxalyzer:
     needs: version
@@ -317,7 +396,7 @@ jobs:
 
   # --- GitHub release with installer, wheel and agents ----------------------
   release:
-    needs: [version, wheel, windows, docker, wiz-agent, voxalyzer, voxalyzer-docker]
+    needs: [version, wheel, windows, docker, wiz-agent, youtube-agent, youtube-agent-docker, voxalyzer, voxalyzer-docker]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v8
@@ -330,6 +409,7 @@ jobs:
           files: |
             artifacts/DungeonTuber-*.exe
             artifacts/DungeonTuberWizAgent-*.exe
+            artifacts/DungeonTuberYouTubeAgent-*.exe
             artifacts/voxalyzer-*.exe
             artifacts/*.whl
           tag_name: ${{ needs.version.outputs.tag }}
@@ -344,6 +424,8 @@ jobs:
             **Server (Python):** `pipx install <wheel-file>` then `dungeontuber-server`.
 
             **Voxalyzer** (analysis agent, run next to your GPU): `voxalyzer-${{ needs.version.outputs.app_version }}.exe` – see `agents/voxalyzer/README.md`. Docker (NVIDIA GPU): `docker pull ghcr.io/${{ github.repository_owner }}/dungeontuber-voxalyzer:${{ needs.version.outputs.app_version }}`.
+
+            **YouTube download agent** (runs yt-dlp on a PC that YouTube does not block and uploads to the server): `DungeonTuberYouTubeAgent-${{ needs.version.outputs.app_version }}.exe --token <token>` – see `agents/youtube/README.md`. Docker: `docker pull ghcr.io/${{ github.repository_owner }}/dungeontuber-youtube-agent:${{ needs.version.outputs.app_version }}`.
 
             **WiZ light agent** (runs next to the bulbs, for a server outside their network): `DungeonTuberWizAgent-${{ needs.version.outputs.app_version }}.exe --token <token>` (add `--server <url>` for a server other than dungeontuber.duckdns.org) – see `agents/wiz/README.md`.
         env:

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dungeontuber-youtube-agent"
+version = "0.1.0"
+description = "YouTube download agent for a DungeonTuber server: runs yt-dlp on this machine and uploads the mp3 files to the server"
+requires-python = ">=3.12"
+# The download code (core/ of the DungeonTuber repository) is not a package of its own: it is taken from the checkout (see the sys.path
+# fallback in dt_youtube_agent.py), copied next to the agent by the Dockerfile and bundled by the PyInstaller spec.
+dependencies = [
+    "yt-dlp[default]>=2026.8.19",
+    "websockets>=14",
+    "mutagen>=1.48.1",
+    "pillow>=12.3",
+    "packaging>=24.0",
+    "pywizlight>=0.6.6",
+]
+
+[project.optional-dependencies]
+dev = ["pyinstaller>=6.22.3"]
+
+[project.scripts]
+dt-youtube-agent = "dt_youtube_agent:main"
+
+[tool.setuptools]
+py-modules = ["dt_youtube_agent"]

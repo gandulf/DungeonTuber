@@ -1,6 +1,7 @@
 """Imports the audio of YouTube links (single videos and playlists) as tagged mp3 files, using yt-dlp."""
 import io
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -11,7 +12,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from core.i18n import _
 from core.mp3 import update_mp3_album, update_mp3_artist, update_mp3_chapters, update_mp3_cover_data, update_mp3_source, update_mp3_title
+from core.settings import AppSettings
 from core.tools import ensure_tool, find_tool
+from core.utils import get_user_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,9 @@ Progress = Callable[[str], None]
 ALLOWED_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com")  # and their subdomains
 DEFAULT_MAX_MINUTES = 240
 MAX_NAME = 150
+COOKIES_NAME = "youtube-cookies.txt"
+MAX_COOKIES_BYTES = 2 * 1024 * 1024
+COOKIE_DOMAINS = ("youtube.com", "youtube-nocookie.com", "google.com")  # nothing else of an exported browser session is kept
 
 
 class ImportFailed(Exception):
@@ -91,8 +97,58 @@ def _runtime(progress: Progress | None) -> dict:
     return {"deno": {"path": ensure_tool("deno", progress)}}
 
 
+_cookies_override: dict = {}  # set by an agent on a user's own machine: its own cookies.txt or the cookies of a browser profile
+
+
+def use_cookies(file: str | None = None, browser: str | None = None):
+    """Takes the cookies from a file or a browser (e.g. "firefox") instead of the cookies.txt of the server settings."""
+    _cookies_override.clear()
+    if browser:
+        _cookies_override["cookiesfrombrowser"] = (browser,)
+    elif file:
+        _cookies_override["cookiefile"] = str(file)
+
+
+def cookies_file() -> Path:
+    """The cookies.txt of a signed-in YouTube session, next to settings.json (YouTube blocks anonymous downloads from many servers)."""
+    path = AppSettings.path
+    return (path.parent if path else get_user_data_dir()) / COOKIES_NAME
+
+
+def clean_cookies(text: str) -> str:
+    """The YouTube cookies of a Netscape cookies.txt export; everything else (other sites) is dropped."""
+    if len(text.encode("utf-8")) > MAX_COOKIES_BYTES:
+        raise ImportFailed(_("The cookies file is too large"))
+    lines = []
+    for line in text.splitlines():
+        fields = line.split("\t")
+        domain = fields[0].removeprefix("#HttpOnly_").lstrip(".").lower()
+        if len(fields) == 7 and any(domain == allowed or domain.endswith("." + allowed) for allowed in COOKIE_DOMAINS):
+            lines.append("\t".join(fields))
+    if not lines:
+        raise ImportFailed(_("No YouTube cookies found in this file (expected a cookies.txt in Netscape format)"))
+    return "# Netscape HTTP Cookie File\n" + "\n".join(lines) + "\n"
+
+
+def save_cookies(text: str):
+    content = clean_cookies(text)
+    path = cookies_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8", newline="\n") as out:
+        out.write(content)
+
+
+def delete_cookies():
+    cookies_file().unlink(missing_ok=True)
+
+
 def _options(progress: Progress | None, **extra) -> dict:
-    return {"quiet": True, "no_warnings": True, "noprogress": True, "js_runtimes": _runtime(progress), **extra}
+    options = {"quiet": True, "no_warnings": True, "noprogress": True, "js_runtimes": _runtime(progress), **extra}
+    if _cookies_override:
+        options.update(_cookies_override)
+    elif cookies_file().is_file():
+        options["cookiefile"] = str(cookies_file())
+    return options
 
 
 def resolve(url: str, progress: Progress | None = None, whole: bool | None = None) -> Resolved:
@@ -135,6 +191,12 @@ def _entry(item: dict) -> RemoteEntry | None:
 
 def _clean_error(error: Exception) -> str:
     message = re.sub(r"\x1b\[[0-9;]*m", "", str(error))  # colors
+    if "Sign in to confirm" in message:
+        if _cookies_override:
+            return _("YouTube rejected the cookies of the download agent. Sign in to YouTube on the agent machine or export fresh cookies there.")
+        if cookies_file().is_file():
+            return _("YouTube rejected the stored cookies. Export a fresh cookies.txt and upload it again in the settings.")
+        return _("YouTube asks for a sign-in because it treats this server as a bot. An administrator can upload a cookies.txt under Settings > Library.")
     return re.sub(r"^ERROR:\s*(\[[^\]]+\]\s*[\w-]+:\s*)?", "", message).strip() or type(error).__name__
 
 

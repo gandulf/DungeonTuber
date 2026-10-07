@@ -21,6 +21,11 @@
 # By default it analyzes for real, on the CPU (slow). DT_VOX_FAKE=1 returns mock values instead (no models needed). On an NVIDIA GPU:
 #   DT_VOX_GPU=all docker compose up --build       (and uncomment the GPU reservation of the voxalyzer service)
 #
+# YouTube import: the youtube-agent service (agents/youtube) connects to DungeonTuber like the Voxalyzer agent and, while it runs, does every
+# YouTube lookup and download (yt-dlp runs in its container, the mp3 files are uploaded to DungeonTuber). Stop it
+# (docker compose stop youtube-agent) to let DungeonTuber download by itself. If YouTube asks for a sign-in, give the agent a cookies.txt:
+# uncomment the volume and the --cookies argument of the service.
+#
 # Other S3 services: change the DT_S3_* variables (endpoint, region "auto" for Cloudflare R2, keys, bucket) and drop rustfs/rustfs-init.
 # Reset everything: docker compose down -v
 
@@ -37,7 +42,7 @@ services:
       DT_PASSWORD: dungeontuber
       DT_LIBRARY: /music
       DT_FAKE_LIGHTS: "1"                 # simulated WiZ bulbs (real discovery needs host networking on Linux)
-      DT_AGENT_TOKEN: dev-agent-token     # shared with the voxalyzer agent below (development only)
+      DT_AGENT_TOKEN: dev-agent-token     # shared with the voxalyzer and youtube agents below (development only)
       DT_S3_BUCKET: music
       DT_S3_NAME: S3 (RustFS)
       DT_S3_ENDPOINT: http://rustfs:9000
@@ -94,6 +99,33 @@ services:
       watch:
         - action: rebuild
           path: ./agents/voxalyzer/voxalyzer
+          ignore:
+            - "**/__pycache__/"
+
+  youtube-agent:
+    build:
+      context: .                          # the agent uses core/ of this checkout
+      dockerfile: agents/youtube/Dockerfile
+    image: dungeontuber-youtube-agent:local
+    command: ["--server", "http://dungeontuber:8765", "--name", "compose"]
+    # command: ["--server", "http://dungeontuber:8765", "--name", "compose", "--cookies", "/cookies.txt"]
+    environment:
+      DT_AGENT_TOKEN: dev-agent-token
+    # volumes:
+    #   - ./cookies.txt:/cookies.txt:ro
+    depends_on:
+      - dungeontuber
+    restart: unless-stopped               # reconnects by itself when DungeonTuber restarts
+    develop:
+      watch:
+        - action: rebuild
+          path: ./agents/youtube
+          ignore:
+            - "**/__pycache__/"
+            - dist/
+            - build/
+        - action: rebuild
+          path: ./core
           ignore:
             - "**/__pycache__/"
 

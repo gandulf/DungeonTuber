@@ -94,6 +94,9 @@ export const api = {
   resolveImport: (url: string, whole?: boolean) => request<ImportPreview>('POST', '/api/import/resolve', { url, whole }),
   startImport: (body: { dir: string; entries: { url: string; title: string }[]; album?: string; playlist?: string; folder?: string; analyze?: boolean; split?: boolean }) =>
     request<{ queued: number; pending: number }>('POST', '/api/import', body),
+  youtubeCookies: () => get<{ set: boolean; updated: number | null }>('/api/import/cookies'),
+  putYoutubeCookies: (content: string) => request<{ set: boolean; updated: number | null }>('PUT', '/api/import/cookies', { content }),
+  deleteYoutubeCookies: () => request<{ set: boolean; updated: number | null }>('DELETE', '/api/import/cookies'),
   importStatus: () => get<{ pending: number; done: number; failed: number; items: DownloadItem[] }>('/api/import'),
 
   // settings
