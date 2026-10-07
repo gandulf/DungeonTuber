@@ -86,6 +86,31 @@
     }
   }
 
+  let cloud = $state<{ configured: boolean; host: string | null }>({ configured: false, host: null });
+  let cloudUrl = $state('');
+  let cloudKey = $state('');
+  let cloudSecret = $state('');
+  if (admin) void api.cloudAnalysis().then((result) => (cloud = result)).catch(() => {});
+
+  async function saveCloud() {
+    try {
+      cloud = await api.putCloudAnalysis(cloudUrl, cloudKey, cloudSecret);
+      cloudUrl = cloudKey = cloudSecret = '';
+      toast(t('Cloud analysis saved'), 'success');
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  async function removeCloud() {
+    if (!(await askConfirm(t('Remove the cloud analysis settings?')))) return;
+    try {
+      cloud = await api.deleteCloudAnalysis();
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   let agents = $state<{ tokenSet: boolean; connected: AgentInfo[] } | null>(null);
   let agentToken = $state('');
   void api.agents().then((result) => (agents = result)).catch(() => {});
@@ -327,6 +352,16 @@
             <div class="row"><button class="btn" onclick={downloadAgentConfig}><Icon name="download" size={14} /> {t('Download agents.json')}</button></div>
           {/if}
           <div class="row"><button class="btn" onclick={createAgentToken}>{agents?.tokenSet ? t('New agent token') : t('Create agent token')}</button></div>
+        </div>
+        <h4>{t('Cloud analysis')}</h4>
+        <span class="muted small">{t('Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.')}</span>
+        <span class="small">{cloud.configured ? t('Configured ({0})', cloud.host ?? '') : t('Not configured')}</span>
+        <label class="field">{t('Endpoint URL')}<input type="url" placeholder="https://…modal.run" bind:value={cloudUrl} /></label>
+        <label class="field">{t('Key')}<input type="text" autocomplete="off" placeholder="wk-…" bind:value={cloudKey} /></label>
+        <label class="field">{t('Secret')}<input type="password" autocomplete="off" placeholder="ws-…" bind:value={cloudSecret} /></label>
+        <div class="row">
+          <button class="btn" disabled={!cloudUrl.trim() || !cloudKey.trim() || !cloudSecret.trim()} onclick={saveCloud}>{t('Save')}</button>
+          {#if cloud.configured}<button class="btn danger" onclick={removeCloud}>{t('Remove')}</button>{/if}
         </div>
       {:else if section === 'player'}
         <p class="muted small">{t('These settings are stored in this browser.')}</p>

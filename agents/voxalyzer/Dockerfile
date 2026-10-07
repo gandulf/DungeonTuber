@@ -1,5 +1,5 @@
-# 1. Use NVIDIA CUDA as the base
-FROM nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
+# 1. Use NVIDIA CUDA as the base: onnxruntime-gpu 1.30+ needs CUDA 13 and cuDNN 9 (NVIDIA driver 580 or newer on the host)
+FROM nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04
 
 # 2. Set environment variables to avoid prompts during install
 ENV DEBIAN_FRONTEND=noninteractive

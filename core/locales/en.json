@@ -309,5 +309,18 @@
   "Red": "Red",
   "Pink": "Pink",
   "Copy this token now, it is only shown once. Or download agents.json and put it next to the agents: all agents on a machine then start without arguments.": "Copy this token now, it is only shown once. Or download agents.json and put it next to the agents: all agents on a machine then start without arguments.",
-  "Download agents.json": "Download agents.json"
+  "Download agents.json": "Download agents.json",
+  "The URL must start with https://": "The URL must start with https://",
+  "The cloud analysis failed ({0}): {1}": "The cloud analysis failed ({0}): {1}",
+  "The cloud analysis is not reachable: {0}": "The cloud analysis is not reachable: {0}",
+  "Cloud analysis": "Cloud analysis",
+  "Endpoint URL": "Endpoint URL",
+  "Configured ({0})": "Configured ({0})",
+  "Not configured": "Not configured",
+  "Cloud analysis saved": "Cloud analysis saved",
+  "Remove the cloud analysis settings?": "Remove the cloud analysis settings?",
+  "The key or the secret is missing": "The key or the secret is missing",
+  "The cloud analysis rejected the key or the secret ({0})": "The cloud analysis rejected the key or the secret ({0})",
+  "Secret": "Secret",
+  "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.": "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser."
 }

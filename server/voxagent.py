@@ -1,4 +1,5 @@
 """Voxalyzer behind an agent: the analysis runs on another machine (e.g. with a GPU) that connects out to the server.
+Without an agent the on-demand cloud function (server/voxcloud.py) is used when one is configured.
 
 For every file the server hands the agent a one-time download ticket ({"op": "analyze", "download": "/api/agents/files/<ticket>"}); the
 agent fetches the mp3 with its token, analyzes it and answers with the result, which the analysis queue then stores like any other backend.
@@ -11,6 +12,7 @@ from os import PathLike
 from pathlib import Path
 
 from core.analyzer import AnalyzerBackend
+from server import voxcloud
 from server.agents import Agent, agent_hub
 from server.events import hub
 
@@ -50,20 +52,20 @@ class AgentVoxalyzerBackend(AnalyzerBackend):
 
 
 def current_backend() -> AnalyzerBackend | None:
-    """The connected Voxalyzer agent; None when nothing can analyze."""
-    return AgentVoxalyzerBackend() if agent_hub.get(KIND) is not None else None
+    """The connected Voxalyzer agent, else the cloud function; None when nothing can analyze."""
+    return AgentVoxalyzerBackend() if agent_hub.get(KIND) is not None else voxcloud.current_backend()
 
 
-def _publish_availability():
+def publish_availability():
     hub.publish("analysis.available", {"active": current_backend() is not None})
 
 
 async def _connected(agent: Agent):
-    _publish_availability()
+    publish_availability()
 
 
 async def _disconnected(agent: Agent):
-    _publish_availability()
+    publish_availability()
 
 
 def install():

@@ -77,31 +77,6 @@ services:
         - action: rebuild
           path: ./pyproject.toml
 
-  voxalyzer:
-    build:
-      context: agents/voxalyzer
-    image: voxalyzer:local
-    command: ["--server", "http://dungeontuber:8765", "--name", "compose"]
-    environment:
-      DT_AGENT_TOKEN: dev-agent-token
-      DT_FAKE_ANALYSIS: ${DT_VOX_FAKE:-1}
-    depends_on:
-      - dungeontuber
-    restart: unless-stopped               # reconnects by itself when DungeonTuber restarts
-    deploy:                             # real analysis on an NVIDIA GPU (needs the NVIDIA container toolkit)
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    develop:
-      watch:
-        - action: rebuild
-          path: ./agents/voxalyzer/voxalyzer
-          ignore:
-            - "**/__pycache__/"
-
   youtube-agent:
     build:
       context: .                          # the agent uses core/ of this checkout

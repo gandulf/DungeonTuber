@@ -39,6 +39,21 @@ docker run --gpus all ghcr.io/gandulf/dungeontuber-voxalyzer:latest --token <tok
 `DT_SERVER`, `DT_AGENT_TOKEN` and `DT_AGENT_NAME` can be used instead of the options, and so can the `agents.json` that all DungeonTuber agents share (see [`agents/README.md`](../README.md)). `--fake` (or `DT_FAKE_ANALYSIS=1`) skips the models and returns
 mock categories, tags, genres and bpm, for testing without a GPU.
 
+## Run on demand on Modal
+
+Without a GPU machine of your own, [`modal_app.py`](modal_app.py) runs the analysis in a [Modal](https://modal.com) function: a GPU
+container (T4 by default) starts when the server posts an mp3 and stops when idle, so only the seconds of an analysis are billed. The
+models are part of the image. A connected agent is preferred; the cloud function is used when none is connected.
+```bash
+pip install modal && modal setup
+cd agents/voxalyzer && modal deploy modal_app.py
+```
+The endpoint uses Modal's proxy auth, so requests without a valid key and secret are rejected before a container starts. Create a proxy
+auth token in the Modal dashboard (Settings → Proxy Auth Tokens), then enter the URL that `modal deploy` prints together with its key and
+secret under Settings → Agents → Cloud analysis. `DT_CLOUD_GPU` (e.g. `L4`), `DT_CLOUD_CPU` (reserved CPU cores, default 4),
+`DT_CLOUD_MAX_CONTAINERS` (parallel analyses, default 2) and `DT_CLOUD_IDLE_SECONDS` (how long a container stays warm, default 60) are read
+when deploying. The first analysis after an idle period includes the cold start of the container.
+
 ## Models
 
 The ~31 MB of ONNX models are part of the repo but not of the releases. On the first start the agent downloads the missing ones from the static
