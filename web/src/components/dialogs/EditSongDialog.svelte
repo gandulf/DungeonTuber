@@ -61,7 +61,7 @@
 </script>
 
 <Modal title={t('Edit Song')} onclose={closeDialog} width="680px">
-  <form class="grid" onsubmit={(e) => { e.preventDefault(); void save(); }}>
+  <form class="grid" data-tour="edit-form" onsubmit={(e) => { e.preventDefault(); void save(); }}>
     <div class="cover-col">
       <label class="cover">
         {#if preview}<img src={preview} alt="" />{:else if track.has_cover}<img src={coverUrl(track.id, 256)} alt="" />{:else}<span class="muted">{t('Cover')}</span>{/if}

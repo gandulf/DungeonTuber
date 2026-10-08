@@ -389,7 +389,7 @@ def test_favorites_and_open_tabs_are_per_user(client, library):
     # anna starts with nothing and her changes do not touch the SuperAdmin's
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
     assert client.get(f"/api/tracks/{_id(song)}").json()["favorite"] is False
-    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": ""}
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "player": None}
     assert client.patch(f"/api/tracks/{_id(song)}", json={"favorite": True}).json()["favorite"] is True
     client.put("/api/user/state", json={"favorites": [f"{root}/Tavern"]})
     drums = library["root"] / "Battle" / "drums.mp3"
@@ -407,7 +407,7 @@ def test_favorites_and_open_tabs_are_per_user(client, library):
     client.delete("/api/users/anna")
     client.post("/api/users", json={"name": "anna", "password": "pw1234"})
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
-    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": ""}
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "player": None}
     assert client.get(f"/api/tracks/{_id(drums)}").json()["favorite"] is False
 
 
@@ -497,3 +497,48 @@ def test_accent_color_is_kept_per_user(client):
     assert client.get("/api/user/state").json()["accent"] == ""
     assert client.put("/api/user/state", json={"accent": "red"}).json()["accent"] == "red"
     assert client.put("/api/user/state", json={"accent": ""}).json()["accent"] == ""
+
+
+def test_rename_folder(client, library):
+    root = library["root"]
+    response = client.post("/api/files/rename", json={"path": (root / "Tavern").as_posix(), "name": "Inn"})
+    assert response.status_code == 200 and response.json()["path"] == (root / "Inn").as_posix()
+    assert (root / "Inn").is_dir() and not (root / "Tavern").exists()
+
+    assert client.post("/api/files/rename", json={"path": (root / "Inn").as_posix(), "name": "Battle"}).status_code == 409
+    assert client.post("/api/files/rename", json={"path": (root / "Inn").as_posix(), "name": "a/b"}).status_code == 400
+    assert client.post("/api/files/rename", json={"path": root.as_posix(), "name": "x"}).status_code == 400
+
+
+def test_library_folders_are_fixed_in_server_mode(client, library):
+    from server.config import get_config
+    config = get_config()
+    previous, config.local_mode = config.local_mode, False
+    try:
+        assert client.put("/api/settings", json={"libraryRoots": [library["root"].as_posix()]}).status_code == 403
+        assert client.put("/api/settings", json={"lightsTimeout": 4}).status_code == 200
+        config.local_mode = True
+        assert client.put("/api/settings", json={"libraryRoots": [library["root"].as_posix()]}).status_code == 200
+    finally:
+        config.local_mode = previous
+
+
+def test_tour_done_is_remembered(client):
+    assert client.get("/api/user/state").json()["tour_done"] is False
+    assert client.put("/api/user/state", json={"tour_done": True}).json()["tour_done"] is True
+    assert client.get("/api/user/state").json()["tour_done"] is True
+
+
+def test_player_settings_are_kept_per_user(client):
+    set_password("secret")
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    settings = {"shuffle": True, "repeat": "all", "volume": 40, "muted": True, "effectsVolume": 25, "normalize": False, "crossfade": False}
+
+    assert client.put("/api/user/state", json={"player": {**settings, "repeat": "forever"}}).status_code == 422
+    assert client.put("/api/user/state", json={"player": {**settings, "volume": 200}}).status_code == 422
+    assert client.put("/api/user/state", json={"player": settings}).json()["player"] == settings
+
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert client.get("/api/user/state").json()["player"] is None

@@ -41,7 +41,7 @@
     openMenu(event, [
       ...(effect && variant ? [
         { label: t('Play'), icon: 'play', action: () => playEffect(effect, 0) },
-        { label: t('Edit Song'), icon: 'edit', action: () => editSong(variant) },
+        { label: t('Edit Song…'), icon: 'edit', action: () => editSong(variant) },
         ...(data.settings?.voxalyzerActive !== false ? [{ label: t('Analyze'), icon: 'sparkles', action: () => analyze([variant.path]) }] : []),
         { separator: true },
       ] : []),

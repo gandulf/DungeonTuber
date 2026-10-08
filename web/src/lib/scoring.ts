@@ -64,10 +64,16 @@ export function genreLevel(desired: string[], values: string[] | null | undefine
   return found === desired.length ? 0 : found > 0 ? 1 : 2;
 }
 
-/** 0 = green (<50), 1 = yellow (<100), 2 = orange (<150), 3 = red */
+/** The score (0 = perfect, unbounded) as a match in percent: 100 % is perfect, every 100 points of distance cut it by a factor of e. */
+export function scorePercent(score: number | null): number | null {
+  return score === null ? null : Math.round(100 * Math.exp(-score / 100));
+}
+
+/** By match percent: 0 = green (61–100 %), 1 = yellow (37–60 %), 2 = orange (22–36 %), 3 = red (0–21 %) */
 export function scoreLevel(score: number | null): number | null {
-  if (score === null) return null;
-  return score < 50 ? 0 : score < 100 ? 1 : score < 150 ? 2 : 3;
+  const percent = scorePercent(score);
+  if (percent === null) return null;
+  return percent >= 61 ? 0 : percent >= 37 ? 1 : percent >= 22 ? 2 : 3;
 }
 
 export function emptyFilter(filter: FilterConfig): boolean {

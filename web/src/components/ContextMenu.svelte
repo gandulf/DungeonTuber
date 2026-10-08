@@ -60,7 +60,7 @@
       <div class="sep"></div>
     {:else}
       <div class="item-wrap" role="none" onmouseenter={() => level === 0 && (openSub = item.children ? i : null)}>
-        <button class="item" disabled={item.disabled} onclick={(e) => { e.stopPropagation(); run(item); }}>
+        <button class="item" data-tour={item.tour} disabled={item.disabled} onclick={(e) => { e.stopPropagation(); run(item); }}>
           <span class="ic">
             {#if item.checked}<Icon name="check" size={15} />{:else if item.icon}<Icon name={item.icon} size={15} />{/if}
           </span>
@@ -69,7 +69,7 @@
           {#if item.children}<Icon name="chevron-right" size={14} />{/if}
         </button>
         {#if item.children && openSub === i && level === 0}
-          <div class="menu sub" use:fit>{@render items(item.children, 1)}</div>
+          <div class="menu sub" data-tour={item.tour ? `${item.tour}-sub` : undefined} use:fit>{@render items(item.children, 1)}</div>
         {/if}
       </div>
     {/if}

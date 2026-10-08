@@ -57,7 +57,7 @@
     <FolderTree bind:selected={target} />
   </div>
 
-  <div class="section">
+  <div class="section" data-tour="upload-drop">
     <span class="label-xs">{t('Files')}</span>
     <div class="drop" class:over={dragOver} role="presentation"
          ondragover={(e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); dragOver = true; } }}

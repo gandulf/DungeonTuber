@@ -28,7 +28,8 @@
   const showRight = $derived(prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false));
 
   $effect(() => {
-    if (!prefs.tourDone) setTimeout(() => (ui.tour = true), 600);
+    // the server remembers it per user: the desktop app gets a new port (and so an empty browser storage) on every start
+    if (!prefs.tourDone && !data.user.tour_done) setTimeout(() => (ui.tour = true), 600);
   });
 
   $effect(() => {

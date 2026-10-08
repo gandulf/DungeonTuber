@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { api, coverUrl, pathToId } from '../../lib/api';
   import { toggleFavorite, trackMenu, uploadFiles } from '../../lib/actions';
   import { itemsFromDrop } from '../../lib/upload';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
-  import { bpmLevel, categoryLevel, emptyFilter, genreLevel, scoreLevel } from '../../lib/scoring';
+  import { bpmLevel, categoryLevel, emptyFilter, genreLevel, scoreLevel, scorePercent } from '../../lib/scoring';
   import { data } from '../../lib/stores/data.svelte';
   import { extraCategoryKeys, filter, library, loadTab, removeFromPlaylist, reorderPlaylist, setSort, updateTrack, visibleRows, type Tab } from '../../lib/stores/library.svelte';
   import { player, playTrack, refreshCurrentTrack } from '../../lib/stores/player.svelte';
@@ -61,9 +62,12 @@
     return list;
   });
 
-  const template = $derived(columns.map((col) => col.width).join(' '));
+  const MIN_COLUMN = 40;
+  // a column the user resized keeps its pixel width, the others keep their flexible default
+  const widthOf = (col: Column) => (prefs.columnWidths[col.id] ? `${prefs.columnWidths[col.id]}px` : col.width);
+  const template = $derived(columns.map(widthOf).join(' '));
   // minimum row width so the header and rows scroll horizontally together
-  const minWidth = $derived(columns.reduce((sum, col) => sum + (parseInt(col.width.replace('minmax(', ''), 10) || 0), 0));
+  const minWidth = $derived(columns.reduce((sum, col) => sum + (parseInt(widthOf(col).replace('minmax(', ''), 10) || 0), 0));
 
   // --- virtual scrolling ---
   let viewport = $state<HTMLDivElement | null>(null);
@@ -125,16 +129,21 @@
     scrollTop = viewport.scrollTop; // render the new window right away instead of waiting for the scroll event
   }
 
-  // when a filter is set the best match is selected (like the desktop app)
+  // when the filter (or the sorting) changes the best match is selected (like the desktop app); moving the selection afterwards must not trigger this again
+  let bestFor = '';
   $effect(() => {
-    if (filterActive && library.sortKey === 'score' && rows.length) {
-      const best = rows[0].track.id;
-      if (library.selection[0] !== best) {
-        library.selection = [best];
-        anchor = cursor = 0;
-        if (viewport) viewport.scrollTop = 0;
-      }
+    const key = `${tab.key}|${library.sortKey}|${library.sortAsc}|${JSON.stringify(filter)}`;
+    if (!filterActive || library.sortKey !== 'score' || !rows.length) {
+      bestFor = '';
+      return;
     }
+    if (key === bestFor) return;
+    bestFor = key;
+    untrack(() => {
+      library.selection = [rows[0].track.id];
+      anchor = cursor = 0;
+      if (viewport) viewport.scrollTop = 0;
+    });
   });
 
   // --- keyboard (navigation, type-to-search) ---
@@ -261,7 +270,7 @@
 
   function onRowDragOver(event: DragEvent, index: number) {
     const types = event.dataTransfer?.types ?? [];
-    if (types.includes('application/x-dungeontuber-tag') || (canReorder && types.includes('application/x-dungeontuber-tracks'))
+    if (types.includes('application/x-dungeontuber-tag') || types.includes('application/x-dungeontuber-genre') || (canReorder && types.includes('application/x-dungeontuber-tracks'))
         || (tab.type === 'playlist' && types.includes('application/x-dungeontuber-path'))) {
       event.preventDefault();
       dropIndex = index;
@@ -270,6 +279,7 @@
 
   async function onRowDrop(event: DragEvent, track: Track, index: number) {
     const tag = event.dataTransfer?.getData('application/x-dungeontuber-tag');
+    const genre = event.dataTransfer?.getData('application/x-dungeontuber-genre');
     const treePath = event.dataTransfer?.getData('application/x-dungeontuber-path');
     dropIndex = null;
     if (treePath && tab.type === 'playlist') {
@@ -278,13 +288,12 @@
       await dropTreePath(treePath, index);
       return;
     }
-    if (tag) {
+    if (tag || genre) {
       event.preventDefault();
       event.stopPropagation();
-      if (track.tags.includes(tag)) return;
       try {
-        const updated = await api.patchTrack(track.id, { tags: [...track.tags, tag] });
-        updateTrack(updated);
+        if (tag && !track.tags.includes(tag)) updateTrack(await api.patchTrack(track.id, { tags: [...track.tags, tag] }));
+        if (genre && !track.genres.includes(genre)) updateTrack(await api.patchTrack(track.id, { genres: [...track.genres, genre] }));
       } catch (e) {
         errorToast(e);
       }
@@ -355,6 +364,41 @@
     savePrefs();
   }
 
+  function startResize(event: PointerEvent, column: Column) {
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget as HTMLElement;
+    const startX = event.clientX;
+    const startWidth = (handle.parentElement as HTMLElement).offsetWidth;
+    handle.setPointerCapture(event.pointerId);
+    const move = (e: PointerEvent) => (prefs.columnWidths[column.id] = Math.max(MIN_COLUMN, Math.round(startWidth + e.clientX - startX)));
+    const stop = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', stop);
+      handle.removeEventListener('pointercancel', stop);
+      savePrefs();
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointercancel', stop);
+  }
+
+  /** Keyboard alternative to dragging: the arrow keys change the width of the focused column in 10px steps. */
+  function resizeByKey(event: KeyboardEvent, column: Column) {
+    const step = event.key === 'ArrowRight' ? 10 : event.key === 'ArrowLeft' ? -10 : 0;
+    if (!step) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const width = prefs.columnWidths[column.id] ?? (event.currentTarget as HTMLElement).parentElement!.offsetWidth;
+    prefs.columnWidths[column.id] = Math.max(MIN_COLUMN, width + step);
+    savePrefs();
+  }
+
+  function resetWidth(column: Column) {
+    delete prefs.columnWidths[column.id];
+    savePrefs();
+  }
+
   function headerMenu(event: MouseEvent) {
     const c = prefs.columns;
     const items: MenuItem[] = [
@@ -406,6 +450,35 @@
     return prefs.titleInsteadOfFile && track.title ? track.title : track.name;
   }
 
+  /** Shows as many tag chips as fit into the column and sums up the rest as "+N" (re-fitted whenever the column is resized). */
+  function fitChips(node: HTMLElement, _deps: string) {
+    const fit = () => {
+      const pills = [...node.querySelectorAll<HTMLElement>('.pill')];
+      const more = node.querySelector<HTMLElement>('.more-tags');
+      if (!more) return;
+      pills.forEach((pill) => (pill.style.display = ''));
+      more.style.display = 'none';
+      const gap = parseFloat(getComputedStyle(node).columnGap) || 0;
+      const available = node.clientWidth;
+      const widths = pills.map((pill) => pill.offsetWidth);
+      const sum = (count: number) => widths.slice(0, count).reduce((total, width) => total + width, 0) + gap * Math.max(0, count - 1);
+      // a single chip is always shown (clipped when the column is too narrow)
+      if (pills.length <= 1 || sum(pills.length) <= available) return;
+      more.style.display = '';
+      let shown = pills.length - 1;
+      for (; shown > 1; shown--) {
+        more.textContent = `+${pills.length - shown}`;
+        if (sum(shown) + gap + more.offsetWidth <= available) break;
+      }
+      more.textContent = `+${pills.length - shown}`;
+      pills.forEach((pill, index) => (pill.style.display = index < shown ? '' : 'none'));
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(node);
+    fit();
+    return { update: fit, destroy: () => observer.disconnect() };
+  }
+
   function sortedTags(track: Track): { tag: string; match: boolean }[] {
     const tags = track.tags.map((tag) => ({ tag, match: filter.tags.includes(tag) }));
     return tags.sort((a, b) => Number(b.match) - Number(a.match));
@@ -434,6 +507,8 @@
               onclick={() => column.sort && setSort(column.sort)}>
         {#if column.id === 'favorite'}<Icon name="heart" size={13} />{:else}<span class="ellipsis">{column.label}</span>{/if}
         {#if library.sortKey === column.sort}<span class="sort">{library.sortAsc ? '▲' : '▼'}</span>{/if}
+        <span class="resize" role="slider" tabindex="0" aria-label={t('Column width')} aria-valuemin={MIN_COLUMN} aria-valuenow={prefs.columnWidths[column.id] ?? 0} title={t('Drag to resize, double-click to reset')}
+              onpointerdown={(e) => startResize(e, column)} onclick={(e) => e.stopPropagation()} onkeydown={(e) => resizeByKey(e, column)} ondblclick={(e) => { e.stopPropagation(); resetWidth(column); }}></span>
       </button>
     {/each}
   </div>
@@ -484,9 +559,9 @@
                   {#if track.chapters.length}<span class="muted" title={t('Chapters')}><Icon name="marker" size={14} /></span>{/if}
                 </div>
               {:else if column.id === 'mood'}
-                <div class="tags">
-                  {#each sortedTags(track).slice(0, 2) as { tag, match } (tag)}<span class="pill {match ? 'match' : tone(tag)}">{tag}</span>{/each}
-                  {#if track.tags.length > 2}<span class="more-tags" title={track.tags.join(', ')}>+{track.tags.length - 2}</span>{/if}
+                <div class="tags" use:fitChips={track.tags.join('|') + '#' + filter.tags.join('|')}>
+                  {#each sortedTags(track) as { tag, match } (tag)}<span class="pill {match ? 'match' : tone(tag)}">{tag}</span>{/each}
+                  <span class="more-tags" title={track.tags.join(', ')}></span>
                 </div>
               {:else if column.id === 'duration'}
                 <span class="muted num">{duration(track.length)}</span>
@@ -503,7 +578,7 @@
               {:else if column.id === 'bpm'}
                 {track.bpm ?? ''}
               {:else if column.id === 'score'}
-                {#if row.score !== null}<span class="score">{row.score}</span>{/if}
+                {#if row.score !== null}<span class="score" title={t('Distance: {0}', row.score)}>{scorePercent(row.score)}%</span>{/if}
               {:else}
                 {@const value = track.categories[column.id.slice(4)]}
                 {#if value !== undefined && value !== null}
@@ -529,7 +604,11 @@
   .table.filedrop { box-shadow: inset 0 0 0 2px var(--accent); }
   .header { display: grid; background: var(--surface); position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--border); }
   .th { display: flex; align-items: center; gap: 4px; padding: 12px 10px 10px; font-size: var(--fs-xs); font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); text-align: left; min-width: 0; }
+  .th { position: relative; }
   .th:hover { color: var(--text); }
+  .resize { position: absolute; top: 0; bottom: 0; right: -5px; width: 10px; cursor: col-resize; z-index: 3; touch-action: none; }
+  .resize::after { content: ''; position: absolute; top: 25%; bottom: 25%; left: 4px; width: 2px; border-radius: 1px; background: var(--border-strong); opacity: 0; transition: opacity 0.12s; }
+  .th:hover .resize::after, .resize:hover::after { opacity: 1; }
   .th.right { justify-content: flex-end; }
   .th.center { justify-content: center; }
   .sort { font-size: 8px; color: var(--accent); }
@@ -568,8 +647,8 @@
   .texts { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
   .title-text { font-weight: 600; }
   .sub { font-size: var(--fs-xs); color: var(--muted); }
-  .tags { display: flex; gap: 5px; min-width: 0; overflow: hidden; align-items: center; }
-  .more-tags { font-size: var(--fs-xs); color: var(--faint); }
+  .tags { display: flex; flex: 1; gap: 5px; min-width: 0; overflow: hidden; align-items: center; }
+  .more-tags { font-size: var(--fs-xs); color: var(--faint); flex: none; white-space: nowrap; }
   .bulb { display: flex; filter: drop-shadow(0 0 4px currentColor); }
   .bar-cell { display: flex; align-items: center; gap: 8px; width: 100%; }
   .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }

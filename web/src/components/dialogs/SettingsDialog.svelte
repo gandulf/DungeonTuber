@@ -17,6 +17,8 @@
 
   type Section = 'general' | 'library' | 'categories' | 'lights' | 'agents' | 'player' | 'security';
   const admin = data.auth?.is_admin !== false;
+  // library folders can only be edited in the desktop app; a server gets them at startup
+  const desktop = data.auth?.local === true;
   let section = $state<Section>('general');
 
   const s = data.settings!;
@@ -166,12 +168,12 @@
     saving = true;
     try {
       const changed: Partial<Record<keyof ServerSettings, unknown>> = {};
-      const keys: (keyof ServerSettings)[] = ['locale', 'skipAnalyzedMusic', 'lightsEnabled', 'lightsBroadcastIP', 'lightsTimeout', 'effectsDirectory', 'shareOnNetwork', 'sharePort'];
+      const keys: (keyof ServerSettings)[] = ['locale', 'skipAnalyzedMusic', 'lightsEnabled', 'lightsBroadcastIP', 'lightsTimeout', 'shareOnNetwork', 'sharePort'];
       for (const key of keys) if (form[key] !== s[key]) changed[key] = form[key];
       const rootList = roots.split('\n').map((r) => r.trim()).filter(Boolean);
-      if (rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
+      if (desktop && rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
       if (Object.keys(changed).length) await saveSettings(changed);
-      if ('effectsDirectory' in changed || 'libraryRoots' in changed) void loadEffects();
+      if ('libraryRoots' in changed) void loadEffects();
       if ('lightsEnabled' in changed && form.lightsEnabled) void loadLights();
       if (storagesDirty) {
         if (storages.some((row) => !row.bucket.trim())) throw new Error(t('Every storage needs a bucket name.'));
@@ -270,11 +272,11 @@
           <label class="check"><input type="checkbox" bind:checked={form.skipAnalyzedMusic} /> {t('Skip Analyzed Music')}</label>
         {/if}
       {:else if section === 'library'}
-        <label class="field">{t('Library folders (one per line, paths on the server)')}
-          <textarea rows="5" bind:value={roots}></textarea></label>
-        <label class="field">{t('Select Effects Directory')}
-          <input type="text" bind:value={form.effectsDirectory} placeholder="C:/Music/Effects" /></label>
-        <p class="muted small">{t('Only files inside these folders are accessible through the web interface.')}</p>
+        {#if desktop}
+          <label class="field">{t('Library folders (one per line, paths on the server)')}
+            <textarea rows="5" bind:value={roots}></textarea></label>
+          <p class="muted small">{t('Only files inside these folders are accessible through the web interface.')}</p>
+        {/if}
         <h4>{t('Cloud storage (S3 compatible)')}</h4>
         <p class="muted small">{t('Buckets of AWS S3, Cloudflare R2, Backblaze B2, MinIO and others. Song data is kept in the library database; the files in the bucket are never modified. Use s3://<id>/folder as effects directory.')}</p>
         {#if !storagesAvailable}<p class="warn small">{t('The S3 client is not installed on the server (pip install DungeonTuber[s3]).')}</p>{/if}

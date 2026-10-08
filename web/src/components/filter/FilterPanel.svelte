@@ -112,7 +112,7 @@
       {/if}
 
       {#if prefs.filter.presets}
-        <div class="presets" data-tour="presets">
+        <div class="presets">
           {#each data.presets as preset (preset.name)}
             <button class="preset" onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')}>
               <Icon name="bookmark" size={13} /> {preset.name}
@@ -160,7 +160,7 @@
             </div>
             {#if current}{@render sliders(prefs.filter.sliders ? current[1] : [])}{/if}
             <div class="card-foot">
-              <button class="btn sm" onclick={savePreset}><Icon name="bookmark" size={14} /> {t('Save as Preset')}</button>
+              <button class="btn sm" data-tour="presets" onclick={savePreset}><Icon name="bookmark" size={14} /> {t('Save as Preset')}</button>
               {#if active}<button class="btn sm ghost" onclick={clearFilter}>{t('Reset')}</button>{/if}
             </div>
           </div>

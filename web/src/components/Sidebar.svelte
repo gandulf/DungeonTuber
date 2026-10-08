@@ -60,6 +60,23 @@
     }
   }
 
+  async function renameFolder(item: BrowseItem) {
+    const name = await askText(t('Rename'), t('Folder name'), item.name);
+    if (!name || name === item.name) return;
+    try {
+      const result = await api.rename(item.path, name);
+      const inside = (path: string) => path === item.path || path.startsWith(item.path + '/');
+      for (const tab of [...library.tabs]) if (inside(tab.path)) closeTab(tab.key);
+      if (data.user.favorites.some(inside)) {
+        const moved = data.user.favorites.map((p) => (inside(p) ? result.path + p.slice(item.path.length) : p));
+        data.user = await api.putUserState({ favorites: moved });
+      }
+      refresh();
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   function itemMenu(item: BrowseItem): MenuItem[] {
     const items: MenuItem[] = [{ label: t('Open'), icon: item.type === 'mp3' ? 'play' : 'folder', action: () => openItem(item) }];
     if (item.type === 'dir') {
@@ -67,8 +84,8 @@
         { label: t('Add to favorites'), icon: 'bookmark', action: () => addFavoriteFolder(item.path) },
         { label: t('New Playlist…'), icon: 'playlist', action: () => newPlaylist([], item.path) },
         { label: t('New folder…'), icon: 'plus', action: () => createFolder(item.path) },
-        { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog(item.path) },
-        { label: t('Import from YouTube…'), icon: 'cloud', action: () => openImportDialog(item.path) },
+        { label: t('Upload songs…'), icon: 'upload', tour: 'menu-upload', action: () => openUploadDialog(item.path) },
+        { label: t('Import from YouTube…'), icon: 'cloud', tour: 'menu-import', action: () => openImportDialog(item.path) },
       );
     }
     if (item.type !== 'm3u' && data.settings?.voxalyzerActive !== false) {
@@ -76,6 +93,7 @@
     }
     items.push({ separator: true }, { label: t('Refresh'), icon: 'refresh', action: refresh });
     if (item.storage === undefined && canDelete(item.uploaded_by)) {
+      if (item.type === 'dir') items.push({ label: t('Rename'), icon: 'edit', action: () => renameFolder(item) });
       items.push({ label: t('Delete'), icon: 'trash', action: () => deleteItems([{ path: item.path, name: item.name, dir: item.type === 'dir' }]) });
     }
     return items;

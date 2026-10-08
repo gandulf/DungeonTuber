@@ -51,6 +51,10 @@ dev = [
     "build>=1.2"
 ]
 
+[dependency-groups]
+# a plain `uv sync` installs the dev tools; the extra stays for `pip install .[dev]` (CI)
+dev = ["DungeonTuber[dev]"]
+
 [project.scripts]
 dungeontuber = "DungeonTuber:main"
 dungeontuber-server = "server.__main__:main"

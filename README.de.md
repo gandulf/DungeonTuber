@@ -55,7 +55,7 @@ Die Stärke von DungeonTuber liegt im Filterbereich über der Song-Tabelle:
 * **Mood-Map:** Ziehe den blauen Punkt in Richtung *Wütend/Aufgeregt* für einen Bosskampf oder *Glücklich/Entspannt* für ein friedliches Stadtthema.
 * **Kategorie-Regler:** Verfeinere die Suche (z. B. *Mystik* und *Dunkelheit* erhöhen für einen gruseligen Dungeon); die Liste filtert automatisch.
 * **BPM:** Passe den Herzschlag der Szene an, z. B. hohe BPM für eine Verfolgungsjagd.
-* **Tags und Genres:** Ein-Klick-Filter wie **Drums** oder **Düster**. Ziehe einen Tag auf einen Song, um ihn zu taggen.
+* **Tags und Genres:** Ein-Klick-Filter wie **Drums** oder **Düster**. Ziehe einen Tag oder ein Genre auf einen Song, um es hinzuzufügen.
 * **Presets:** Gib einen Namen ein (z. B. *Epischer Boss*), klicke auf das Speichern-Symbol und rufe den Filter später aus dem Dropdown wieder auf.
 
 ### 3. Wiedergabe & Effekte
@@ -66,7 +66,7 @@ Die Stärke von DungeonTuber liegt im Filterbereich über der Song-Tabelle:
 * **Layout:** Über das Ansicht-Menü blendest du Widgets aus, die du nicht brauchst, sodass ein kleiner Bildschirm nur die Trackliste zeigen kann.
 
 ### 4. Suche, Favoriten & Playlists
-* **Suche:** Tippe einfach los, um die Song-Tabelle oder den Verzeichnisbaum zu filtern.
+* **Suche:** Tippe einfach los, um die Song-Tabelle zu filtern.
 * **Favoriten:** Klicke auf den **Stern** neben einem Track. Favorisierte Ordner erscheinen in der Seitenleiste.
 * **Playlists:** *Neue Playlist…* erstellt eine `.m3u`-Datei im Ordner deiner Wahl; füge Songs über das Kontextmenü oder per Drag & Drop hinzu.
 

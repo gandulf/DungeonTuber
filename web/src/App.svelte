@@ -9,7 +9,7 @@
   import { loadEffects, updateEffectTrack } from './lib/stores/effects.svelte';
   import { reloadDirTabs, reloadPlaylistTabs, restoreTabs, updateTrack } from './lib/stores/library.svelte';
   import { loadLights, setLightState } from './lib/stores/lights.svelte';
-  import { applyAudioPrefs, refreshCurrentTrack } from './lib/stores/player.svelte';
+  import { applyPlayerSettings, refreshCurrentTrack } from './lib/stores/player.svelte';
   import { toast, ui } from './lib/stores/ui.svelte';
   import { connectEvents, disconnectEvents, onEvent } from './lib/ws';
   import Login from './components/Login.svelte';
@@ -33,7 +33,7 @@
         return;
       }
       await loadData();
-      applyAudioPrefs();
+      applyPlayerSettings(data.user.player);
       restoreTabs();
       void loadEffects();
       void api.importStatus().then(setDownloads).catch(() => undefined);

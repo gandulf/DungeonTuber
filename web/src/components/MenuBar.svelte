@@ -13,18 +13,18 @@
   }
 </script>
 
-<header class="topbar" data-tour="menubar">
+<header class="topbar">
   {#if ui.narrow}
     <button class="icon-btn" title={t('Files')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'tree' ? null : 'tree'; }}><Icon name="library" size={18} /></button>
   {/if}
-  <div class="tabs-area">
+  <div class="tabs-area" data-tour="tabs">
     {#if library.tabs.length}<Tabs />{:else}<span class="hint muted">{t('Welcome to Dungeon Tuber')}</span>{/if}
   </div>
-  <label class="search" class:active={library.search}>
+  <label class="search" class:active={library.search} data-tour="search">
     <Icon name="search" size={15} />
     <input type="search" placeholder={t('Search tracks…')} bind:value={library.search} />
   </label>
-  <button class="icon-btn" title={t('Menu')} onclick={showMenu}><Icon name="menu" size={18} /></button>
+  <button class="icon-btn" title={t('Menu')} data-tour="menubar" onclick={showMenu}><Icon name="menu" size={18} /></button>
   {#if ui.narrow}
     <button class="icon-btn" title={t('Lights')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'side' ? null : 'side'; }}><Icon name="bulb" size={18} /></button>
   {/if}

@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.settings import AppSettings, SettingKeys
 from server.index import get_index
@@ -36,10 +36,23 @@ class TabsState(BaseModel):
 ACCENTS = ("violet", "blue", "teal", "green", "amber", "orange", "red", "pink")  # the colours of web/src/lib/accent.ts
 
 
+class PlayerSettings(BaseModel):
+    """The player options a user takes along to every device they sign in on."""
+    shuffle: bool
+    repeat: Literal["none", "all", "single"]
+    volume: int = Field(ge=0, le=150)
+    muted: bool = False
+    effectsVolume: int = Field(default=70, ge=0, le=150)
+    normalize: bool
+    crossfade: bool
+
+
 class UserStateRequest(BaseModel):
     favorites: list[str] | None = None
     tabs: TabsState | None = None
     accent: str | None = None  # one of ACCENTS, "" for the default
+    tour_done: bool | None = None
+    player: PlayerSettings | None = None
 
 
 class NewUserRequest(BaseModel):
@@ -142,7 +155,8 @@ def get_user_state(user: str = Depends(current_user)):
     favorites = index.user_state(user, "favorites")
     if favorites is None and user == ADMIN:  # the favorites from before they were per user
         favorites = AppSettings.value(SettingKeys.FAVORITES, [], type=list)
-    return {"favorites": favorites or [], "tabs": index.user_state(user, "tabs"), "accent": index.user_state(user, "accent") or ""}
+    return {"favorites": favorites or [], "tabs": index.user_state(user, "tabs"), "accent": index.user_state(user, "accent") or "",
+            "tour_done": bool(index.user_state(user, "tour_done")), "player": index.user_state(user, "player")}
 
 
 @router.put("/api/user/state")
@@ -156,4 +170,8 @@ def put_user_state(body: UserStateRequest, user: str = Depends(current_user)):
         if body.accent and body.accent not in ACCENTS:
             raise HTTPException(status_code=400, detail="Unknown accent color")
         index.set_user_state(user, "accent", body.accent)
+    if body.tour_done is not None:
+        index.set_user_state(user, "tour_done", body.tour_done)
+    if body.player is not None:
+        index.set_user_state(user, "player", body.player.model_dump())
     return get_user_state(user)

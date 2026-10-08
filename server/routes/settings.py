@@ -10,7 +10,7 @@ from core.settings import AppSettings, MusicCategory, Preset, SettingKeys, get_m
 from core.utils import DOWNLOAD_LINK, get_broadcast_ip, get_ip, get_current_version, get_latest_version, \
     is_newer_version_available
 from server.auth import require_admin, require_auth
-from server.config import default_library_roots, get_library_roots
+from server.config import default_library_roots, get_config, get_library_roots
 from server.voxagent import current_backend
 
 router = APIRouter(dependencies=[Depends(require_auth)])
@@ -54,6 +54,8 @@ def get_settings():
 @router.put("/api/settings", dependencies=[Depends(require_admin)])
 def put_settings(values: dict):
     allowed = {str(key): spec for key, spec in SERVER_SETTINGS.items()}
+    if str(SettingKeys.LIBRARY_ROOTS) in values and not get_config().local_mode:
+        raise HTTPException(status_code=403, detail="The library folders are set when the server starts")
     for key, value in values.items():
         if key not in allowed:
             raise HTTPException(status_code=400, detail=f"Unknown setting {key}")

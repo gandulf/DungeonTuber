@@ -43,7 +43,7 @@ export function appMenu(): MenuItem[] {
       action: () => tab && analyze([tab.path]) },
     { label: t('Rescan Library'), icon: 'refresh', action: () => rescanLibrary(tab?.type === 'dir' ? tab.path : undefined) },
     { separator: true },
-    { label: t('View'), icon: 'grid', children: [
+    { label: t('View'), icon: 'grid', tour: 'menu-view', children: [
       { label: t('Simple Mode'), action: () => applyViewMode('simple') },
       { label: t('Player Mode'), action: () => applyViewMode('player') },
       { label: t('Complex Mode'), action: () => applyViewMode('complex') },

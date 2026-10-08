@@ -20,7 +20,7 @@
   }
 </script>
 
-<footer class="player">
+<footer class="player" data-tour="player">
   <div class="now">
     <div class="art" class:vibrate={player.playing}>
       {#if player.track?.has_cover}

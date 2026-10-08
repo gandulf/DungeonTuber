@@ -55,7 +55,7 @@ The power of DungeonTuber lies in the filter panel above the song table:
 * **Mood map:** Drag the blue dot toward *Angry/Excited* for a boss fight or toward *Happy/Relaxed* for a peaceful town.
 * **Category sliders:** Fine-tune the search (e.g., increase *Mystik* and *Darkness* for a spooky dungeon); the list filters automatically.
 * **BPM:** Match the heartbeat of the scene, e.g. a high BPM for a chase.
-* **Tags and genres:** One-click filters like **Drums** or **Dark**. Drag a tag onto a song to tag it.
+* **Tags and genres:** One-click filters like **Drums** or **Dark**. Drag a tag or genre onto a song to add it.
 * **Presets:** Type a name (like *Epic Boss*), click the save icon and recall the exact filter later from the dropdown.
 
 ### 3. Playback & Effects
@@ -66,7 +66,7 @@ The power of DungeonTuber lies in the filter panel above the song table:
 * **Layout:** The view menu hides the widgets you do not need, so a small screen can show just the track list.
 
 ### 4. Search, Favorites & Playlists
-* **Search:** Start typing to filter the song table or the directory tree.
+* **Search:** Start typing to filter the song table.
 * **Favorites:** Click the **star** next to a track. Favorite folders appear in the sidebar.
 * **Playlists:** *New Playlist…* creates an `.m3u` file in the folder of your choice; add songs from the context menu or by drag and drop.
 

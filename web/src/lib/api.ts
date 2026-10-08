@@ -75,6 +75,7 @@ export const api = {
   removeFromPlaylist: (playlist: string, ids: string[]) => request('POST', '/api/playlists/remove', { playlist, ids }),
   reorderPlaylist: (playlist: string, ids: string[]) => request('PUT', '/api/playlists/order', { playlist, ids }),
   move: (source: string, target_dir: string) => request<{ path: string; id: string }>('POST', '/api/files/move', { source, target_dir }),
+  rename: (path: string, name: string) => request<{ path: string; id: string }>('POST', '/api/files/rename', { path, name }),
   deleteFile: (path: string) => request<{ deleted: boolean }>('DELETE', `/api/files?${qs({ path })}`),
   createFolder: (parent: string, name: string) => {
     const form = new FormData();

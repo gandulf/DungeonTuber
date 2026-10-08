@@ -2,7 +2,7 @@ import { api, coverUrl, mediaUrl } from '../api';
 import { AudioEngine } from '../audio/engine';
 import { t } from '../i18n.svelte';
 import { prefs, savePrefs } from '../prefs.svelte';
-import type { Chapter, Effect, LightSetting, Track } from '../types';
+import type { Chapter, Effect, LightSetting, PlayerSettings, Track } from '../types';
 import { visibleRows } from './library.svelte';
 
 export const player = $state({
@@ -48,6 +48,35 @@ export function applyAudioPrefs() {
   engine.setEffectsVolume(prefs.effectsVolume, false);
   engine.setNormalize(prefs.normalize);
 }
+
+// --- the player options of the signed in user ---
+// They are kept on the server with the user profile, so every device starts with the same shuffle, repeat, volume, normalization and crossfade.
+const currentSettings = (): PlayerSettings => ({ shuffle: prefs.shuffle, repeat: prefs.repeat, volume: prefs.volume, muted: prefs.muted, effectsVolume: prefs.effectsVolume, normalize: prefs.normalize, crossfade: prefs.crossfade });
+let known = ''; // what the server has (or is being sent)
+let settingsLoaded = $state(false);
+
+/** Applies the options saved in the profile; a profile without them keeps (and from then on saves) what this browser has. */
+export function applyPlayerSettings(saved: PlayerSettings | null) {
+  if (saved) {
+    Object.assign(prefs, saved);
+    known = JSON.stringify(currentSettings());
+    savePrefs();
+  }
+  applyAudioPrefs();
+  settingsLoaded = true;
+}
+
+$effect.root(() => {
+  $effect(() => {
+    const serialized = JSON.stringify(currentSettings());
+    if (!settingsLoaded || serialized === known) return;
+    const timer = setTimeout(() => {
+      known = serialized;
+      void api.putUserState({ player: JSON.parse(serialized) }).catch(() => undefined);
+    }, 500);
+    return () => clearTimeout(timer);
+  });
+});
 
 export function cueLight(setting: LightSetting | null | undefined) {
   if (!setting) return;

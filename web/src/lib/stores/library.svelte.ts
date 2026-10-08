@@ -90,7 +90,7 @@ export function selectTab(key: string) {
   const tab = activeTab();
   if (tab) {
     library.sortKey = tab.type === 'playlist' ? 'index' : emptyFilter(filter) ? 'name' : 'score';
-    library.sortAsc = true;
+    library.sortAsc = library.sortKey !== 'score';
   }
   void loadTab(key);
   persistTabs();
@@ -170,7 +170,7 @@ function sortValue(row: Row, key: SortKey): string | number | boolean | null {
     case 'index': return track.index ?? 0;
     case 'name': return (prefs.titleInsteadOfFile && track.title ? track.title : track.name).toLowerCase();
     case 'title': return (track.title ?? '').toLowerCase();
-    case 'score': return row.score;
+    case 'score': return row.score === null ? null : -row.score; // the column shows a match in percent: ascending = worst first
     case 'bpm': return track.bpm;
     case 'genre': return track.genres.join(', ').toLowerCase();
     case 'artist': return (track.artist ?? '').toLowerCase();
@@ -208,7 +208,7 @@ export function setSort(key: SortKey) {
   if (library.sortKey === key) library.sortAsc = !library.sortAsc;
   else {
     library.sortKey = key;
-    library.sortAsc = key !== 'favorite' ? true : true;
+    library.sortAsc = key !== 'score'; // best match first
   }
 }
 
@@ -216,7 +216,7 @@ export function setSort(key: SortKey) {
 export function onFilterChanged() {
   if (!emptyFilter(filter)) {
     library.sortKey = 'score';
-    library.sortAsc = true;
+    library.sortAsc = false;
   } else if (library.sortKey === 'score') {
     library.sortKey = activeTab()?.type === 'playlist' ? 'index' : 'name';
   }

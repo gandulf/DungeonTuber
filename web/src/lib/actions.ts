@@ -157,7 +157,7 @@ export function openImportDialog(directory?: string) {
   if (target) openDialog(ImportDialog, { directory: target });
 }
 
-function uploadTarget(): string | null {
+export function uploadTarget(): string | null {
   const tab = activeTab();
   return tab?.type === 'dir' ? tab.path : (prefs.treeRoot ?? data.settings?.libraryRoots[0] ?? null);
 }
@@ -178,11 +178,11 @@ export function trackMenu(tracks: Track[]): MenuItem[] {
   const items: MenuItem[] = [];
   if (single) {
     items.push({ label: t('Play'), icon: 'play', action: () => playTrack(single) });
-    items.push({ label: t('Edit Song'), icon: 'edit', action: () => editSong(single) });
+    items.push({ label: t('Edit Song…'), icon: 'edit', tour: 'menu-edit', action: () => editSong(single) });
     items.push({ label: t('Favorite'), icon: 'star', checked: single.favorite, action: () => toggleFavorite(single) });
   }
   if (data.settings?.voxalyzerActive !== false) {
-    items.push({ label: t('Analyze'), icon: 'sparkles', action: () => analyze(tracks.map((track) => track.path)) });
+    items.push({ label: t('Analyze'), icon: 'sparkles', tour: 'menu-analyze', action: () => analyze(tracks.map((track) => track.path)) });
   }
   items.push({ separator: true }, { label: t('Add to playlist'), icon: 'playlist', children: playlistMenu(ids) });
   if (tab?.type === 'playlist') {

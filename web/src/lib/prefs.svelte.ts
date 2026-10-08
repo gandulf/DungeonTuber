@@ -24,6 +24,8 @@ export interface Prefs {
   rightWidth: number;
   filter: { presets: boolean; circumplex: boolean; sliders: boolean; bpm: boolean; tags: boolean; genres: boolean };
   columns: Record<string, boolean>;
+  /** Widths in px of the song table columns the user has resized (by column id). */
+  columnWidths: Record<string, number>;
   hiddenCategories: string[];
   dynamicColumns: boolean;
   dynamicScore: boolean;
@@ -64,6 +66,7 @@ const defaults: Prefs = {
   filter: { presets: true, circumplex: true, sliders: true, bpm: true, tags: true, genres: true },
   columns: { index: true, favorite: true, cover: true, title: false, summary: false, artist: false, album: false, genre: true, bpm: true, score: true, tags: true, duration: true },
   hiddenCategories: [],
+  columnWidths: {},
   dynamicColumns: false,
   dynamicScore: true,
   titleInsteadOfFile: true,
@@ -87,7 +90,7 @@ function load(): Prefs {
   try {
     const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}');
     if (stored.theme !== 'light' && stored.theme !== 'dark') delete stored.theme; // e.g. the former 'system' mode
-    return { ...defaults, ...stored, filter: { ...defaults.filter, ...stored.filter }, columns: { ...defaults.columns, ...stored.columns },
+    return { ...defaults, ...stored, filter: { ...defaults.filter, ...stored.filter }, columns: { ...defaults.columns, ...stored.columns }, columnWidths: { ...stored.columnWidths },
       importOptions: { ...defaults.importOptions, ...stored.importOptions } };
   } catch {
     return structuredClone(defaults);

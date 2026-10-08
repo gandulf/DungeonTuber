@@ -15,6 +15,8 @@ export interface MenuItem {
   disabled?: boolean;
   separator?: boolean;
   children?: MenuItem[];
+  /** Anchor for the guided tour. */
+  tour?: string;
 }
 
 export const ui = $state({

@@ -49,7 +49,7 @@
   const temp = $derived(current?.temperature ?? tempMin);
 </script>
 
-<section class="card lighting">
+<section class="card lighting" data-tour="lights">
   <div class="head">
     <span class="glyph"><Icon name="bulb" size={17} /></span>
     <h3 class="card-title">{t('Lighting')}</h3>

@@ -98,7 +98,7 @@
 </script>
 
 <Modal resizable title={t('Import from YouTube')} onclose={closeDialog} width="760px">
-  <div class="section">
+  <div class="section" data-tour="import-url">
     <span class="label-xs">{t('YouTube link')}</span>
     <form class="row" onsubmit={(e) => { e.preventDefault(); void lookup(); }}>
       <input type="text" bind:value={url} placeholder="https://www.youtube.com/watch?v=…" oninput={() => { preview = null; error = ''; }} />

@@ -146,6 +146,19 @@ export interface UserState {
   favorites: string[];
   tabs: { open: { type: 'dir' | 'playlist'; path: string }[]; active: string | null } | null;
   accent: string;
+  tour_done: boolean;
+  player: PlayerSettings | null;
+}
+
+/** The player options that follow a user from device to device. */
+export interface PlayerSettings {
+  shuffle: boolean;
+  repeat: 'none' | 'all' | 'single';
+  volume: number;
+  muted: boolean;
+  effectsVolume: number;
+  normalize: boolean;
+  crossfade: boolean;
 }
 
 export interface UserInfo {

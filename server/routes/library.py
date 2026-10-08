@@ -457,6 +457,27 @@ def move_file(body: MoveRequest):
     return {"path": target.client_path, "id": target.id}
 
 
+class RenameRequest(BaseModel):
+    path: str
+    name: str
+
+
+@router.post("/api/files/rename")
+def rename_file(body: RenameRequest, user: str = Depends(current_user)):
+    source = safe_path(body.path)
+    if source.is_root:
+        raise HTTPException(status_code=400, detail="Cannot rename a library root")
+    if not may_delete(source, user):
+        raise HTTPException(status_code=403, detail="You can only rename what you uploaded yourself")
+    target = source.parent.child(safe_name(body.name))
+    if target != source:
+        with storage_errors():
+            source.storage.move(source.rel, target.rel)
+        get_index().relocate(source, target)
+        hub.publish("library.changed", {"path": source.parent.client_path})
+    return {"path": target.client_path, "id": target.id}
+
+
 @router.post("/api/files/folder")
 def create_folder(parent: str = Form(...), name: str = Form(...), user: str = Depends(current_user)):
     directory = safe_path(parent, kind="dir").child(safe_name(name))

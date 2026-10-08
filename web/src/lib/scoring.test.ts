@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bpmLevel, calculateScore, categoryLevel, emptyFilter, genreLevel, scoreLevel } from './scoring';
+import { bpmLevel, calculateScore, categoryLevel, emptyFilter, genreLevel, scoreLevel, scorePercent } from './scoring';
 import type { FilterConfig } from './types';
 
 const track = (data: Partial<{ categories: Record<string, number>; tags: string[]; genres: string[]; bpm: number | null }> = {}) => ({
@@ -49,6 +49,9 @@ describe('levels', () => {
     expect(bpmLevel(100, 200)).toBe(2);
     expect(genreLevel(['Rock', 'Pop'], ['Rock'])).toBe(1);
     expect([null, 10, 60, 120, 200].map((s) => scoreLevel(s))).toEqual([null, 0, 1, 2, 3]);
+    expect([0, 50, 100, 300].map((s) => scorePercent(s))).toEqual([100, 61, 37, 5]);
+    // the colour bands are given in percent: 61–100 / 37–60 / 22–36 / 0–21
+    expect([0, 49, 50, 99, 100, 151, 155, 400].map((s) => scoreLevel(s))).toEqual([0, 0, 0, 1, 1, 2, 3, 3]);
     expect(emptyFilter(filter())).toBe(true);
     expect(emptyFilter(filter({ bpm: 80 }))).toBe(false);
   });
