@@ -5,7 +5,6 @@
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { ACCENTS, DEFAULT_ACCENT } from '../../lib/accent';
   import { data, saveCategories, saveSettings, setAccent } from '../../lib/stores/data.svelte';
-  import { loadEffects } from '../../lib/stores/effects.svelte';
   import { loadLights } from '../../lib/stores/lights.svelte';
   import { setNormalize } from '../../lib/stores/player.svelte';
   import { askConfirm, closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
@@ -173,7 +172,6 @@
       const rootList = roots.split('\n').map((r) => r.trim()).filter(Boolean);
       if (desktop && rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
       if (Object.keys(changed).length) await saveSettings(changed);
-      if ('libraryRoots' in changed) void loadEffects();
       if ('lightsEnabled' in changed && form.lightsEnabled) void loadLights();
       if (storagesDirty) {
         if (storages.some((row) => !row.bucket.trim())) throw new Error(t('Every storage needs a bucket name.'));

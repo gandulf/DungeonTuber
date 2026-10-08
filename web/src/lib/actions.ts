@@ -1,8 +1,9 @@
 // Commands shared by the tree, the song table, menus and shortcuts.
 import { api, pathToId } from './api';
 import { t } from './i18n.svelte';
-import { prefs } from './prefs.svelte';
+import { prefs, savePrefs } from './prefs.svelte';
 import { data } from './stores/data.svelte';
+import { loadEffects } from './stores/effects.svelte';
 import { activeTab, addToPlaylist, closeTab, library, loadTab, openTab, reloadAllDirTabs, reloadDirTabs, removeFromPlaylist, updateTrack } from './stores/library.svelte';
 import { playTrack, refreshCurrentTrack } from './stores/player.svelte';
 import { askConfirm, askText, errorToast, openDialog, toast, ui, type MenuItem } from './stores/ui.svelte';
@@ -49,6 +50,23 @@ export async function rescanLibrary(path?: string) {
   } catch (e) {
     errorToast(e);
   }
+}
+
+/** The library folders were changed (desktop app): drops what lies outside of the new folders, then syncs the database and the open tabs. */
+export async function libraryRootsChanged() {
+  try {
+    const roots = (await api.roots()).map((root) => root.path.replace(/\/+$/, ''));
+    const inside = (path: string) => roots.some((root) => path === root || path.startsWith(root + '/'));
+    for (const tab of [...library.tabs]) if (!inside(tab.path)) closeTab(tab.key);
+    if (prefs.treeRoot && !inside(prefs.treeRoot)) {
+      prefs.treeRoot = null;
+      savePrefs();
+    }
+  } catch (e) {
+    errorToast(e);
+  }
+  void loadEffects();
+  await rescanLibrary();
 }
 
 export function editSong(track: Track) {

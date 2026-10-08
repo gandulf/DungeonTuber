@@ -11,6 +11,8 @@
 
 ![Screenshot of application](docs/screen2.png)
 
+[![Watch the DungeonTuber intro on YouTube](https://img.youtube.com/vi/85AZrB7YnOY/maxresdefault.jpg)](https://youtu.be/85AZrB7YnOY "Watch the DungeonTuber intro on YouTube")
+
 ---
 
 ## 🚀 Key Features

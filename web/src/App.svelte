@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { libraryRootsChanged } from './lib/actions';
   import { applyAccent } from './lib/accent';
   import { api, setUnauthorizedHandler } from './lib/api';
   import { t } from './lib/i18n.svelte';
@@ -59,6 +60,7 @@
       }),
       onEvent('playlist.changed', ({ path }) => reloadPlaylistTabs(path)),
       onEvent('library.changed', ({ path }) => reloadDirTabs(path)),
+      onEvent('library.roots', () => void libraryRootsChanged()),
       onEvent('lights.state', (list) => setLightState(list)),
       onEvent('analysis.progress', ({ message }) => (ui.progress = message)),
       onEvent('analysis.status', ({ pending }) => pending === 0 && (ui.progress = null)),

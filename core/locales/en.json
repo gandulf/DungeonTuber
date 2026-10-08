@@ -9,6 +9,7 @@
   "Aggressive Low": "Soft, smooth, non-threatening",
   "Aggressive Medium": "Tense, sturdy, firm",
   "Album": "Album",
+  "All": "All",
   "All songs will be played at a normalized volume.": "All songs will be played at a normalized volume.",
   "Analyze": "Analyze",
   "Analyze Directory": "Analyze Directory",
@@ -339,5 +340,8 @@
   "The key or the secret is missing": "The key or the secret is missing",
   "The cloud analysis rejected the key or the secret ({0})": "The cloud analysis rejected the key or the secret ({0})",
   "Secret": "Secret",
-  "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.": "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser."
+  "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.": "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.",
+  "New here?": "New here?",
+  "Watch the 3 minute intro to DungeonTuber": "Watch the 3 minute intro to DungeonTuber",
+  "Play intro video": "Play intro video"
 }

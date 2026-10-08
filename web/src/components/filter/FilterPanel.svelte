@@ -3,7 +3,7 @@
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { emptyFilter } from '../../lib/scoring';
   import { data, savePresets } from '../../lib/stores/data.svelte';
-  import { filter, onFilterChanged } from '../../lib/stores/library.svelte';
+  import { activeTab, filter, onFilterChanged } from '../../lib/stores/library.svelte';
   import { askConfirm, askText, openMenu } from '../../lib/stores/ui.svelte';
   import type { MusicCategory, Preset } from '../../lib/types';
   import Icon from '../Icon.svelte';
@@ -13,20 +13,36 @@
 
   const VALENCE = 'Valence';
   const AROUSAL = 'Arousal';
+  const ALL = '\u0000all'; // cannot clash with a real group name
 
-  const hasCircumplex = $derived(prefs.filter.circumplex && data.categories.some((c) => c.key === VALENCE) && data.categories.some((c) => c.key === AROUSAL));
+  // Mood rules follow the songs in the table: configured categories (plus unknown ones found in the files) that at least one song has.
+  // Without songs or without any categories on them, the configured categories are the default.
+  const categories = $derived.by<MusicCategory[]>(() => {
+    const tracks = activeTab()?.tracks ?? [];
+    const present = new Set<string>();
+    for (const track of tracks) for (const key of Object.keys(track.categories)) present.add(key);
+    if (!present.size) return data.categories;
+    const known = new Set(data.categories.map((c) => c.key));
+    const extra = [...present].filter((key) => !known.has(key)).sort().map((key): MusicCategory => ({ key, name: key, description: '', levels: {}, group: null }));
+    return [...data.categories.filter((c) => present.has(c.key)), ...extra];
+  });
+
+  const hasCircumplex = $derived(prefs.filter.circumplex && categories.some((c) => c.key === VALENCE) && categories.some((c) => c.key === AROUSAL));
   const visible = $derived(prefs.filter.presets || prefs.filter.sliders || hasCircumplex || prefs.filter.bpm);
   const showMap = $derived(prefs.showMoodMap && hasCircumplex);
 
   const groups = $derived.by(() => {
     const map = new Map<string, MusicCategory[]>();
-    for (const category of data.categories) {
+    for (const category of categories) {
       if (showMap && (category.key === VALENCE || category.key === AROUSAL)) continue;
       const group = category.group || '';
       if (!map.has(group)) map.set(group, []);
       map.get(group)!.push(category);
     }
-    return [...map.entries()];
+    const entries = [...map.entries()];
+    // an extra "All" tab lists every rule regardless of its group
+    if (entries.length > 1) entries.push([ALL, entries.flatMap(([, list]) => list)]);
+    return entries;
   });
   let activeGroup = $state<string | null>(null);
   const current = $derived<[string, MusicCategory[]] | undefined>(groups.find(([group]) => group === activeGroup) ?? groups[0]);
@@ -94,7 +110,7 @@
     {#each list as category (category.key)}
       <CategorySlider {category} value={filter.categories[category.key] ?? null} onchange={(v) => setCategory(category.key, v)} />
     {/each}
-    {#if prefs.filter.bpm && (current?.[0] ?? '') === ''}
+    {#if prefs.filter.bpm && ['', ALL].includes(current?.[0] ?? '')}
       <div data-tour="bpm"><BpmDial value={filter.bpm} onchange={(v) => { filter.bpm = v; onFilterChanged(); }} /></div>
     {/if}
   </div>
@@ -153,7 +169,7 @@
               {#if groups.length > 1}
                 <div class="seg small">
                   {#each groups as [group] (group)}
-                    <button class:on={(current?.[0] ?? '') === group} onclick={() => (activeGroup = group)}>{group || t('General')}</button>
+                    <button class:on={(current?.[0] ?? '') === group} onclick={() => (activeGroup = group)}>{group === ALL ? t('All') : group || t('General')}</button>
                   {/each}
                 </div>
               {/if}

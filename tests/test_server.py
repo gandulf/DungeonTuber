@@ -523,6 +523,21 @@ def test_library_folders_are_fixed_in_server_mode(client, library):
         config.local_mode = previous
 
 
+def test_changing_the_library_folders_tells_the_clients(client, library, monkeypatch):
+    from server.config import get_config
+    events = []
+    monkeypatch.setattr("server.routes.settings.hub.publish", lambda event, data=None: events.append(event))
+    config = get_config()
+    previous, config.local_mode = config.local_mode, True
+    try:
+        assert client.put("/api/settings", json={"lightsTimeout": 4}).status_code == 200
+        assert "library.roots" not in events
+        assert client.put("/api/settings", json={"libraryRoots": [library["root"].as_posix()]}).status_code == 200
+        assert events == ["library.roots"]
+    finally:
+        config.local_mode = previous
+
+
 def test_tour_done_is_remembered(client):
     assert client.get("/api/user/state").json()["tour_done"] is False
     assert client.put("/api/user/state", json={"tour_done": True}).json()["tour_done"] is True

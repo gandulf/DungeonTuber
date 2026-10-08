@@ -13,6 +13,7 @@
   "Aggressive Low": "Weich, sanft, nicht bedrohlich",
   "Aggressive Medium": "Angespannt, robust, fest",
   "Album": "Album",
+  "All": "Alle",
   "All songs will be played at a normalized volume.": "Alle Lieder werden mit einer einheitlichen Lautstärke abgespielt.",
   "Analyze": "Analysieren",
   "Analyze Directory": "Verzeichnis analysieren",
@@ -439,5 +440,8 @@
   "The key or the secret is missing": "Der Schlüssel oder das Secret fehlt",
   "The cloud analysis rejected the key or the secret ({0})": "Die Cloud-Analyse hat den Schlüssel oder das Secret abgelehnt ({0})",
   "Secret": "Secret",
-  "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.": "Analysiert bei Bedarf in einer Cloud-Funktion (Modal, siehe agents/voxalyzer/modal_app.py), wenn kein Agent verbunden ist. Lege im Modal-Dashboard ein Proxy-Auth-Token für Schlüssel und Secret an; sie werden nie an den Browser zurückgesendet."
+  "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.": "Analysiert bei Bedarf in einer Cloud-Funktion (Modal, siehe agents/voxalyzer/modal_app.py), wenn kein Agent verbunden ist. Lege im Modal-Dashboard ein Proxy-Auth-Token für Schlüssel und Secret an; sie werden nie an den Browser zurückgesendet.",
+  "New here?": "Neu hier?",
+  "Watch the 3 minute intro to DungeonTuber": "Sieh dir das 3-Minuten-Intro zu DungeonTuber an",
+  "Play intro video": "Intro-Video abspielen"
 }

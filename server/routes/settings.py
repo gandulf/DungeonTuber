@@ -11,6 +11,7 @@ from core.utils import DOWNLOAD_LINK, get_broadcast_ip, get_ip, get_current_vers
     is_newer_version_available
 from server.auth import require_admin, require_auth
 from server.config import default_library_roots, get_config, get_library_roots
+from server.events import hub
 from server.voxagent import current_backend
 
 router = APIRouter(dependencies=[Depends(require_auth)])
@@ -85,6 +86,8 @@ def put_settings(values: dict):
 
     if str(SettingKeys.LOCALE) in values:
         apply_locale()
+    if str(SettingKeys.LIBRARY_ROOTS) in values:
+        hub.publish("library.roots", {})  # the clients reload the folder tree and rescan the new library
     return _settings_dict()
 
 

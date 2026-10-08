@@ -44,7 +44,7 @@
 
   $effect(() => {
     void loadRoots();
-    const stops = [onEvent('library.changed', () => refresh()), onEvent('storages.changed', () => void loadRoots())];
+    const stops = [onEvent('library.changed', () => refresh()), onEvent('library.roots', () => refresh()), onEvent('storages.changed', () => void loadRoots())];
     return () => stops.forEach((stop) => stop());
   });
 
