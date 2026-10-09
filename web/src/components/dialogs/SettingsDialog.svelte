@@ -16,11 +16,14 @@
   import Modal from './Modal.svelte';
   import UsersPanel from './UsersPanel.svelte';
 
-  type Section = 'general' | 'library' | 'categories' | 'lights' | 'agents' | 'player' | 'security';
+  type Section = 'general' | 'library' | 'categories' | 'lights' | 'agents' | 'youtube' | 'player' | 'security';
+  const AGENT_URL = 'https://github.com/gandulf/DungeonTuber/releases/latest/download/dt-youtube.exe';
+  let { initialSection = 'general' }: { initialSection?: Section } = $props();
   const admin = data.auth?.is_admin !== false;
   // library folders can only be edited in the desktop app; a server gets them at startup
   const desktop = data.auth?.local === true;
-  let section = $state<Section>('general');
+  // svelte-ignore state_referenced_locally
+  let section = $state<Section>(initialSection);
 
   const s = data.settings!;
   let form = $state<ServerSettings>(structuredClone($state.snapshot(s)) as ServerSettings);
@@ -146,6 +149,7 @@
   let newToken = $state<{ token: string; name: string } | null>(null); // a new token is only shown once, in a popup
   let tokenName = $state('');
   void api.agents().then((result) => (agents = result)).catch(() => {});
+  const youtubeAgents = $derived(agents?.connected.filter((a) => a.kind === 'youtube').length ?? 0);
   const stopAgentEvents = onEvent('agents.state', (connected) => agents && (agents = { ...agents, connected }));
   onDestroy(stopAgentEvents);
   const agentLabels: Record<string, string> = { lights: 'WiZ light agent', voxalyzer: 'Voxalyzer analysis agent', youtube: 'YouTube download agent' };
@@ -253,6 +257,7 @@
     ['library', 'Library', 'folder'],
     ['categories', 'Categories', 'sliders'],
     ['lights', 'Lights', 'bulb'],
+    ['youtube', 'YouTube', 'download'],
     ['agents', 'Agents', 'cloud'],
     ['player', 'Player', 'play'],
     ['security', 'Security', 'power'],
@@ -262,7 +267,7 @@
 <Modal resizable title={t('Settings')} onclose={closeDialog} width="820px">
   <div class="layout">
     <nav>
-      {#each sections.filter(([key]) => admin || ['general', 'agents', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
+      {#each sections.filter(([key]) => admin || ['general', 'youtube', 'agents', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
         <button class:active={section === key} onclick={() => (section = key)}><Icon name={icon} size={16} /> {t(label)}</button>
       {/each}
     </nav>
@@ -325,17 +330,30 @@
           </div>
         {/each}
         <div class="row"><button class="btn" onclick={addStorage}><Icon name="plus" size={14} /> {t('Add storage')}</button></div>
-        <h4>{t('YouTube import')}</h4>
-        <p class="muted small">{t('YouTube often blocks downloads from servers. Export the cookies of a signed-in YouTube session as cookies.txt (Netscape format, e.g. with a browser extension) and upload them here. Only the YouTube cookies are kept, and they are never sent back to the browser.')}</p>
-        <div class="row">
-          <span class="small">{cookies.set ? t('Cookies stored ({0})', new Date((cookies.updated ?? 0) * 1000).toLocaleString()) : t('No cookies stored')}</span>
-          <span class="grow"></span>
-          <label class="btn"><Icon name="upload" size={14} /> {t('Upload cookies.txt…')}<input type="file" accept=".txt,text/plain" hidden onchange={uploadCookies} /></label>
-          {#if cookies.set}<button class="btn danger" onclick={removeCookies}>{t('Remove')}</button>{/if}
-        </div>
-        <label class="field">{t('Proxy for YouTube downloads')}
-          <input type="text" autocomplete="off" placeholder={proxyFromEnv ? t('Default from the server configuration') : 'http://user:password@host:port'} bind:value={proxy} /></label>
-        <p class="muted small">{t('All YouTube requests go through this proxy (http, https, socks4 or socks5). Leave empty to use the default of the server (DT_YT_PROXY) or none.')}</p>
+      {:else if section === 'youtube'}
+        <section class="group">
+          <h4>{t('YouTube download agent')}</h4>
+          <p class="muted small">{t('YouTube often blocks downloads from servers. The Windows agent dt-youtube.exe downloads on your own computer instead, where YouTube works reliably. Download the agent, create an agent token under Agents, download the agents.json offered with the token and save it in the same folder as the agent. The agent has to keep running as long as you want to download YouTube songs.')}</p>
+          <div class="row">
+            <span class="small">{youtubeAgents > 0 ? t('{0} YouTube download agent(s) connected', youtubeAgents) : t('No agent connected')}</span>
+            <span class="grow"></span>
+            <a class="btn primary" href={AGENT_URL} target="_blank" rel="noopener"><Icon name="download" size={14} /> {t('Download dt-youtube.exe')}</a>
+          </div>
+          <span class="muted small">{t('Always the latest release from GitHub.')}</span>
+        </section>
+        {#if admin}
+          <h4>{t('Cookies')}</h4>
+          <p class="muted small">{t('Without an agent: export the cookies of a signed-in YouTube session as cookies.txt (Netscape format, e.g. with a browser extension) and upload them here. Only the YouTube cookies are kept, and they are never sent back to the browser.')}</p>
+          <div class="row">
+            <span class="small">{cookies.set ? t('Cookies stored ({0})', new Date((cookies.updated ?? 0) * 1000).toLocaleString()) : t('No cookies stored')}</span>
+            <span class="grow"></span>
+            <label class="btn"><Icon name="upload" size={14} /> {t('Upload cookies.txt…')}<input type="file" accept=".txt,text/plain" hidden onchange={uploadCookies} /></label>
+            {#if cookies.set}<button class="btn danger" onclick={removeCookies}>{t('Remove')}</button>{/if}
+          </div>
+          <label class="field">{t('Proxy for YouTube downloads')}
+            <input type="text" autocomplete="off" placeholder={proxyFromEnv ? t('Default from the server configuration') : 'http://user:password@host:port'} bind:value={proxy} /></label>
+          <p class="muted small">{t('All YouTube requests go through this proxy (http, https, socks4 or socks5). Leave empty to use the default of the server (DT_YT_PROXY) or none.')}</p>
+        {/if}
       {:else if section === 'categories'}
         <div class="cat-head">
           <span class="muted small">{t('The mood categories songs are rated in.')}</span>

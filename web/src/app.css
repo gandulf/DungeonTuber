@@ -153,7 +153,7 @@ input[type='range'].range::-moz-range-thumb {
 }
 .btn:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-hover); }
 .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; color: var(--accent-text); box-shadow: 0 4px 14px var(--accent-soft); }
-.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn.primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; filter: brightness(1.08); }
 .btn.ghost { border-color: transparent; background: transparent; }
 .btn.danger { color: var(--red); }
 .btn.sm { padding: 4px 10px; font-size: var(--fs-sm); }

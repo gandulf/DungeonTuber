@@ -103,6 +103,7 @@ export const api = {
   youtubeProxy: () => get<{ value: string; fromEnv: boolean }>('/api/import/proxy'),
   putYoutubeProxy: (value: string) => request<{ value: string; fromEnv: boolean }>('PUT', '/api/import/proxy', { value }),
   deleteYoutubeCookies: () => request<{ set: boolean; updated: number | null }>('DELETE', '/api/import/cookies'),
+  analysisStatus: () => get<{ pending: number; done: number; failed: number; items: DownloadItem[] }>('/api/analysis'),
   importStatus: () => get<{ pending: number; done: number; failed: number; items: DownloadItem[] }>('/api/import'),
 
   // settings
@@ -127,7 +128,6 @@ export const api = {
   effects: () => get<{ directory: string | null; effects: Effect[] }>('/api/effects'),
   analyze: (paths: string[]) => request<{ queued: number; pending: number }>('POST', '/api/analysis', { paths }),
   rescan: (path?: string) => request<{ added: number; changed: number; removed: number; total: number }>('POST', '/api/library/rescan', { path: path ?? null }),
-  analysisStatus: () => get<{ backend: string; pending: number; done: number; failed: number }>('/api/analysis'),
 
   // lights
   lights: () => get<{ enabled: boolean; lights: Light[]; scenes: string[]; agent: boolean }>('/api/lights'),

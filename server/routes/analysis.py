@@ -56,4 +56,4 @@ def remove_cloud():
 @router.get("/api/analysis")
 def status():
     backend = current_backend()
-    return {"backend": backend.name if backend else None, **analysis_queue.status()}
+    return {"backend": backend.name if backend else None, **analysis_queue.details()}

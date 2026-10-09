@@ -218,7 +218,7 @@ export interface DownloadItem {
   id: number;
   url: string;
   title: string;
-  state: 'queued' | 'downloading' | 'done' | 'skipped' | 'failed';
+  state: 'queued' | 'downloading' | 'running' | 'done' | 'skipped' | 'failed';
   percent: number;
   message: string;
 }

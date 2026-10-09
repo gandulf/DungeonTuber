@@ -3,11 +3,12 @@
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { data } from '../../lib/stores/data.svelte';
-  import { closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
+  import { closeDialog, errorToast, openDialog, toast } from '../../lib/stores/ui.svelte';
   import type { ImportPreview } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import FolderTree from './FolderTree.svelte';
   import Modal from './Modal.svelte';
+  import SettingsDialog from './SettingsDialog.svelte';
 
   let { directory }: { directory: string } = $props();
 
@@ -92,6 +93,7 @@
       closeDialog();
     } catch (e) {
       busy = false;
+      error = e instanceof Error ? e.message : String(e);
       errorToast(e);
     }
   }
@@ -105,7 +107,11 @@
       <button class="btn" type="submit" disabled={busy || !url.trim()}><Icon name="search" size={15} /> {t('Look up')}</button>
     </form>
     {#if busy && !preview}<span class="muted summary">{t('Looking up…')}</span>{/if}
-    {#if error}<span class="error summary">{error}</span>{/if}
+    {#if error}
+      <span class="error summary">{error}</span>
+      <span class="muted summary">{t('YouTube often blocks downloads from servers. You may be able to fix this in the settings by running the YouTube download agent on your own computer.')}
+        <button class="link" type="button" onclick={() => openDialog(SettingsDialog, { initialSection: 'youtube' })}>{t('Open the YouTube settings')}</button></span>
+    {/if}
   </div>
 
   {#if preview}
@@ -178,4 +184,5 @@
   .check { display: flex; align-items: center; gap: 8px; }
   .summary { font-size: var(--fs-sm); }
   .error { color: var(--danger, #d33); }
+  .link { color: var(--accent); text-decoration: underline; padding: 0; }
 </style>

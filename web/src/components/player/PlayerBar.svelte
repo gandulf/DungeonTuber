@@ -109,8 +109,7 @@
   .right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   @media (max-width: 900px) {
     .player { grid-template-columns: 1fr; gap: 10px; padding: 10px 14px; }
-    .art { width: 48px; height: 48px; }
+    .now { display: none; }
     .right { justify-content: center; }
-    .tags { display: none; }
   }
 </style>

@@ -6,7 +6,7 @@
   import { t } from './lib/i18n.svelte';
   import { prefs } from './lib/prefs.svelte';
   import { data, loadAuth, loadData } from './lib/stores/data.svelte';
-  import { downloads, setDownloads } from './lib/stores/downloads.svelte';
+  import { setAnalysis, setDownloads } from './lib/stores/downloads.svelte';
   import { loadEffects, updateEffectTrack } from './lib/stores/effects.svelte';
   import { reloadDirTabs, reloadPlaylistTabs, restoreTabs, updateTrack } from './lib/stores/library.svelte';
   import { loadLights, setLightState } from './lib/stores/lights.svelte';
@@ -40,6 +40,7 @@
       restoreTabs();
       void loadEffects();
       void api.importStatus().then(setDownloads).catch(() => undefined);
+      void api.analysisStatus().then(setAnalysis).catch(() => undefined);
       if (data.settings?.lightsEnabled) void loadLights().catch(() => undefined);
       connectEvents();
       ready = true;
@@ -64,8 +65,7 @@
       onEvent('library.changed', ({ path }) => reloadDirTabs(path)),
       onEvent('library.roots', () => void libraryRootsChanged()),
       onEvent('lights.state', (list) => setLightState(list)),
-      onEvent('analysis.progress', ({ message }) => (ui.progress = message)),
-      onEvent('analysis.status', ({ pending }) => pending === 0 && (ui.progress = null)),
+      onEvent('analysis.items', (status) => void setAnalysis(status)),
       onEvent('analysis.available', ({ active }) => data.settings && (data.settings.voxalyzerActive = active)),
       onEvent('analysis.error', ({ message }) => toast(message, 'error')),
       onEvent('import.items', (status) => {

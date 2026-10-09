@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { emptyFilter } from '../../lib/scoring';
@@ -27,9 +28,18 @@
     return [...data.categories.filter((c) => present.has(c.key)), ...extra];
   });
 
+  // the mood map does not fit on small screens (see the media query below): valence and arousal are plain sliders there
+  const compact = window.matchMedia('(max-width: 1100px)');
+  let small = $state(compact.matches);
+  onMount(() => {
+    const listener = (e: MediaQueryListEvent) => (small = e.matches);
+    compact.addEventListener('change', listener);
+    return () => compact.removeEventListener('change', listener);
+  });
+
   const hasCircumplex = $derived(prefs.filter.circumplex && categories.some((c) => c.key === VALENCE) && categories.some((c) => c.key === AROUSAL));
   const visible = $derived(prefs.filter.presets || prefs.filter.sliders || hasCircumplex || prefs.filter.bpm);
-  const showMap = $derived(prefs.showMoodMap && hasCircumplex);
+  const showMap = $derived(prefs.showMoodMap && hasCircumplex && !small);
 
   const groups = $derived.by(() => {
     const map = new Map<string, MusicCategory[]>();
@@ -119,11 +129,11 @@
 {#if visible}
   <section class="mood" aria-label={t('Filter')}>
     <div class="head">
-      {#if hasCircumplex}
+      {#if hasCircumplex && !small}
         <button class="btn sm map-toggle" class:on={prefs.showMoodMap} aria-pressed={prefs.showMoodMap} onclick={toggleMap}>
           <Icon name="compass" size={14} /> {t('Mood Explorer')}
         </button>
-      {:else}
+      {:else if !small}
         <span class="card-title">{t('Mood')}</span>
       {/if}
 

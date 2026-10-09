@@ -429,7 +429,6 @@
   "YouTube cookies saved": "YouTube-Cookies gespeichert",
   "Remove the stored YouTube cookies?": "Die gespeicherten YouTube-Cookies entfernen?",
   "YouTube import": "YouTube-Import",
-  "YouTube often blocks downloads from servers. Export the cookies of a signed-in YouTube session as cookies.txt (Netscape format, e.g. with a browser extension) and upload them here. Only the YouTube cookies are kept, and they are never sent back to the browser.": "YouTube blockiert Downloads von Servern oft. Exportiere die Cookies einer angemeldeten YouTube-Sitzung als cookies.txt (Netscape-Format, z. B. mit einer Browser-Erweiterung) und lade sie hier hoch. Es werden nur die YouTube-Cookies behalten, und sie werden nie an den Browser zurückgesendet.",
   "Cookies stored ({0})": "Cookies gespeichert ({0})",
   "No cookies stored": "Keine Cookies gespeichert",
   "Upload cookies.txt…": "cookies.txt hochladen…",
@@ -470,5 +469,19 @@
   "Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.": "Analysiert bei Bedarf in einer Cloud-Funktion (Modal, siehe agents/voxalyzer/modal_app.py), wenn kein Agent verbunden ist. Lege im Modal-Dashboard ein Proxy-Auth-Token für Schlüssel und Secret an; sie werden nie an den Browser zurückgesendet.",
   "New here?": "Neu hier?",
   "Watch the 3 minute intro to DungeonTuber": "Sieh dir das 3-Minuten-Intro zu DungeonTuber an",
-  "Play intro video": "Intro-Video abspielen"
+  "Play intro video": "Intro-Video abspielen",
+  "YouTube": "YouTube",
+  "Cookies": "Cookies",
+  "YouTube often blocks downloads from servers. The Windows agent dt-youtube.exe downloads on your own computer instead, where YouTube works reliably. Download the agent, create an agent token under Agents, download the agents.json offered with the token and save it in the same folder as the agent. The agent has to keep running as long as you want to download YouTube songs.": "YouTube blockiert Downloads von Servern oft. Der Windows-Agent dt-youtube.exe lädt stattdessen auf deinem eigenen Computer herunter, wo YouTube zuverlässig funktioniert. Lade den Agenten herunter, erstelle unter Agents ein Agent-Token, lade die dazu angebotene agents.json herunter und speichere sie im selben Ordner wie den Agenten. Der Agent muss laufen, solange du YouTube-Lieder herunterladen möchtest.",
+  "{0} YouTube download agent(s) connected": "{0} YouTube-Download-Agent(en) verbunden",
+  "Download dt-youtube.exe": "dt-youtube.exe herunterladen",
+  "Always the latest release from GitHub.": "Immer das neueste Release von GitHub.",
+  "Without an agent: export the cookies of a signed-in YouTube session as cookies.txt (Netscape format, e.g. with a browser extension) and upload them here. Only the YouTube cookies are kept, and they are never sent back to the browser.": "Ohne Agent: Exportiere die Cookies einer angemeldeten YouTube-Sitzung als cookies.txt (Netscape-Format, z. B. mit einer Browser-Erweiterung) und lade sie hier hoch. Es werden nur die YouTube-Cookies behalten, und sie werden nie an den Browser zurückgesendet.",
+  "YouTube often blocks downloads from servers. You may be able to fix this in the settings by running the YouTube download agent on your own computer.": "YouTube blockiert Downloads von Servern oft. Möglicherweise lässt sich das in den Einstellungen beheben, indem du den YouTube-Download-Agenten auf deinem eigenen Computer laufen lässt.",
+  "Open the YouTube settings": "YouTube-Einstellungen öffnen",
+  "Analysis: {0} remaining": "Analyse: noch {0}",
+  "Show analysis": "Analyse anzeigen",
+  "Analysis": "Analyse",
+  "Analyzing": "Analysiere",
+  "No analysis running": "Keine Analyse aktiv"
 }

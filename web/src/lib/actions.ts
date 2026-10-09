@@ -7,6 +7,7 @@ import { loadEffects } from './stores/effects.svelte';
 import { activeTab, addToPlaylist, closeTab, library, loadTab, openTab, reloadAllDirTabs, reloadDirTabs, removeFromPlaylist, updateTrack } from './stores/library.svelte';
 import { playTrack, refreshCurrentTrack } from './stores/player.svelte';
 import { askConfirm, askText, errorToast, openDialog, toast, ui, type MenuItem } from './stores/ui.svelte';
+import type { JobKind } from './stores/downloads.svelte';
 import type { BrowseItem, Track } from './types';
 import { isMp3, itemsFromDrop, type UploadItem } from './upload';
 import EditSongDialog from '../components/dialogs/EditSongDialog.svelte';
@@ -166,8 +167,8 @@ export function openUploadDialog(directory?: string, initial: UploadItem[] = [])
   if (target) openDialog(UploadDialog, { directory: target, initial });
 }
 
-export function openDownloadsDialog() {
-  openDialog(DownloadsDialog, {});
+export function openDownloadsDialog(kind: JobKind = 'downloads') {
+  openDialog(DownloadsDialog, { kind });
 }
 
 export function openImportDialog(directory?: string) {

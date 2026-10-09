@@ -9,7 +9,7 @@
   import { data } from '../../lib/stores/data.svelte';
   import { extraCategoryKeys, filter, library, loadTab, removeFromPlaylist, reorderPlaylist, setSort, updateTrack, visibleRows, type Tab } from '../../lib/stores/library.svelte';
   import { player, playTrack, refreshCurrentTrack } from '../../lib/stores/player.svelte';
-  import { errorToast, openDialog, openMenu, type MenuItem } from '../../lib/stores/ui.svelte';
+  import { errorToast, openDialog, openMenu, ui, type MenuItem } from '../../lib/stores/ui.svelte';
   import type { Track } from '../../lib/types';
   import ImagePopup from '../dialogs/ImagePopup.svelte';
   import Icon from '../Icon.svelte';
@@ -595,7 +595,9 @@
   {#if library.search}
     <div class="search-pill" class:none={!rows.length}><Icon name="search" size={13} /> {library.search}</div>
   {/if}
-  <div class="footer muted">{rows.length} / {tab.tracks.length} · {t('{0} selected', library.selection.length)}</div>
+  {#if !ui.narrow}
+    <div class="footer muted">{rows.length} / {tab.tracks.length} · {t('{0} selected', library.selection.length)}</div>
+  {/if}
 </div>
 
 <style>

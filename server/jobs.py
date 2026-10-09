@@ -2,6 +2,7 @@
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 
 from core.analyzer import analyze_file, is_analyzed
 from core.i18n import _
@@ -23,12 +24,27 @@ def collect_locations(location: Location) -> list[Location]:
                   key=lambda item: item.rel)
 
 
+@dataclass
+class AnalysisItem:
+    """One file of the analysis queue, shaped like the items of the download queue (server/downloads.py)."""
+    id: int
+    title: str
+    state: str = "queued"  # queued, running, done, skipped, failed
+    message: str = ""
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "url": "", "title": self.title, "state": self.state, "percent": 0, "message": self.message}
+
+
 class AnalysisQueue:
     MAX_WORKERS = 8
+    SHOWN = 50  # queued and finished items sent to the clients (a directory can hold thousands of files)
 
     def __init__(self):
         self._executor: ThreadPoolExecutor | None = None
         self._lock = threading.Lock()
+        self._next_id = 0
+        self.items: list[AnalysisItem] = []
         self.pending = 0
         self.done = 0
         self.failed = 0
@@ -37,6 +53,24 @@ class AnalysisQueue:
         with self._lock:
             return {"pending": self.pending, "done": self.done, "failed": self.failed}
 
+    def details(self) -> dict:
+        """Counters and the items of the current run: the running ones, the next queued ones and the last finished ones."""
+        with self._lock:
+            running = [item for item in self.items if item.state == "running"]
+            queued = [item for item in self.items if item.state == "queued"][:self.SHOWN]
+            finished = [item for item in self.items if item.state not in ("queued", "running")][-self.SHOWN:]
+            return {"pending": self.pending, "done": self.done, "failed": self.failed,
+                    "items": [item.to_dict() for item in finished + running + queued]}
+
+    def _publish(self):
+        hub.publish("analysis.items", self.details())
+
+    def _update(self, item: AnalysisItem, **changes):
+        with self._lock:
+            for key, value in changes.items():
+                setattr(item, key, value)
+        self._publish()
+
     def submit(self, locations: list[Location]) -> int:
         backend = current_backend()
         if backend is None:
@@ -44,13 +78,20 @@ class AnalysisQueue:
         files = [file for location in locations for file in collect_locations(location)]
         with self._lock:
             if self.pending == 0:
+                self.items = []
                 self.done = self.failed = 0
+            batch = []
+            for file in files:
+                self._next_id += 1
+                batch.append(AnalysisItem(self._next_id, file.name))
+            self.items.extend(batch)
             self.pending += len(files)
         if self._executor is None:
             self._executor = ThreadPoolExecutor(max_workers=self.MAX_WORKERS, thread_name_prefix="analysis")
-        for file in files:
-            self._executor.submit(self._run, file, backend)
+        for file, item in zip(files, batch):
+            self._executor.submit(self._run, file, backend, item)
         hub.publish("analysis.status", self.status())
+        self._publish()
         return len(files)
 
     @staticmethod
@@ -80,25 +121,29 @@ class AnalysisQueue:
         progress(_("File {0} processed.").format(location.name))
         return True
 
-    def _run(self, location: Location, backend):
+    def _run(self, location: Location, backend, item: AnalysisItem):
         try:
-            changed = self._analyze(location, backend, lambda message: hub.publish("analysis.progress", {"message": message}))
+            self._update(item, state="running")
+            changed = self._analyze(location, backend, lambda message: self._update(item, message=message))
             if changed:
                 if location.root.is_local:
                     get_index().invalidate(location)
                 hub.publish("track.updated", get_index().get(location))
             with self._lock:
                 self.done += 1
+            self._update(item, state="done" if changed else "skipped", message="")
             hub.publish("analysis.result", {"id": location.id, "changed": changed})
         except Exception as e:
             logger.error("Analysis of {0} failed: {1}", location, e)
             with self._lock:
                 self.failed += 1
+            self._update(item, state="failed", message=str(e))
             hub.publish("analysis.error", {"id": location.id, "message": str(e)})
         finally:
             with self._lock:
                 self.pending -= 1
             hub.publish("analysis.status", self.status())
+            self._publish()
 
     def shutdown(self):
         if self._executor is not None:

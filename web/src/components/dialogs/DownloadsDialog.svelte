@@ -1,23 +1,27 @@
 <script lang="ts">
   import { t } from '../../lib/i18n.svelte';
-  import { downloads } from '../../lib/stores/downloads.svelte';
+  import { jobs, type JobKind } from '../../lib/stores/downloads.svelte';
   import { closeDialog } from '../../lib/stores/ui.svelte';
   import type { DownloadItem } from '../../lib/types';
   import Modal from './Modal.svelte';
 
+  let { kind = 'downloads' }: { kind?: JobKind } = $props();
+  // svelte-ignore state_referenced_locally
+  const status = jobs(kind);
   const labels: Record<DownloadItem['state'], string> = {
     queued: 'Queued',
     downloading: 'Downloading',
+    running: 'Analyzing',
     done: 'Done',
     skipped: 'Skipped',
     failed: 'Failed',
   };
 </script>
 
-<Modal title={t('Downloads')} onclose={closeDialog} width="640px">
-  {#if downloads.items.length}
+<Modal title={kind === 'downloads' ? t('Downloads') : t('Analysis')} onclose={closeDialog} width="640px">
+  {#if status.items.length}
     <ul>
-      {#each downloads.items as item (item.id)}
+      {#each status.items as item (item.id)}
         <li class={item.state}>
           <div class="line">
             <span class="ellipsis title" title={item.title}>{item.title}</span>
@@ -25,14 +29,16 @@
           </div>
           {#if item.state === 'downloading'}
             <progress max="100" value={item.percent}></progress>
+          {:else if item.state === 'running'}
+            <progress></progress>
           {/if}
           {#if item.message && item.state !== 'done'}<span class="message muted">{item.message}</span>{/if}
         </li>
       {/each}
     </ul>
-    <span class="muted summary">{t('{0} remaining · {1} finished · {2} failed', downloads.pending, downloads.done, downloads.failed)}</span>
+    <span class="muted summary">{t('{0} remaining · {1} finished · {2} failed', status.pending, status.done, status.failed)}</span>
   {:else}
-    <span class="muted">{t('No downloads')}</span>
+    <span class="muted">{kind === 'downloads' ? t('No downloads') : t('No analysis running')}</span>
   {/if}
   {#snippet footer()}
     <button class="btn" onclick={closeDialog}>{t('Close')}</button>

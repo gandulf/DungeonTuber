@@ -53,7 +53,7 @@ services:
       DT_S3_DIRECT: ${DT_S3_DIRECT:-0}
     volumes:
       - dt-data:/data                     # settings.json + library.db
-      - ${DT_MUSIC_DIR:-${USERPROFILE}/Music}:/music
+      - ${DT_MUSIC_DIR:-${USERPROFILE}/Music/Dsa}:/music
     depends_on:
       rustfs-init:
         condition: service_completed_successfully
