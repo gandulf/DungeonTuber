@@ -162,6 +162,7 @@ Als Argumente (`dungeontuber-server --help`) oder Umgebungsvariablen:
 |---|---|---|
 | `DT_HOST` / `DT_PORT` | Interface und Port | `127.0.0.1` / `8765` (das Docker-Image nutzt `0.0.0.0`) |
 | `DT_DATA_DIR` | Einstellungen, Bibliotheks-Cache, Logs | `%APPDATA%/DungeonTuber` oder `~/.config/DungeonTuber` (Docker: `/data`) |
+| `DT_YT_PROXY` | Standard-Proxy für alle yt-dlp-Anfragen (in den Einstellungen überschreibbar) | keiner |
 | `DT_LIBRARY` | Musikordner (unter Linux durch `:`, unter Windows durch `;` getrennt) | `~/Music` (Docker: `/music`) |
 | `DT_PASSWORD` | SuperAdmin-Passwort, Benutzername `admin` (ohne Passwort kann sich nur der Server-Rechner selbst verbinden) | – |
 | `DT_FORWARDED_ALLOW_IPS` | vertrauenswürdige Reverse-Proxys für `X-Forwarded-*` | `127.0.0.1` |

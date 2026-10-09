@@ -199,8 +199,9 @@
   .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
   .map-toggle.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
   .seg.small button { padding: 3px 10px; font-size: var(--fs-xs); }
-  .slider-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 26px; row-gap: 2px; overflow-y: auto; padding-right: 4px; align-content: start; }
-  .slider-list.wide { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .slider-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); column-gap: 26px; row-gap: 2px; overflow-x: hidden; overflow-y: auto; padding-right: 4px; align-content: start; }
+  .slider-list.wide { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }
+  .slider-list > :global(*) { min-width: 0; }
   .card-foot { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
   @media (max-width: 1100px) { .cards { grid-template-columns: 1fr; } .vibe { display: none; } }
   @media (max-width: 900px) { .cards { max-height: 30vh; } }

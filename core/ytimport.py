@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from core.i18n import _
 from core.mp3 import update_mp3_album, update_mp3_artist, update_mp3_chapters, update_mp3_cover_data, update_mp3_source, update_mp3_title
-from core.settings import AppSettings
+from core.settings import AppSettings, SettingKeys
 from core.tools import ensure_tool, find_tool
 from core.utils import get_user_data_dir
 
@@ -24,6 +24,8 @@ ALLOWED_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com")  # and their
 DEFAULT_MAX_MINUTES = 240
 MAX_NAME = 150
 COOKIES_NAME = "youtube-cookies.txt"
+PROXY_ENV = "DT_YT_PROXY"
+PROXY_SCHEMES = ("http", "https", "socks4", "socks4a", "socks5", "socks5h")
 MAX_COOKIES_BYTES = 2 * 1024 * 1024
 COOKIE_DOMAINS = ("youtube.com", "youtube-nocookie.com", "google.com")  # nothing else of an exported browser session is kept
 
@@ -142,8 +144,32 @@ def delete_cookies():
     cookies_file().unlink(missing_ok=True)
 
 
+def stored_proxy() -> str:
+    return (AppSettings.value(SettingKeys.YOUTUBE_PROXY, "", type=str) or "").strip()
+
+
+def proxy_url() -> str:
+    """The proxy for all yt-dlp requests: the setting, otherwise the DT_YT_PROXY environment variable, otherwise none."""
+    return stored_proxy() or os.environ.get(PROXY_ENV, "").strip()
+
+
+def check_proxy(value: str) -> str:
+    """The proxy url (http, https, socks4, socks4a, socks5 or socks5h with optional user:password@) or ImportFailed."""
+    value = value.strip()
+    try:
+        parts = urlsplit(value)
+        valid = parts.scheme in PROXY_SCHEMES and bool(parts.hostname) and parts.port != 0
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ImportFailed(_("Invalid proxy address (expected e.g. http://user:password@host:port or socks5://host:port)"))
+    return value
+
+
 def _options(progress: Progress | None, **extra) -> dict:
     options = {"quiet": True, "no_warnings": True, "noprogress": True, "js_runtimes": _runtime(progress), **extra}
+    if proxy_url():
+        options["proxy"] = proxy_url()
     if _cookies_override:
         options.update(_cookies_override)
     elif cookies_file().is_file():

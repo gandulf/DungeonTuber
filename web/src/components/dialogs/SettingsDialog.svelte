@@ -65,6 +65,11 @@
   let cookies = $state<{ set: boolean; updated: number | null }>({ set: false, updated: null });
   if (admin) void api.youtubeCookies().then((result) => (cookies = result)).catch(() => {});
 
+  let proxy = $state('');
+  let proxyFromEnv = $state(false);
+  let proxySaved = '';
+  if (admin) void api.youtubeProxy().then((result) => { proxy = proxySaved = result.value; proxyFromEnv = result.fromEnv; }).catch(() => {});
+
   async function uploadCookies(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -171,6 +176,7 @@
       for (const key of keys) if (form[key] !== s[key]) changed[key] = form[key];
       const rootList = roots.split('\n').map((r) => r.trim()).filter(Boolean);
       if (desktop && rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
+      if (admin && proxy.trim() !== proxySaved) await api.putYoutubeProxy(proxy);
       if (Object.keys(changed).length) await saveSettings(changed);
       if ('lightsEnabled' in changed && form.lightsEnabled) void loadLights();
       if (storagesDirty) {
@@ -306,6 +312,9 @@
           <label class="btn"><Icon name="upload" size={14} /> {t('Upload cookies.txt…')}<input type="file" accept=".txt,text/plain" hidden onchange={uploadCookies} /></label>
           {#if cookies.set}<button class="btn danger" onclick={removeCookies}>{t('Remove')}</button>{/if}
         </div>
+        <label class="field">{t('Proxy for YouTube downloads')}
+          <input type="text" autocomplete="off" placeholder={proxyFromEnv ? t('Default from the server configuration') : 'http://user:password@host:port'} bind:value={proxy} /></label>
+        <p class="muted small">{t('All YouTube requests go through this proxy (http, https, socks4 or socks5). Leave empty to use the default of the server (DT_YT_PROXY) or none.')}</p>
       {:else if section === 'categories'}
         <div class="cat-head">
           <span class="muted small">{t('Levels: one "value: description" per line')}</span>

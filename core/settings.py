@@ -46,6 +46,8 @@ class SettingKeys(StrEnum):
 
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
     IMPORT_MAX_MINUTES = "importMaxMinutes"
+    # Proxy for all yt-dlp requests (e.g. a residential proxy); overrides the DT_YT_PROXY environment variable
+    YOUTUBE_PROXY = "youtubeProxy"
 
     LIGHTS_ENABLED = "lightsEnabled"
     LIGHTS_CONFIG = "lightsConfig"

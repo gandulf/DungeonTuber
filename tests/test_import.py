@@ -230,3 +230,24 @@ def test_cookies_are_stored_and_used_by_yt_dlp(client, monkeypatch):
 
     assert client.delete("/api/import/cookies").json()["set"] is False
     assert "administrator" in ytimport._clean_error(Exception("ERROR: [youtube] x: Sign in to confirm you’re not a bot"))
+
+
+def test_proxy_setting_overrides_the_environment_default(client, monkeypatch):
+    monkeypatch.setattr(ytimport, "_runtime", lambda progress: {})
+    monkeypatch.delenv("DT_YT_PROXY", raising=False)
+    assert "proxy" not in ytimport._options(None)
+    assert client.get("/api/import/proxy").json() == {"value": "", "fromEnv": False}
+
+    monkeypatch.setenv("DT_YT_PROXY", "socks5://env.example.com:1080")
+    assert ytimport._options(None)["proxy"] == "socks5://env.example.com:1080"
+    assert client.get("/api/import/proxy").json() == {"value": "", "fromEnv": True}
+
+    assert client.put("/api/import/proxy", json={"value": "ftp://nope"}).status_code == 400
+    assert client.put("/api/import/proxy", json={"value": "not a url"}).status_code == 400
+    state = client.put("/api/import/proxy", json={"value": " http://user:pw@proxy.example.com:8080 "}).json()
+    assert state["value"] == "http://user:pw@proxy.example.com:8080"
+    assert ytimport._options(None)["proxy"] == "http://user:pw@proxy.example.com:8080"
+    assert "pw" not in client.get("/api/settings").text  # the proxy may contain credentials
+
+    client.put("/api/import/proxy", json={"value": ""})
+    assert ytimport._options(None)["proxy"] == "socks5://env.example.com:1080"

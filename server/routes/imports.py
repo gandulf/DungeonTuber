@@ -1,11 +1,13 @@
 """Import of YouTube links (single videos and playlists) into the library."""
+import os
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from core.i18n import _
-from core.ytimport import ImportFailed, check_url, cookies_file, delete_cookies, resolve, save_cookies
+from core.settings import AppSettings, SettingKeys
+from core.ytimport import PROXY_ENV, ImportFailed, check_proxy, check_url, cookies_file, delete_cookies, resolve, save_cookies, stored_proxy
 from server.auth import current_user, require_admin, require_auth
 from server import ytagent
 from server.downloads import Batch, download_queue, make_folder, max_minutes
@@ -98,3 +100,29 @@ def put_cookies(body: CookiesRequest):
 def remove_cookies():
     delete_cookies()
     return _cookies_state()
+
+
+class ProxyRequest(BaseModel):
+    value: str = ""
+
+
+def _proxy_state() -> dict:
+    return {"value": stored_proxy(), "fromEnv": bool(os.environ.get(PROXY_ENV, "").strip())}
+
+
+@router.get("/api/import/proxy", dependencies=[Depends(require_admin)])
+def proxy_status():
+    """The configured proxy (it may contain credentials, so only for administrators); empty uses the DT_YT_PROXY default."""
+    return _proxy_state()
+
+
+@router.put("/api/import/proxy", dependencies=[Depends(require_admin)])
+def put_proxy(body: ProxyRequest):
+    if body.value.strip():
+        try:
+            AppSettings.setValue(SettingKeys.YOUTUBE_PROXY, check_proxy(body.value))
+        except ImportFailed as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        AppSettings.remove(SettingKeys.YOUTUBE_PROXY)
+    return _proxy_state()

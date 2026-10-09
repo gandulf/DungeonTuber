@@ -100,6 +100,8 @@ export const api = {
   deleteCloudAnalysis: () => request<{ configured: boolean; host: string | null }>('DELETE', '/api/analysis/cloud'),
   youtubeCookies: () => get<{ set: boolean; updated: number | null }>('/api/import/cookies'),
   putYoutubeCookies: (content: string) => request<{ set: boolean; updated: number | null }>('PUT', '/api/import/cookies', { content }),
+  youtubeProxy: () => get<{ value: string; fromEnv: boolean }>('/api/import/proxy'),
+  putYoutubeProxy: (value: string) => request<{ value: string; fromEnv: boolean }>('PUT', '/api/import/proxy', { value }),
   deleteYoutubeCookies: () => request<{ set: boolean; updated: number | null }>('DELETE', '/api/import/cookies'),
   importStatus: () => get<{ pending: number; done: number; failed: number; items: DownloadItem[] }>('/api/import'),
 
