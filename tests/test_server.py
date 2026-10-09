@@ -199,6 +199,44 @@ def test_settings_categories_presets(client):
     assert presets == [{"name": "Fight", "categories": {"Arousal": 9}, "tags": [], "genres": [], "bpm": 140}]
 
 
+def _login_as_anna(client):
+    set_password("secret")
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+
+
+def test_presets_and_view_settings_belong_to_the_user(client):
+    set_password("secret")
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    client.put("/api/presets", json=[{"name": "Admin", "categories": {}}])
+    client.put("/api/user/state", json={"view": {"rowStyle": "large", "unknown": 1}, "locale": "de"})
+    state = client.get("/api/user/state").json()
+    assert state["view"] == {"rowStyle": "large"} and state["locale"] == "de"
+    assert client.put("/api/user/state", json={"locale": "xx"}).status_code == 400
+    assert client.put("/api/user/state", json={"view": {"columns": {"a": "x" * 30000}}}).status_code == 413
+
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert client.get("/api/presets").json() == []
+    assert client.get("/api/user/state").json()["view"] is None and client.get("/api/user/state").json()["locale"] == ""
+    assert [p["name"] for p in client.put("/api/presets", json=[{"name": "Anna", "categories": {}}]).json()] == ["Anna"]
+
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"password": "secret"})
+    assert [p["name"] for p in client.get("/api/presets").json()] == ["Admin"]
+
+
+def test_only_the_admin_changes_the_categories(client):
+    _login_as_anna(client)
+
+    assert len(client.get("/api/categories").json()) == 9
+    assert client.put("/api/categories", json=[{"key": "a", "name": "A"}]).status_code == 403
+    assert client.post("/api/categories/reset").status_code == 403
+
+
 def test_effects(client, library, tmp_path):
     effects_dir = tmp_path / "effects"
     write_mp3(effects_dir / "Rain" / "1 light.mp3")
@@ -389,7 +427,7 @@ def test_favorites_and_open_tabs_are_per_user(client, library):
     # anna starts with nothing and her changes do not touch the SuperAdmin's
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
     assert client.get(f"/api/tracks/{_id(song)}").json()["favorite"] is False
-    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "player": None}
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "player": None, "view": None, "locale": ""}
     assert client.patch(f"/api/tracks/{_id(song)}", json={"favorite": True}).json()["favorite"] is True
     client.put("/api/user/state", json={"favorites": [f"{root}/Tavern"]})
     drums = library["root"] / "Battle" / "drums.mp3"
@@ -407,7 +445,7 @@ def test_favorites_and_open_tabs_are_per_user(client, library):
     client.delete("/api/users/anna")
     client.post("/api/users", json={"name": "anna", "password": "pw1234"})
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
-    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "player": None}
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "player": None, "view": None, "locale": ""}
     assert client.get(f"/api/tracks/{_id(drums)}").json()["favorite"] is False
 
 
@@ -548,7 +586,7 @@ def test_player_settings_are_kept_per_user(client):
     set_password("secret")
     client.post("/api/auth/login", json={"password": "secret"})
     client.post("/api/users", json={"name": "anna", "password": "pw1234"})
-    settings = {"shuffle": True, "repeat": "all", "volume": 40, "muted": True, "effectsVolume": 25, "normalize": False, "crossfade": False}
+    settings = {"shuffle": True, "repeat": "all", "volume": 40, "muted": True, "effectsVolume": 25, "normalize": False, "crossfade": False, "dynamicScore": False, "dynamicColumns": True}
 
     assert client.put("/api/user/state", json={"player": {**settings, "repeat": "forever"}}).status_code == 422
     assert client.put("/api/user/state", json={"player": {**settings, "volume": 200}}).status_code == 422

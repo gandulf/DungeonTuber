@@ -1,7 +1,7 @@
 import json
 
-from core.settings import (AppSettings, FilterConfig, MusicCategory, Preset, SettingKeys, add_preset, get_category_keys, get_music_categories,
-                           get_presets, reset_presets, set_music_categories, settings)
+from core.settings import (AppSettings, FilterConfig, MusicCategory, Preset, SettingKeys, get_category_keys, get_music_categories,
+                           set_music_categories, settings)
 from core.settings_backend import JsonSettings
 
 
@@ -79,19 +79,11 @@ def test_set_music_categories_resets_key_cache():
     assert len(get_category_keys()) == 9
 
 
-def test_presets_survive_reload():
-    add_preset(Preset("Fight", {"Arousal": 9}, tags=["Combat skirmish"], bpm=140))
-    settings.reload()
-
-    presets = get_presets()
-    assert [p.name for p in presets] == ["Fight"]
-    assert presets[0].categories == {"Arousal": 9}
-    assert presets[0].bpm == 140
-
-    reset_presets()
-    settings.reload()
-    assert get_presets() == []
+def test_preset_json_round_trip():
+    preset = Preset("Fight", {"Arousal": 9}, tags=["Combat skirmish"], bpm=140)
+    assert Preset.json_load(preset.json_dump()) == preset
     assert json.loads(Preset.json_dump_list([])) == []
+
 
 
 def test_filter_config_defaults_are_not_shared():

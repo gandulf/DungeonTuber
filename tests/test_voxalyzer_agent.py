@@ -126,7 +126,7 @@ def test_agent_handler_runs_one_analysis_at_a_time(monkeypatch):
     active = []
     peak = []
 
-    def fake_analyze(self, download):
+    def fake_analyze(self, download, name=""):
         active.append(download)
         peak.append(len(active))
         time.sleep(0.05)

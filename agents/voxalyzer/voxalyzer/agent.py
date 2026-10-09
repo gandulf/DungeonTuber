@@ -75,8 +75,9 @@ class Analyzer:
                 tmp.write(chunk)
             return tmp.name
 
-    def _analyze(self, download: str) -> dict:
+    def _analyze(self, download: str, name: str = "") -> dict:
         if self.fake:
+            logger.info("Analyzed audio for %s (simulated)", name or download)
             return fake_analysis()
         from voxalyzer.analyzer import analyze_file, begin_session  # models and onnxruntime are only needed for real work
 
@@ -89,13 +90,14 @@ class Analyzer:
             os.remove(path)
         if analysis is None:
             raise OSError("The analysis produced no result")
+        logger.info("Analyzed audio for %s", name or download)
         return to_response(analysis)
 
     async def handle(self, request: dict):
         op = request.get("op")
         if op == "analyze":
             async with self._lock:
-                return await asyncio.to_thread(self._analyze, str(request["download"]))
+                return await asyncio.to_thread(self._analyze, str(request["download"]), str(request.get("name") or ""))
         if op == "version":
             return MODEL_VERSION
         raise ValueError(f"Unknown operation {op}")

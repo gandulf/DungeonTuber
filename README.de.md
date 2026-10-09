@@ -76,7 +76,7 @@ Die Stärke von DungeonTuber liegt im Filterbereich über der Song-Tabelle:
 
 ## 🤖 Agenten
 
-Agenten sind kleine Programme auf anderen Rechnern, die sich nach außen mit deinem Server verbinden, sodass der Server selbst überall laufen kann. Den Agenten-Token erstellst du unter **Einstellungen → Agenten** (Administrator); er wird nur einmal angezeigt, der Server speichert nur einen Hash. Verbundene Agenten werden dort aufgelistet und lassen sich wieder entfernen.
+Agenten sind kleine Programme auf anderen Rechnern, die sich nach außen mit deinem Server verbinden, sodass der Server selbst überall laufen kann. Jeder Benutzer erstellt seinen eigenen Agenten-Token unter **Einstellungen → Agenten**; er wird nur einmal angezeigt, der Server speichert nur einen Hash. Tokens lassen sich wieder löschen (die Agenten, die sie nutzen, werden getrennt); der SuperAdmin sieht und löscht alle Tokens. Verbundene Agenten werden dort aufgelistet und können vom SuperAdmin entfernt werden.
 
 | Agent | Wo er läuft | Was er tut |
 |---|---|---|

@@ -1,17 +1,17 @@
-"""Server-side (per GM) settings, categories, presets, version and locales."""
+"""Server-side settings, categories, the presets of the users, version and locales."""
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from core import i18n
-from core.settings import AppSettings, MusicCategory, Preset, SettingKeys, get_music_categories, get_presets, set_music_categories, \
-    set_presets, settings
+from core.settings import AppSettings, MusicCategory, Preset, SettingKeys, get_music_categories, set_music_categories, settings
 from core.utils import DOWNLOAD_LINK, get_broadcast_ip, get_ip, get_current_version, get_latest_version, \
     is_newer_version_available
-from server.auth import require_admin, require_auth
+from server.auth import current_user, require_admin, require_auth
 from server.config import default_library_roots, get_config, get_library_roots
 from server.events import hub
+from server.index import get_index
 from server.voxagent import current_backend
 
 router = APIRouter(dependencies=[Depends(require_auth)])
@@ -106,7 +106,7 @@ def get_categories():
     return [asdict(category) for category in get_music_categories()]
 
 
-@router.put("/api/categories")
+@router.put("/api/categories", dependencies=[Depends(require_admin)])
 def put_categories(categories: list[CategoryModel]):
     keys = [c.key.strip() for c in categories]
     if any(not key for key in keys) or len(set(keys)) != len(keys):
@@ -116,7 +116,7 @@ def put_categories(categories: list[CategoryModel]):
     return get_categories()
 
 
-@router.post("/api/categories/reset")
+@router.post("/api/categories/reset", dependencies=[Depends(require_admin)])
 def reset_categories():
     set_music_categories(None)
     return get_categories()
@@ -132,16 +132,22 @@ class PresetModel(BaseModel):
     bpm: int | None = None
 
 
+def _presets(user: str) -> list[dict]:
+    return get_index().user_state(user, "presets") or []
+
+
 @router.get("/api/presets")
-def get_presets_route():
-    return [asdict(preset) for preset in get_presets()]
+def get_presets_route(user: str = Depends(current_user)):
+    """The presets of the signed in user."""
+    return _presets(user)
 
 
 @router.put("/api/presets")
-def put_presets(presets: list[PresetModel]):
-    set_presets([Preset(p.name.strip(), {k: v for k, v in p.categories.items() if v is not None}, p.tags, p.genres, p.bpm)
-                 for p in presets if p.name.strip()])
-    return get_presets_route()
+def put_presets(presets: list[PresetModel], user: str = Depends(current_user)):
+    kept = [asdict(Preset(p.name.strip(), {k: v for k, v in p.categories.items() if v is not None}, p.tags, p.genres, p.bpm))
+            for p in presets if p.name.strip()]
+    get_index().set_user_state(user, "presets", kept)
+    return kept
 
 
 # --- misc ------------------------------------------------------------------

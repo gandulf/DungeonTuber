@@ -1,8 +1,10 @@
-from typing import Literal
+import json
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from core import i18n
 from core.settings import AppSettings, SettingKeys
 from server.index import get_index
 
@@ -45,6 +47,13 @@ class PlayerSettings(BaseModel):
     effectsVolume: int = Field(default=70, ge=0, le=150)
     normalize: bool
     crossfade: bool
+    dynamicScore: bool = True
+    dynamicColumns: bool = False
+
+
+VIEW_KEYS = ("showEffects", "showLights", "filter", "moodCollapsed", "showMoodMap", "columns", "columnWidths", "hiddenCategories", "titleInsteadOfFile",
+             "summaryUnderTitle", "rowStyle", "effectsGrid", "effectsTitle", "importOptions")  # the view preferences a user takes along (web/src/lib/stores/profile.svelte.ts)
+MAX_VIEW_BYTES = 20000
 
 
 class UserStateRequest(BaseModel):
@@ -53,6 +62,8 @@ class UserStateRequest(BaseModel):
     accent: str | None = None  # one of ACCENTS, "" for the default
     tour_done: bool | None = None
     player: PlayerSettings | None = None
+    view: dict[str, Any] | None = None  # see VIEW_KEYS
+    locale: str | None = None  # the language of the user, "" for the default of the server
 
 
 class NewUserRequest(BaseModel):
@@ -156,7 +167,8 @@ def get_user_state(user: str = Depends(current_user)):
     if favorites is None and user == ADMIN:  # the favorites from before they were per user
         favorites = AppSettings.value(SettingKeys.FAVORITES, [], type=list)
     return {"favorites": favorites or [], "tabs": index.user_state(user, "tabs"), "accent": index.user_state(user, "accent") or "",
-            "tour_done": bool(index.user_state(user, "tour_done")), "player": index.user_state(user, "player")}
+            "tour_done": bool(index.user_state(user, "tour_done")), "player": index.user_state(user, "player"),
+            "view": index.user_state(user, "view"), "locale": index.user_state(user, "locale") or ""}
 
 
 @router.put("/api/user/state")
@@ -174,4 +186,13 @@ def put_user_state(body: UserStateRequest, user: str = Depends(current_user)):
         index.set_user_state(user, "tour_done", body.tour_done)
     if body.player is not None:
         index.set_user_state(user, "player", body.player.model_dump())
+    if body.view is not None:
+        view = {key: value for key, value in body.view.items() if key in VIEW_KEYS}
+        if len(json.dumps(view)) > MAX_VIEW_BYTES:
+            raise HTTPException(status_code=413, detail="The view settings are too large")
+        index.set_user_state(user, "view", view)
+    if body.locale is not None:
+        if body.locale and body.locale not in i18n.available_locales():
+            raise HTTPException(status_code=400, detail="Unknown language")
+        index.set_user_state(user, "locale", body.locale)
     return get_user_state(user)

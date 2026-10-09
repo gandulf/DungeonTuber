@@ -13,6 +13,7 @@ from core.settings import AppSettings, SettingKeys
 from core.storage import AlreadyExists
 from core.ytimport import DEFAULT_MAX_MINUTES, ImportFailed, download, file_name
 from server import playlists
+from server.context import current_user_var
 from server.events import hub
 from server.index import get_index
 from server.jobs import analysis_queue
@@ -138,6 +139,7 @@ class DownloadQueue:
                 self._update(item, percent=value)
 
         self._update(item, state=DOWNLOADING, message="")
+        current_user_var.set(batch.user)  # a download agent of this user is preferred
         with tempfile.TemporaryDirectory(prefix="dt-import-") as tmp:
             result = (ytagent.download if ytagent.available() else download)(item.url, Path(tmp), lambda message: self._update(item, message=message), max_minutes(), batch.album, percent,
                               batch.split)

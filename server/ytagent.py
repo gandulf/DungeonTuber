@@ -13,6 +13,7 @@ from typing import Callable
 from core.i18n import _
 from core.ytimport import DEFAULT_MAX_MINUTES, Downloaded, ImportFailed, RemoteEntry, Resolved
 from server.agents import Agent, AgentError, agent_hub
+from server.context import current_user_var
 
 logger = logging.getLogger(__file__)
 
@@ -36,15 +37,15 @@ def upload_dir(ticket: str) -> Path | None:
 
 def _call(op: str, timeout: float, on_progress: Callable[[dict], None] | None = None, **args):
     """Runs a request on the server's event loop (called from worker threads); agent failures become ImportFailed."""
-    agent = agent_hub.get(KIND)
-    if agent is None or _loop is None:
-        raise ImportFailed(_("No YouTube agent connected"))
-    try:
-        return asyncio.run_coroutine_threadsafe(agent.call(op, timeout=timeout, on_progress=on_progress, **args), _loop).result(timeout + 10)
-    except AgentError as e:
-        raise ImportFailed(str(e))
-    except (ConnectionError, TimeoutError, OSError) as e:
-        raise ImportFailed(str(e) or _("The YouTube agent did not answer"))
+    with agent_hub.lease(KIND, current_user_var.get()) as agent:  # the agent of the requesting user (their IP and cookies), else the least busy one
+        if agent is None or _loop is None:
+            raise ImportFailed(_("No YouTube agent connected"))
+        try:
+            return asyncio.run_coroutine_threadsafe(agent.call(op, timeout=timeout, on_progress=on_progress, **args), _loop).result(timeout + 10)
+        except AgentError as e:
+            raise ImportFailed(str(e))
+        except (ConnectionError, TimeoutError, OSError) as e:
+            raise ImportFailed(str(e) or _("The YouTube agent did not answer"))
 
 
 def resolve(url: str, progress=None, whole: bool | None = None) -> Resolved:

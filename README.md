@@ -76,7 +76,7 @@ The power of DungeonTuber lies in the filter panel above the song table:
 
 ## 🤖 Agents
 
-Agents are small programs on other machines that connect *out* to your server, so the server itself can run anywhere. Create the agent token in **Settings → Agents** (administrator); it is shown once, and the server only keeps a hash. Connected agents are listed there and can be removed again.
+Agents are small programs on other machines that connect *out* to your server, so the server itself can run anywhere. Every user creates their own agent token in **Settings → Agents**; it is shown once, and the server only keeps a hash. Tokens can be deleted again (the agents using them are disconnected); the SuperAdmin sees and can delete all tokens. Connected agents are listed there and can be removed by the SuperAdmin.
 
 | Agent | Where it runs | What it does |
 |---|---|---|

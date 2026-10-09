@@ -25,6 +25,8 @@
     return player.effectPlaying && player.effect?.id === effect.id;
   }
 
+  const admin = data.auth?.is_admin !== false;
+
   function chooseDirectory() {
     openDialog(SelectFolderDialog, {
       title: t('Select Effects Directory'),
@@ -45,10 +47,26 @@
         ...(data.settings?.voxalyzerActive !== false ? [{ label: t('Analyze'), icon: 'sparkles', action: () => analyze([variant.path]) }] : []),
         { separator: true },
       ] : []),
-      { label: t('Select Effects Directory'), icon: 'folder', action: chooseDirectory },
+      ...(admin ? [{ label: t('Select Effects Directory'), icon: 'folder', action: chooseDirectory }] : []),
       { label: t('Refresh'), icon: 'refresh', action: loadEffects },
       { label: t('Use mp3 title instead of file name'), checked: prefs.effectsTitle, action: () => { prefs.effectsTitle = !prefs.effectsTitle; savePrefs(); } },
     ]);
+  }
+
+  /** Typing while the panel has the focus filters the effects (like the song table); the filter is shown as a small overlay. */
+  function onKeydown(event: KeyboardEvent) {
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select') || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === 'Escape' && effects.search) effects.search = '';
+    else if (event.key === 'Backspace' && effects.search) effects.search = effects.search.slice(0, -1);
+    else if (event.key.length === 1 && /[\p{L}\p{N} _\-]/u.test(event.key) && (event.key !== ' ' || effects.search)) effects.search += event.key;
+    else return;
+    event.preventDefault();
+  }
+
+  /** A space of the search must not click the focused effect when the key is released. */
+  function onKeyup(event: KeyboardEvent) {
+    if (event.key === ' ' && effects.search) event.preventDefault();
   }
 
   function setGrid(grid: boolean) {
@@ -66,7 +84,8 @@
   }
 </script>
 
-<section class="card soundscapes" data-tour="effects" oncontextmenu={(e) => menu(e)} aria-label={t('Effects')}>
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+<section class="card soundscapes" data-tour="effects" role="group" tabindex="0" onkeydown={onKeydown} onkeyup={onKeyup} oncontextmenu={(e) => menu(e)} aria-label={t('Effects')}>
   <div class="head">
     <span class="glyph"><Icon name="waves" size={17} /></span>
     <h3 class="card-title">{t('Soundscapes')}</h3>
@@ -88,14 +107,18 @@
   </div>
   <VolumeControl compact volume={prefs.effectsVolume} {muted} onchange={(v) => { muted = false; setEffectsVolume(v); }} onmute={mute} />
 
-  {#if effects.list.length > 6}
-    <input type="search" placeholder={t('Filter songs...')} bind:value={effects.search} />
+  {#if effects.search}
+    <div class="search-pill" class:none={!list.length}><Icon name="search" size={13} /> {effects.search}</div>
   {/if}
 
   {#if !effects.directory}
     <div class="empty">
       <p class="muted">{t('No effects directory configured.')}</p>
-      <button class="btn sm" onclick={chooseDirectory}><Icon name="folder" size={14} /> {t('Select Effects Directory')}</button>
+      {#if admin}
+        <button class="btn sm" onclick={chooseDirectory}><Icon name="folder" size={14} /> {t('Select Effects Directory')}</button>
+      {:else}
+        <p class="muted small">{t('An administrator has to select the effects directory.')}</p>
+      {/if}
     </div>
   {:else if !effects.list.length}
     <div class="empty muted">{effects.loading ? t('Loading…') : t('No MP3 files found.')}</div>
@@ -128,7 +151,9 @@
 </section>
 
 <style>
-  .soundscapes { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .soundscapes { position: relative; padding: 16px; display: flex; flex-direction: column; gap: 12px; outline: none; }
+  .search-pill { position: absolute; top: 12px; right: 12px; z-index: 2; padding: 4px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--accent); box-shadow: var(--shadow); display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
+  .search-pill.none { border-color: var(--red); }
   .head { display: flex; align-items: center; gap: 9px; }
   .glyph { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
   .grow { flex: 1; }
