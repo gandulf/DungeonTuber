@@ -11,7 +11,7 @@
   --radius: 12px;
   --radius-sm: 8px;
 
-  --ambient: 124, 92, 255; /* rgb of the current cover, set at runtime */
+  --ambient: var(--accent-rgb, 124, 92, 255); /* rgb of the current cover, set at runtime; the accent without one */
 
   --bg: #f4f2fa;
   --bg-2: #ece9f6;

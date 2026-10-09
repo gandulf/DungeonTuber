@@ -1,11 +1,10 @@
 // Tints the UI with the average colour of the current cover (CSS variable --ambient).
 const cache = new Map<string, string>();
-const FALLBACK = '124, 92, 255';
 
 export async function applyAmbient(url: string | null) {
   const root = document.documentElement;
   if (!url) {
-    root.style.setProperty('--ambient', FALLBACK);
+    root.style.removeProperty('--ambient'); // app.css: the colour of the accent
     return;
   }
   const cached = cache.get(url);
@@ -33,6 +32,6 @@ export async function applyAmbient(url: string | null) {
     cache.set(url, value);
     root.style.setProperty('--ambient', value);
   } catch {
-    root.style.setProperty('--ambient', FALLBACK);
+    root.style.removeProperty('--ambient'); // app.css: the colour of the accent
   }
 }

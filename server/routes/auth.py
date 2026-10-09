@@ -35,7 +35,7 @@ class TabsState(BaseModel):
     active: str | None = None
 
 
-ACCENTS = ("violet", "blue", "teal", "green", "amber", "orange", "red", "pink")  # the colours of web/src/lib/accent.ts
+ACCENTS = ("violet", "blue", "teal", "green", "amber", "orange", "red", "darkred", "pink")  # the colours of web/src/lib/accent.ts
 
 
 class PlayerSettings(BaseModel):
