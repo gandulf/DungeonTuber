@@ -7,13 +7,13 @@ agent fetches the mp3 with its token, analyzes it and answers with the result, w
 import asyncio
 import logging
 import secrets
-import threading
 from os import PathLike
 from pathlib import Path
 
 from core.analyzer import AnalyzerBackend
 from server import voxcloud
 from server.agents import Agent, agent_hub
+from server.context import current_user_var
 from server.events import hub
 
 logger = logging.getLogger(__file__)
@@ -25,7 +25,6 @@ KIND = "voxalyzer"
 
 _loop: asyncio.AbstractEventLoop | None = None
 _tickets: dict[str, Path] = {}
-_gate = threading.Semaphore(1)  # one file at a time: the agent has a single GPU session and the call timeout is per file
 
 
 def ticket_path(ticket: str) -> Path | None:
@@ -37,22 +36,22 @@ class AgentVoxalyzerBackend(AnalyzerBackend):
     name = "agent"
 
     def analyze_mp3(self, file_path: PathLike[str]) -> dict | None:
-        agent = agent_hub.get(KIND)
-        if agent is None or _loop is None:
-            raise ConnectionError("No Voxalyzer agent connected")
-        with _gate:
-            ticket = secrets.token_urlsafe(24)
-            _tickets[ticket] = Path(file_path)
-            try:
-                call = asyncio.run_coroutine_threadsafe(
-                    agent.call("analyze", timeout=ANALYZE_TIMEOUT, download=f"/api/agents/files/{ticket}"), _loop)
-                return call.result(ANALYZE_TIMEOUT + 10)
-            finally:
-                _tickets.pop(ticket, None)
+        with agent_hub.lease(KIND, current_user_var.get()) as agent:
+            if agent is None or _loop is None:
+                raise ConnectionError("No Voxalyzer agent connected")
+            with agent.gate:  # one file at a time per agent: it has a single GPU session and the call timeout is per file
+                ticket = secrets.token_urlsafe(24)
+                _tickets[ticket] = Path(file_path)
+                try:
+                    call = asyncio.run_coroutine_threadsafe(
+                        agent.call("analyze", timeout=ANALYZE_TIMEOUT, download=f"/api/agents/files/{ticket}", name=Path(file_path).name), _loop)
+                    return call.result(ANALYZE_TIMEOUT + 10)
+                finally:
+                    _tickets.pop(ticket, None)
 
 
 def current_backend() -> AnalyzerBackend | None:
-    """The connected Voxalyzer agent, else the cloud function; None when nothing can analyze."""
+    """A connected Voxalyzer agent, else the cloud function; None when nothing can analyze."""
     return AgentVoxalyzerBackend() if agent_hub.get(KIND) is not None else voxcloud.current_backend()
 
 

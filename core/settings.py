@@ -42,7 +42,6 @@ class SettingKeys(StrEnum):
     USERS = "users"
 
     CATEGORIES = "categories"
-    PRESETS = "presets"
 
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
     IMPORT_MAX_MINUTES = "importMaxMinutes"
@@ -59,7 +58,7 @@ class SettingKeys(StrEnum):
     SERVER_PASSWORD_HASH = "serverPasswordHash"
     SERVER_SECRET = "serverSecret"
     # SHA-256 of the token that agents (WiZ lights, analysis) use to connect; see server/agents.py
-    AGENT_TOKEN_HASH = "agentTokenHash"
+    AGENT_TOKENS = "agentTokens"  # tokens of the users: list of dicts with id, name, user, hash, created, used
 
 
 def default_settings_path() -> str:
@@ -170,61 +169,19 @@ class Preset:
 
 
 class SettingsStore:
-    """Holds the presets and music categories and persists them through the settings backend."""
+    """Holds the music categories and persists them through the settings backend."""
 
     def __init__(self, backend: JsonSettings):
         self._backend = backend
-        self._presets: list[Preset] | None = None
         self._music_categories: list[MusicCategory] | None = None
         self._custom_categories_loaded = False
         self._category_keys: list[str] | None = None
 
     def reload(self):
         """Forget cached values so they are read from the backend again."""
-        self._presets = None
         self._music_categories = None
         self._custom_categories_loaded = False
         self._category_keys = None
-
-    # presets
-    def get_presets(self) -> list[Preset]:
-        if self._presets is None:
-            self._presets = self._load_presets()
-        return self._presets
-
-    def _load_presets(self) -> list[Preset]:
-        raw = self._backend.value(SettingKeys.PRESETS)
-        if not raw:
-            return []
-        try:
-            data = json.loads(raw) if isinstance(raw, str) else raw
-            return [Preset(**d) for d in data if d.get("name") is not None]
-        except (TypeError, ValueError, AttributeError) as e:
-            logger.error("Failed to load presets: {0}", e)
-            return []
-
-    def set_presets(self, presets: list[Preset] | None):
-        if presets is None:
-            self._presets = []
-            self._backend.remove(SettingKeys.PRESETS)
-        else:
-            self._presets = [preset for preset in presets if preset.name is not None]
-            self._save_presets()
-
-    def add_preset(self, preset: Preset):
-        self.get_presets().append(preset)
-        self._save_presets()
-
-    def remove_preset(self, preset: Preset):
-        self.get_presets().remove(preset)
-        self._save_presets()
-
-    def reset_presets(self):
-        self._presets = []
-        self._backend.remove(SettingKeys.PRESETS)
-
-    def _save_presets(self):
-        self._backend.setValue(SettingKeys.PRESETS, Preset.json_dump_list(self.get_presets()))
 
     # music categories
     def get_music_categories(self) -> list[MusicCategory]:
@@ -271,26 +228,6 @@ class SettingsStore:
 
 # Shared application-wide store; the module-level functions below delegate to it.
 settings = SettingsStore(AppSettings)
-
-
-def get_presets() -> list[Preset]:
-    return settings.get_presets()
-
-
-def set_presets(presets: list[Preset] | None):
-    settings.set_presets(presets)
-
-
-def add_preset(preset: Preset):
-    settings.add_preset(preset)
-
-
-def remove_preset(preset: Preset):
-    settings.remove_preset(preset)
-
-
-def reset_presets():
-    settings.reset_presets()
 
 
 def get_music_categories() -> list[MusicCategory]:

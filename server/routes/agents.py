@@ -1,30 +1,47 @@
 """Agent status and token management (the agents themselves connect through the /ws/agent WebSocket)."""
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from fastapi.responses import FileResponse
 
-from server.agents import agent_hub, agent_token_set, bearer_token, new_agent_token, valid_agent_token
-from server.auth import require_admin, require_auth
+from server.agents import agent_hub, agent_tokens, bearer_token, create_agent_token, delete_agent_token, valid_agent_token
+from server.auth import current_user
+from server.users import ADMIN
 from server import ytagent
 from server.voxagent import ticket_path
 
 router = APIRouter()
 
 
-@router.get("/api/agents", dependencies=[Depends(require_auth)])
-def agents():
-    return {"tokenSet": agent_token_set(), "connected": agent_hub.status()}
+@router.get("/api/agents")
+def agents(user: str = Depends(current_user)):
+    """The connected agents and the tokens: everybody sees their own, the SuperAdmin all of them."""
+    return {"tokens": agent_tokens(None if user == ADMIN else user), "connected": agent_hub.status()}
 
 
-@router.post("/api/agents/token", dependencies=[Depends(require_admin)])
-def create_token():
-    """Generates a new agent token; it is shown once, only its hash is stored."""
-    return {"token": new_agent_token()}
+class TokenRequest(BaseModel):
+    name: str = ""
 
 
-@router.delete("/api/agents/{kind}", dependencies=[Depends(require_admin)])
-async def remove_agent(kind: str):
-    """Disconnects an agent; it is told not to reconnect (a new token locks out agents for good)."""
-    if not await agent_hub.remove(kind):
+@router.post("/api/agents/tokens")
+def create_token(body: TokenRequest, user: str = Depends(current_user)):
+    """Creates a token for the signed-in user; it is shown once, only its hash is stored."""
+    token, entry = create_agent_token(user, body.name)
+    return {"token": token, "id": entry["id"]}
+
+
+@router.delete("/api/agents/tokens/{token_id}")
+async def remove_token(token_id: str, user: str = Depends(current_user)):
+    """Revokes a token (the SuperAdmin any, everybody else their own) and disconnects the agents that use it."""
+    if not delete_agent_token(token_id, None if user == ADMIN else user):
+        raise HTTPException(404, "No such token")
+    await agent_hub.revoke(token_id)
+    return {"tokens": agent_tokens(None if user == ADMIN else user), "connected": agent_hub.status()}
+
+
+@router.delete("/api/agents/{agent_id}")
+async def remove_agent(agent_id: int, user: str = Depends(current_user)):
+    """Disconnects an agent (the SuperAdmin any, everybody else their own); it is told not to reconnect."""
+    if not await agent_hub.remove(agent_id, None if user == ADMIN else user):
         raise HTTPException(404, "No such agent connected")
     return {"connected": agent_hub.status()}
 

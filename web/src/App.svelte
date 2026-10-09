@@ -11,6 +11,7 @@
   import { reloadDirTabs, reloadPlaylistTabs, restoreTabs, updateTrack } from './lib/stores/library.svelte';
   import { loadLights, setLightState } from './lib/stores/lights.svelte';
   import { applyPlayerSettings, refreshCurrentTrack } from './lib/stores/player.svelte';
+  import { applyViewSettings } from './lib/stores/profile.svelte';
   import { toast, ui } from './lib/stores/ui.svelte';
   import { connectEvents, disconnectEvents, onEvent } from './lib/ws';
   import Login from './components/Login.svelte';
@@ -35,6 +36,7 @@
       }
       await loadData();
       applyPlayerSettings(data.user.player);
+      applyViewSettings(data.user.view);
       restoreTabs();
       void loadEffects();
       void api.importStatus().then(setDownloads).catch(() => undefined);

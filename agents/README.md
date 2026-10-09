@@ -16,7 +16,7 @@ All agents read the same file, `agents.json`:
 { "server": "https://music.example.com", "token": "<agent token>", "name": "my-pc" }
 ```
 
-* **Get it from the server:** create the agent token under **Settings → Agents** and click **Download agents.json**. The file has the address of your server and the new token.
+* **Get it from the server:** create your agent token under **Settings → Agents** and click **Download agents.json**. The file has the address of your server and the new token.
 * **Where to put it:** next to the agent programs, or in the DungeonTuber data folder (`%APPDATA%\DungeonTuber` on Windows, `~/.config/DungeonTuber` elsewhere), or anywhere and point `DT_AGENT_CONFIG` at it.
 * **Precedence:** command line option, then environment variable (`DT_SERVER`, `DT_AGENT_TOKEN`, `DT_AGENT_NAME`), then `agents.json`, then the default. `name` is optional (default: the computer name).
 

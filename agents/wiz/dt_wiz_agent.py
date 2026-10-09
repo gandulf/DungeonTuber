@@ -125,10 +125,16 @@ class Bulbs:
         if op == "state":
             return await bulb.state()
         if op == "pilot":
+            logger.info("Set bulb %s to %s", bulb_name(request), request.get("params") or {})
             return await bulb.pilot_set(request.get("params") or {})
         if op == "off":
+            logger.info("Switched bulb %s off", bulb_name(request))
             return await bulb.off()
         raise ValueError(f"Unknown operation {op}")
+
+
+def bulb_name(request: dict) -> str:
+    return str(request.get("mac"))
 
 
 async def answer(websocket, bulbs: Bulbs, raw: str):

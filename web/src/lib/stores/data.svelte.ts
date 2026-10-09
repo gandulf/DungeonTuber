@@ -8,7 +8,7 @@ import { errorToast } from './ui.svelte';
 export const data = $state({
   auth: null as AuthState | null,
   settings: null as ServerSettings | null,
-  user: { favorites: [], tabs: null, accent: '', tour_done: false, player: null } as UserState,
+  user: { favorites: [], tabs: null, accent: '', tour_done: false, player: null, view: null, locale: '' } as UserState,
   categories: [] as MusicCategory[],
   presets: [] as Preset[],
   version: null as VersionInfo | null,
@@ -22,6 +22,17 @@ export async function setAccent(accent: string) {
   data.user.accent = accent;
   try {
     data.user = await api.putUserState({ accent });
+  } catch (e) {
+    errorToast(e);
+  }
+}
+
+/** Picks the language of the signed in user ('' for the default of the server); applied at once and kept on the server. */
+export async function setUserLocale(locale: string) {
+  data.user.locale = locale;
+  setLocale(locale || data.settings?.locale);
+  try {
+    data.user = await api.putUserState({ locale });
   } catch (e) {
     errorToast(e);
   }
@@ -41,7 +52,7 @@ export async function loadData() {
   data.categories = categories;
   data.presets = presets;
   data.locales = locales;
-  setLocale(settings.locale);
+  setLocale(user.locale || settings.locale);
   api.version().then((version) => (data.version = version)).catch(() => undefined);
 }
 
@@ -49,7 +60,7 @@ export async function saveSettings(values: Partial<Record<keyof ServerSettings, 
   try {
     data.settings = await api.putSettings(values);
     if ('locale' in values) {
-      setLocale(data.settings.locale);
+      setLocale(data.user.locale || data.settings.locale);
       data.categories = await api.categories();
     }
   } catch (e) {

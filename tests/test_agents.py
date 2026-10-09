@@ -74,17 +74,43 @@ def _wait(condition, seconds=5):
     return False
 
 
-def test_agent_token_is_stored_as_hash(client):
-    token = client.post("/api/agents/token").json()["token"]
+def test_agent_tokens_are_stored_as_hashes(client):
+    token = client.post("/api/agents/tokens", json={"name": "laptop"}).json()["token"]
 
     assert valid_agent_token(token)
     assert not valid_agent_token(token + "x")
     assert not valid_agent_token(None)
     assert token not in Path(AppSettings.path).read_text()
-    assert client.get("/api/agents").json() == {"tokenSet": True, "connected": []}
+    listed = client.get("/api/agents").json()
+    assert [(t["name"], t["user"]) for t in listed["tokens"]] == [("laptop", "admin")] and "hash" not in listed["tokens"][0]
 
-    second = client.post("/api/agents/token").json()["token"]
-    assert second != token and not valid_agent_token(token)
+    second = client.post("/api/agents/tokens", json={"name": "pc"}).json()  # several tokens are valid at the same time
+    assert valid_agent_token(token) and valid_agent_token(second["token"])
+    assert client.delete(f"/api/agents/tokens/{second['id']}").status_code == 200
+    assert valid_agent_token(token) and not valid_agent_token(second["token"])
+    assert client.delete(f"/api/agents/tokens/{second['id']}").status_code == 404
+
+
+def test_users_manage_their_own_tokens(client):
+    from server.agents import create_agent_token
+    own, entry = create_agent_token("alice", "alice pc")
+    other, other_entry = create_agent_token("bob", "bob pc")
+    admin_token = client.post("/api/agents/tokens", json={}).json()
+
+    assert {t["user"] for t in client.get("/api/agents").json()["tokens"]} == {"alice", "bob", "admin"}  # the SuperAdmin sees all
+    assert valid_agent_token(own) and valid_agent_token(other) and valid_agent_token(admin_token["token"])
+    assert client.delete(f"/api/agents/tokens/{entry['id']}").status_code == 200
+    assert not valid_agent_token(own) and valid_agent_token(other)
+
+
+def test_last_use_of_a_token_is_remembered(client):
+    token = client.post("/api/agents/tokens", json={"name": "pc"}).json()["token"]
+    assert client.get("/api/agents").json()["tokens"][0]["used"] is None
+
+    with _connect(client, token) as websocket:
+        websocket.send_text(json.dumps({"type": "hello", "kind": "lights", "name": "home"}))
+        assert json.loads(websocket.receive_text()) == {"type": "welcome"}
+    assert time.time() - client.get("/api/agents").json()["tokens"][0]["used"] < 60
 
 
 def test_agent_connection_needs_the_agent_token(client):
@@ -113,7 +139,7 @@ def test_lights_through_agent(client):
         data = client.get("/api/lights").json()
         assert data["agent"] is True
         assert all(light["online"] for light in data["lights"])
-        assert client.get("/api/agents").json()["connected"] == [{"kind": "lights", "name": "home"}]
+        assert [(x["kind"], x["name"], x["user"]) for x in client.get("/api/agents").json()["connected"]] == [("lights", "home", "admin")]
 
         mac = data["lights"][0]["mac"]
         light = client.patch(f"/api/lights/{mac}", json={"state": True, "color": "#00ff00", "brightness": 80}).json()
@@ -155,14 +181,15 @@ def test_agent_url():
 
 def test_admin_removes_a_connected_agent(client):
     set_agent_token("secret-agent-token")
-    assert client.delete("/api/agents/voxalyzer").status_code == 404
+    assert client.delete("/api/agents/999").status_code == 404
 
     with _connect(client, "secret-agent-token") as websocket:
         websocket.send_text(json.dumps({"type": "hello", "kind": "voxalyzer", "name": "gpu-box"}))
         assert json.loads(websocket.receive_text()) == {"type": "welcome"}
-        assert client.get("/api/agents").json()["connected"] == [{"kind": "voxalyzer", "name": "gpu-box"}]
+        connected = client.get("/api/agents").json()["connected"]
+        assert [(a["kind"], a["name"], a["user"]) for a in connected] == [("voxalyzer", "gpu-box", "admin")]
 
-        assert client.delete("/api/agents/voxalyzer").status_code == 200
+        assert client.delete(f"/api/agents/{connected[0]['id']}").status_code == 200
         with pytest.raises(WebSocketDisconnect) as closed:
             websocket.receive_text()
         assert closed.value.code == 4403  # the agent must not reconnect
@@ -182,4 +209,41 @@ def test_agent_changes_are_published_to_the_ui(client):
                 seen.append(message)
                 if message.get("event") == "agents.state":
                     break
-            assert any(m.get("event") == "agents.state" and m.get("data") == [{"kind": "voxalyzer", "name": "gpu-box"}] for m in seen), seen
+            assert any(m.get("event") == "agents.state" and [(x["kind"], x["name"]) for x in m.get("data")] == [("voxalyzer", "gpu-box")] for m in seen), seen
+
+
+def test_several_agents_of_a_kind_work_side_by_side(client):
+    from server.agents import agent_hub, create_agent_token
+    alice, _entry = create_agent_token("alice", "alice pc")
+    bob, _entry = create_agent_token("bob", "bob pc")
+
+    def hello(websocket, kind, name):
+        websocket.send_text(json.dumps({"type": "hello", "kind": kind, "name": name}))
+        assert json.loads(websocket.receive_text()) == {"type": "welcome"}
+
+    with _connect(client, alice) as first, _connect(client, bob) as second, _connect(client, bob) as third:
+        hello(first, "youtube", "alice-pc")
+        hello(second, "youtube", "bob-pc")
+        assert sorted(a["name"] for a in client.get("/api/agents").json()["connected"]) == ["alice-pc", "bob-pc"]
+
+        assert agent_hub.get("youtube", "bob").name == "bob-pc"  # the agent of the requesting user
+        assert agent_hub.get("youtube", "alice").name == "alice-pc"
+        with agent_hub.lease("youtube", "carol") as busy, agent_hub.lease("youtube", "carol") as other:  # otherwise the least busy one
+            assert busy is not other
+
+        hello(third, "youtube", "bob-pc")  # the same agent connecting again replaces its stale connection
+        assert _wait(lambda: sorted(a["name"] for a in client.get("/api/agents").json()["connected"]) == ["alice-pc", "bob-pc"])
+
+    assert _wait(lambda: client.get("/api/agents").json()["connected"] == [])
+
+
+def test_only_one_light_agent_is_connected(client):
+    from server.agents import create_agent_token
+    token, _entry = create_agent_token("admin", "lights")
+    with _connect(client, token) as first:
+        first.send_text(json.dumps({"type": "hello", "kind": "lights", "name": "one"}))
+        first.receive_text()
+        with _connect(client, token) as second:
+            second.send_text(json.dumps({"type": "hello", "kind": "lights", "name": "two"}))
+            second.receive_text()
+            assert _wait(lambda: [a["name"] for a in client.get("/api/agents").json()["connected"]] == ["two"])

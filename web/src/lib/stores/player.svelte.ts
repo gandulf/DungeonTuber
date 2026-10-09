@@ -50,8 +50,9 @@ export function applyAudioPrefs() {
 }
 
 // --- the player options of the signed in user ---
-// They are kept on the server with the user profile, so every device starts with the same shuffle, repeat, volume, normalization and crossfade.
-const currentSettings = (): PlayerSettings => ({ shuffle: prefs.shuffle, repeat: prefs.repeat, volume: prefs.volume, muted: prefs.muted, effectsVolume: prefs.effectsVolume, normalize: prefs.normalize, crossfade: prefs.crossfade });
+// They are kept on the server with the user profile, so every device starts with the same shuffle, repeat, volume, normalization, crossfade and dynamic table columns.
+const currentSettings = (): PlayerSettings => ({ shuffle: prefs.shuffle, repeat: prefs.repeat, volume: prefs.volume, muted: prefs.muted, effectsVolume: prefs.effectsVolume, normalize: prefs.normalize, crossfade: prefs.crossfade,
+  dynamicScore: prefs.dynamicScore, dynamicColumns: prefs.dynamicColumns });
 let known = ''; // what the server has (or is being sent)
 let settingsLoaded = $state(false);
 

@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { ACCENTS, DEFAULT_ACCENT } from '../../lib/accent';
-  import { data, saveCategories, saveSettings, setAccent } from '../../lib/stores/data.svelte';
+  import { data, saveCategories, saveSettings, setAccent, setUserLocale } from '../../lib/stores/data.svelte';
   import { loadLights } from '../../lib/stores/lights.svelte';
   import { setNormalize } from '../../lib/stores/player.svelte';
   import { askConfirm, closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
-  import type { AgentInfo, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
+  import AgentTokenDialog from './AgentTokenDialog.svelte';
+  import CategoryEditDialog, { type CategoryRow } from './CategoryEditDialog.svelte';
+  import type { AgentInfo, AgentState, AgentToken, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import { onEvent } from '../../lib/ws';
   import Modal from './Modal.svelte';
@@ -55,13 +57,36 @@
     }
   }
 
-  interface CategoryRow { key: string; name: string; group: string; description: string; levels: string }
+  const LEVELS = ['1', '5', '10'];
   const toRow = (c: MusicCategory): CategoryRow => ({
     key: c.key, name: c.name, group: c.group ?? '', description: c.description,
-    levels: Object.entries(c.levels).map(([k, v]) => `${k}: ${v}`).join('\n'),
+    low: c.levels[1] ?? '', medium: c.levels[5] ?? '', high: c.levels[10] ?? '',
+    other: Object.fromEntries(Object.entries(c.levels).filter(([level]) => !LEVELS.includes(level))), isNew: false,
   });
+  const levelsOf = (row: CategoryRow): Record<string, string> => {
+    const levels: Record<string, string> = { ...row.other };
+    for (const [level, text] of [['1', row.low], ['5', row.medium], ['10', row.high]]) if (text.trim()) levels[level] = text.trim();
+    return levels;
+  };
   let categories = $state<CategoryRow[]>(data.categories.map(toRow));
   let categoriesDirty = $state(false);
+  /** The category of the edit popup (`index` null for a new one). */
+  let editing = $state<{ index: number | null; row: CategoryRow } | null>(null);
+  let catList = $state<HTMLElement | null>(null);
+
+  async function saveCategory(row: CategoryRow) {
+    if (!editing) return;
+    const { index } = editing;
+    editing = null;
+    categoriesDirty = true;
+    if (index === null) {
+      categories.push({ ...row, isNew: true });
+      await tick();
+      catList?.scrollTo({ top: catList.scrollHeight, behavior: 'smooth' }); // the new entry is at the end of a long list
+    } else {
+      categories[index] = { ...row, isNew: categories[index].isNew };
+    }
+  }
   let cookies = $state<{ set: boolean; updated: number | null }>({ set: false, updated: null });
   if (admin) void api.youtubeCookies().then((result) => (cookies = result)).catch(() => {});
 
@@ -117,8 +142,9 @@
     }
   }
 
-  let agents = $state<{ tokenSet: boolean; connected: AgentInfo[] } | null>(null);
-  let agentToken = $state('');
+  let agents = $state<AgentState | null>(null);
+  let newToken = $state<{ token: string; name: string } | null>(null); // a new token is only shown once, in a popup
+  let tokenName = $state('');
   void api.agents().then((result) => (agents = result)).catch(() => {});
   const stopAgentEvents = onEvent('agents.state', (connected) => agents && (agents = { ...agents, connected }));
   onDestroy(stopAgentEvents);
@@ -128,28 +154,27 @@
     const label = t(agentLabels[agent.kind] ?? agent.kind);
     if (!(await askConfirm(t('Remove {0}? It disconnects and does not reconnect.', `${label} (${agent.name})`)))) return;
     try {
-      const result = await api.removeAgent(agent.kind);
+      const result = await api.removeAgent(agent.id);
       if (agents) agents = { ...agents, connected: result.connected };
     } catch (e) {
       errorToast(e);
     }
   }
 
-  /** The settings all agents of a machine share (agents.json, see agents/README.md); the token only passes through this browser. */
-  function downloadAgentConfig() {
-    const config = { server: location.origin, token: agentToken };
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2) + '\n'], { type: 'application/json' }));
-    link.download = 'agents.json';
-    link.click();
-    URL.revokeObjectURL(link.href);
+  async function createAgentToken() {
+    try {
+      newToken = { token: (await api.createAgentToken(tokenName.trim())).token, name: tokenName.trim() };
+      tokenName = '';
+      agents = await api.agents();
+    } catch (e) {
+      errorToast(e);
+    }
   }
 
-  async function createAgentToken() {
-    if (agents?.tokenSet && !(await askConfirm(t('A new token locks out agents that use the current one. Continue?')))) return;
+  async function deleteAgentToken(token: AgentToken) {
+    if (!(await askConfirm(t('Delete the token {0}? Agents that use it disconnect and are locked out.', token.name || t('Unnamed'))))) return;
     try {
-      agentToken = (await api.createAgentToken()).token;
-      agents = await api.agents();
+      agents = await api.deleteAgentToken(token.id);
     } catch (e) {
       errorToast(e);
     }
@@ -158,15 +183,6 @@
   let password = $state('');
   let password2 = $state('');
   let saving = $state(false);
-
-  function parseLevels(text: string): Record<string, string> {
-    const levels: Record<string, string> = {};
-    for (const line of text.split('\n')) {
-      const match = line.match(/^\s*(\d+)\s*[:=]\s*(.+)$/);
-      if (match) levels[match[1]] = match[2].trim();
-    }
-    return levels;
-  }
 
   async function save() {
     saving = true;
@@ -191,7 +207,7 @@
           if (!key) continue;
           if (keysSeen.has(key)) throw new Error(t('Category keys must be unique: {0}', key));
           keysSeen.add(key);
-          list.push({ key, name: row.name.trim() || key, group: row.group.trim(), description: row.description, levels: parseLevels(row.levels) });
+          list.push({ key, name: row.name.trim() || key, group: row.group.trim(), description: row.description, levels: levelsOf(row) });
         }
         await saveCategories(list);
       }
@@ -211,8 +227,7 @@
   }
 
   function addCategory() {
-    categories.push({ key: '', name: t('New Category'), group: '', description: '', levels: '1: \n5: \n10: ' });
-    categoriesDirty = true;
+    editing = { index: null, row: { key: '', name: '', group: '', description: '', low: '', medium: '', high: '', other: {}, isNew: true } };
   }
 
   async function changePassword(remove = false) {
@@ -244,10 +259,10 @@
   ];
 </script>
 
-<Modal title={t('Settings')} onclose={closeDialog} width="820px">
+<Modal resizable title={t('Settings')} onclose={closeDialog} width="820px">
   <div class="layout">
     <nav>
-      {#each sections.filter(([key]) => admin || ['general', 'categories', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
+      {#each sections.filter(([key]) => admin || ['general', 'agents', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
         <button class:active={section === key} onclick={() => (section = key)}><Icon name={icon} size={16} /> {t(label)}</button>
       {/each}
     </nav>
@@ -264,13 +279,19 @@
             </button>
           {/each}
         </div>
-        <p class="muted small">{t('Only for you: the color is kept with your account.')}</p>
+        <label class="field">{t('Language')}
+          <select value={data.user.locale} onchange={(e) => setUserLocale(e.currentTarget.value)}>
+            <option value="">{data.settings?.locale ? t('Server default') : t('System Default')}</option>
+            {#each data.locales as locale (locale)}<option value={locale}>{t(locale)}</option>{/each}
+          </select>
+        </label>
         {#if admin}
-          <label class="field">{t('Language')}
+          <label class="field">{t('Server language')}
             <select bind:value={form.locale}>
               <option value="">{t('System Default')}</option>
               {#each data.locales as locale (locale)}<option value={locale}>{t(locale)}</option>{/each}
             </select>
+            <span class="muted small">{t('Language of server messages and category names, and the default of users who did not choose their own.')}</span>
           </label>
           <h4>{t('Analyzer')}</h4>
           <label class="check"><input type="checkbox" bind:checked={form.skipAnalyzedMusic} /> {t('Skip Analyzed Music')}</label>
@@ -317,22 +338,28 @@
         <p class="muted small">{t('All YouTube requests go through this proxy (http, https, socks4 or socks5). Leave empty to use the default of the server (DT_YT_PROXY) or none.')}</p>
       {:else if section === 'categories'}
         <div class="cat-head">
-          <span class="muted small">{t('Levels: one "value: description" per line')}</span>
+          <span class="muted small">{t('The mood categories songs are rated in.')}</span>
           <span class="grow"></span>
           <button class="btn" onclick={addCategory}><Icon name="plus" size={14} /> {t('Add')}</button>
           <button class="btn danger" onclick={resetCategories}>{t('Reset All')}</button>
         </div>
-        <div class="cats">
-          {#each categories as row, i (i)}
-            <div class="cat" oninput={() => (categoriesDirty = true)} role="group">
-              <input type="text" placeholder={t('Key')} bind:value={row.key} />
-              <input type="text" placeholder={t('Name')} bind:value={row.name} />
-              <input type="text" placeholder={t('Group')} bind:value={row.group} />
-              <button class="icon-btn" title={t('Remove')} onclick={() => { categories.splice(i, 1); categoriesDirty = true; }}><Icon name="trash" size={15} /></button>
-              <textarea rows="2" placeholder={t('Description')} bind:value={row.description}></textarea>
-              <textarea rows="3" placeholder="1: low&#10;5: medium&#10;10: high" bind:value={row.levels}></textarea>
-            </div>
-          {/each}
+        <div class="cats" bind:this={catList}>
+          <table class="cat-table">
+            <thead><tr><th>{t('Name')}</th><th>{t('Group')}</th><th>{t('Description')}</th><th></th></tr></thead>
+            <tbody>
+              {#each categories as row, i (i)}
+                <tr>
+                  <td class="strong">{row.name || row.key}</td>
+                  <td>{row.group || '–'}</td>
+                  <td class="desc"><span class="ellipsis">{row.description}</span></td>
+                  <td class="acts">
+                    <button class="icon-btn" title={t('Edit')} aria-label={t('Edit')} onclick={() => (editing = { index: i, row: { ...$state.snapshot(row) } })}><Icon name="edit" size={15} /></button>
+                    <button class="icon-btn" title={t('Remove')} aria-label={t('Remove')} onclick={() => { categories.splice(i, 1); categoriesDirty = true; }}><Icon name="trash" size={15} /></button>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
         </div>
       {:else if section === 'lights'}
         <label class="check"><input type="checkbox" bind:checked={form.lightsEnabled} /> {t('Enabled')} ({t('Wiz Lights')})</label>
@@ -342,26 +369,45 @@
           <span class="muted small">{t('Time to search for bulbs in seconds')}</span></label>
       {:else if section === 'agents'}
         <span class="muted small">{t('Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube).')}</span>
-        <div class="field">
-          <span>{t('Connected agents')}</span>
-          {#each agents?.connected ?? [] as agent (agent.kind)}
-            <div class="row agent">
-              <span class="grow">{t(agentLabels[agent.kind] ?? agent.kind)} <span class="muted small">{agent.name}</span></span>
-              <button class="icon-btn" title={t('Remove')} onclick={() => removeAgent(agent)}><Icon name="trash" size={14} /></button>
+        <section class="group">
+          <h4>{t('Connected agents')} <span class="count">{agents?.connected.length ?? 0}</span></h4>
+          {#each agents?.connected ?? [] as agent (agent.id)}
+            <div class="item">
+              <span class="dot on" title={t('Connected agents')}></span>
+              <div class="info">
+                <strong>{t(agentLabels[agent.kind] ?? agent.kind)}</strong>
+                <span class="meta"><span>{agent.name}</span>{#if agent.user}<span class="pill violet">{agent.user}</span>{/if}</span>
+              </div>
+              {#if admin || agent.user === data.auth?.user}<button class="icon-btn" title={t('Remove')} onclick={() => removeAgent(agent)}><Icon name="trash" size={14} /></button>{/if}
             </div>
           {:else}
-            <span class="muted small">{t('No agent connected')}</span>
+            <p class="empty">{t('No agent connected')}</p>
           {/each}
-        </div>
-        <div class="field">
-          <span>{t('Agent token')}</span>
-          {#if agentToken}
-            <input type="text" readonly value={agentToken} onfocus={(e) => e.currentTarget.select()} />
-            <span class="muted small">{t('Copy this token now, it is only shown once. Or download agents.json and put it next to the agents: all agents on a machine then start without arguments.')}</span>
-            <div class="row"><button class="btn" onclick={downloadAgentConfig}><Icon name="download" size={14} /> {t('Download agents.json')}</button></div>
-          {/if}
-          <div class="row"><button class="btn" onclick={createAgentToken}>{agents?.tokenSet ? t('New agent token') : t('Create agent token')}</button></div>
-        </div>
+        </section>
+        <section class="group">
+          <h4>{t('Agent tokens')} <span class="count">{agents?.tokens.length ?? 0}</span></h4>
+          {#each agents?.tokens ?? [] as token (token.id)}
+            <div class="item">
+              <span class="dot" class:on={!!token.used}></span>
+              <div class="info">
+                <strong>{token.name || t('Unnamed')}</strong>
+                <span class="meta">
+                  {#if admin}<span class="pill violet">{token.user}</span>{/if}
+                  <span>{t('Created {0}', new Date(token.created * 1000).toLocaleDateString())}</span>
+                  <span>{token.used ? t('Last used {0}', new Date(token.used * 1000).toLocaleString()) : t('Never used')}</span>
+                </span>
+              </div>
+              <button class="icon-btn" title={t('Remove')} onclick={() => deleteAgentToken(token)}><Icon name="trash" size={14} /></button>
+            </div>
+          {:else}
+            <p class="empty">{t('No agent token yet')}</p>
+          {/each}
+          <div class="row create">
+            <input type="text" class="grow" placeholder={t('Name of the token (e.g. the computer)')} bind:value={tokenName} />
+            <button class="btn" onclick={createAgentToken}><Icon name="plus" size={14} /> {t('Create agent token')}</button>
+          </div>
+        </section>
+        {#if admin}
         <h4>{t('Cloud analysis')}</h4>
         <span class="muted small">{t('Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.')}</span>
         <span class="small">{cloud.configured ? t('Configured ({0})', cloud.host ?? '') : t('Not configured')}</span>
@@ -372,13 +418,16 @@
           <button class="btn" disabled={!cloudUrl.trim() || !cloudKey.trim() || !cloudSecret.trim()} onclick={saveCloud}>{t('Save')}</button>
           {#if cloud.configured}<button class="btn danger" onclick={removeCloud}>{t('Remove')}</button>{/if}
         </div>
+        {/if}
       {:else if section === 'player'}
-        <p class="muted small">{t('These settings are stored in this browser.')}</p>
         <label class="check"><input type="checkbox" checked={prefs.crossfade} onchange={(e) => { prefs.crossfade = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Crossfade')}</label>
+        <span class="muted small">{t('The next song fades in while the current one fades out.')}</span>
         <label class="check"><input type="checkbox" checked={prefs.normalize} onchange={(e) => setNormalize((e.currentTarget as HTMLInputElement).checked)} /> {t('Normalize Volume')}</label>
         <span class="muted small">{t('All songs will be played at a normalized volume.')}</span>
         <label class="check"><input type="checkbox" checked={prefs.dynamicScore} onchange={(e) => { prefs.dynamicScore = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Dynamic Score Column')}</label>
+        <span class="muted small">{t('Shows the match score column only while a filter is active.')}</span>
         <label class="check"><input type="checkbox" checked={prefs.dynamicColumns} onchange={(e) => { prefs.dynamicColumns = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Dynamic Category Columns')}</label>
+        <span class="muted small">{t('Shows the BPM and mood columns only when the filter uses them.')}</span>
       {:else if section === 'security'}
         {#if !admin}
           <p>{t('Signed in as {0}', data.auth?.user ?? '')}</p>
@@ -409,6 +458,13 @@
     <button class="btn" onclick={closeDialog}>{t('Cancel')}</button>
     <button class="btn primary" disabled={saving} onclick={save}>{t('Save')}</button>
   {/snippet}
+
+  {#if newToken}
+    <AgentTokenDialog token={newToken.token} name={newToken.name} onclose={() => (newToken = null)} />
+  {/if}
+  {#if editing}
+    <CategoryEditDialog row={editing.row} onsave={saveCategory} onclose={() => (editing = null)} />
+  {/if}
 </Modal>
 
 <style>
@@ -427,7 +483,16 @@
   .swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; display: grid; place-items: center; color: #fff; cursor: pointer; box-shadow: var(--shadow-sm); }
   .swatch:hover { transform: scale(1.08); }
   .swatch.selected { border-color: var(--text); }
-  .row.agent { align-items: center; }
+  .group { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+  .group h4 { margin: 0 0 2px; display: flex; align-items: center; gap: 8px; font-size: var(--fs-lg); }
+  .count { font-size: var(--fs-xs); font-weight: 600; padding: 1px 8px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+  .item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+  .item .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-xs); color: var(--muted); }
+  .dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--border-strong); }
+  .dot.on { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+  .empty { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+  .create { padding-top: 6px; border-top: 1px dashed var(--border-strong); }
   .grow { flex: 1; }
   .grow { flex: 1; }
   .storage { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); align-items: center; }
@@ -436,8 +501,12 @@
   .warn { color: var(--danger, #d9534f); }
   .cat-head { display: flex; align-items: center; gap: 8px; }
   .cats { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow: auto; padding-right: 4px; }
-  .cat { display: grid; grid-template-columns: 1fr 1.3fr 1fr auto; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); }
-  .cat textarea:first-of-type { grid-column: 1 / 3; }
-  .cat textarea:last-of-type { grid-column: 3 / 5; }
+  .cat-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+  .cat-table th { text-align: left; font-size: var(--fs-xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); padding: 4px 8px; }
+  .cat-table td { padding: 6px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
+  .cat-table .strong { font-weight: 600; }
+  .cat-table .desc { max-width: 220px; color: var(--muted); }
+  .cat-table .desc .ellipsis { display: block; }
+  .cat-table .acts { white-space: nowrap; text-align: right; width: 72px; }
   @media (max-width: 640px) { .layout { grid-template-columns: 1fr; } nav { flex-direction: row; flex-wrap: wrap; } }
 </style>

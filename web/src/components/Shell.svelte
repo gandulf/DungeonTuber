@@ -6,6 +6,7 @@
   import { t } from '../lib/i18n.svelte';
   import { data } from '../lib/stores/data.svelte';
   import { downloads } from '../lib/stores/downloads.svelte';
+  import { effects } from '../lib/stores/effects.svelte';
   import { activeTab, library } from '../lib/stores/library.svelte';
   import { cycleRepeat, next, player, previous, setVolume, toggleEffect, toggleMute, togglePlay } from '../lib/stores/player.svelte';
   import { closeMenu, ui } from '../lib/stores/ui.svelte';
@@ -42,6 +43,12 @@
     return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
   }
 
+  /** While a search typed into the song table or the effects list is running, its keys (the space included) belong to the search. */
+  function searching(event: KeyboardEvent): boolean {
+    const target = event.target as HTMLElement;
+    return (!!library.search && !!target.closest('[data-tour="table"]')) || (!!effects.search && !!target.closest('[data-tour="effects"]'));
+  }
+
   function setScale(scale: number) {
     prefs.fontScale = Math.round(Math.max(0.8, Math.min(1.5, scale)) * 10) / 10;
     savePrefs();
@@ -54,6 +61,7 @@
       else void document.documentElement.requestFullscreen();
       return;
     }
+    if (searching(event)) return;
     if (!(event.ctrlKey || event.metaKey) || typing(event)) {
       if (event.key === ' ' && !typing(event) && !(event.target as HTMLElement).closest('button')) {
         event.preventDefault();

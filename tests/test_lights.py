@@ -71,13 +71,13 @@ def test_registry_load_and_save():
 
 
 def test_registry_invalid_config_only_removes_lights():
-    AppSettings.setValue(SettingKeys.PRESETS, "[]")
+    AppSettings.setValue(SettingKeys.LOCALE, "de")
     AppSettings.setValue(SettingKeys.LIGHTS_CONFIG, "{broken")
 
     LightRegistry().load()
 
     assert not AppSettings.contains(SettingKeys.LIGHTS_CONFIG)
-    assert AppSettings.contains(SettingKeys.PRESETS)
+    assert AppSettings.contains(SettingKeys.LOCALE)
 
 
 def test_fake_discovery():

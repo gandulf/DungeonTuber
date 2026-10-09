@@ -85,6 +85,7 @@ class Worker:
             progress(message=_("Uploading {0}...").format(result.title))
             for index, song in enumerate(songs):
                 self._upload(str(request["upload"]), index, song.path)
+            logger.info("Downloaded audio from YouTube at {0}: {1} ({2} song(s))", request["url"], result.title, len(songs))
             return {"title": result.title, "name": result.name, "split": bool(result.parts),
                     "files": [{"name": song.name, "title": song.title} for song in songs]}
 
@@ -92,6 +93,7 @@ class Worker:
         op = request.get("op")
         if op == "resolve":
             resolved = await asyncio.to_thread(ytimport.resolve, str(request["url"]), None, request.get("whole"))
+            logger.info("Looked up {0}: {1}", request["url"], resolved.title or f"{len(resolved.entries)} video(s)")
             return asdict(resolved)
         if op == "download":
             async with self._lock:

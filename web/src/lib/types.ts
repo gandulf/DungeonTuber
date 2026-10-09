@@ -100,8 +100,23 @@ export interface Light extends LightSetting {
 }
 
 export interface AgentInfo {
+  id: number;
   kind: string;
   name: string;
+  user: string | null;
+}
+
+export interface AgentToken {
+  id: string;
+  name: string;
+  user: string;
+  created: number;
+  used: number | null;
+}
+
+export interface AgentState {
+  tokens: AgentToken[];
+  connected: AgentInfo[];
 }
 
 export interface ServerSettings {
@@ -148,6 +163,28 @@ export interface UserState {
   accent: string;
   tour_done: boolean;
   player: PlayerSettings | null;
+  /** The view preferences (see stores/profile.svelte.ts). */
+  view: Partial<ViewSettings> | null;
+  /** The language of the user, '' for the default of the server. */
+  locale: string;
+}
+
+/** The view preferences that follow a user from device to device (a subset of Prefs). */
+export interface ViewSettings {
+  showEffects: boolean;
+  showLights: boolean;
+  filter: { presets: boolean; circumplex: boolean; sliders: boolean; bpm: boolean; tags: boolean; genres: boolean };
+  moodCollapsed: boolean;
+  showMoodMap: boolean;
+  columns: Record<string, boolean>;
+  columnWidths: Record<string, number>;
+  hiddenCategories: string[];
+  titleInsteadOfFile: boolean;
+  summaryUnderTitle: boolean;
+  rowStyle: 'small' | 'medium' | 'large';
+  effectsGrid: boolean;
+  effectsTitle: boolean;
+  importOptions: { makePlaylist: boolean; makeFolder: boolean; split: boolean; analyze: boolean };
 }
 
 /** The player options that follow a user from device to device. */
@@ -159,6 +196,8 @@ export interface PlayerSettings {
   effectsVolume: number;
   normalize: boolean;
   crossfade: boolean;
+  dynamicScore: boolean;
+  dynamicColumns: boolean;
 }
 
 export interface UserInfo {
