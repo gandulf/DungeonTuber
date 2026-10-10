@@ -64,7 +64,7 @@ const defaults: Prefs = {
   leftWidth: 260,
   rightWidth: 300,
   filter: { presets: true, circumplex: true, sliders: true, bpm: true, tags: true, genres: true },
-  columns: { index: true, favorite: true, cover: true, title: false, summary: false, artist: false, album: false, genre: true, bpm: true, score: true, tags: true, duration: true },
+  columns: { index: true, favorite: true, cover: true, title: false, summary: false, artist: false, album: false, track: false, genre: true, bpm: true, score: true, tags: true, duration: true },
   hiddenCategories: [],
   columnWidths: {},
   dynamicColumns: false,

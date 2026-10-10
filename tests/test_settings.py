@@ -50,7 +50,7 @@ def test_default_categories():
     keys = get_category_keys()
 
     assert keys[:2] == ["Valence", "Arousal"]
-    assert len(get_music_categories()) == 9
+    assert len(get_music_categories()) == 12
 
 
 def test_custom_categories_are_loaded_from_settings():
@@ -65,7 +65,7 @@ def test_invalid_custom_categories_are_dropped():
     AppSettings.setValue(SettingKeys.CATEGORIES, "{broken")
     settings.reload()
 
-    assert len(get_music_categories()) == 9
+    assert len(get_music_categories()) == 12
     assert not AppSettings.contains(SettingKeys.CATEGORIES)
 
 
@@ -76,7 +76,7 @@ def test_set_music_categories_resets_key_cache():
     assert get_category_keys() == ["epic"]
 
     set_music_categories(None)
-    assert len(get_category_keys()) == 9
+    assert len(get_category_keys()) == 12
 
 
 def test_preset_json_round_trip():

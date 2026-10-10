@@ -2,9 +2,9 @@
 import { api, pathToId } from './api';
 import { t } from './i18n.svelte';
 import { prefs, savePrefs } from './prefs.svelte';
-import { data } from './stores/data.svelte';
+import { data, forgetFavorites, isPlaylistPath } from './stores/data.svelte';
 import { loadEffects } from './stores/effects.svelte';
-import { activeTab, addToPlaylist, closeTab, library, loadTab, openTab, reloadAllDirTabs, reloadDirTabs, removeFromPlaylist, updateTrack } from './stores/library.svelte';
+import { activeTab, addToPlaylist, closeTab, library, loadTab, openTab, reloadAllDirTabs, reloadDirTabs, reloadPlaylistTabs, removeFromPlaylist, updateTrack } from './stores/library.svelte';
 import { playTrack, refreshCurrentTrack } from './stores/player.svelte';
 import { askConfirm, askText, errorToast, openDialog, toast, ui, type MenuItem } from './stores/ui.svelte';
 import type { JobKind } from './stores/downloads.svelte';
@@ -13,7 +13,7 @@ import { isMp3, itemsFromDrop, type UploadItem } from './upload';
 import EditSongDialog from '../components/dialogs/EditSongDialog.svelte';
 import DownloadsDialog from '../components/dialogs/DownloadsDialog.svelte';
 import ImportDialog from '../components/dialogs/ImportDialog.svelte';
-import NewPlaylistDialog from '../components/dialogs/NewPlaylistDialog.svelte';
+import PlaylistDialog from '../components/dialogs/PlaylistDialog.svelte';
 import UploadDialog from '../components/dialogs/UploadDialog.svelte';
 
 export function dirname(path: string): string {
@@ -70,8 +70,18 @@ export async function libraryRootsChanged() {
   await rescanLibrary();
 }
 
-export function editSong(track: Track) {
-  openDialog(EditSongDialog, { track });
+/** Edits the tags of a song; opened from a playlist, its scene name there comes first. */
+export function editSong(track: Track, playlist?: string) {
+  openDialog(EditSongDialog, { track, playlist });
+}
+
+/** Edits a song picked in the file tree (which only knows its id). */
+export async function editSongById(id: string) {
+  try {
+    editSong(await api.track(id));
+  } catch (e) {
+    errorToast(e);
+  }
 }
 
 export async function toggleFavorite(track: Track) {
@@ -89,7 +99,27 @@ export function newPlaylist(ids: string[] = [], directory?: string) {
   const tab = activeTab();
   const current = tab?.type === 'dir' ? tab.path : tab ? dirname(tab.path) : null;
   const dir = directory ?? current ?? prefs.treeRoot ?? data.settings?.libraryRoots[0];
-  if (dir) openDialog(NewPlaylistDialog, { directory: dir, ids });
+  if (dir) openDialog(PlaylistDialog, { directory: dir, ids });
+}
+
+/** Names the scene a song is used for in one playlist (kept in the playlist, the mp3 stays as it is). */
+export async function editScene(playlist: string, track: Track) {
+  const scene = await askText(t('Scene name'), t('Only used in this playlist'), track.scene ?? '');
+  if (scene !== null && scene !== track.scene) await setScene(playlist, track, scene);
+}
+
+async function setScene(playlist: string, track: Track, scene: string) {
+  try {
+    await api.setScene(playlist, track.id, scene);
+    reloadPlaylistTabs(playlist);
+  } catch (e) {
+    errorToast(e);
+  }
+}
+
+/** Edits the name and the visibility (public or private) of a playlist. */
+export function editPlaylist(playlist: { path: string; name: string; private?: boolean }) {
+  openDialog(PlaylistDialog, { playlist: { path: playlist.path, name: playlist.name, private: !!playlist.private } });
 }
 
 /** Uploads mp3 files one request at a time (folders below `directory` are created from the item paths); returns the stored tracks. */
@@ -159,6 +189,7 @@ export async function deleteItems(items: { path: string; name: string; dir?: boo
   }
   const gone = (path: string) => items.some((item) => path === item.path || path.startsWith(item.path + '/'));
   for (const tab of [...library.tabs]) if (gone(tab.path)) closeTab(tab.key);
+  await forgetFavorites(items.map((item) => item.path));
   for (const tab of library.tabs) void loadTab(tab.key, true);
 }
 
@@ -181,12 +212,14 @@ export function uploadTarget(): string | null {
   return tab?.type === 'dir' ? tab.path : (prefs.treeRoot ?? data.settings?.libraryRoots[0] ?? null);
 }
 
+/** "Add to playlist": the favorite playlists and the open ones. */
 export function playlistMenu(ids: string[]): MenuItem[] {
-  const playlists = library.tabs.filter((tab) => tab.type === 'playlist');
+  const paths = [...new Set([...data.user.favorites.filter(isPlaylistPath), ...library.tabs.filter((tab) => tab.type === 'playlist').map((tab) => tab.path)])];
+  const name = (path: string) => path.split('/').pop()!.replace(/\.m3u$/i, '');
   return [
     { label: t('New Playlist…'), icon: 'plus', action: () => newPlaylist(ids) },
-    ...(playlists.length ? [{ separator: true }] : []),
-    ...playlists.map((tab) => ({ label: tab.name, icon: 'playlist', action: () => addToPlaylist(tab.path, ids) })),
+    ...(paths.length ? [{ separator: true }] : []),
+    ...paths.map((path) => ({ label: name(path), icon: 'playlist', action: () => addToPlaylist(path, ids) })),
   ];
 }
 
@@ -197,7 +230,7 @@ export function trackMenu(tracks: Track[]): MenuItem[] {
   const items: MenuItem[] = [];
   if (single) {
     items.push({ label: t('Play'), icon: 'play', action: () => playTrack(single) });
-    items.push({ label: t('Edit Song…'), icon: 'edit', tour: 'menu-edit', action: () => editSong(single) });
+    items.push({ label: t('Edit Song…'), icon: 'edit', tour: 'menu-edit', action: () => editSong(single, tab?.type === 'playlist' ? tab.path : undefined) });
     items.push({ label: t('Favorite'), icon: 'star', checked: single.favorite, action: () => toggleFavorite(single) });
   }
   if (data.settings?.voxalyzerActive !== false) {
@@ -205,6 +238,8 @@ export function trackMenu(tracks: Track[]): MenuItem[] {
   }
   items.push({ separator: true }, { label: t('Add to playlist'), icon: 'playlist', children: playlistMenu(ids) });
   if (tab?.type === 'playlist') {
+    if (single) items.push({ label: t('Scene name…'), icon: 'marker', action: () => editScene(tab.path, single) });
+    if (single?.scene) items.push({ label: t('Remove scene name'), icon: 'close', action: () => setScene(tab.path, single, '') });
     items.push({ label: t('Remove from playlist'), icon: 'trash', action: () => removeFromPlaylist(tab.path, ids) });
   }
   if (tracks.length && tracks.every((track) => canDelete(track.uploaded_by))) {

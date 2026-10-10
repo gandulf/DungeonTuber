@@ -1,10 +1,11 @@
-from mutagen.id3 import ID3
+from mutagen.id3 import ID3, TRCK, Encoding
 from mutagen.mp3 import MP3
 
 from conftest import write_mp3
 from core.lights import LightSetting
-from core.mp3 import (EffectEntry, Mp3Entry, list_mp3s, parse_mp3, update_categories_and_tags, update_mp3_category, update_mp3_chapters,
-                      update_mp3_cover_data, update_mp3_data, update_mp3_favorite, update_mp3_light, update_mp3_tags)
+from core.mp3 import (EffectEntry, Mp3Entry, list_mp3s, parse_mp3, parse_track_number, update_categories_and_tags, update_mp3_category, update_mp3_chapters,
+                      update_mp3_cover_data, update_mp3_data, update_mp3_favorite, update_mp3_light, update_mp3_tags,
+                      update_mp3_track)
 
 
 def test_parse_untagged_file(mp3_file):
@@ -169,3 +170,19 @@ def test_to_dict(mp3_file):
 
     assert data["name"] == "song"
     assert data["chapters"] == [{"title": "A", "time": 0, "light": {"scene": None, "brightness": 255, "temperature": None, "color": "#010203"}}]
+
+
+def test_track_number_is_read_and_written(mp3_file):
+    assert parse_mp3(mp3_file).track is None
+    audio = MP3(mp3_file, ID3=ID3)
+    audio.add_tags()
+    audio.tags.add(TRCK(Encoding.UTF8, text=["3/12"]))
+    audio.save()
+    assert parse_mp3(mp3_file).track == 3
+
+    update_mp3_track(mp3_file, 7)  # the total is kept
+    assert str(MP3(mp3_file, ID3=ID3).tags["TRCK"].text[0]) == "7/12"
+    assert parse_mp3(mp3_file).to_dict()["track"] == 7
+    update_mp3_track(mp3_file, None)
+    assert parse_mp3(mp3_file).track is None
+    assert [parse_track_number(v) for v in ("05", " 2 / 9", "x", "0", None)] == [5, 2, None, None, None]

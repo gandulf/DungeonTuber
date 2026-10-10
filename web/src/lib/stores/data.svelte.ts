@@ -81,11 +81,20 @@ export async function savePresets(presets: Preset[]) {
   }
 }
 
+/** Brings back the default presets. */
+export async function resetPresets() {
+  try {
+    data.presets = await api.resetPresets();
+  } catch (e) {
+    errorToast(e);
+  }
+}
+
 export function categoryName(key: string): string {
   return data.categories.find((c) => c.key === key)?.name ?? key;
 }
 
-async function saveFavoriteFolders(favorites: string[]) {
+async function saveFavorites(favorites: string[]) {
   try {
     data.user = await api.putUserState({ favorites });
   } catch (e) {
@@ -93,10 +102,28 @@ async function saveFavoriteFolders(favorites: string[]) {
   }
 }
 
-export function addFavoriteFolder(path: string) {
-  if (!data.user.favorites.includes(path)) void saveFavoriteFolders([...data.user.favorites, path]);
+/** Favorites are folders (shown under "Library") and playlists (shown under "Playlists"). */
+export const isPlaylistPath = (path: string) => path.toLowerCase().endsWith('.m3u');
+
+export function addFavorite(path: string) {
+  if (!data.user.favorites.includes(path)) void saveFavorites([...data.user.favorites, path]);
 }
 
-export function removeFavoriteFolder(path: string) {
-  void saveFavoriteFolders(data.user.favorites.filter((p) => p !== path));
+export function removeFavorite(path: string) {
+  void saveFavorites(data.user.favorites.filter((p) => p !== path));
+}
+
+const inside = (path: string, base: string) => path === base || path.startsWith(base + '/');
+
+/** Favorites follow a renamed or moved folder or playlist. */
+export async function moveFavorites(oldPath: string, newPath: string) {
+  if (data.user.favorites.some((p) => inside(p, oldPath))) {
+    await saveFavorites(data.user.favorites.map((p) => (inside(p, oldPath) ? newPath + p.slice(oldPath.length) : p)));
+  }
+}
+
+/** Deleted folders and playlists leave the favorites. */
+export async function forgetFavorites(paths: string[]) {
+  const kept = data.user.favorites.filter((p) => !paths.some((base) => inside(p, base)));
+  if (kept.length !== data.user.favorites.length) await saveFavorites(kept);
 }

@@ -4,7 +4,7 @@
   import { closeDialog } from '../../lib/stores/ui.svelte';
   import { isMp3, itemsFromDrop, itemsFromFiles, type UploadItem } from '../../lib/upload';
   import Icon from '../Icon.svelte';
-  import FolderTree from './FolderTree.svelte';
+  import FolderSelect from './FolderSelect.svelte';
   import Modal from './Modal.svelte';
 
   let { directory, initial = [] }: { directory: string; initial?: UploadItem[] } = $props();
@@ -52,12 +52,12 @@
 </script>
 
 <Modal resizable title={t('Upload songs')} onclose={closeDialog} width="760px">
-  <div class="section fill">
+  <div class="section">
     <span class="label-xs">{t('Target folder')}</span>
-    <FolderTree bind:selected={target} />
+    <FolderSelect bind:selected={target} />
   </div>
 
-  <div class="section" data-tour="upload-drop">
+  <div class="section fill" data-tour="upload-drop">
     <span class="label-xs">{t('Files')}</span>
     <div class="drop" class:over={dragOver} role="presentation"
          ondragover={(e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); dragOver = true; } }}
@@ -103,6 +103,7 @@
   .section { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
   .section.fill { flex: 1 1 auto; min-height: 0; }
   .drop { min-height: 90px; max-height: 170px; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 8px; border: 2px dashed var(--border-strong); border-radius: 12px; font-size: var(--fs-sm); }
+  .section.fill .drop { flex: 1 1 auto; max-height: none; }
   .drop.over { border-color: var(--accent); background: var(--accent-soft); }
   ul { list-style: none; margin: 0; padding: 0; width: 100%; align-self: flex-start; }
   li { padding: 2px 4px; color: var(--muted); }

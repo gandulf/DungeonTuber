@@ -25,9 +25,14 @@ CAT_HAPPY = "Happy"
 CAT_PARTY = "Party"
 CAT_RELAXED = "Relaxed"
 CAT_SAD = "Sad"
+CAT_DANCEABLE = "Danceable"
 
-_DEFAULT_CATEGORIES = [CAT_VALENCE, CAT_AROUSAL, CAT_ENGAGEMENT, CAT_DARKNESS, CAT_AGGRESSIVE, CAT_HAPPY, CAT_PARTY, CAT_RELAXED, CAT_SAD]
-_MOOD_CATEGORIES = [CAT_SAD, CAT_AGGRESSIVE, CAT_RELAXED, CAT_HAPPY, CAT_PARTY]
+CAT_ENERGY = "Energy"
+CAT_TONAL = "Tonal"
+
+_DEFAULT_CATEGORIES = [CAT_VALENCE, CAT_AROUSAL, CAT_ENGAGEMENT, CAT_DARKNESS, CAT_ENERGY, CAT_TONAL,
+                       CAT_AGGRESSIVE, CAT_HAPPY, CAT_PARTY, CAT_DANCEABLE, CAT_RELAXED, CAT_SAD]
+_MOOD_CATEGORIES = [CAT_SAD, CAT_AGGRESSIVE, CAT_RELAXED, CAT_HAPPY, CAT_PARTY, CAT_DANCEABLE]
 
 
 class SettingKeys(StrEnum):
@@ -244,6 +249,17 @@ def get_music_category(key: str, additional_categories: list[MusicCategory] | No
 
 def get_category_keys() -> list[str]:
     return settings.get_category_keys()
+
+
+def default_presets() -> list[Preset]:
+    """Presets every user starts with: the usual scenes of a role playing session (names are message ids)."""
+    return [
+        Preset("Tavern", {CAT_VALENCE: 8, CAT_AROUSAL: 6, CAT_DARKNESS: 2, CAT_HAPPY: 8, CAT_PARTY: 7, CAT_DANCEABLE: 6}),
+        Preset("Travel & Exploration", {CAT_VALENCE: 6, CAT_AROUSAL: 4, CAT_ENGAGEMENT: 3, CAT_DARKNESS: 3, CAT_RELAXED: 6}),
+        Preset("Dungeon", {CAT_VALENCE: 3, CAT_AROUSAL: 4, CAT_ENGAGEMENT: 3, CAT_DARKNESS: 8, CAT_TONAL: 4, CAT_HAPPY: 1}),
+        Preset("Battle", {CAT_AROUSAL: 9, CAT_ENGAGEMENT: 8, CAT_ENERGY: 8, CAT_AGGRESSIVE: 8, CAT_RELAXED: 1}),
+        Preset("Drama & Loss", {CAT_VALENCE: 2, CAT_AROUSAL: 3, CAT_ENERGY: 3, CAT_RELAXED: 5, CAT_SAD: 8}),
+    ]
 
 
 class FilterConfig:

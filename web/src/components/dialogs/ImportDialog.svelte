@@ -6,7 +6,7 @@
   import { closeDialog, errorToast, openDialog, toast } from '../../lib/stores/ui.svelte';
   import type { ImportPreview } from '../../lib/types';
   import Icon from '../Icon.svelte';
-  import FolderTree from './FolderTree.svelte';
+  import FolderSelect from './FolderSelect.svelte';
   import Modal from './Modal.svelte';
   import SettingsDialog from './SettingsDialog.svelte';
 
@@ -147,9 +147,9 @@
       {/if}
     </div>
 
-    <div class="section fill">
+    <div class="section">
       <span class="label-xs">{t('Target folder')}</span>
-      <FolderTree bind:selected={target} height="180px" />
+      <FolderSelect bind:selected={target} />
     </div>
     {#if canSplit}
       <label class="check" title={t('Videos without chapters are imported as one song.')}>
@@ -171,7 +171,6 @@
 
 <style>
   .section { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-  .section.fill { flex: 1 1 auto; min-height: 0; }
   .row { display: flex; gap: 8px; }
   .row input { flex: 1; }
   .entries { list-style: none; margin: 0; padding: 4px; max-height: 220px; overflow: auto; border: 1px solid var(--border-strong); border-radius: 12px; }

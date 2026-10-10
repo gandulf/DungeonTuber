@@ -14,7 +14,7 @@ from pathlib import Path
 from core.lights import LightSetting
 from core.mp3 import (Mp3Entry, _audio, parse_mp3, update_mp3_album, update_mp3_artist, update_mp3_bpm, update_mp3_categories,
                       update_mp3_chapters, update_mp3_cover_data, update_mp3_favorite, update_mp3_genre, update_mp3_light, update_mp3_summary,
-                      update_mp3_tags, update_mp3_title)
+                      update_mp3_tags, update_mp3_title, update_mp3_track)
 from core.storage import NotFound, StorageError
 from core.utils import get_user_data_dir
 from server.context import current_user_var
@@ -24,7 +24,7 @@ from server.users import ADMIN
 logger = logging.getLogger(__file__)
 
 # update fields the database understands (see TrackIndex.update)
-FIELDS = ("title", "artist", "album", "summary", "genres", "tags", "bpm", "favorite", "categories", "light")
+FIELDS = ("title", "artist", "album", "track", "summary", "genres", "tags", "bpm", "favorite", "categories", "light")
 
 
 def track_dict(entry: Mp3Entry, location: Location) -> dict:
@@ -41,7 +41,7 @@ def track_dict(entry: Mp3Entry, location: Location) -> dict:
 def stub_dict(location: Location) -> dict:
     """What the client sees of a remote track that has not been imported yet."""
     return {"path": location.client_path, "id": location.id, "file": location.name, "name": location.stem, "title": None, "artist": None,
-            "album": None, "summary": "", "genres": [], "tags": [], "length": -1, "favorite": False, "categories": {}, "bpm": None,
+            "album": None, "track": None, "summary": "", "genres": [], "tags": [], "length": -1, "favorite": False, "categories": {}, "bpm": None,
             "light": None, "chapters": [], "has_cover": False, "index": None, "pending": True}
 
 
@@ -61,6 +61,7 @@ class TrackIndex:
         self._conn.execute("CREATE TABLE IF NOT EXISTS uploads (path TEXT PRIMARY KEY, user TEXT, at REAL)")
         self._conn.execute("CREATE TABLE IF NOT EXISTS favorites (user TEXT, path TEXT, value INTEGER, PRIMARY KEY (user, path))")
         self._conn.execute("CREATE TABLE IF NOT EXISTS user_state (user TEXT, key TEXT, value TEXT, PRIMARY KEY (user, key))")
+        self._conn.execute("CREATE TABLE IF NOT EXISTS private (path TEXT PRIMARY KEY)")
         self._conn.commit()
 
     # --- reading ---------------------------------------------------------
@@ -113,6 +114,25 @@ class TrackIndex:
             self._conn.execute("INSERT OR REPLACE INTO uploads (path, user, at) VALUES (?, ?, ?)", (location.client_path, user, time.time()))
             self._conn.commit()
 
+    def private_under(self, location: Location) -> set[str]:
+        """Client paths of the private playlists at or below a location (only their creator sees them)."""
+        key = location.client_path
+        with self._lock:
+            rows = self._conn.execute("SELECT path FROM private WHERE path = ? OR path LIKE ? ESCAPE '\\'", (key, _like_prefix(key))).fetchall()
+        return {row[0] for row in rows}
+
+    def is_private(self, location: Location) -> bool:
+        with self._lock:
+            return self._conn.execute("SELECT 1 FROM private WHERE path = ?", (location.client_path,)).fetchone() is not None
+
+    def set_private(self, location: Location, private: bool):
+        with self._lock:
+            if private:
+                self._conn.execute("INSERT OR IGNORE INTO private (path) VALUES (?)", (location.client_path,))
+            else:
+                self._conn.execute("DELETE FROM private WHERE path = ?", (location.client_path,))
+            self._conn.commit()
+
     def _store(self, key: str, data: dict, mtime: float, size: int, cover: tuple[bytes, str] | None = None):
         data = {k: v for k, v in data.items() if k not in ("uploaded_by", "uploaded_at")}
         with self._lock:
@@ -134,7 +154,9 @@ class TrackIndex:
         row = self._row(key)
         if location.root.is_local:
             if row and row[0] == stat.mtime and row[1] == stat.size:
-                return self._decorated(key, json.loads(row[2]))
+                data = json.loads(row[2])
+                if "track" in data:  # stored before track numbers were read: read the file again
+                    return self._decorated(key, data)
             entry = parse_mp3(location.local_path)
             if entry is None:
                 return None
@@ -245,8 +267,8 @@ class TrackIndex:
     @staticmethod
     def _write_tags(path: Path, changes: dict):
         audio = _audio(path)
-        writers = {"title": update_mp3_title, "artist": update_mp3_artist, "album": update_mp3_album, "summary": update_mp3_summary,
-                   "genres": update_mp3_genre, "tags": update_mp3_tags, "bpm": update_mp3_bpm, "favorite": update_mp3_favorite,
+        writers = {"title": update_mp3_title, "artist": update_mp3_artist, "album": update_mp3_album, "track": update_mp3_track,
+                   "summary": update_mp3_summary, "genres": update_mp3_genre, "tags": update_mp3_tags, "bpm": update_mp3_bpm, "favorite": update_mp3_favorite,
                    "categories": update_mp3_categories, "light": update_mp3_light}
         for field, write in writers.items():
             if field in changes:
@@ -331,7 +353,7 @@ class TrackIndex:
 
     def _move_uploads(self, old_key: str, new_key: str):
         with self._lock:
-            for table in ("uploads", "favorites"):
+            for table in ("uploads", "favorites", "private"):
                 self._conn.execute(f"UPDATE {table} SET path = ? || substr(path, ?) WHERE path = ? OR path LIKE ? ESCAPE '\\'",
                                    (new_key, len(old_key) + 1, old_key, _like_prefix(old_key)))
             self._conn.commit()
@@ -346,7 +368,7 @@ class TrackIndex:
 
     def forget_paths(self, paths: list[str]):
         with self._lock:
-            for table in ("tracks", "covers", "uploads", "favorites"):
+            for table in ("tracks", "covers", "uploads", "favorites", "private"):
                 self._conn.executemany(f"DELETE FROM {table} WHERE path = ?", [(path,) for path in paths])
             self._conn.commit()
 
@@ -354,7 +376,7 @@ class TrackIndex:
         """Drops a deleted file or directory."""
         key = location.client_path
         with self._lock:
-            for table in ("tracks", "covers", "uploads", "favorites"):
+            for table in ("tracks", "covers", "uploads", "favorites", "private"):
                 self._conn.execute(f"DELETE FROM {table} WHERE path = ? OR path LIKE ? ESCAPE '\\'", (key, _like_prefix(key)))
             self._conn.commit()
 
@@ -369,6 +391,7 @@ def entry_from_dict(data: dict) -> Mp3Entry:
     entry = Mp3Entry(data["path"], name=data.get("file"), categories=data.get("categories"), tags=data.get("tags"), artist=data.get("artist"),
                      album=data.get("album"), title=data.get("title"), genre=data.get("genres"), bpm=data.get("bpm"))
     entry.summary = data.get("summary") or ""
+    entry.track = data.get("track")
     entry.length = data.get("length", -1)
     entry.favorite = data.get("favorite", False)
     if data.get("light"):

@@ -16,6 +16,9 @@ export interface Tab {
   loaded: boolean;
   loading: boolean;
   error: string | null;
+  /** Playlists only: private (visible to its creator alone) and who created it. */
+  private?: boolean;
+  owner?: string | null;
 }
 
 export type SortKey = string; // 'index' | 'name' | 'score' | 'bpm' | 'genre' | 'artist' | 'album' | 'favorite' | 'cat:<key>'
@@ -75,6 +78,8 @@ export async function loadTab(key: string, force = false) {
     const result = tab.type === 'dir' ? await api.tracksOfDir(tab.path) : await api.tracksOfPlaylist(tab.path);
     tab.tracks = result.tracks;
     tab.name = result.name || tab.name;
+    tab.private = result.private;
+    tab.owner = result.uploaded_by;
     tab.loaded = true;
   } catch (e) {
     tab.error = e instanceof Error ? e.message : String(e);
@@ -140,7 +145,7 @@ export function updateTrack(track: Track) {
   for (const tab of library.tabs) {
     const index = tab.tracks.findIndex((t) => t.id === previous || t.id === track.id);
     // events carry no favorite: it is personal and stays as it is
-    if (index >= 0) tab.tracks[index] = { ...track, favorite: track.favorite ?? tab.tracks[index].favorite, index: tab.tracks[index].index };
+    if (index >= 0) tab.tracks[index] = { ...track, favorite: track.favorite ?? tab.tracks[index].favorite, index: tab.tracks[index].index, scene: tab.tracks[index].scene };
   }
   if (previous !== track.id) library.selection = library.selection.map((id) => (id === previous ? track.id : id));
 }
@@ -164,14 +169,15 @@ export interface Row {
   score: number | null;
 }
 
-function sortValue(row: Row, key: SortKey): string | number | boolean | null {
+function sortValue(row: Row, key: SortKey, playlist: boolean): string | number | boolean | null {
   const track = row.track;
   switch (key) {
-    case 'index': return track.index ?? 0;
-    case 'name': return (prefs.titleInsteadOfFile && track.title ? track.title : track.name).toLowerCase();
+    case 'index': return playlist ? (track.index ?? 0) : (track.track ?? null); // folders show the track number in the # column
+    case 'name': return (track.scene || (prefs.titleInsteadOfFile && track.title ? track.title : track.name)).toLowerCase();
     case 'title': return (track.title ?? '').toLowerCase();
     case 'score': return row.score === null ? null : -row.score; // the column shows a match in percent: ascending = worst first
     case 'bpm': return track.bpm;
+    case 'track': return track.track ?? null;
     case 'genre': return track.genres.join(', ').toLowerCase();
     case 'artist': return (track.artist ?? '').toLowerCase();
     case 'album': return (track.album ?? '').toLowerCase();
@@ -190,13 +196,14 @@ export function visibleRows(): Row[] {
   const search = library.search.trim().toLowerCase();
   let rows: Row[] = tab.tracks.map((track) => ({ track, score: calculateScore(track, filter) }));
   if (search) {
-    rows = rows.filter(({ track }) => `${track.name} ${track.title ?? ''} ${track.summary ?? ''} ${track.tags.join(' ')}`.toLowerCase().includes(search));
+    rows = rows.filter(({ track }) => `${track.scene ?? ''} ${track.name} ${track.title ?? ''} ${track.summary ?? ''} ${track.tags.join(' ')}`.toLowerCase().includes(search));
   }
   const key = library.sortKey;
   const direction = library.sortAsc ? 1 : -1;
+  const playlist = tab.type === 'playlist';
   return rows.sort((a, b) => {
-    const va = sortValue(a, key);
-    const vb = sortValue(b, key);
+    const va = sortValue(a, key, playlist);
+    const vb = sortValue(b, key, playlist);
     if (va === vb) return 0;
     if (va === null || va === undefined) return 1; // missing values last
     if (vb === null || vb === undefined) return -1;

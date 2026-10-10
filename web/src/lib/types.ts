@@ -22,6 +22,8 @@ export interface Track {
   title: string | null;
   artist: string | null;
   album: string | null;
+  /** Track number on the album (ID3 TRCK). */
+  track?: number | null;
   summary: string;
   genres: string[];
   tags: string[];
@@ -34,6 +36,8 @@ export interface Track {
   has_cover: boolean;
   index: number | null;
   previous_id?: string;
+  /** Playlists only: the scene name of the entry (stored in the playlist, not in the mp3). */
+  scene?: string | null;
 }
 
 export interface BrowseItem {
@@ -46,6 +50,8 @@ export interface BrowseItem {
   storage?: string;
   /** Who uploaded or created it (unset for files that were not added through Dungeon Tuber). */
   uploaded_by?: string | null;
+  /** Set for private playlists, which only their creator sees. */
+  private?: boolean;
 }
 
 export interface BrowseResult {
@@ -61,6 +67,9 @@ export interface TrackList {
   path: string;
   name: string;
   tracks: Track[];
+  /** Playlists only: private (visible to its creator alone) and who created it. */
+  private?: boolean;
+  uploaded_by?: string | null;
 }
 
 export interface MusicCategory {

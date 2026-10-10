@@ -1,11 +1,11 @@
 """Server-side settings, categories, the presets of the users, version and locales."""
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from core import i18n
-from core.settings import AppSettings, MusicCategory, Preset, SettingKeys, get_music_categories, set_music_categories, settings
+from core.settings import AppSettings, MusicCategory, Preset, SettingKeys, default_presets, get_music_categories, set_music_categories, settings
 from core.utils import DOWNLOAD_LINK, get_broadcast_ip, get_ip, get_current_version, get_latest_version, \
     is_newer_version_available
 from server.auth import current_user, require_admin, require_auth
@@ -132,14 +132,28 @@ class PresetModel(BaseModel):
     bpm: int | None = None
 
 
-def _presets(user: str) -> list[dict]:
-    return get_index().user_state(user, "presets") or []
+def _presets(user: str, request: Request) -> list[dict]:
+    """The stored presets of a user; users who never changed theirs get the default presets in their language."""
+    stored = get_index().user_state(user, "presets")
+    if stored is not None:
+        return stored
+    language = get_index().user_state(user, "locale") or request.headers.get("accept-language", "").split(",")[0]
+    language = language.split("-")[0].split("_")[0].lower()
+    catalog = i18n.load_catalog(language) if language in i18n.available_locales() else {}
+    return [{**asdict(preset), "name": catalog.get(preset.name, preset.name)} for preset in default_presets()]
 
 
 @router.get("/api/presets")
-def get_presets_route(user: str = Depends(current_user)):
+def get_presets_route(request: Request, user: str = Depends(current_user)):
     """The presets of the signed in user."""
-    return _presets(user)
+    return _presets(user, request)
+
+
+@router.post("/api/presets/reset")
+def reset_presets(request: Request, user: str = Depends(current_user)):
+    """Brings back the default presets."""
+    get_index().set_user_state(user, "presets", None)
+    return _presets(user, request)
 
 
 @router.put("/api/presets")

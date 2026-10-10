@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api, coverUrl } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
-  import { updateTrack } from '../../lib/stores/library.svelte';
+  import { reloadPlaylistTabs, updateTrack } from '../../lib/stores/library.svelte';
   import { refreshCurrentTrack } from '../../lib/stores/player.svelte';
   import { updateEffectTrack } from '../../lib/stores/effects.svelte';
   import { closeDialog, errorToast } from '../../lib/stores/ui.svelte';
@@ -9,14 +9,17 @@
   import LightEditor from './LightEditor.svelte';
   import Modal from './Modal.svelte';
 
-  let { track }: { track: Track } = $props();
+  /** `playlist`: the song was opened from this playlist, so its scene name there can be edited too. */
+  let { track, playlist }: { track: Track; playlist?: string } = $props();
 
   // svelte-ignore state_referenced_locally
   let form = $state({
+    scene: track.scene ?? '',
     name: track.file.replace(/\.mp3$/i, ''),
     title: track.title ?? '',
     artist: track.artist ?? '',
     album: track.album ?? '',
+    track: track.track ?? 0,
     genres: track.genres.join(', '),
     bpm: track.bpm ?? 0,
     tags: track.tags.join(', '),
@@ -28,6 +31,11 @@
   let cover = $state<File | null>(null);
   let preview = $state<string | null>(null);
   let saving = $state(false);
+
+  // the dialog focuses its first field (the favorite checkbox) when it opens: the scene name wins afterwards
+  function focusLater(node: HTMLInputElement) {
+    setTimeout(() => node.focus());
+  }
 
   const split = (value: string) => value.split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -42,8 +50,13 @@
   async function save() {
     saving = true;
     try {
+      // before a rename: the playlist still refers to the song by its current path
+      if (playlist && form.scene.trim() !== (track.scene ?? '')) {
+        await api.setScene(playlist, track.id, form.scene.trim());
+        reloadPlaylistTabs(playlist);
+      }
       let updated = await api.patchTrack(track.id, {
-        title: form.title, artist: form.artist, album: form.album, genres: split(form.genres), bpm: form.bpm || null,
+        title: form.title, artist: form.artist, album: form.album, track: form.track || null, genres: split(form.genres), bpm: form.bpm || null,
         tags: split(form.tags), summary: form.summary, favorite: form.favorite, light,
         ...(form.name.trim() && form.name.trim() !== track.file.replace(/\.mp3$/i, '') ? { name: form.name.trim() } : {}),
       });
@@ -71,12 +84,21 @@
       <label class="check"><input type="checkbox" bind:checked={form.favorite} /> {t('Favorite')}</label>
     </div>
     <div class="fields">
+      {#if playlist}
+        <label class="wide scene">
+          <span>{t('Scene name')} <span class="muted">· {t('Only used in this playlist')}</span></span>
+          <input type="text" bind:value={form.scene} use:focusLater />
+        </label>
+      {/if}
       <label class="wide">{t('Name')}<input type="text" bind:value={form.name} /></label>
       <label class="wide">{t('Title')}<input type="text" bind:value={form.title} /></label>
       <label>{t('Artist')}<input type="text" bind:value={form.artist} /></label>
       <label>{t('Album')}<input type="text" bind:value={form.album} /></label>
-      <label>{t('Genre')}<input type="text" bind:value={form.genres} placeholder={t('Separate multiple tags with comma')} /></label>
-      <label>{t('BPM')}<input type="number" min="0" max="300" bind:value={form.bpm} /></label>
+      <div class="wide triple">
+        <label>{t('Genre')}<input type="text" bind:value={form.genres} placeholder={t('Separate multiple tags with comma')} /></label>
+        <label>{t('Track')}<input type="number" min="0" max="9999" bind:value={form.track} /></label>
+        <label>{t('BPM')}<input type="number" min="0" max="300" bind:value={form.bpm} /></label>
+      </div>
       <label class="wide">{t('Tags')}<input type="text" bind:value={form.tags} placeholder={t('Separate multiple tags with comma')} /></label>
       <label class="wide">{t('Summary')}<textarea rows="3" bind:value={form.summary}></textarea></label>
       <div class="wide">
@@ -105,9 +127,12 @@
   .cover img { width: 100%; height: 100%; object-fit: cover; }
   .hint { font-size: var(--fs-xs); }
   .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .triple { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
   .fields label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
   .fields input, .fields textarea { color: var(--text); }
   .wide { grid-column: 1 / -1; }
+  .scene > span:first-child { color: var(--gold); font-weight: 600; }
+  .scene .muted { font-weight: 400; }
   .check { display: flex; align-items: center; gap: 6px; }
   .small { font-size: var(--fs-xs); }
   .path { font-size: var(--fs-xs); overflow-wrap: anywhere; }

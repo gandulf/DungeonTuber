@@ -5,11 +5,12 @@
   import type { BrowseItem } from '../../lib/types';
   import Icon from '../Icon.svelte';
 
-  let { item, depth = 1, selected = $bindable(), expanded = $bindable() }: {
+  let { item, depth = 1, selected = $bindable(), expanded = $bindable(), onMenu }: {
     item: BrowseItem;
     depth?: number;
     selected: string;
     expanded: string[];
+    onMenu?: (event: MouseEvent, item: BrowseItem) => void;
   } = $props();
 
   let children = $state<BrowseItem[] | null>(null);
@@ -38,7 +39,8 @@
 
 <div role="treeitem" aria-expanded={children?.length ? open : undefined} aria-selected={selected === item.path}>
   <button class="row" class:selected={selected === item.path} class:lib-root={isRoot} style:padding-left="{depth * 14 - 8}px"
-          title={item.path} onclick={() => (selected = item.path)} ondblclick={(e) => children?.length && toggle(e)}>
+          title={item.path} onclick={() => (selected = item.path)}
+          oncontextmenu={(e) => { if (onMenu) { e.preventDefault(); e.stopPropagation(); onMenu(e, item); } }} ondblclick={(e) => children?.length && toggle(e)}>
     <span class="twisty" role="presentation" onclick={(e) => children?.length && toggle(e)} ondblclick={(e) => e.stopPropagation()}>
       {#if children?.length}<Icon name={open ? 'chevron-down' : 'chevron-right'} size={13} />{/if}
     </span>
@@ -47,7 +49,7 @@
   </button>
   {#if open && children}
     {#each children as child (child.path)}
-      <FolderPicker item={child} depth={depth + 1} bind:selected bind:expanded />
+      <FolderPicker item={child} depth={depth + 1} bind:selected bind:expanded {onMenu} />
     {/each}
   {/if}
 </div>

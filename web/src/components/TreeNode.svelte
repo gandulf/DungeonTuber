@@ -1,6 +1,8 @@
 <script lang="ts">
   import TreeNode from './TreeNode.svelte';
   import { api } from '../lib/api';
+  import { t } from '../lib/i18n.svelte';
+  import { moveFavorites } from '../lib/stores/data.svelte';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
   import { canDropOnPlaylist, dropOnPlaylist, uploadFiles } from '../lib/actions';
   import { itemsFromDrop } from '../lib/upload';
@@ -104,7 +106,8 @@
     event.preventDefault();
     event.stopPropagation();
     try {
-      await api.move(source, item.path);
+      const moved = await api.move(source, item.path);
+      await moveFavorites(source, moved.path);
       reloadDirTabs(item.path);
       children = null;
       if (expanded) void load();
@@ -131,6 +134,7 @@
       <span class="file"><Icon name={item.type === 'm3u' ? 'playlist' : 'music'} size={15} /></span>
     {/if}
     <span class="ellipsis name">{item.name}</span>
+    {#if item.private}<span class="private" title={t('Private')}><Icon name="lock" size={12} /></span>{/if}
   </button>
   {#if expanded && children}
     {#each children as child (child.path)}
@@ -148,6 +152,7 @@
   .twisty { width: 16px; display: flex; justify-content: center; color: var(--muted); flex: none; }
   .folder { color: var(--gold); display: flex; opacity: 0.85; }
   .file { color: var(--muted); display: flex; }
+  .private { display: flex; flex: none; color: var(--faint); }
   .name { flex: 1; }
   .row.lib-root { font-weight: 600; color: var(--text); }
 </style>

@@ -80,6 +80,11 @@ def test_patch_track_and_rename(client, library):
     assert data["tags"] == ["Cozy"]
     assert data["categories"] == {"Valence": 10, "Arousal": 3}
     assert data["light"]["color"] == "#ff0000"
+    assert data["track"] is None
+    assert client.patch(f"/api/tracks/{_id(song)}", json={"track": 4}).json()["track"] == 4
+    assert client.get(f"/api/tracks/{_id(song)}").json()["track"] == 4
+    assert client.patch(f"/api/tracks/{_id(song)}", json={"track": -1}).status_code == 422
+    assert client.patch(f"/api/tracks/{_id(song)}", json={"track": None}).json()["track"] is None
 
     data = client.patch(f"/api/tracks/{data['id']}", json={"categories": {"Arousal": None}, "light": None}).json()
     assert data["categories"] == {"Valence": 10}
@@ -148,6 +153,60 @@ def test_playlists(client, library):
     assert client.get("/api/tracks", params={"playlist": created["path"]}).json()["tracks"] == []
 
 
+def test_scene_names_are_kept_in_the_playlist(client, library):
+    root = library["root"]
+    fight, drums, inn = (_id((root / rel).as_posix()) for rel in ("Battle/fight.mp3", "Battle/drums.mp3", "Tavern/inn.mp3"))
+    boss = client.post("/api/playlists", json={"path": (root / "Boss").as_posix(), "ids": [fight, drums]}).json()["path"]
+    town = client.post("/api/playlists", json={"path": (root / "Town").as_posix(), "ids": [fight]}).json()["path"]
+
+    def scenes(playlist):
+        return {t["name"]: t["scene"] for t in client.get("/api/tracks", params={"playlist": playlist}).json()["tracks"]}
+
+    assert scenes(boss) == {"fight": None, "drums": None}
+    assert client.put("/api/playlists/scene", json={"playlist": boss, "id": fight, "scene": "Throne room\nfinale"}).status_code == 200
+    assert client.put("/api/playlists/scene", json={"playlist": boss, "id": inn, "scene": "x"}).status_code == 404
+    assert scenes(boss) == {"fight": "Throne room finale", "drums": None}
+    assert scenes(town) == {"fight": None}  # the same song is named per playlist
+    assert "#EXTINF:" in (root / "Boss.m3u").read_text() and ",Throne room finale\n" in (root / "Boss.m3u").read_text()
+
+    # adding, reordering and removing songs keeps the names
+    client.post("/api/playlists/entries", json={"playlist": boss, "ids": [inn], "index": 0})
+    client.put("/api/playlists/order", json={"playlist": boss, "ids": [drums, fight, inn]})
+    client.post("/api/playlists/remove", json={"playlist": boss, "ids": [drums]})
+    assert scenes(boss) == {"fight": "Throne room finale", "inn": None}
+    client.put("/api/playlists/scene", json={"playlist": boss, "id": fight, "scene": " "})
+    assert scenes(boss) == {"fight": None, "inn": None}
+
+
+def test_playlists_follow_renamed_and_moved_songs(client, library):
+    root = library["root"]
+    fight, inn = (_id((root / rel).as_posix()) for rel in ("Battle/fight.mp3", "Tavern/inn.mp3"))
+    mix = client.post("/api/playlists", json={"path": (root / "Mix").as_posix(), "ids": [fight, inn]}).json()["path"]
+    local = client.post("/api/playlists", json={"path": (root / "Battle" / "Local").as_posix(), "ids": [fight, inn]}).json()["path"]
+    client.put("/api/playlists/scene", json={"playlist": mix, "id": fight, "scene": "Boss"})
+
+    def names(playlist):
+        return [(t["name"], t["scene"]) for t in client.get("/api/tracks", params={"playlist": playlist}).json()["tracks"]]
+
+    # renaming a song in the song editor
+    renamed = client.patch(f"/api/tracks/{fight}", json={"name": "duel"}).json()
+    assert names(mix) == [("duel", "Boss"), ("inn", None)]
+    assert names(local) == [("duel", None), ("inn", None)]
+
+    # renaming the folder of a song
+    client.post("/api/files/rename", json={"path": (root / "Tavern").as_posix(), "name": "Inn"})
+    assert names(mix) == [("duel", "Boss"), ("inn", None)]
+
+    # moving a folder together with a playlist inside that refers to a song outside of it
+    client.post("/api/files/folder", data={"parent": root.as_posix(), "name": "Arc"})
+    moved = client.post("/api/files/move", json={"source": (root / "Battle").as_posix(), "target_dir": (root / "Arc").as_posix()})
+    assert moved.status_code == 200
+    assert names(mix) == [("duel", "Boss"), ("inn", None)]
+    assert names((root / "Arc" / "Battle" / "Local.m3u").as_posix()) == [("duel", None), ("inn", None)]
+    assert "../../Inn/inn.mp3" in (root / "Arc" / "Battle" / "Local.m3u").read_text()
+    assert renamed["name"] == "duel"
+
+
 def test_upload_and_move(client, library):
     tavern = (library["root"] / "Tavern").as_posix()
     mp3_bytes = write_mp3(library["root"].parent / "tmp_upload.mp3").read_bytes()
@@ -190,13 +249,26 @@ def test_settings_categories_presets(client):
     assert client.put("/api/settings", json={"lightsTimeout": 3}).json()["lightsTimeout"] == 3.0
 
     categories = client.get("/api/categories").json()
-    assert len(categories) == 9
+    assert len(categories) == 12
     assert client.put("/api/categories", json=[{"key": "a", "name": "A"}, {"key": "a", "name": "B"}]).status_code == 400
     assert [c["key"] for c in client.put("/api/categories", json=[{"key": "spooky", "name": "Spooky", "levels": {"1": "low"}}]).json()] == ["spooky"]
-    assert len(client.post("/api/categories/reset").json()) == 9
+    assert len(client.post("/api/categories/reset").json()) == 12
 
     presets = client.put("/api/presets", json=[{"name": "Fight", "categories": {"Arousal": 9, "Valence": None}, "bpm": 140}]).json()
     assert presets == [{"name": "Fight", "categories": {"Arousal": 9}, "tags": [], "genres": [], "bpm": 140}]
+
+
+def test_users_start_with_the_default_presets(client):
+    defaults = client.get("/api/presets", headers={"Accept-Language": "de-DE,de;q=0.9"}).json()
+    assert [p["name"] for p in defaults] == ["Taverne", "Reise & Erkundung", "Dungeon", "Kampf", "Drama & Verlust"]
+    assert defaults[3]["categories"]["Aggressive"] == 8
+    assert [p["name"] for p in client.get("/api/presets").json()][0] == "Tavern"
+
+    # once changed, the own presets are kept (even an empty list); a reset brings the defaults back
+    assert client.put("/api/presets", json=[]).json() == []
+    assert client.get("/api/presets").json() == []
+    assert len(client.post("/api/presets/reset").json()) == 5
+    assert len(client.get("/api/presets").json()) == 5
 
 
 def _login_as_anna(client):
@@ -220,7 +292,7 @@ def test_presets_and_view_settings_belong_to_the_user(client):
 
     client.post("/api/auth/logout")
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
-    assert client.get("/api/presets").json() == []
+    assert "Admin" not in [p["name"] for p in client.get("/api/presets").json()]  # anna gets the defaults, not the presets of the admin
     assert client.get("/api/user/state").json()["view"] is None and client.get("/api/user/state").json()["locale"] == ""
     assert [p["name"] for p in client.put("/api/presets", json=[{"name": "Anna", "categories": {}}]).json()] == ["Anna"]
 
@@ -232,7 +304,7 @@ def test_presets_and_view_settings_belong_to_the_user(client):
 def test_only_the_admin_changes_the_categories(client):
     _login_as_anna(client)
 
-    assert len(client.get("/api/categories").json()) == 9
+    assert len(client.get("/api/categories").json()) == 12
     assert client.put("/api/categories", json=[{"key": "a", "name": "A"}]).status_code == 403
     assert client.post("/api/categories/reset").status_code == 403
 
@@ -506,6 +578,49 @@ def test_users_delete_only_what_they_uploaded(client, library):
     assert delete(f"{tavern}/Album").status_code == 200
     assert delete(f"{tavern}/inn.mp3").status_code == 200
     assert not (root / "Tavern" / "Album").exists()
+
+
+def test_private_playlists_are_only_visible_to_their_creator(client, library):
+    set_password("secret")
+    root = library["root"]
+    battle = (root / "Battle").as_posix()
+    fight = _id((root / "Battle" / "fight.mp3").as_posix())
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    client.post("/api/users", json={"name": "bob", "password": "pw1234"})
+
+    def names():
+        return {i["name"]: i.get("private", False) for i in client.get("/api/browse", params={"path": battle}).json()["items"] if i["type"] == "m3u"}
+
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    secret = client.post("/api/playlists", json={"path": f"{battle}/Secret", "ids": [fight], "private": True}).json()
+    shared = client.post("/api/playlists", json={"path": f"{battle}/Shared", "ids": [fight]}).json()
+    assert secret["private"] and not shared["private"]
+    assert names() == {"Secret": True, "Shared": False}
+    listing = client.get("/api/tracks", params={"playlist": secret["path"]}).json()
+    assert listing["private"] and listing["uploaded_by"] == "anna" and len(listing["tracks"]) == 1
+
+    # nobody else sees, plays, changes, renames or deletes it, not even the SuperAdmin
+    for login in ({"username": "bob", "password": "pw1234"}, {"password": "secret"}):
+        client.post("/api/auth/login", json=login)
+        assert names() == {"Shared": False}
+        assert client.get("/api/tracks", params={"playlist": secret["path"]}).status_code == 404
+        assert client.post("/api/playlists/entries", json={"playlist": secret["path"], "ids": [fight]}).status_code == 404
+        assert client.post("/api/files/rename", json={"path": secret["path"], "name": "Mine.m3u"}).status_code == 404
+        assert client.delete("/api/files", params={"path": secret["path"]}).status_code == 404
+        assert client.put("/api/playlists/visibility", json={"playlist": secret["path"], "private": False}).status_code == 404
+
+    # only the creator changes the visibility
+    client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})
+    assert client.put("/api/playlists/visibility", json={"playlist": shared["path"], "private": True}).status_code == 403
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert client.put("/api/playlists/visibility", json={"playlist": shared["path"], "private": True}).status_code == 200
+    assert client.put("/api/playlists/visibility", json={"playlist": secret["path"], "private": False}).status_code == 200
+    renamed = client.post("/api/files/rename", json={"path": shared["path"], "name": "Hidden.m3u"}).json()
+    assert names() == {"Secret": False, "Hidden": True}
+    client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})
+    assert names() == {"Secret": False}
+    assert client.get("/api/tracks", params={"playlist": renamed["path"]}).status_code == 404
 
 
 def test_static_files_stay_inside_the_web_directory(tmp_path):

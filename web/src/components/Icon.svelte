@@ -61,6 +61,8 @@
     menu: 'M4 6h16M4 12h16M4 18h16',
     'chevron-up': 'M6 15l6-6 6 6',
     library: 'M4 4h4v16H4zM10 4h4v16h-4zM16 5l3.5-1 3 15.5-3.5 1z',
+    lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
+    users: 'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
     mask: 'M3 6c3 0 6-1.5 9-1.5S18 6 21 6c0 7-4 13-9 13S3 13 3 6zM8 10h2M14 10h2M9 15s1 1 3 1 3-1 3-1',
   };
   export type IconName = keyof typeof paths | string;

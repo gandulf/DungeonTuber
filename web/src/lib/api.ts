@@ -70,10 +70,13 @@ export const api = {
   },
 
   // playlists & files
-  createPlaylist: (path: string, ids: string[] = []) => request<{ path: string; id: string; name: string }>('POST', '/api/playlists', { path, ids }),
+  createPlaylist: (path: string, ids: string[] = [], isPrivate = false) =>
+    request<{ path: string; id: string; name: string; private: boolean }>('POST', '/api/playlists', { path, ids, private: isPrivate }),
+  setPlaylistVisibility: (playlist: string, isPrivate: boolean) => request('PUT', '/api/playlists/visibility', { playlist, private: isPrivate }),
   addToPlaylist: (playlist: string, ids: string[], index = -1) => request<{ added: number }>('POST', '/api/playlists/entries', { playlist, ids, index }),
   removeFromPlaylist: (playlist: string, ids: string[]) => request('POST', '/api/playlists/remove', { playlist, ids }),
   reorderPlaylist: (playlist: string, ids: string[]) => request('PUT', '/api/playlists/order', { playlist, ids }),
+  setScene: (playlist: string, id: string, scene: string) => request('PUT', '/api/playlists/scene', { playlist, id, scene }),
   move: (source: string, target_dir: string) => request<{ path: string; id: string }>('POST', '/api/files/move', { source, target_dir }),
   rename: (path: string, name: string) => request<{ path: string; id: string }>('POST', '/api/files/rename', { path, name }),
   deleteFile: (path: string) => request<{ deleted: boolean }>('DELETE', `/api/files?${qs({ path })}`),
@@ -116,6 +119,7 @@ export const api = {
   resetCategories: () => request<MusicCategory[]>('POST', '/api/categories/reset'),
   presets: () => get<Preset[]>('/api/presets'),
   putPresets: (presets: Preset[]) => request<Preset[]>('PUT', '/api/presets', presets),
+  resetPresets: () => request<Preset[]>('POST', '/api/presets/reset'),
   version: () => get<VersionInfo>('/api/version'),
   locales: () => get<string[]>('/api/locales'),
 

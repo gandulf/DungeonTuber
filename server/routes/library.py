@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.lights import LightSetting
 from core.mp3 import parse_mp3
@@ -62,8 +62,21 @@ def roots():
             for root in get_roots()]
 
 
+def hidden(location: Location, user: str) -> bool:
+    """A private playlist is invisible to everybody but the user who created it."""
+    index = get_index()
+    return index.is_private(location) and index.uploads_under(location).get(location.client_path) != user
+
+
+def _visible_path(path: str, user: str, **kwargs) -> Location:
+    location = safe_path(path, **kwargs)
+    if hidden(location, user):
+        raise HTTPException(status_code=404, detail="Not found")
+    return location
+
+
 @router.get("/api/browse")
-def browse(path: str):
+def browse(path: str, user: str = Depends(current_user)):
     directory = safe_path(path, kind="dir")
     dirs, files = [], []
     with storage_errors():
@@ -84,9 +97,13 @@ def browse(path: str):
     dirs.sort(key=lambda item: item["name"].lower())
     files.sort(key=lambda item: item["name"].lower())
     owners = get_index().uploads_under(directory)
+    private = get_index().private_under(directory)
+    files = [item for item in files if item["path"] not in private or owners.get(item["path"]) == user]
     for item in dirs + files:
         if item["path"] in owners:
             item["uploaded_by"] = owners[item["path"]]
+        if item["path"] in private:
+            item["private"] = True
     parent = directory.parent
     return {"path": directory.client_path, "name": directory.name, "id": directory.id,
             "parent": parent.client_path if parent else None, "items": dirs + files}
@@ -122,15 +139,19 @@ def _mp3s(directory: Location, recursive: bool) -> list[Location]:
 
 
 @router.get("/api/tracks")
-def tracks(dir: str | None = None, playlist: str | None = None, recursive: bool = True):
+def tracks(dir: str | None = None, playlist: str | None = None, recursive: bool = True, user: str = Depends(current_user)):
     if playlist:
-        playlist_loc = safe_path(playlist, kind="file")
+        playlist_loc = _visible_path(playlist, user, kind="file")
         with storage_errors():
-            locations = playlists.read(playlist_loc)
-        if locations is None:
+            entries = playlists.read_entries(playlist_loc)
+        if entries is None:
             raise HTTPException(status_code=400, detail="Not an extended M3U playlist")
-        locations = [loc for loc in locations if not loc.root.is_local or loc.storage.exists(loc.rel)]
-        return {"type": "playlist", "path": playlist_loc.client_path, "name": playlist_loc.stem, "tracks": get_index().get_many(locations)}
+        entries = [(loc, scene) for loc, scene in entries if not loc.root.is_local or loc.storage.exists(loc.rel)]
+        data = get_index().get_many([loc for loc, _ in entries])
+        for item in data:  # unreadable songs are left out, the index still points to their entry
+            item["scene"] = entries[item["index"]][1]
+        return {"type": "playlist", "path": playlist_loc.client_path, "name": playlist_loc.stem, "tracks": data,
+                "private": get_index().is_private(playlist_loc), "uploaded_by": get_index().uploads_under(playlist_loc).get(playlist_loc.client_path)}
     if dir:
         directory = safe_path(dir, kind="dir")
         data = get_index().get_many(_mp3s(directory, recursive))
@@ -163,6 +184,7 @@ class TrackPatch(BaseModel):
     title: str | None = None
     artist: str | None = None
     album: str | None = None
+    track: int | None = Field(None, ge=0, le=9999)
     summary: str | None = None
     genres: list[str] | None = None
     tags: list[str] | None = None
@@ -190,6 +212,8 @@ def patch_track(track_id: str, patch: TrackPatch):
         changes["artist"] = patch.artist or None
     if "album" in fields:
         changes["album"] = patch.album or None
+    if "track" in fields:
+        changes["track"] = patch.track or None
     if "summary" in fields:
         changes["summary"] = patch.summary or ""
     if "genres" in fields:
@@ -227,7 +251,9 @@ def patch_track(track_id: str, patch: TrackPatch):
                     raise HTTPException(status_code=409, detail="A file with this name already exists")
                 location.storage.move(location.rel, target.rel)
                 index.relocate(location, target)
+                _follow_move(location, target)
                 location = target
+                hub.publish("library.changed", {"path": location.parent.client_path})  # file trees show the new name
 
     data = index.get(location)
     if data is None:
@@ -368,6 +394,18 @@ def media_file(file_id: str):
 class PlaylistCreate(BaseModel):
     path: str
     ids: list[str] = []
+    private: bool = False
+
+
+class PlaylistScene(BaseModel):
+    playlist: str
+    id: str
+    scene: str = ""
+
+
+class PlaylistVisibility(BaseModel):
+    playlist: str
+    private: bool
 
 
 class PlaylistEntries(BaseModel):
@@ -380,17 +418,17 @@ def _locations(ids: list[str]) -> list[Location]:
     return [safe_id(track_id) for track_id in ids]
 
 
-def _playlist_location(path: str, must_exist: bool = True) -> Location:
-    playlist = safe_path(path, must_exist=must_exist, kind="file" if must_exist else None)
+def _playlist_location(path: str, user: str, must_exist: bool = True) -> Location:
+    playlist = _visible_path(path, user, must_exist=must_exist, kind="file" if must_exist else None)
     if playlist.suffix != ".m3u":
         raise HTTPException(status_code=400, detail="Playlists must be .m3u files")
     return playlist
 
 
 @router.post("/api/playlists")
-def create_playlist(body: PlaylistCreate):
+def create_playlist(body: PlaylistCreate, user: str = Depends(current_user)):
     path = body.path if body.path.lower().endswith(".m3u") else body.path + ".m3u"
-    playlist = _playlist_location(path, must_exist=False)
+    playlist = _playlist_location(path, user, must_exist=False)
     parent = playlist.parent
     if parent is None:
         raise HTTPException(status_code=400, detail="Invalid playlist path")
@@ -399,13 +437,29 @@ def create_playlist(body: PlaylistCreate):
         raise HTTPException(status_code=409, detail="Playlist already exists")
     with storage_errors():
         playlists.write(playlist, _locations(body.ids))
+    get_index().set_uploader(playlist, user)
+    get_index().set_private(playlist, body.private)
     hub.publish("library.changed", {"path": parent.client_path})
-    return {"path": playlist.client_path, "id": playlist.id, "name": playlist.stem}
+    return {"path": playlist.client_path, "id": playlist.id, "name": playlist.stem, "private": body.private}
+
+
+@router.put("/api/playlists/visibility")
+def set_playlist_visibility(body: PlaylistVisibility, user: str = Depends(current_user)):
+    """Makes a playlist private (only its creator sees it) or public again; only allowed for whoever may delete it."""
+    playlist = _playlist_location(body.playlist, user)
+    if not may_delete(playlist, user):
+        raise HTTPException(status_code=403, detail="You can only change playlists you created yourself")
+    if body.private and playlist.client_path not in get_index().uploads_under(playlist):
+        get_index().set_uploader(playlist, user)  # a private playlist needs somebody who still sees it
+    get_index().set_private(playlist, body.private)
+    hub.publish("library.changed", {"path": playlist.parent.client_path})
+    hub.publish("playlist.changed", {"path": playlist.client_path})
+    return {"path": playlist.client_path, "private": body.private}
 
 
 @router.post("/api/playlists/entries")
-def add_to_playlist(body: PlaylistEntries):
-    playlist = _playlist_location(body.playlist)
+def add_to_playlist(body: PlaylistEntries, user: str = Depends(current_user)):
+    playlist = _playlist_location(body.playlist, user)
     with storage_errors():
         added = playlists.append(playlist, _locations(body.ids), body.index)
     if added:
@@ -414,8 +468,8 @@ def add_to_playlist(body: PlaylistEntries):
 
 
 @router.post("/api/playlists/remove")
-def remove_from_playlist(body: PlaylistEntries):
-    playlist = _playlist_location(body.playlist)
+def remove_from_playlist(body: PlaylistEntries, user: str = Depends(current_user)):
+    playlist = _playlist_location(body.playlist, user)
     with storage_errors():
         playlists.remove(playlist, _locations(body.ids))
     hub.publish("playlist.changed", {"path": playlist.client_path})
@@ -423,12 +477,29 @@ def remove_from_playlist(body: PlaylistEntries):
 
 
 @router.put("/api/playlists/order")
-def reorder_playlist(body: PlaylistEntries):
-    playlist = _playlist_location(body.playlist)
+def reorder_playlist(body: PlaylistEntries, user: str = Depends(current_user)):
+    playlist = _playlist_location(body.playlist, user)
     with storage_errors():
         playlists.write(playlist, _locations(body.ids))
     hub.publish("playlist.changed", {"path": playlist.client_path})
     return {"ok": True}
+
+
+@router.put("/api/playlists/scene")
+def set_playlist_scene(body: PlaylistScene, user: str = Depends(current_user)):
+    """Gives a song a scene name inside one playlist (stored in the playlist, not in the mp3); an empty name removes it."""
+    playlist = _playlist_location(body.playlist, user)
+    with storage_errors():
+        if not playlists.set_scene(playlist, safe_id(body.id), body.scene):
+            raise HTTPException(status_code=404, detail="Song is not in the playlist")
+    hub.publish("playlist.changed", {"path": playlist.client_path})
+    return {"ok": True}
+
+
+def _follow_move(old: Location, new: Location):
+    """Playlists keep their songs when a song or folder is renamed or moved."""
+    for playlist in playlists.follow_move(old, new):
+        hub.publish("playlist.changed", {"path": playlist.client_path})
 
 
 # --- files -----------------------------------------------------------------
@@ -439,8 +510,8 @@ class MoveRequest(BaseModel):
 
 
 @router.post("/api/files/move")
-def move_file(body: MoveRequest):
-    source = safe_path(body.source)
+def move_file(body: MoveRequest, user: str = Depends(current_user)):
+    source = _visible_path(body.source, user)
     target_dir = safe_path(body.target_dir, kind="dir")
     if source.root != target_dir.root:
         raise HTTPException(status_code=400, detail="Files cannot be moved between different libraries")
@@ -452,6 +523,7 @@ def move_file(body: MoveRequest):
     with storage_errors():
         source.storage.move(source.rel, target.rel)
     get_index().relocate(source, target)
+    _follow_move(source, target)
     hub.publish("library.changed", {"path": source.parent.client_path})
     hub.publish("library.changed", {"path": target_dir.client_path})
     return {"path": target.client_path, "id": target.id}
@@ -464,7 +536,7 @@ class RenameRequest(BaseModel):
 
 @router.post("/api/files/rename")
 def rename_file(body: RenameRequest, user: str = Depends(current_user)):
-    source = safe_path(body.path)
+    source = _visible_path(body.path, user)
     if source.is_root:
         raise HTTPException(status_code=400, detail="Cannot rename a library root")
     if not may_delete(source, user):
@@ -474,6 +546,7 @@ def rename_file(body: RenameRequest, user: str = Depends(current_user)):
         with storage_errors():
             source.storage.move(source.rel, target.rel)
         get_index().relocate(source, target)
+        _follow_move(source, target)
         hub.publish("library.changed", {"path": source.parent.client_path})
     return {"path": target.client_path, "id": target.id}
 
@@ -575,7 +648,7 @@ def may_delete(location: Location, user: str) -> bool:
 
 @router.delete("/api/files")
 def delete_file(path: str = Query(...), user: str = Depends(current_user)):
-    location = safe_path(path)
+    location = _visible_path(path, user)
     if location.is_root:
         raise HTTPException(status_code=400, detail="Cannot delete a library root")
     if not may_delete(location, user):

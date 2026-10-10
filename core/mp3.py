@@ -8,7 +8,7 @@ from os import PathLike
 from pathlib import Path
 from typing import TypedDict, Iterator, Iterable
 
-from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, APIC, Encoding, PictureType, CHAP, CTOC
+from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, TRCK, APIC, Encoding, PictureType, CHAP, CTOC
 from mutagen.mp3 import MP3
 
 from core.lights import LightSetting
@@ -37,7 +37,7 @@ def _read_cover_frame(tags) -> APIC | None:
 
 
 class Mp3Entry(object):
-    __slots__ = ["index", "name", "path", "title", "artist", "album", "summary", "genres", "length", "favorite", "categories", "_tags",
+    __slots__ = ["index", "name", "path", "title", "artist", "album", "track", "summary", "genres", "length", "favorite", "categories", "_tags",
                  "_has_cover", "bpm", "light", "chapters", "__weakref__"]
 
     index: int | None
@@ -46,6 +46,7 @@ class Mp3Entry(object):
     title: str | None
     artist: str | None
     album: str | None
+    track: int | None
     summary: str | None
     genres: list[str]
     length: int
@@ -70,6 +71,7 @@ class Mp3Entry(object):
         self.title = title
         self.artist = artist
         self.album = album
+        self.track = None
         if isinstance(genre, str):
             self.genres = [genre]
         elif genre:
@@ -156,6 +158,7 @@ class Mp3Entry(object):
             "title": self.title,
             "artist": self.artist,
             "album": self.album,
+            "track": self.track,
             "summary": self.summary,
             "genres": list(self.genres),
             "tags": list(self.tags),
@@ -256,6 +259,15 @@ class EffectEntry(object):
         return None
 
 
+def parse_track_number(value) -> int | None:
+    """The number of a TRCK frame ("3" or "3/12"); None if it is missing or not a positive number."""
+    try:
+        number = int(str(value).split("/")[0].strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
 def _parse_favorite(frame) -> bool:
     if not frame or not frame.text:
         return False
@@ -281,6 +293,9 @@ def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
 
             if 'TCON' in audio.tags:
                 entry.genres = list(audio.tags.get('TCON').text)
+
+            if 'TRCK' in audio.tags:
+                entry.track = parse_track_number(audio.tags.get('TRCK').text[0] if audio.tags.get('TRCK').text else None)
 
             if 'TBPM' in audio.tags:
                 try:
@@ -375,6 +390,7 @@ def update_mp3_data(path: PathLike[str], data: Mp3Entry):
 
     update_mp3_title(audio, data.title, False)
     update_mp3_album(audio, data.album, False)
+    update_mp3_track(audio, data.track, False)
     update_mp3_artist(audio, data.artist, False)
     update_mp3_bpm(audio, data.bpm, False)
     update_mp3_genre(audio, data.genres, False)
@@ -443,6 +459,21 @@ def update_mp3_album(path: str | PathLike[str] | MP3, new_album: str, save: bool
     if save:
         audio.save()
         logger.debug("Updated album to {0} for {1}", new_album, path)
+
+
+def update_mp3_track(path: str | PathLike[str] | MP3, track: int | None, save: bool = True):
+    """Sets the track number; a total that was stored with it ("3/12") is kept."""
+    audio = _audio(path)
+
+    if not track:
+        audio.tags.delall("TRCK")
+    else:
+        old = audio.tags.get("TRCK")
+        total = str(old.text[0]).partition("/")[2].strip() if old and old.text else ""
+        audio.tags.add(TRCK(Encoding.UTF8, text=[f"{track}/{total}" if total else str(track)]))
+    if save:
+        audio.save()
+        logger.debug("Updated track number to {0} for {1}", track, path)
 
 
 def update_mp3_artist(path: str | PathLike[str] | MP3, new_artist: str, save: bool = True):

@@ -40,7 +40,8 @@
   const columns = $derived.by((): Column[] => {
     const c = prefs.columns;
     const list: Column[] = [];
-    if (tab.type === 'playlist' && c.index) list.push({ id: 'index', label: '#', width: '42px', sort: 'index', align: 'right' });
+    // the position in a playlist, the track number in a folder
+    if (c.index) list.push({ id: 'index', label: '#', width: '42px', sort: 'index', align: 'right', title: tab.type === 'playlist' ? undefined : t('Track') });
     if (c.favorite) list.push({ id: 'favorite', label: '', width: '30px', sort: 'favorite', align: 'center', title: t('Favorite') });
     list.push({ id: 'name', label: prefs.titleInsteadOfFile ? t('Title') : t('Name'), width: 'minmax(240px, 1.5fr)', sort: 'name', edit: prefs.titleInsteadOfFile ? 'text' : undefined });
     if (c.tags) list.push({ id: 'mood', label: t('Mood'), width: 'minmax(130px, 0.7fr)' });
@@ -48,6 +49,7 @@
     if (c.summary && !prefs.summaryUnderTitle) list.push({ id: 'summary', label: t('Summary'), width: 'minmax(160px, 0.8fr)', sort: 'summary', edit: 'text' });
     if (c.artist) list.push({ id: 'artist', label: t('Artist'), width: '130px', sort: 'artist', edit: 'text' });
     if (c.album) list.push({ id: 'album', label: t('Album'), width: '130px', sort: 'album', edit: 'text' });
+    if (c.track) list.push({ id: 'track', label: t('Track'), width: '58px', sort: 'track', edit: 'number', align: 'right' });
     if (c.genre) list.push({ id: 'genre', label: t('Genre'), width: '110px', sort: 'genre', edit: 'list' });
     if (c.bpm && (!prefs.dynamicColumns || filter.bpm !== null)) list.push({ id: 'bpm', label: t('BPM'), width: '58px', sort: 'bpm', edit: 'number', align: 'right' });
     if (c.score && (!prefs.dynamicScore || filterActive)) list.push({ id: 'score', label: t('Score'), width: '62px', sort: 'score', align: 'right' });
@@ -198,6 +200,7 @@
       case 'album': return track.album ?? '';
       case 'genre': return track.genres.join(', ');
       case 'bpm': return track.bpm?.toString() ?? '';
+      case 'track': return track.track?.toString() ?? '';
       default: {
         const value = track.categories[column.id.slice(4)];
         return value === undefined || value === null ? '' : String(value);
@@ -224,6 +227,10 @@
       const bpm = value.trim() === '' ? null : Number(value);
       if (bpm !== null && (!Number.isFinite(bpm) || bpm < 0)) return errorToast(t('Invalid number'));
       patch.bpm = bpm === null ? null : Math.round(bpm);
+    } else if (column === 'track') {
+      const number = value.trim() === '' ? null : Number(value);
+      if (number !== null && (!Number.isInteger(number) || number < 0)) return errorToast(t('Invalid number'));
+      patch.track = number || null;
     } else if (column.startsWith('cat:')) {
       const number = value.trim() === '' ? null : Number(value.replace(',', '.'));
       if (number !== null && !Number.isFinite(number)) return errorToast(t('Invalid number'));
@@ -409,6 +416,7 @@
       { label: t('Summary'), checked: c.summary, disabled: prefs.summaryUnderTitle, action: () => toggleColumn('summary') },
       { label: t('Artist'), checked: c.artist, action: () => toggleColumn('artist') },
       { label: t('Album'), checked: c.album, action: () => toggleColumn('album') },
+      { label: t('Track'), checked: c.track, action: () => toggleColumn('track') },
       { label: t('Genre'), checked: c.genre, action: () => toggleColumn('genre') },
       { label: t('BPM'), checked: c.bpm, action: () => toggleColumn('bpm') },
       { label: t('Score'), checked: c.score, action: () => toggleColumn('score') },
@@ -538,7 +546,7 @@
                 <input class="edit" type="text" bind:value={editing.value} use:focusInput onblur={commitEdit}
                        onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') editing = null; }} />
               {:else if column.id === 'index'}
-                {#if player.track?.id === track.id}<span class="now"><Icon name={player.playing ? 'volume' : 'pause'} size={14} /></span>{:else}<span class="muted">{(track.index ?? 0) + 1}</span>{/if}
+                {#if player.track?.id === track.id}<span class="now"><Icon name={player.playing ? 'volume' : 'pause'} size={14} /></span>{:else}<span class="muted">{tab.type === 'playlist' ? (track.index ?? 0) + 1 : (track.track ?? '')}</span>{/if}
               {:else if column.id === 'favorite'}
                 <span class="fav" class:on={track.favorite}><Icon name="heart" size={16} filled={track.favorite} /></span>
               {:else if column.id === 'name'}
@@ -550,9 +558,14 @@
                     </span>
                   {/if}
                   <div class="texts">
-                    <span class="title-text ellipsis">{displayName(track)}</span>
-                    {#if prefs.rowStyle !== 'small'}
-                      <span class="sub ellipsis">{prefs.summaryUnderTitle && track.summary ? track.summary : track.artist || track.album || ''}</span>
+                    {#if track.scene}
+                      <span class="title-text ellipsis" title={track.scene}><Icon name="marker" size={12} class="scene-icon" />{track.scene}{#if prefs.rowStyle === 'small'}<span class="muted"> · {displayName(track)}</span>{/if}</span>
+                      {#if prefs.rowStyle !== 'small'}<span class="sub ellipsis">{displayName(track)}</span>{/if}
+                    {:else}
+                      <span class="title-text ellipsis">{displayName(track)}</span>
+                      {#if prefs.rowStyle !== 'small'}
+                        <span class="sub ellipsis">{prefs.summaryUnderTitle && track.summary ? track.summary : track.artist || track.album || ''}</span>
+                      {/if}
                     {/if}
                   </div>
                   {#if track.light?.color}<span class="bulb" style:color={track.light.color} title={t('Lights')}><Icon name="bulb" size={15} filled /></span>{/if}
@@ -577,6 +590,8 @@
                 <span class="ellipsis">{track.genres.join(', ')}</span>
               {:else if column.id === 'bpm'}
                 {track.bpm ?? ''}
+              {:else if column.id === 'track'}
+                <span class="muted num">{track.track ?? ''}</span>
               {:else if column.id === 'score'}
                 {#if row.score !== null}<span class="score" title={t('Distance: {0}', row.score)}>{scorePercent(row.score)}%</span>{/if}
               {:else}
@@ -595,7 +610,7 @@
   {#if library.search}
     <div class="search-pill" class:none={!rows.length}><Icon name="search" size={13} /> {library.search}</div>
   {/if}
-  {#if !ui.narrow}
+  {#if !ui.narrow && library.selection.length > 1}
     <div class="footer muted">{rows.length} / {tab.tracks.length} · {t('{0} selected', library.selection.length)}</div>
   {/if}
 </div>
@@ -649,6 +664,7 @@
   .texts { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
   .title-text { font-weight: 600; }
   .sub { font-size: var(--fs-xs); color: var(--muted); }
+  .title-text :global(.scene-icon) { display: inline-block; vertical-align: -1px; margin-right: 5px; color: var(--gold); }
   .tags { display: flex; flex: 1; gap: 5px; min-width: 0; overflow: hidden; align-items: center; }
   .more-tags { font-size: var(--fs-xs); color: var(--faint); flex: none; white-space: nowrap; }
   .bulb { display: flex; filter: drop-shadow(0 0 4px currentColor); }

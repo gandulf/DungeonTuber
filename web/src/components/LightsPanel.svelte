@@ -54,21 +54,15 @@
     <span class="glyph"><Icon name="bulb" size={17} /></span>
     <h3 class="card-title">{t('Lighting')}</h3>
     <span class="grow"></span>
+    <button class="icon-btn" class:active={followMusic} aria-pressed={followMusic} disabled={!lights.list.length}
+            title="{t('Lights follow music')}: {followMusic ? t('On') : t('Off')}&#10;{t('When on, every light that is switched on takes the light setting of the playing song and changes with its chapter markers. Click to switch it on or off.')}"
+            onclick={() => setFollow(!followMusic)}>
+      <Icon name="sparkles" size={15} />
+    </button>
     <button class="icon-btn" title={t('Refresh')} disabled={lights.discovering} onclick={discoverLights}>
       <Icon name="refresh" size={15} class={lights.discovering ? 'spin' : ''} />
     </button>
   </div>
-
-  <label class="follow">
-    <div>
-      <span class="follow-title"><Icon name="sparkles" size={15} /> {t('Lights follow music')}</span>
-      <span class="card-sub">{t('Lighting reacts to the current song and its markers.')}</span>
-    </div>
-    <span class="switch">
-      <input type="checkbox" checked={followMusic} disabled={!lights.list.length} onchange={(e) => setFollow((e.currentTarget as HTMLInputElement).checked)} />
-      <span></span>
-    </span>
-  </label>
 
   {#if !lights.list.length}
     <div class="empty">
@@ -97,10 +91,12 @@
         <span class="active-name ellipsis">{selectedLights.length > 1 ? t('{0} lights', selectedLights.length) : current.name}</span>
         {#if current.scene}<span class="pill gold">{current.scene}</span>{/if}
       </div>
-      <span class="switch">
-        <input type="checkbox" checked={current.state} onchange={(e) => patchSelected({ state: (e.currentTarget as HTMLInputElement).checked })} />
+      <!-- a label: the checkbox itself is hidden, only a label forwards clicks on the switch to it -->
+      <label class="switch" title={current.state ? t('Turn off') : t('Turn on')}>
+        <input type="checkbox" checked={current.state} aria-label={t('Active light')}
+               onchange={(e) => patchSelected({ state: (e.currentTarget as HTMLInputElement).checked })} />
         <span></span>
-      </span>
+      </label>
     </div>
 
     <div class="field">
@@ -143,9 +139,6 @@
   .head { display: flex; align-items: center; gap: 9px; }
   .glyph { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--gold-soft); color: var(--gold); }
   .grow { flex: 1; }
-  .follow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); cursor: pointer; }
-  .follow > div { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-  .follow-title { display: flex; align-items: center; gap: 7px; font-weight: 600; }
   .empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px; text-align: center; }
   .bulbs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
   .bulb { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 6px; min-width: 70px; border-radius: 12px; border: 1px solid transparent; }

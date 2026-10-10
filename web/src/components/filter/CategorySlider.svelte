@@ -1,7 +1,7 @@
 <script lang="ts" module>
-  const ICONS: Record<string, string> = {
+  export const ICONS: Record<string, string> = {
     Valence: 'smile', Arousal: 'bolt', Engagement: 'activity', Darkness: 'moon', Aggressive: 'flame', Happy: 'sun',
-    Party: 'sparkles', Relaxed: 'leaf', Sad: 'drop', Tonal: 'waves',
+    Party: 'sparkles', Relaxed: 'leaf', Sad: 'drop', Tonal: 'waves', Danceable: 'shuffle', Energy: 'power',
   };
 </script>
 

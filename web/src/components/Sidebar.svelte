@@ -1,12 +1,12 @@
 <script lang="ts">
   import { api } from '../lib/api';
-  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, newPlaylist, openImportDialog, openItem, openUploadDialog, uploadFiles } from '../lib/actions';
+  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, editPlaylist, editSongById, newPlaylist, openImportDialog, openItem, openUploadDialog, uploadFiles } from '../lib/actions';
   import { itemsFromDrop } from '../lib/upload';
   import { t } from '../lib/i18n.svelte';
   import { openSettings, setTheme } from '../lib/menus';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
-  import { addFavoriteFolder, data, removeFavoriteFolder } from '../lib/stores/data.svelte';
-  import { closeTab, library, openTab, reloadDirTabs, selectTab } from '../lib/stores/library.svelte';
+  import { addFavorite, data, isPlaylistPath, moveFavorites, removeFavorite } from '../lib/stores/data.svelte';
+  import { closeTab, library, openTab, reloadDirTabs } from '../lib/stores/library.svelte';
   import { askText, errorToast, openMenu, ui, type MenuItem } from '../lib/stores/ui.svelte';
   import { onEvent } from '../lib/ws';
   import type { BrowseItem } from '../lib/types';
@@ -19,7 +19,20 @@
   let dropTarget = $state(false);
   let overPlaylist = $state<string | null>(null);
 
-  const playlists = $derived(library.tabs.filter((tab) => tab.type === 'playlist'));
+  const favoriteFolders = $derived(data.user.favorites.filter((path) => !isPlaylistPath(path)));
+  // only favorite playlists are listed; an open tab of one adds what is known about it (private, creator)
+  const favoritePlaylists = $derived(data.user.favorites.filter(isPlaylistPath).map((path) => ({
+    path, name: lastPart(path).replace(/\.m3u$/i, ''), tab: library.tabs.find((tab) => tab.type === 'playlist' && tab.path === path),
+  })));
+
+  async function editFavoritePlaylist(path: string) {
+    try {
+      const result = await api.tracksOfPlaylist(path);
+      editPlaylist({ path, name: result.name, private: result.private });
+    } catch (e) {
+      errorToast(e);
+    }
+  }
 
   async function loadRoots() {
     try {
@@ -67,10 +80,7 @@
       const result = await api.rename(item.path, name);
       const inside = (path: string) => path === item.path || path.startsWith(item.path + '/');
       for (const tab of [...library.tabs]) if (inside(tab.path)) closeTab(tab.key);
-      if (data.user.favorites.some(inside)) {
-        const moved = data.user.favorites.map((p) => (inside(p) ? result.path + p.slice(item.path.length) : p));
-        data.user = await api.putUserState({ favorites: moved });
-      }
+      await moveFavorites(item.path, result.path);
       refresh();
     } catch (e) {
       errorToast(e);
@@ -81,18 +91,25 @@
     const items: MenuItem[] = [{ label: t('Open'), icon: item.type === 'mp3' ? 'play' : 'folder', action: () => openItem(item) }];
     if (item.type === 'dir') {
       items.push(
-        { label: t('Add to favorites'), icon: 'bookmark', action: () => addFavoriteFolder(item.path) },
+        { label: t('Add to favorites'), icon: 'bookmark', action: () => addFavorite(item.path) },
         { label: t('New Playlist…'), icon: 'playlist', action: () => newPlaylist([], item.path) },
         { label: t('New folder…'), icon: 'plus', action: () => createFolder(item.path) },
         { label: t('Upload songs…'), icon: 'upload', tour: 'menu-upload', action: () => openUploadDialog(item.path) },
         { label: t('Import from YouTube…'), icon: 'cloud', tour: 'menu-import', action: () => openImportDialog(item.path) },
       );
     }
+    if (item.type === 'mp3') items.push({ label: t('Edit Song…'), icon: 'edit', action: () => editSongById(item.id) });
+    if (item.type === 'm3u') {
+      items.push(data.user.favorites.includes(item.path)
+        ? { label: t('Remove from favorites'), icon: 'bookmark', action: () => removeFavorite(item.path) }
+        : { label: t('Add to favorites'), icon: 'bookmark', action: () => addFavorite(item.path) });
+    }
     if (item.type !== 'm3u' && data.settings?.voxalyzerActive !== false) {
       items.push({ label: t('Analyze'), icon: 'sparkles', action: () => analyze([item.path]) });
     }
     items.push({ separator: true }, { label: t('Refresh'), icon: 'refresh', action: refresh });
     if (item.storage === undefined && canDelete(item.uploaded_by)) {
+      if (item.type === 'm3u') items.push({ label: t('Edit Playlist…'), icon: 'edit', action: () => editPlaylist(item) });
       if (item.type === 'dir') items.push({ label: t('Rename'), icon: 'edit', action: () => renameFolder(item) });
       items.push({ label: t('Delete'), icon: 'trash', action: () => deleteItems([{ path: item.path, name: item.name, dir: item.type === 'dir' }]) });
     }
@@ -131,13 +148,13 @@
   <nav class="nav">
     <div class="nav-section">
       <span class="label-xs">{t('Library')}</span>
-      {#each data.user.favorites as path (path)}
+      {#each favoriteFolders as path (path)}
         <button class="nav-item" title={path} onclick={() => openTab('dir', path)}
                 oncontextmenu={(e) => openMenu(e, [
                   { label: t('Open'), icon: 'folder', action: () => openTab('dir', path) },
                   { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog(path) },
                   { label: t('Import from YouTube…'), icon: 'cloud', action: () => openImportDialog(path) },
-                  { label: t('Remove from favorites'), icon: 'trash', action: () => removeFavoriteFolder(path) },
+                  { label: t('Remove from favorites'), icon: 'trash', action: () => removeFavorite(path) },
                 ])}>
           <Icon name="bookmark" size={16} /><span class="ellipsis">{lastPart(path)}</span>
         </button>
@@ -151,19 +168,22 @@
         <span class="label-xs">{t('Playlists')}</span>
         <button class="icon-btn mini" title={t('New Playlist…')} onclick={() => newPlaylist()}><Icon name="plus" size={14} /></button>
       </div>
-      {#each playlists as playlist (playlist.key)}
-        <button class="nav-item" class:active={library.active === playlist.key} class:over={overPlaylist === playlist.key} title={playlist.path} onclick={() => selectTab(playlist.key)}
-                ondragover={(e) => { if (canDropOnPlaylist(e.dataTransfer)) { e.preventDefault(); overPlaylist = playlist.key; } }}
+      {#each favoritePlaylists as playlist (playlist.path)}
+        <button class="nav-item" class:active={!!playlist.tab && library.active === playlist.tab.key} class:over={overPlaylist === playlist.path} title={playlist.path}
+                onclick={() => openTab('playlist', playlist.path)}
+                ondragover={(e) => { if (canDropOnPlaylist(e.dataTransfer)) { e.preventDefault(); overPlaylist = playlist.path; } }}
                 ondragleave={() => (overPlaylist = null)}
                 ondrop={(e) => { e.preventDefault(); overPlaylist = null; void dropOnPlaylist(playlist.path, e.dataTransfer); }}
                 oncontextmenu={(e) => openMenu(e, [
-                  { label: t('Open'), icon: 'playlist', action: () => selectTab(playlist.key) },
-                  { label: t('Remove from list'), icon: 'close', action: () => closeTab(playlist.key) },
+                  { label: t('Open'), icon: 'playlist', action: () => openTab('playlist', playlist.path) },
+                  ...(!playlist.tab?.loaded || canDelete(playlist.tab.owner) ? [{ label: t('Edit Playlist…'), icon: 'edit', action: () => editFavoritePlaylist(playlist.path) }] : []),
+                  { label: t('Remove from favorites'), icon: 'trash', action: () => removeFavorite(playlist.path) },
                 ])}>
           <Icon name="playlist" size={16} /><span class="ellipsis">{playlist.name}</span>
+          {#if playlist.tab?.private}<span class="private" title={t('Private')}><Icon name="lock" size={12} /></span>{/if}
         </button>
       {:else}
-        <span class="empty muted">{t('Open a .m3u file from the tree.')}</span>
+        <span class="empty muted">{t('Right-click a playlist to add it to the favorites.')}</span>
       {/each}
     </div>
 
@@ -211,6 +231,7 @@
   .nav-item:hover { background: var(--hover); color: var(--text); }
   .nav-item.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
   .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav-item .private { display: flex; flex: none; margin-left: auto; color: var(--faint); }
   .empty { font-size: var(--fs-xs); padding: 2px 10px 4px; line-height: 1.4; }
   .files { flex: 1; min-height: 0; }
   .tree { flex: 1; overflow: auto; min-height: 80px; border-radius: 10px; padding: 4px; }

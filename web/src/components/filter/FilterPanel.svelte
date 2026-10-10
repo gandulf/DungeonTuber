@@ -3,12 +3,13 @@
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { emptyFilter } from '../../lib/scoring';
-  import { data, savePresets } from '../../lib/stores/data.svelte';
+  import { data, resetPresets as restoreDefaultPresets, savePresets } from '../../lib/stores/data.svelte';
   import { activeTab, filter, onFilterChanged } from '../../lib/stores/library.svelte';
-  import { askConfirm, askText, openMenu } from '../../lib/stores/ui.svelte';
+  import { askConfirm, askText, openDialog, openMenu } from '../../lib/stores/ui.svelte';
   import type { MusicCategory, Preset } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import BpmDial from './BpmDial.svelte';
+  import CategoryHelpDialog from './CategoryHelpDialog.svelte';
   import CategorySlider from './CategorySlider.svelte';
   import Circumplex from './Circumplex.svelte';
 
@@ -24,9 +25,20 @@
     for (const track of tracks) for (const key of Object.keys(track.categories)) present.add(key);
     if (!present.size) return data.categories;
     const known = new Set(data.categories.map((c) => c.key));
-    const extra = [...present].filter((key) => !known.has(key)).sort().map((key): MusicCategory => ({ key, name: key, description: '', levels: {}, group: null }));
+    const extra = [...present].filter((key) => !known.has(key)).sort().map(builtinCategory);
     return [...data.categories.filter((c) => present.has(c.key)), ...extra];
   });
+
+  /** A category found in the songs but not configured; known analysis keys (e.g. Tonal, Danceable, Energy) bring their translated texts. */
+  function builtinCategory(key: string): MusicCategory {
+    const text = (id: string) => (t(id) === id ? '' : t(id));
+    const levels: Record<string, string> = {};
+    for (const [value, suffix] of [[1, 'Low'], [5, 'Medium'], [10, 'High']] as const) {
+      const level = text(`${key} ${suffix}`);
+      if (level) levels[value] = level;
+    }
+    return { key, name: text(key) || key, description: text(`${key} Description`), levels, group: null };
+  }
 
   // the mood map does not fit on small screens (see the media query below): valence and arousal are plain sliders there
   const compact = window.matchMedia('(max-width: 1100px)');
@@ -71,7 +83,19 @@
     onFilterChanged();
   }
 
+  // the clicked preset stays marked until a slider (or tag, genre, bpm) differs from it
+  let clickedPreset = $state<string | null>(null);
+  const setValues = (categories: Record<string, number | null | undefined>) =>
+    Object.entries(categories).filter(([, v]) => v !== null && v !== undefined && v >= 0).sort(([a], [b]) => a.localeCompare(b));
+  const sameList = (a: string[], b: string[]) => a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
+  function matches(preset: Preset): boolean {
+    return JSON.stringify(setValues(preset.categories ?? {})) === JSON.stringify(setValues(filter.categories))
+      && sameList(preset.tags, filter.tags) && sameList(preset.genres, filter.genres) && (preset.bpm ?? null) === (filter.bpm ?? null);
+  }
+  const selectedPreset = $derived(data.presets.find((p) => p.name === clickedPreset && matches(p))?.name ?? null);
+
   function applyPreset(preset: Preset) {
+    clickedPreset = preset.name;
     filter.categories = { ...preset.categories };
     filter.tags = [...preset.tags];
     filter.genres = [...preset.genres];
@@ -93,7 +117,7 @@
   }
 
   async function resetPresets() {
-    if (await askConfirm(t('Reset Presets') + '?')) await savePresets([]);
+    if (await askConfirm(t('Reset Presets') + '?')) await restoreDefaultPresets();
   }
 
   function presetMenu(event: MouseEvent, preset: Preset) {
@@ -140,7 +164,7 @@
       {#if prefs.filter.presets}
         <div class="presets">
           {#each data.presets as preset (preset.name)}
-            <button class="preset" onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')}>
+            <button class="preset" class:on={selectedPreset === preset.name} aria-pressed={selectedPreset === preset.name} onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')}>
               <Icon name="bookmark" size={13} /> {preset.name}
             </button>
           {/each}
@@ -176,13 +200,17 @@
                 <h3 class="card-title">{t('Mood Sliders')}</h3>
                 <p class="card-sub">{t('Fine tune the sound')}</p>
               </div>
-              {#if groups.length > 1}
-                <div class="seg small">
-                  {#each groups as [group] (group)}
-                    <button class:on={(current?.[0] ?? '') === group} onclick={() => (activeGroup = group)}>{group === ALL ? t('All') : group || t('General')}</button>
-                  {/each}
-                </div>
-              {/if}
+              <div class="head-tools">
+                {#if groups.length > 1}
+                  <div class="seg small">
+                    {#each groups as [group] (group)}
+                      <button class:on={(current?.[0] ?? '') === group} onclick={() => (activeGroup = group)}>{group === ALL ? t('All') : group || t('General')}</button>
+                    {/each}
+                  </div>
+                {/if}
+                <button class="help" title={t('What do the mood sliders mean?')} aria-label={t('What do the mood sliders mean?')}
+                        onclick={() => openDialog(CategoryHelpDialog, { categories })}>?</button>
+              </div>
             </div>
             {#if current}{@render sliders(prefs.filter.sliders ? current[1] : [])}{/if}
             <div class="card-foot">
@@ -202,12 +230,16 @@
   .presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .preset { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 9px; font-size: var(--fs-sm); color: var(--gold); background: var(--gold-soft); border: 1px solid transparent; }
   .preset:hover { border-color: var(--gold); }
+  .preset.on { color: var(--bg); background: var(--gold); border-color: var(--gold); font-weight: 600; }
   .grow { flex: 1; }
   .cards { display: grid; grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 1.2fr); gap: 12px; height: min(36vh, 290px); }
   .cards.single { grid-template-columns: 1fr; }
   .card { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
   .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
   .map-toggle.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .head-tools { display: flex; align-items: center; gap: 6px; }
+  .help { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--fs-xs); font-weight: 700; line-height: 1; }
+  .help:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
   .seg.small button { padding: 3px 10px; font-size: var(--fs-xs); }
   .slider-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); column-gap: 26px; row-gap: 2px; overflow-x: hidden; overflow-y: auto; padding-right: 4px; align-content: start; }
   .slider-list.wide { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }
