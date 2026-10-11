@@ -14,9 +14,9 @@
   import Icon from '../Icon.svelte';
   import { onEvent } from '../../lib/ws';
   import Modal from './Modal.svelte';
-  import UsersPanel from './UsersPanel.svelte';
+  import UsersPanel, { type PasswordRequest } from './UsersPanel.svelte';
 
-  type Section = 'general' | 'library' | 'categories' | 'lights' | 'agents' | 'youtube' | 'assistant' | 'player' | 'security';
+  type Section = 'general' | 'library' | 'categories' | 'lights' | 'analyzer' | 'agents' | 'youtube' | 'assistant' | 'player' | 'security';
   const AGENT_URL = 'https://github.com/gandulf/DungeonTuber/releases/latest/download/dt-youtube.exe';
   let { initialSection = 'general' }: { initialSection?: Section } = $props();
   const admin = data.auth?.is_admin !== false;
@@ -238,8 +238,6 @@
     }
   }
 
-  let password = $state('');
-  let password2 = $state('');
   let saving = $state(false);
 
   async function save() {
@@ -292,19 +290,56 @@
     editing = { index: null, row: { key: '', name: '', group: '', description: '', low: '', medium: '', high: '', other: {}, isNew: true } };
   }
 
-  async function changePassword(remove = false) {
-    if (!remove && (password.length < 4 || password !== password2)) {
-      toast(t('Passwords must match and have at least 4 characters.'), 'error');
-      return;
-    }
+  // --- password dialog (own password, new users, passwords of other users) -----------------------------------------
+
+  let passwordDialog = $state<PasswordRequest | null>(null);
+  let pwName = $state('');
+  let password = $state('');
+  let password2 = $state('');
+  let pwBusy = $state(false);
+  const pwValid = $derived((!passwordDialog?.withName || pwName.trim().length >= 2) && password.length >= 4 && password === password2);
+
+  function askPassword(request: PasswordRequest) {
+    pwName = password = password2 = '';
+    passwordDialog = request;
+  }
+
+  async function submitPassword(event: SubmitEvent) {
+    event.preventDefault();
+    if (!passwordDialog || !pwValid || pwBusy) return;
+    pwBusy = true;
     try {
-      if (!admin) await api.setOwnPassword(password);
-      else {
-        const result = await api.setPassword(remove ? null : password);
-        if (data.auth) data.auth.password_set = result.password_set;
-      }
-      password = password2 = '';
-      toast(remove ? t('Password removed') : t('Password changed'), 'success');
+      await passwordDialog.onsubmit(password, pwName.trim());
+      passwordDialog = null;
+    } catch (e) {
+      errorToast(e);
+    } finally {
+      pwBusy = false;
+    }
+  }
+
+  function changeOwnPassword() {
+    askPassword({
+      title: admin && !data.auth?.password_set ? t('Set password') : t('Change password'),
+      subtitle: admin ? t('The password of the SuperAdmin ({0}).', data.auth?.user ?? 'admin') : t('Signed in as {0}', data.auth?.user ?? ''),
+      submitLabel: t('Save'),
+      onsubmit: async (value) => {
+        if (!admin) await api.setOwnPassword(value);
+        else {
+          const result = await api.setPassword(value);
+          if (data.auth) data.auth.password_set = result.password_set;
+        }
+        toast(t('Password changed'), 'success');
+      },
+    });
+  }
+
+  async function removePassword() {
+    if (!(await askConfirm(t('Remove the password? Then only this computer can connect.')))) return;
+    try {
+      const result = await api.setPassword(null);
+      if (data.auth) data.auth.password_set = result.password_set;
+      toast(t('Password removed'), 'success');
     } catch (e) {
       errorToast(e);
     }
@@ -315,6 +350,7 @@
     ['library', 'Library', 'folder'],
     ['categories', 'Categories', 'sliders'],
     ['lights', 'Lights', 'bulb'],
+    ['analyzer', 'Analyzer', 'waves'],
     ['youtube', 'YouTube', 'download'],
     ['agents', 'Agents', 'cloud'],
     ['assistant', 'AI Assistant', 'sparkles'],
@@ -357,8 +393,6 @@
             </select>
             <span class="muted small">{t('Language of server messages and category names, and the default of users who did not choose their own.')}</span>
           </label>
-          <h4>{t('Analyzer')}</h4>
-          <label class="check"><input type="checkbox" bind:checked={form.skipAnalyzedMusic} /> {t('Skip Analyzed Music')}</label>
         {/if}
       {:else if section === 'library'}
         {#if desktop}
@@ -508,7 +542,8 @@
             <button class="btn" onclick={createAgentToken}><Icon name="plus" size={14} /> {t('Create agent token')}</button>
           </div>
         </section>
-        {#if admin}
+      {:else if section === 'analyzer'}
+        <label class="check"><input type="checkbox" bind:checked={form.skipAnalyzedMusic} /> {t('Skip Analyzed Music')}</label>
         <h4>{t('Cloud analysis')}</h4>
         <span class="muted small">{t('Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.')}</span>
         <span class="small">{cloud.configured ? t('Configured ({0})', cloud.host ?? '') : t('Not configured')}</span>
@@ -519,7 +554,6 @@
           <button class="btn" disabled={!cloudUrl.trim() || !cloudKey.trim() || !cloudSecret.trim()} onclick={saveCloud}>{t('Save')}</button>
           {#if cloud.configured}<button class="btn danger" onclick={removeCloud}>{t('Remove')}</button>{/if}
         </div>
-        {/if}
       {:else if section === 'player'}
         <label class="check"><input type="checkbox" checked={prefs.crossfade} onchange={(e) => { prefs.crossfade = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Crossfade')}</label>
         <span class="muted small">{t('The next song fades in while the current one fades out.')}</span>
@@ -530,27 +564,32 @@
         <label class="check"><input type="checkbox" checked={prefs.dynamicColumns} onchange={(e) => { prefs.dynamicColumns = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Dynamic Category Columns')}</label>
         <span class="muted small">{t('Shows the BPM and mood columns only when the filter uses them.')}</span>
       {:else if section === 'security'}
-        {#if !admin}
-          <p>{t('Signed in as {0}', data.auth?.user ?? '')}</p>
-        {:else}
-          {#if data.auth?.local}
-            <p class="muted">{t('The desktop app only accepts connections from this computer. A password is needed when running as a server for other devices.')}</p>
+        <section class="group">
+          <h4>{t('Your account')}</h4>
+          <div class="item">
+            <span class="dot" class:on={!admin || !!data.auth?.password_set}></span>
+            <div class="info">
+              <strong>{data.auth?.user ?? 'admin'}{#if admin} <span class="pill violet">{t('SuperAdmin')}</span>{/if}</strong>
+              <span class="meta">{!admin || data.auth?.password_set ? t('A password is set.') : t('No password is set – only this computer can connect.')}</span>
+            </div>
+            <button class="btn sm" onclick={changeOwnPassword}><Icon name="lock" size={14} /> {admin && !data.auth?.password_set ? t('Set password') : t('Change password')}</button>
+            {#if admin && data.auth?.password_set}
+              <button class="icon-btn" title={t('Remove password')} aria-label={t('Remove password')} onclick={removePassword}><Icon name="trash" size={14} /></button>
+            {/if}
+          </div>
+          {#if admin && data.auth?.local}
+            <span class="muted small">{t('The desktop app only accepts connections from this computer. A password is needed when running as a server for other devices.')}</span>
           {/if}
-          <p>{data.auth?.password_set ? t('A password is set.') : t('No password is set – only this computer can connect.')}</p>
-        {/if}
-        <label class="field">{t('New password')}<input type="password" bind:value={password} autocomplete="new-password" /></label>
-        <label class="field">{t('Repeat password')}<input type="password" bind:value={password2} autocomplete="new-password" /></label>
-        <div class="row">
-          <button class="btn primary" onclick={() => changePassword()}>{t('Set password')}</button>
-          {#if admin && data.auth?.password_set}<button class="btn danger" onclick={() => changePassword(true)}>{t('Remove password')}</button>{/if}
-        </div>
-        {#if admin}<UsersPanel />{/if}
+        </section>
+        {#if admin}<UsersPanel {askPassword} />{/if}
         {#if admin && data.auth?.local}
-          <h4>{t('Share on network')}</h4>
-          <label class="check"><input type="checkbox" bind:checked={form.shareOnNetwork} disabled={!data.auth?.password_set} />
-            {t('Let tablets and phones in this network connect (requires a password and a restart)')}</label>
-          <label class="field">{t('Port')}<input type="number" min="1024" max="65535" bind:value={form.sharePort} disabled={!form.shareOnNetwork} /></label>
-          {#if form.shareOnNetwork}<p class="muted small">{t('After restarting, open {0} on the other device.', form.networkUrl)}</p>{/if}
+          <section class="group">
+            <h4>{t('Share on network')}</h4>
+            <label class="check"><input type="checkbox" bind:checked={form.shareOnNetwork} disabled={!data.auth?.password_set} />
+              {t('Let tablets and phones in this network connect (requires a password and a restart)')}</label>
+            <label class="field">{t('Port')}<input type="number" min="1024" max="65535" bind:value={form.sharePort} disabled={!form.shareOnNetwork} /></label>
+            {#if form.shareOnNetwork}<p class="muted small">{t('After restarting, open {0} on the other device.', form.networkUrl)}</p>{/if}
+          </section>
         {/if}
       {/if}
     </div>
@@ -565,6 +604,24 @@
   {/if}
   {#if editing}
     <CategoryEditDialog row={editing.row} onsave={saveCategory} onclose={() => (editing = null)} />
+  {/if}
+  {#if passwordDialog}
+    <Modal title={passwordDialog.title} onclose={() => (passwordDialog = null)} width="420px">
+      <form id="password-form" class="pw-form" onsubmit={submitPassword}>
+        {#if passwordDialog.subtitle}<p class="muted small">{passwordDialog.subtitle}</p>{/if}
+        {#if passwordDialog.withName}
+          <label class="field">{t('User name')}<input type="text" bind:value={pwName} autocomplete="off" /></label>
+        {/if}
+        <label class="field">{t('New password')}<input type="password" bind:value={password} autocomplete="new-password" />
+          <span class="muted small">{t('At least 4 characters.')}</span></label>
+        <label class="field">{t('Repeat password')}<input type="password" bind:value={password2} autocomplete="new-password" />
+          {#if password2 && password !== password2}<span class="warn small">{t('The passwords do not match.')}</span>{/if}</label>
+      </form>
+      {#snippet footer()}
+        <button class="btn" type="button" onclick={() => (passwordDialog = null)}>{t('Cancel')}</button>
+        <button class="btn primary" type="submit" form="password-form" disabled={!pwValid || pwBusy}>{passwordDialog?.submitLabel}</button>
+      {/snippet}
+    </Modal>
   {/if}
 </Modal>
 
@@ -595,7 +652,8 @@
   .empty { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
   .create { padding-top: 6px; border-top: 1px dashed var(--border-strong); }
   .grow { flex: 1; }
-  .grow { flex: 1; }
+  .pw-form { display: flex; flex-direction: column; gap: 12px; }
+  .pw-form p { margin: 0; }
   .storage { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); align-items: center; }
   .storage .id { align-self: center; }
   .storage .actions { justify-content: flex-end; }

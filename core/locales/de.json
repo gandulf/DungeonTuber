@@ -605,5 +605,14 @@
   "Type a search or set a filter to find the best {0} songs of the whole library.": "Gib einen Suchbegriff ein oder setze einen Filter, um die besten {0} Songs der gesamten Bibliothek zu finden.",
   "The best {0} of {1} songs of the whole library": "Die besten {0} von {1} Songs der gesamten Bibliothek",
   "No song of the library has values for this filter yet; analyze the songs first.": "Kein Song der Bibliothek hat Werte für diesen Filter; analysiere die Songs zuerst.",
-  "Finds the best fitting songs of your whole library for a scene: the AI sets the filter, nothing is invented": "Findet die passendsten Songs deiner gesamten Bibliothek für eine Szene: Die KI setzt den Filter, nichts wird erfunden"
+  "Finds the best fitting songs of your whole library for a scene: the AI sets the filter, nothing is invented": "Findet die passendsten Songs deiner gesamten Bibliothek für eine Szene: Die KI setzt den Filter, nichts wird erfunden",
+  "Your account": "Dein Konto",
+  "Change password": "Passwort ändern",
+  "The password of the SuperAdmin ({0}).": "Das Passwort des SuperAdmins ({0}).",
+  "Remove the password? Then only this computer can connect.": "Passwort entfernen? Danach kann sich nur noch dieser Computer verbinden.",
+  "At least 4 characters.": "Mindestens 4 Zeichen.",
+  "The passwords do not match.": "Die Passwörter stimmen nicht überein.",
+  "Create user": "Benutzer anlegen",
+  "New password for {0}.": "Neues Passwort für {0}.",
+  "No other users yet.": "Noch keine weiteren Benutzer."
 }

@@ -1,5 +1,6 @@
 // Open song tabs (folders / playlists), their tracks and the shared filter.
 import { api } from '../api';
+import { cached } from '../cache';
 import { t } from '../i18n.svelte';
 import { prefs, savePrefs } from '../prefs.svelte';
 import { data } from './data.svelte';
@@ -61,8 +62,10 @@ export async function loadGlobal(force = false) {
   globalTab.loading = true;
   globalTab.error = null;
   try {
-    globalTab.tracks = (await api.libraryTracks()).tracks;
-    globalTab.loaded = true;
+    await cached('tracks:library', () => api.libraryTracks(), (result) => {
+      globalTab.tracks = result.tracks;
+      globalTab.loaded = true;
+    });
   } catch (e) {
     globalTab.error = e instanceof Error ? e.message : String(e);
   } finally {
@@ -131,12 +134,14 @@ export async function loadTab(key: string, force = false) {
   tab.loading = true;
   tab.error = null;
   try {
-    const result = tab.type === 'dir' ? await api.tracksOfDir(tab.path) : await api.tracksOfPlaylist(tab.path);
-    tab.tracks = result.tracks;
-    tab.name = result.name || tab.name;
-    tab.private = result.private;
-    tab.owner = result.uploaded_by;
-    tab.loaded = true;
+    // the cached songs show at once, the current ones replace them when they differ
+    await cached(`tracks:${tab.key}`, () => (tab.type === 'dir' ? api.tracksOfDir(tab.path) : api.tracksOfPlaylist(tab.path)), (result) => {
+      tab.tracks = result.tracks;
+      tab.name = result.name || tab.name;
+      tab.private = result.private;
+      tab.owner = result.uploaded_by;
+      tab.loaded = true;
+    });
   } catch (e) {
     tab.error = e instanceof Error ? e.message : String(e);
   } finally {

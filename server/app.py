@@ -99,6 +99,10 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
         root = os.path.realpath(web_dir)
         candidate = os.path.realpath(os.path.join(root, full_path)) if full_path else None
         if candidate and candidate.startswith(root + os.sep) and os.path.isfile(candidate):  # never serve anything outside the web directory
+            if full_path == "sw.js":  # the service worker has to be checked for updates on every start
+                return FileResponse(candidate, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+            if full_path.endswith(".webmanifest"):
+                return FileResponse(candidate, media_type="application/manifest+json")
             return FileResponse(candidate)
         if index_file.is_file():
             return FileResponse(index_file, headers={"Cache-Control": "no-cache"})

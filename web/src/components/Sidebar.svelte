@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '../lib/api';
+  import { cached } from '../lib/cache';
   import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, editPlaylist, editSongById, newPlaylist, openImportDialog, openItem, openUploadDialog, uploadFiles } from '../lib/actions';
   import { itemsFromDrop } from '../lib/upload';
   import { t } from '../lib/i18n.svelte';
@@ -36,29 +37,42 @@
 
   async function loadRoots() {
     try {
-      const loaded = await api.roots();
-      // every library root starts expanded, so all storages show up as plain folders next to each other
-      const fresh = loaded.filter((r) => !prefs.seenRoots.includes(r.path));
-      if (fresh.length) {
-        prefs.seenRoots = [...prefs.seenRoots, ...fresh.map((r) => r.path)];
-        prefs.expanded = [...prefs.expanded, ...fresh.map((r) => r.path)];
-        savePrefs();
-      }
-      roots = loaded;
+      await cached('roots', () => api.roots(), (loaded) => {
+        // every library root starts expanded, so all storages show up as plain folders next to each other
+        const fresh = loaded.filter((r) => !prefs.seenRoots.includes(r.path));
+        if (fresh.length) {
+          prefs.seenRoots = [...prefs.seenRoots, ...fresh.map((r) => r.path)];
+          prefs.expanded = [...prefs.expanded, ...fresh.map((r) => r.path)];
+          savePrefs();
+        }
+        roots = loaded;
+      });
     } catch (e) {
       errorToast(e);
     }
   }
 
+  /** Reloads the tree in place: the expanded folders keep showing their items until the new ones arrive. */
   function refresh() {
     refreshKey++;
     void loadRoots();
   }
 
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Many changes in a row (e.g. an upload of several files) refresh the tree once. */
+  function refreshSoon() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(refresh, 300);
+  }
+
   $effect(() => {
     void loadRoots();
-    const stops = [onEvent('library.changed', () => refresh()), onEvent('library.roots', () => refresh()), onEvent('storages.changed', () => void loadRoots())];
-    return () => stops.forEach((stop) => stop());
+    const stops = [onEvent('library.changed', refreshSoon), onEvent('library.roots', refreshSoon), onEvent('storages.changed', () => void loadRoots())];
+    return () => {
+      clearTimeout(refreshTimer);
+      stops.forEach((stop) => stop());
+    };
   });
 
   async function createFolder(parent: string) {
@@ -196,11 +210,9 @@
       <div class="tree" class:drop={dropTarget} role="tree" tabindex="-1"
            ondragover={(e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); dropTarget = true; } }}
            ondragleave={() => (dropTarget = false)} ondrop={onDrop} oncontextmenu={treeMenu}>
-        {#key refreshKey}
-          {#each roots as item (item.path)}
-            <TreeNode {item} depth={1} bind:selected onOpen={openItem} onMenu={(e, i) => openMenu(e, itemMenu(i))} />
-          {/each}
-        {/key}
+        {#each roots as item (item.path)}
+          <TreeNode {item} depth={1} version={refreshKey} bind:selected onOpen={openItem} onMenu={(e, i) => openMenu(e, itemMenu(i))} />
+        {/each}
       </div>
     </div>
   </nav>

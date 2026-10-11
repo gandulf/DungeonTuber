@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import TreeNode from './TreeNode.svelte';
   import { api } from '../lib/api';
+  import { cached } from '../lib/cache';
   import { t } from '../lib/i18n.svelte';
   import { moveFavorites } from '../lib/stores/data.svelte';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
@@ -11,9 +13,11 @@
   import type { BrowseItem } from '../lib/types';
   import Icon from './Icon.svelte';
 
-  let { item, depth, selected = $bindable(), onOpen, onMenu }: {
+  let { item, depth, version = 0, selected = $bindable(), onOpen, onMenu }: {
     item: BrowseItem;
     depth: number;
+    /** Raised by the sidebar to refresh the tree in place. */
+    version?: number;
     selected: string | null;
     onOpen: (item: BrowseItem) => void;
     onMenu: (event: MouseEvent, item: BrowseItem) => void;
@@ -25,10 +29,17 @@
   let dragOver = $state(false);
   const isRoot = $derived(item.storage !== undefined);
 
+  let request = 0;
+
+  /** Loads the items (the cached ones at once); the old ones stay visible until the new ones arrive, and only the latest request counts. */
   async function load() {
+    const current = ++request;
     try {
-      children = (await api.browse(item.path)).items;
+      await cached(`browse:${item.path}`, () => api.browse(item.path), (result) => {
+        if (current === request) children = result.items;
+      });
     } catch (e) {
+      if (current !== request) return;
       errorToast(e);
       children = [];
     }
@@ -36,6 +47,16 @@
 
   $effect(() => {
     if (expanded && children === null && item.type === 'dir') void load();
+  });
+
+  // a refresh reloads expanded folders in place; collapsed ones load again when they are opened
+  $effect(() => {
+    void version;
+    untrack(() => {
+      if (children === null) return;
+      if (expanded) void load();
+      else children = null;
+    });
   });
 
   function toggle(event?: Event) {
@@ -109,8 +130,8 @@
       const moved = await api.move(source, item.path);
       await moveFavorites(source, moved.path);
       reloadDirTabs(item.path);
-      children = null;
       if (expanded) void load();
+      else children = null;
     } catch (e) {
       errorToast(e);
     }
@@ -138,7 +159,7 @@
   </button>
   {#if expanded && children}
     {#each children as child (child.path)}
-      <TreeNode item={child} depth={depth + 1} bind:selected {onOpen} {onMenu} />
+      <TreeNode item={child} depth={depth + 1} {version} bind:selected {onOpen} {onMenu} />
     {/each}
   {/if}
 </div>

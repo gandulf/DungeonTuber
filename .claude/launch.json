@@ -14,6 +14,22 @@
       "port": 8765
     },
     {
+      "name": "dungeontuber-server-test",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "server",
+        "--port",
+        "8765",
+        "--fake-lights",
+        "--data-dir",
+        "C:/Users/gandu/AppData/Local/Temp/claude/C--Users-gandu-PycharmProjects-DungeonTuber/37a6be15-2ad3-4fbf-8da8-81be02d34965/scratchpad/dtdata",
+        "--library",
+        "test-library"
+      ],
+      "port": 8765
+    },
+    {
       "name": "dungeontuber-web-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

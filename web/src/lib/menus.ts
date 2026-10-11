@@ -1,5 +1,6 @@
 // Application menu (former File / View / Help menus).
 import { api } from './api';
+import { clearCache } from './cache';
 import { analyze, newPlaylist, openImportDialog, openUploadDialog, rescanLibrary } from './actions';
 import { t } from './i18n.svelte';
 import { applyViewMode, prefs, savePrefs, type ThemeMode } from './prefs.svelte';
@@ -75,7 +76,7 @@ export function appMenu(): MenuItem[] {
     { label: t('Show Tour'), icon: 'compass', action: () => (ui.tour = true) },
     { label: t('About'), icon: 'info', action: () => openDialog(AboutDialog) },
     ...(!data.auth?.local && data.auth?.password_set
-      ? [{ label: `${t('Logout')} (${data.auth.user})`, icon: 'logout', action: async () => { await api.logout(); location.reload(); } }]
+      ? [{ label: `${t('Logout')} (${data.auth.user})`, icon: 'logout', action: async () => { await api.logout(); await clearCache(); location.reload(); } }]
       : []),
   ];
 }

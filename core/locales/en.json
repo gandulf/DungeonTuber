@@ -605,5 +605,14 @@
   "Welcome to Dungeon Tuber": "Welcome to Dungeon Tuber",
   "not found": "not found",
   "{0} lights": "{0} lights",
-  "{0} selected": "{0} selected"
+  "{0} selected": "{0} selected",
+  "Your account": "Your account",
+  "Change password": "Change password",
+  "The password of the SuperAdmin ({0}).": "The password of the SuperAdmin ({0}).",
+  "Remove the password? Then only this computer can connect.": "Remove the password? Then only this computer can connect.",
+  "At least 4 characters.": "At least 4 characters.",
+  "The passwords do not match.": "The passwords do not match.",
+  "Create user": "Create user",
+  "New password for {0}.": "New password for {0}.",
+  "No other users yet.": "No other users yet."
 }

@@ -1,14 +1,25 @@
+<script lang="ts" module>
+  /** What the password dialog of the settings asks for (see SettingsDialog). */
+  export interface PasswordRequest {
+    title: string;
+    subtitle?: string;
+    withName?: boolean;
+    submitLabel: string;
+    onsubmit: (password: string, name: string) => Promise<void>;
+  }
+</script>
+
 <script lang="ts">
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { data } from '../../lib/stores/data.svelte';
-  import { askConfirm, askText, errorToast, toast } from '../../lib/stores/ui.svelte';
+  import { askConfirm, errorToast, toast } from '../../lib/stores/ui.svelte';
   import type { UserInfo } from '../../lib/types';
   import Icon from '../Icon.svelte';
 
+  let { askPassword }: { askPassword: (request: PasswordRequest) => void } = $props();
+
   let users = $state<UserInfo[]>([]);
-  let name = $state('');
-  let password = $state('');
 
   async function load() {
     try {
@@ -22,27 +33,29 @@
     void load();
   });
 
-  async function add(event: SubmitEvent) {
-    event.preventDefault();
-    try {
-      await api.createUser(name.trim(), password);
-      name = password = '';
-      await load();
-      toast(t('User created'), 'success');
-    } catch (e) {
-      errorToast(e);
-    }
+  function add() {
+    askPassword({
+      title: t('Create user'),
+      withName: true,
+      submitLabel: t('Create user'),
+      onsubmit: async (password, name) => {
+        await api.createUser(name, password);
+        await load();
+        toast(t('User created'), 'success');
+      },
+    });
   }
 
-  async function reset(user: UserInfo) {
-    const value = await askText(t('Set password'), `${t('New password')} (${user.name})`);
-    if (!value) return;
-    try {
-      await api.resetUserPassword(user.name, value);
-      toast(t('Password changed'), 'success');
-    } catch (e) {
-      errorToast(e);
-    }
+  function reset(user: UserInfo) {
+    askPassword({
+      title: t('Change password'),
+      subtitle: t('New password for {0}.', user.name),
+      submitLabel: t('Save'),
+      onsubmit: async (password) => {
+        await api.resetUserPassword(user.name, password);
+        toast(t('Password changed'), 'success');
+      },
+    });
   }
 
   async function remove(user: UserInfo) {
@@ -54,35 +67,36 @@
       errorToast(e);
     }
   }
+
+  const others = $derived(users.filter((user) => !user.admin));
 </script>
 
-<h4>{t('Users')}</h4>
-<ul class="users">
-  {#each users as user (user.name)}
-    <li>
-      <Icon name={user.admin ? 'power' : 'smile'} size={15} />
-      <span class="grow ellipsis">{user.name}{#if user.admin} <span class="muted small">({t('SuperAdmin')})</span>{/if}</span>
-      {#if !user.admin}
-        <button class="btn sm" onclick={() => reset(user)}>{t('Set password')}</button>
-        <button class="icon-btn" title={t('Remove')} onclick={() => remove(user)}><Icon name="trash" size={15} /></button>
-      {/if}
-    </li>
+<section class="group">
+  <div class="head">
+    <h4>{t('Users')} <span class="count">{others.length}</span></h4>
+    <span class="grow"></span>
+    {#if data.auth?.password_set}
+      <button class="btn sm primary" onclick={add}><Icon name="plus" size={14} /> {t('Create user')}</button>
+    {/if}
+  </div>
+  {#each others as user (user.name)}
+    <div class="item">
+      <Icon name="smile" size={15} />
+      <strong class="grow ellipsis">{user.name}</strong>
+      <button class="btn sm" onclick={() => reset(user)}><Icon name="lock" size={14} /> {t('Change password')}</button>
+      <button class="icon-btn" title={t('Remove')} aria-label={t('Remove')} onclick={() => remove(user)}><Icon name="trash" size={14} /></button>
+    </div>
+  {:else}
+    <p class="empty">{data.auth?.password_set ? t('No other users yet.') : t('Set the SuperAdmin password first to add users.')}</p>
   {/each}
-</ul>
-{#if data.auth?.password_set}
-  <form class="add" onsubmit={add}>
-    <input type="text" placeholder={t('User name')} bind:value={name} autocomplete="off" />
-    <input type="password" placeholder={t('Password')} bind:value={password} autocomplete="new-password" />
-    <button class="btn primary" type="submit" disabled={name.trim().length < 2 || password.length < 4}><Icon name="plus" size={14} /> {t('Add user')}</button>
-  </form>
-{:else}
-  <p class="muted small">{t('Set the SuperAdmin password first to add users.')}</p>
-{/if}
+</section>
 
 <style>
-  .users { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-  li { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 10px; }
+  .group { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+  .head { display: flex; align-items: center; gap: 8px; }
+  h4 { margin: 0 0 2px; display: flex; align-items: center; gap: 8px; font-size: var(--fs-lg); }
+  .count { font-size: var(--fs-xs); font-weight: 600; padding: 1px 8px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+  .item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
   .grow { flex: 1; min-width: 0; }
-  .add { display: flex; gap: 8px; flex-wrap: wrap; }
-  .add input { flex: 1; min-width: 120px; }
+  .empty { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 </style>

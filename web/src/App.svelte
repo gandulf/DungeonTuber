@@ -3,6 +3,7 @@
   import { libraryRootsChanged } from './lib/actions';
   import { applyAccent } from './lib/accent';
   import { api, setUnauthorizedHandler } from './lib/api';
+  import { setCacheScope } from './lib/cache';
   import { t } from './lib/i18n.svelte';
   import { prefs } from './lib/prefs.svelte';
   import { data, loadAuth, loadData } from './lib/stores/data.svelte';
@@ -34,6 +35,7 @@
         ready = true;
         return;
       }
+      setCacheScope(auth.user);
       await loadData();
       applyPlayerSettings(data.user.player);
       applyViewSettings(data.user.view);
