@@ -5,6 +5,7 @@
   import { emptyFilter } from '../../lib/scoring';
   import { data, resetPresets as restoreDefaultPresets, savePresets } from '../../lib/stores/data.svelte';
   import { activeTab, filter, onFilterChanged } from '../../lib/stores/library.svelte';
+  import { sameTags } from '../../lib/tags';
   import { askConfirm, askText, openDialog, openMenu } from '../../lib/stores/ui.svelte';
   import type { MusicCategory, Preset } from '../../lib/types';
   import Icon from '../Icon.svelte';
@@ -87,10 +88,9 @@
   let clickedPreset = $state<string | null>(null);
   const setValues = (categories: Record<string, number | null | undefined>) =>
     Object.entries(categories).filter(([, v]) => v !== null && v !== undefined && v >= 0).sort(([a], [b]) => a.localeCompare(b));
-  const sameList = (a: string[], b: string[]) => a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
   function matches(preset: Preset): boolean {
     return JSON.stringify(setValues(preset.categories ?? {})) === JSON.stringify(setValues(filter.categories))
-      && sameList(preset.tags, filter.tags) && sameList(preset.genres, filter.genres) && (preset.bpm ?? null) === (filter.bpm ?? null);
+      && sameTags(preset.tags, filter.tags) && sameTags(preset.genres, filter.genres) && (preset.bpm ?? null) === (filter.bpm ?? null);
   }
   const selectedPreset = $derived(data.presets.find((p) => p.name === clickedPreset && matches(p))?.name ?? null);
 

@@ -2,6 +2,7 @@
   import { analyze, editSong } from '../lib/actions';
   import { t } from '../lib/i18n.svelte';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
+  import { matcher } from '../lib/search';
   import { data, saveSettings } from '../lib/stores/data.svelte';
   import { effects, loadEffects } from '../lib/stores/effects.svelte';
   import { player, playEffect, setEffectIntensity, setEffectsVolume, toggleEffect } from '../lib/stores/player.svelte';
@@ -14,7 +15,10 @@
   let muted = $state(false);
   let lastVolume = prefs.effectsVolume;
 
-  const list = $derived(effects.list.filter((e) => !effects.search || label(e).toLowerCase().includes(effects.search.toLowerCase())));
+  const list = $derived.by(() => {
+    const matches = matcher(effects.search);
+    return effects.list.filter((e) => matches(label(e)));
+  });
   const playingEffect = $derived(player.effectPlaying ? player.effect : null);
 
   function label(effect: Effect) {

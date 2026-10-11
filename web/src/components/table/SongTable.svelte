@@ -7,7 +7,8 @@
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { bpmLevel, categoryLevel, emptyFilter, genreLevel, scoreLevel, scorePercent } from '../../lib/scoring';
   import { data } from '../../lib/stores/data.svelte';
-  import { extraCategoryKeys, filter, library, loadTab, removeFromPlaylist, reorderPlaylist, setSort, updateTrack, visibleRows, type Tab } from '../../lib/stores/library.svelte';
+  import { displayTags, hasTag } from '../../lib/tags';
+  import { extraCategoryKeys, filter, library, loadTab, removeFromPlaylist, reorderPlaylist, setSort, tabTagNames, updateTrack, visibleRows, type Tab } from '../../lib/stores/library.svelte';
   import { player, playTrack, refreshCurrentTrack } from '../../lib/stores/player.svelte';
   import { errorToast, openDialog, openMenu, ui, type MenuItem } from '../../lib/stores/ui.svelte';
   import type { Track } from '../../lib/types';
@@ -198,7 +199,7 @@
       case 'summary': return track.summary ?? '';
       case 'artist': return track.artist ?? '';
       case 'album': return track.album ?? '';
-      case 'genre': return track.genres.join(', ');
+      case 'genre': return displayTags(track.genres, tagNames).join(', ');
       case 'bpm': return track.bpm?.toString() ?? '';
       case 'track': return track.track?.toString() ?? '';
       default: {
@@ -299,8 +300,8 @@
       event.preventDefault();
       event.stopPropagation();
       try {
-        if (tag && !track.tags.includes(tag)) updateTrack(await api.patchTrack(track.id, { tags: [...track.tags, tag] }));
-        if (genre && !track.genres.includes(genre)) updateTrack(await api.patchTrack(track.id, { genres: [...track.genres, genre] }));
+        if (tag && !hasTag(track.tags, tag)) updateTrack(await api.patchTrack(track.id, { tags: [...track.tags, tag] }));
+        if (genre && !hasTag(track.genres, genre)) updateTrack(await api.patchTrack(track.id, { genres: [...track.genres, genre] }));
       } catch (e) {
         errorToast(e);
       }
@@ -487,8 +488,11 @@
     return { update: fit, destroy: () => observer.disconnect() };
   }
 
+  // "pop" and "Pop" show up in one spelling, the same as in the tag bar
+  const tagNames = $derived(tabTagNames());
+
   function sortedTags(track: Track): { tag: string; match: boolean }[] {
-    const tags = track.tags.map((tag) => ({ tag, match: filter.tags.includes(tag) }));
+    const tags = displayTags(track.tags, tagNames).map((tag) => ({ tag, match: hasTag(filter.tags, tag) }));
     return tags.sort((a, b) => Number(b.match) - Number(a.match));
   }
 
@@ -587,7 +591,7 @@
               {:else if column.id === 'album'}
                 <span class="ellipsis">{track.album ?? ''}</span>
               {:else if column.id === 'genre'}
-                <span class="ellipsis">{track.genres.join(', ')}</span>
+                <span class="ellipsis">{displayTags(track.genres, tagNames).join(', ')}</span>
               {:else if column.id === 'bpm'}
                 {track.bpm ?? ''}
               {:else if column.id === 'track'}

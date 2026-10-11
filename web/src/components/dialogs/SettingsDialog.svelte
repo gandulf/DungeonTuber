@@ -10,13 +10,13 @@
   import { askConfirm, closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
   import AgentTokenDialog from './AgentTokenDialog.svelte';
   import CategoryEditDialog, { type CategoryRow } from './CategoryEditDialog.svelte';
-  import type { AgentInfo, AgentState, AgentToken, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
+  import type { AgentInfo, AgentState, AgentToken, AssistantStatus, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import { onEvent } from '../../lib/ws';
   import Modal from './Modal.svelte';
   import UsersPanel from './UsersPanel.svelte';
 
-  type Section = 'general' | 'library' | 'categories' | 'lights' | 'agents' | 'youtube' | 'player' | 'security';
+  type Section = 'general' | 'library' | 'categories' | 'lights' | 'agents' | 'youtube' | 'assistant' | 'player' | 'security';
   const AGENT_URL = 'https://github.com/gandulf/DungeonTuber/releases/latest/download/dt-youtube.exe';
   let { initialSection = 'general' }: { initialSection?: Section } = $props();
   const admin = data.auth?.is_admin !== false;
@@ -145,6 +145,60 @@
     }
   }
 
+  let assistantStatus = $state<AssistantStatus | null>(null);
+  let assistantKey = $state('');
+  let assistantModel = $state('');
+  let assistantInstructions = $state('');
+  let assistantGeneralInstructions = $state('');
+  let assistantModels = $state<{ id: string; name: string }[]>([]);
+  if (admin) void api.assistantConfig().then(applyAssistant).catch(() => {});
+
+  /** The models of Google (with a stored key) or a built-in list; a stored model that is not listed stays selectable. */
+  const modelOptions = $derived.by(() => {
+    const current = assistantModel.trim();
+    return current && !assistantModels.some((m) => m.id === current) ? [...assistantModels, { id: current, name: current }] : assistantModels;
+  });
+
+  async function loadAssistantModels() {
+    try {
+      assistantModels = (await api.assistantModels()).models;
+    } catch {
+      // keeps the previous list
+    }
+  }
+
+  function applyAssistant(result: AssistantStatus) {
+    const keyAdded = result.configured && !assistantStatus?.configured;
+    if (keyAdded || !assistantModels.length) void loadAssistantModels();
+    assistantStatus = result;
+    assistantModel = result.model;
+    assistantInstructions = result.instructions;
+    assistantGeneralInstructions = result.generalInstructions;
+    assistantKey = '';
+    if (data.settings) data.settings.assistantConfigured = result.configured;
+  }
+
+  const assistantPayload = () => ({ ...(assistantKey.trim() ? { key: assistantKey.trim() } : {}), model: assistantModel.trim(), instructions: assistantInstructions.trim(),
+    generalInstructions: assistantGeneralInstructions.trim() });
+
+  async function saveAssistant() {
+    try {
+      applyAssistant(await api.putAssistantConfig(assistantPayload()));
+      toast(t('AI assistant saved'), 'success');
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  async function removeAssistant() {
+    if (!(await askConfirm(t('Remove the API key of the AI assistant?')))) return;
+    try {
+      applyAssistant(await api.deleteAssistantConfig());
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   let agents = $state<AgentState | null>(null);
   let newToken = $state<{ token: string; name: string } | null>(null); // a new token is only shown once, in a popup
   let tokenName = $state('');
@@ -197,6 +251,10 @@
       const rootList = roots.split('\n').map((r) => r.trim()).filter(Boolean);
       if (desktop && rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
       if (admin && proxy.trim() !== proxySaved) await api.putYoutubeProxy(proxy);
+      if (admin && assistantStatus && (assistantKey.trim() || assistantModel.trim() !== assistantStatus.model || assistantInstructions.trim() !== assistantStatus.instructions
+          || assistantGeneralInstructions.trim() !== assistantStatus.generalInstructions)) {
+        applyAssistant(await api.putAssistantConfig(assistantPayload()));
+      }
       if (Object.keys(changed).length) await saveSettings(changed);
       if ('lightsEnabled' in changed && form.lightsEnabled) void loadLights();
       if (storagesDirty) {
@@ -259,6 +317,7 @@
     ['lights', 'Lights', 'bulb'],
     ['youtube', 'YouTube', 'download'],
     ['agents', 'Agents', 'cloud'],
+    ['assistant', 'AI Assistant', 'sparkles'],
     ['player', 'Player', 'play'],
     ['security', 'Security', 'power'],
   ];
@@ -354,6 +413,30 @@
             <input type="text" autocomplete="off" placeholder={proxyFromEnv ? t('Default from the server configuration') : 'http://user:password@host:port'} bind:value={proxy} /></label>
           <p class="muted small">{t('All YouTube requests go through this proxy (http, https, socks4 or socks5). Leave empty to use the default of the server (DT_YT_PROXY) or none.')}</p>
         {/if}
+      {:else if section === 'assistant'}
+        <p class="muted small">{t('The AI assistant suggests songs for a scene. It uses Google Gemini: create a free API key in Google AI Studio (aistudio.google.com) and enter it here. The free tier of the Flash models is enough for occasional questions. The key stays on the server and is never sent back to the browser; all users can chat with the assistant.')}</p>
+        <span class="small">{assistantStatus?.configured ? t('Configured (key …{0})', assistantStatus.keyHint) : t('Not configured')}</span>
+        <label class="field">{t('API key')}
+          <input type="password" autocomplete="off" placeholder={assistantStatus?.configured ? t('API key (unchanged)') : 'AIza…'} bind:value={assistantKey} /></label>
+        <label class="field">{t('Model')}
+          <select bind:value={assistantModel}>
+            {#each modelOptions as option (option.id)}
+              <option value={option.id}>{option.name}{option.id === assistantStatus?.defaultModel ? ` (${t('Default')})` : ''} – {option.id}</option>
+            {/each}
+          </select>
+          <span class="muted small">{t('Only models of the free tier are offered (Flash and Flash-Lite); Flash-Lite answers faster.')}</span></label>
+        <label class="field">{t('Instructions for the song suggestions')}
+          <textarea rows="5" maxlength="4000" placeholder={t('e.g. We play Pathfinder in a dark fantasy world. Prefer instrumental film and game soundtracks without vocals.')} bind:value={assistantInstructions}></textarea>
+          <span class="muted small">{t('Added to every request, so the assistant better understands your game, setting and taste in music.')}</span></label>
+        <label class="field">{t('Instructions for the general chat')}
+          <textarea rows="5" maxlength="4000" placeholder={t('e.g. We play DSA 4.1 with the core rules and the Aventurian Compendium.')} bind:value={assistantGeneralInstructions}></textarea>
+          <span class="muted small">{t('Added to every question of the general chat: the rules edition, the setting, house rules or the heroes.')}</span></label>
+        <div class="row">
+          <a class="btn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
+          <span class="grow"></span>
+          <button class="btn" onclick={saveAssistant}>{t('Save')}</button>
+          {#if assistantStatus?.configured}<button class="btn danger" onclick={removeAssistant}>{t('Remove')}</button>{/if}
+        </div>
       {:else if section === 'categories'}
         <div class="cat-head">
           <span class="muted small">{t('The mood categories songs are rated in.')}</span>

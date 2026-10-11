@@ -52,6 +52,13 @@ class SettingKeys(StrEnum):
     IMPORT_MAX_MINUTES = "importMaxMinutes"
     # Proxy for all yt-dlp requests (e.g. a residential proxy); overrides the DT_YT_PROXY environment variable
     YOUTUBE_PROXY = "youtubeProxy"
+    # API key and model of the AI assistant (Google Gemini, see server/assistant.py); the key is never sent back to the browser
+    ASSISTANT_API_KEY = "geminiApiKey"
+    ASSISTANT_MODEL = "geminiModel"
+    # extra instructions of the SuperAdmin, appended to the system prompt of the assistant
+    ASSISTANT_INSTRUCTIONS = "assistantInstructions"
+    # the same for the general chat of the assistant (rules, setting, ideas)
+    ASSISTANT_GENERAL_INSTRUCTIONS = "assistantGeneralInstructions"
 
     LIGHTS_ENABLED = "lightsEnabled"
     LIGHTS_CONFIG = "lightsConfig"

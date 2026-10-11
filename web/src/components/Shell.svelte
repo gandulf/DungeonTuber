@@ -5,11 +5,13 @@
   import { openDownloadsDialog } from '../lib/actions';
   import { t } from '../lib/i18n.svelte';
   import { data } from '../lib/stores/data.svelte';
+  import { assistant } from '../lib/stores/assistant.svelte';
   import { analysis, downloads, type JobKind } from '../lib/stores/downloads.svelte';
   import { effects } from '../lib/stores/effects.svelte';
   import { activeTab, library } from '../lib/stores/library.svelte';
   import { cycleRepeat, next, player, previous, setVolume, toggleEffect, toggleMute, togglePlay } from '../lib/stores/player.svelte';
   import { closeMenu, ui } from '../lib/stores/ui.svelte';
+  import AssistantChat from './AssistantChat.svelte';
   import ConfirmDialog from './dialogs/ConfirmDialog.svelte';
   import PromptDialog from './dialogs/PromptDialog.svelte';
   import ContextMenu from './ContextMenu.svelte';
@@ -152,6 +154,7 @@
   {/if}
 </div>
 
+{#if assistant.open}<AssistantChat />{/if}
 <ContextMenu />
 <Toasts />
 <PromptDialog />

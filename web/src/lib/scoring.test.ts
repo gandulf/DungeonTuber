@@ -28,6 +28,14 @@ describe('calculateScore', () => {
     expect(calculateScore(t, filter({ tags: ['Happy'] }))).toBe(100);
   });
 
+  it('ignores the case of tags and genres', () => {
+    const t = track({ tags: ['Dark'], genres: ['Pop'] });
+    expect(calculateScore(t, filter({ tags: ['dark'] }))).toBe(0);
+    expect(calculateScore(t, filter({ tags: ['POP'] }))).toBe(0);
+    expect(calculateScore(t, filter({ genres: ['pop '] }))).toBe(0);
+    expect(genreLevel(['pop', 'Rock'], ['Pop'])).toBe(1);
+  });
+
   it('handles genres and bpm', () => {
     const t = track({ genres: ['Rock'], bpm: 120 });
     expect(calculateScore(t, filter({ genres: ['Rock'], bpm: 100 }))).toBe(20);
