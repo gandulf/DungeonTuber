@@ -194,3 +194,34 @@ def test_the_general_chat_answers_in_text_with_its_own_instructions(client, gemi
     assert "generationConfig" not in body  # free text, no song list
 
     assert client.post("/api/assistant/chat", json={"mode": "other", "messages": [{"role": "user", "content": "x"}]}).status_code == 422
+
+
+def test_the_smart_search_answers_with_a_filter_of_known_values(client, gemini):
+    calls, answers = gemini
+    client.put("/api/assistant/config", json={"key": "gsk_secret_1234", "instructions": "We play DSA."})
+    answers.append(json.dumps({"message": "Dunkel und angespannt", "bpm": 300,
+                               "categories": [{"key": "Darkness", "value": 9.4}, {"key": "Arousal", "value": 14}, {"key": "Invented", "value": 5}],
+                               "tags": ["DARK", "unknown", "Ritual", "Combat"], "genres": ["ambient", "Metal"]}))
+    context = {"tags": ["Dark", "Ritual", "Combat", "dark"], "genres": ["Ambient", "Metal"]}
+
+    result = client.post("/api/assistant/chat", json={"mode": "smart", "context": context,
+                                                      "messages": [{"role": "user", "content": "Ein düsteres Ritual"}]}).json()
+    assert result["message"] == "Dunkel und angespannt" and result["songs"] == []
+    assert result["filter"] == {"categories": {"Darkness": 9, "Arousal": 10}, "tags": ["Dark", "Ritual"], "genres": ["Ambient"], "bpm": None}
+
+    body = calls[0]["body"]
+    system = body["systemInstruction"]["parts"][0]["text"]
+    assert "- Darkness (" in system and "Dark, Ritual, Combat" in system and "Ambient, Metal" in system and system.endswith("We play DSA.")
+    schema = body["generationConfig"]["responseSchema"]["properties"]
+    assert schema["tags"]["items"]["enum"] == ["Dark", "Ritual", "Combat"] and schema["genres"]["items"]["enum"] == ["Ambient", "Metal"]
+    assert "Darkness" in schema["categories"]["items"]["properties"]["key"]["enum"]
+
+
+def test_the_smart_search_without_tags_or_genres(client, gemini):
+    calls, answers = gemini
+    client.put("/api/assistant/config", json={"key": "gsk_secret_1234"})
+    answers.append(json.dumps({"message": "", "categories": [{"key": "Valence", "value": 8}], "bpm": 120}))
+    result = client.post("/api/assistant/chat", json={"mode": "smart", "messages": [{"role": "user", "content": "Tavern"}]}).json()
+    assert result["filter"] == {"categories": {"Valence": 8}, "tags": [], "genres": [], "bpm": 120}
+    properties = calls[0]["body"]["generationConfig"]["responseSchema"]["properties"]
+    assert "tags" not in properties and "genres" not in properties

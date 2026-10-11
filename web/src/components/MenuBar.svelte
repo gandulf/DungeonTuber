@@ -3,7 +3,7 @@
   import { t } from '../lib/i18n.svelte';
   import { assistant, toggleAssistant } from '../lib/stores/assistant.svelte';
   import { data } from '../lib/stores/data.svelte';
-  import { library } from '../lib/stores/library.svelte';
+  import { library, setGlobal } from '../lib/stores/library.svelte';
   import { openMenu, ui } from '../lib/stores/ui.svelte';
   import Icon from './Icon.svelte';
   import Tabs from './Tabs.svelte';
@@ -38,10 +38,14 @@
   <div class="tabs-area" data-tour="tabs" bind:clientWidth={areaWidth}>
     {#if library.tabs.length}<Tabs />{:else}<span class="hint muted">{t('Welcome to Dungeon Tuber')}</span>{/if}
   </div>
-  <label class="search" class:active={library.search} data-tour="search">
+  <label class="search" class:active={library.search || library.global} data-tour="search">
     <Icon name="search" size={15} />
-    <input type="search" placeholder={t('Search tracks…')} bind:value={library.search} />
+    <input type="search" placeholder={library.global ? t('Search the whole library…') : t('Search tracks…')} bind:value={library.search} />
   </label>
+  <button class="icon-btn global" class:active={library.global} aria-pressed={library.global} data-tour="global-search"
+          title={library.global ? t('Global search: the best {0} songs of the whole library. Click to search the open tab again.', 50)
+                                : t('Search the whole library instead of the open tab')}
+          onclick={() => void setGlobal(!library.global)}><Icon name="globe" size={17} /></button>
   {#if data.settings?.assistantConfigured || data.auth?.is_admin !== false}
     <button class="assistant" class:active={assistant.open} class:labelled={showLabel} title={t('AI Assistant')} aria-label={t('AI Assistant')} aria-pressed={assistant.open}
             data-tour="assistant" bind:clientWidth={buttonWidth} onclick={toggleAssistant}>
@@ -66,6 +70,8 @@
   .search input { border: none; background: none; padding: 0; width: 0; flex: 1; min-width: 0; margin-left: 0; opacity: 0; color: var(--text); transition: opacity 0.15s, margin-left 0.2s; }
   .search:focus-within input, .search.active input { margin-left: 8px; opacity: 1; }
   .search input:focus { box-shadow: none; }
+  .global { width: 36px; height: 36px; border-radius: 10px; border: 1px solid transparent; }
+  .global.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
   .assistant { display: flex; align-items: center; justify-content: center; gap: 7px; flex: none; height: 36px; min-width: 36px; padding: 0 9px; box-sizing: border-box; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); font: inherit; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s; }
   .assistant.labelled { padding: 0 12px 0 10px; }
   .assistant:hover { color: var(--text); border-color: var(--border-strong); }

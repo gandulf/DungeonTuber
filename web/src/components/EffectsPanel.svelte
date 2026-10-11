@@ -94,6 +94,11 @@
     <span class="glyph"><Icon name="waves" size={17} /></span>
     <h3 class="card-title">{t('Soundscapes')}</h3>
     <span class="grow"></span>
+    {#if effects.directory}
+      <button class="icon-btn refresh" title={t('Refresh')} aria-label={t('Refresh')} disabled={effects.loading} onclick={loadEffects}>
+        <Icon name="refresh" size={14} class={effects.loading ? 'spin' : ''} />
+      </button>
+    {/if}
     <div class="seg mini">
       <button class:on={prefs.effectsGrid} title={t('Grid')} onclick={() => setGrid(true)}><Icon name="grid" size={13} /></button>
       <button class:on={!prefs.effectsGrid} title={t('List')} onclick={() => setGrid(false)}><Icon name="list" size={13} /></button>
@@ -162,6 +167,10 @@
   .glyph { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
   .grow { flex: 1; }
   .seg.mini button { padding: 4px 8px; display: flex; }
+  .refresh { width: 26px; height: 26px; }
+  /* the lights panel defines .spin as well, but it is not always shown */
+  .refresh :global(.spin) { animation: refresh-spin 0.9s linear infinite; }
+  @keyframes refresh-spin { to { transform: rotate(360deg); } }
   .controls { display: flex; align-items: center; gap: 12px; }
   .playfx { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); flex: none; }
   .playfx.on { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-color: transparent; box-shadow: 0 0 16px var(--accent-glow); }

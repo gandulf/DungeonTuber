@@ -4,7 +4,7 @@ import { t } from '../i18n.svelte';
 import { prefs, savePrefs } from '../prefs.svelte';
 import { data } from './data.svelte';
 import { calculateScore, emptyFilter } from '../scoring';
-import { matcher } from '../search';
+import { matcher, ranker } from '../search';
 import { displayTags, tagNames } from '../tags';
 import type { FilterConfig, Track } from '../types';
 import { errorToast, toast } from './ui.svelte';
@@ -21,6 +21,8 @@ export interface Tab {
   /** Playlists only: private (visible to its creator alone) and who created it. */
   private?: boolean;
   owner?: string | null;
+  /** The whole library of the global search (see globalTab), not a folder or playlist. */
+  global?: boolean;
 }
 
 export type SortKey = string; // 'index' | 'name' | 'score' | 'bpm' | 'genre' | 'artist' | 'album' | 'favorite' | 'cat:<key>'
@@ -32,6 +34,16 @@ export const library = $state({
   sortKey: 'name' as SortKey,
   sortAsc: true,
   selection: [] as string[], // track ids
+  /** The search covers the whole library (the best GLOBAL_LIMIT songs) instead of the open tab. */
+  global: false,
+});
+
+/** How many songs the global search shows. */
+export const GLOBAL_LIMIT = 50;
+
+/** All songs of the library for the global search; loaded when it is switched on. */
+export const globalTab: Tab = $state({
+  key: 'global', type: 'dir', path: '', name: '', tracks: [], loaded: false, loading: false, error: null, global: true,
 });
 
 export const filter: FilterConfig = $state({ categories: {}, tags: [], genres: [], bpm: null });
@@ -39,7 +51,49 @@ export const filter: FilterConfig = $state({ categories: {}, tags: [], genres: [
 const tabKey = (type: string, path: string) => `${type}:${path}`;
 
 export function activeTab(): Tab | null {
+  if (library.global) return globalTab;
   return library.tabs.find((tab) => tab.key === library.active) ?? null;
+}
+
+/** Loads the songs of the whole library (again with `force`, e.g. after a change of the library). */
+export async function loadGlobal(force = false) {
+  if (globalTab.loading || (globalTab.loaded && !force)) return;
+  globalTab.loading = true;
+  globalTab.error = null;
+  try {
+    globalTab.tracks = (await api.libraryTracks()).tracks;
+    globalTab.loaded = true;
+  } catch (e) {
+    globalTab.error = e instanceof Error ? e.message : String(e);
+  } finally {
+    globalTab.loading = false;
+  }
+}
+
+/** Switches the search across the whole library on or off. */
+export async function setGlobal(on: boolean) {
+  library.global = on;
+  library.selection = [];
+  globalTab.name = t('Whole library');
+  if (on) {
+    if (!emptyFilter(filter)) {
+      library.sortKey = 'score';
+      library.sortAsc = false;
+    }
+    await loadGlobal();
+  } else {
+    const tab = activeTab();
+    if (tab && library.sortKey !== 'score') library.sortKey = tab.type === 'playlist' ? 'index' : 'name';
+  }
+}
+
+let globalTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** The library changed: the songs of the global search are loaded again (once for many changes, e.g. during an import). */
+export function globalChanged() {
+  if (!globalTab.loaded) return;
+  clearTimeout(globalTimer);
+  globalTimer = setTimeout(() => void loadGlobal(true), 500);
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
@@ -91,6 +145,7 @@ export async function loadTab(key: string, force = false) {
 }
 
 export function selectTab(key: string) {
+  library.global = false; // picking a folder or playlist leaves the global search
   library.active = key;
   library.selection = [];
   library.search = '';
@@ -144,7 +199,7 @@ export function restoreTabs() {
 /** Replaces a track in every open tab (after edits / analysis). */
 export function updateTrack(track: Track) {
   const previous = track.previous_id ?? track.id;
-  for (const tab of library.tabs) {
+  for (const tab of [...library.tabs, globalTab]) {
     const index = tab.tracks.findIndex((t) => t.id === previous || t.id === track.id);
     // events carry no favorite: it is personal and stays as it is
     if (index >= 0) tab.tracks[index] = { ...track, favorite: track.favorite ?? tab.tracks[index].favorite, index: tab.tracks[index].index, scene: tab.tracks[index].scene };
@@ -198,15 +253,38 @@ const searchText = (track: Track) =>
 
 /** Whether the search would find anything in the open tab. */
 export function findsInTab(query: string): boolean {
+  if (library.global && !globalTab.loaded) return false;
   const matches = matcher(query);
   return !!activeTab()?.tracks.some((track) => matches(searchText(track)));
+}
+
+/** The best GLOBAL_LIMIT songs of the whole library: by the search (the whole query in the title first), then by the filter.
+ *  Without a search and a filter nothing is shown, the library is too large to list. */
+function bestOfLibrary(rows: Row[]): Row[] {
+  const query = library.search.trim();
+  const filtering = !emptyFilter(filter);
+  if (!query && !filtering) return [];
+  const rank = ranker(query);
+  const titleRank = ranker(query);
+  const ranked = rows
+    .map((row) => {
+      const text = rank(searchText(row.track));
+      if (text === null) return null;
+      const inTitle = query ? titleRank(`${row.track.title ?? ''} ${row.track.name}`) === 0 : true;
+      return { row, text: query ? text * 2 + (inTitle ? 0 : 1) : 0 };
+    })
+    .filter((entry): entry is { row: Row; text: number } => entry !== null);
+  ranked.sort((a, b) => a.text - b.text || (filtering ? (a.row.score ?? Infinity) - (b.row.score ?? Infinity) : 0));
+  return ranked.slice(0, GLOBAL_LIMIT).map((entry) => entry.row);
 }
 
 export function visibleRows(): Row[] {
   const tab = activeTab();
   if (!tab) return [];
   let rows: Row[] = tab.tracks.map((track) => ({ track, score: calculateScore(track, filter) }));
-  if (library.search.trim()) {
+  if (tab.global) {
+    rows = bestOfLibrary(rows);
+  } else if (library.search.trim()) {
     const matches = matcher(library.search);
     rows = rows.filter(({ track }) => matches(searchText(track)));
   }

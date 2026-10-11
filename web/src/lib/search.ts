@@ -60,24 +60,31 @@ export interface Matcher {
   (text: string): boolean;
 }
 
-/** A test for texts that fit the query; an empty query fits everything. */
-export function matcher(query: string): Matcher {
+/** How well a text fits the query: 0 when it holds the query as it is, otherwise 1 + the number of words that are missing; null when it
+ *  does not fit (see MATCHES_PER_MISS). An empty query fits everything with 0. */
+export function ranker(query: string): (text: string) => number | null {
   const normalized = normalize(query);
   const terms = words(normalized);
-  if (!terms.length) return () => true;
+  if (!terms.length) return () => 0;
   const compact = normalized.replace(/ /g, '');
   return (text: string) => {
     const haystack = normalizedText(text);
-    if (haystack.includes(normalized) || haystack.replace(/ /g, '').includes(compact)) return true;
+    if (haystack.includes(normalized) || haystack.replace(/ /g, '').includes(compact)) return 0;
     const candidates = words(haystack);
     let misses = 0;
     for (const term of terms) {
       if (candidates.some((word) => wordMatches(term, word))) continue;
       misses++;
-      if (misses > Math.floor((terms.length - misses) / MATCHES_PER_MISS)) return false; // gives up early
+      if (misses > Math.floor((terms.length - misses) / MATCHES_PER_MISS)) return null; // gives up early
     }
-    return true;
+    return 1 + misses;
   };
+}
+
+/** A test for texts that fit the query; an empty query fits everything. */
+export function matcher(query: string): Matcher {
+  const rank = ranker(query);
+  return (text: string) => rank(text) !== null;
 }
 
 /** Words that say nothing about a song (English and German, plus the articles of a few other languages). */

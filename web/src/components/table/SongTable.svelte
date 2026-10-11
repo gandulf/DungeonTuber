@@ -8,7 +8,7 @@
   import { bpmLevel, categoryLevel, emptyFilter, genreLevel, scoreLevel, scorePercent } from '../../lib/scoring';
   import { data } from '../../lib/stores/data.svelte';
   import { displayTags, hasTag } from '../../lib/tags';
-  import { extraCategoryKeys, filter, library, loadTab, removeFromPlaylist, reorderPlaylist, setSort, tabTagNames, updateTrack, visibleRows, type Tab } from '../../lib/stores/library.svelte';
+  import { extraCategoryKeys, filter, GLOBAL_LIMIT, library, loadTab, removeFromPlaylist, reorderPlaylist, setSort, tabTagNames, updateTrack, visibleRows, type Tab } from '../../lib/stores/library.svelte';
   import { player, playTrack, refreshCurrentTrack } from '../../lib/stores/player.svelte';
   import { errorToast, openDialog, openMenu, ui, type MenuItem } from '../../lib/stores/ui.svelte';
   import type { Track } from '../../lib/types';
@@ -330,6 +330,7 @@
   }
 
   async function onTableDrop(event: DragEvent) {
+    if (tab.global) return; // the whole library has no folder to upload into
     const treePath = event.dataTransfer?.getData('application/x-dungeontuber-path');
     if (treePath && tab.type === 'playlist') {
       event.preventDefault();
@@ -510,7 +511,7 @@
 </script>
 
 <div class="table card" style:--row-h="{rowHeight}px" class:filedrop={fileDrop} role="grid" tabindex="0" bind:this={table} onkeydown={onKeydown}
-     ondragover={(e) => { const types = e.dataTransfer?.types ?? []; if (types.includes('Files') || (tab.type === 'playlist' && types.includes('application/x-dungeontuber-path'))) { e.preventDefault(); fileDrop = true; } }}
+     ondragover={(e) => { const types = e.dataTransfer?.types ?? []; if (!tab.global && (types.includes('Files') || (tab.type === 'playlist' && types.includes('application/x-dungeontuber-path')))) { e.preventDefault(); fileDrop = true; } }}
      ondragleave={(e) => { if (e.currentTarget === e.target) fileDrop = false; }} ondrop={onTableDrop}>
   <div class="viewport" bind:this={viewport} onscroll={() => (scrollTop = viewport!.scrollTop)}>
   <div class="header" style:grid-template-columns={template} style:min-width="{minWidth}px" oncontextmenu={headerMenu} role="row" tabindex="-1">
@@ -530,7 +531,8 @@
     {:else if tab.error}
       <div class="empty error">{tab.error}</div>
     {:else if !rows.length}
-      <div class="empty muted">{library.search ? t('No matches for "{0}"', library.search) : t('No MP3 files found.')}</div>
+      <div class="empty muted">{library.search ? t('No matches for "{0}"', library.search)
+        : tab.global ? t('Type a search or set a filter to find the best {0} songs of the whole library.', GLOBAL_LIMIT) : t('No MP3 files found.')}</div>
     {/if}
     <div class="spacer" style:height="{rows.length * rowHeight}px" style:min-width="{minWidth}px">
       {#each visible as row, i (row.track.id)}
@@ -614,6 +616,9 @@
   {#if library.search}
     <div class="search-pill" class:none={!rows.length}><Icon name="search" size={13} /> {library.search}</div>
   {/if}
+  {#if tab.global && rows.length}
+    <div class="footer muted global-note"><Icon name="globe" size={12} /> {t('The best {0} of {1} songs of the whole library', rows.length, tab.tracks.length)}</div>
+  {/if}
   {#if !ui.narrow && library.selection.length > 1}
     <div class="footer muted">{rows.length} / {tab.tracks.length} · {t('{0} selected', library.selection.length)}</div>
   {/if}
@@ -682,4 +687,5 @@
   .search-pill { position: absolute; top: 50px; right: 18px; padding: 5px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--accent); box-shadow: var(--shadow); display: flex; align-items: center; gap: 6px; }
   .search-pill.none { border-color: var(--red); }
   .footer { padding: 7px 16px; font-size: var(--fs-xs); border-top: 1px solid var(--border); }
+  .global-note { display: flex; align-items: center; gap: 6px; }
 </style>

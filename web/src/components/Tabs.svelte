@@ -48,7 +48,7 @@
 <div class="wrap" bind:clientWidth={width}>
 <div class="tabs" role="tablist">
   {#each shown as { tab, index } (tab.key)}
-    <div class="tab" class:active={tab.key === library.active} role="tab" tabindex="0" aria-selected={tab.key === library.active}
+    <div class="tab" class:active={tab.key === library.active && !library.global} role="tab" tabindex="0" aria-selected={tab.key === library.active}
          title={tab.path} draggable="true"
          onclick={() => selectTab(tab.key)} onkeydown={(e) => e.key === 'Enter' && selectTab(tab.key)}
          onauxclick={(e) => e.button === 1 && closeTab(tab.key)} oncontextmenu={(e) => menu(e, tab.key)}

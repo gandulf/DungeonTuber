@@ -1,5 +1,6 @@
 """AI assistant through the Gemini API of Google (aistudio.google.com), in two modes: "music" suggests songs for a scene of a
-role playing session, "general" answers questions of the game master (rules like those of DSA, the setting, ideas).
+role playing session, "general" answers questions of the game master (rules like those of DSA, the setting, ideas), "smart" turns a
+scene into the filter of the app so that the songs of the library are ranked by it (see server/smartsearch.py).
 
 The SuperAdmin stores the API key in the settings; it is never sent back to the browser. The client keeps the conversation
 and sends it with every request, so the server stays stateless.
@@ -12,6 +13,7 @@ from urllib.parse import quote
 
 from core.i18n import _
 from core.settings import AppSettings, SettingKeys
+from server import smartsearch
 
 logger = logging.getLogger(__file__)
 
@@ -81,9 +83,12 @@ def instructions(mode: str = "music") -> str:
     return (AppSettings.value(key, "", type=str) or "").strip()
 
 
-def system_prompt(mode: str = "music") -> str:
-    extra = instructions(mode)
-    base = GENERAL_PROMPT if mode == "general" else SYSTEM_PROMPT
+def system_prompt(mode: str = "music", context: dict | None = None) -> str:
+    extra = instructions(mode)  # the smart search shares the instructions of the song suggestions (game, setting, taste)
+    if mode == "smart":
+        base = smartsearch.prompt((context or {}).get("tags") or [], (context or {}).get("genres") or [])
+    else:
+        base = GENERAL_PROMPT if mode == "general" else SYSTEM_PROMPT
     return base + (f"\n\nAdditional instructions of the game master:\n{extra}" if extra else "")
 
 
@@ -192,16 +197,20 @@ def _songs(raw: object) -> list[dict[str, str]]:
     return songs[:SONG_COUNT]
 
 
-def chat(messages: list[dict[str, str]], mode: str = "music") -> dict:
+def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | None = None) -> dict:
     """Sends the conversation (role user or assistant) and returns the message, the suggested songs and the raw answer.
 
     The raw answer goes back into the conversation as the assistant turn, so the model knows what it already suggested.
-    The general mode answers in Markdown and suggests no songs.
+    The general mode answers in Markdown and suggests no songs. The smart mode returns a filter (categories, tags, genres, bpm)
+    instead of songs; `context` holds the tags and genres it may choose from.
     """
     history = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"][:MAX_MESSAGE_LENGTH]}]}
                for m in messages[-MAX_MESSAGES:]]
-    payload = {"systemInstruction": {"parts": [{"text": system_prompt(mode)}]}, "contents": history}
-    if mode != "general":
+    tags, genres = (context or {}).get("tags") or [], (context or {}).get("genres") or []
+    payload = {"systemInstruction": {"parts": [{"text": system_prompt(mode, context)}]}, "contents": history}
+    if mode == "smart":
+        payload["generationConfig"] = {"responseMimeType": "application/json", "responseSchema": smartsearch.schema(tags, genres)}
+    elif mode != "general":
         payload["generationConfig"] = {"responseMimeType": "application/json", "responseSchema": RESPONSE_SCHEMA}
     data = _post(payload)
     try:
@@ -222,4 +231,7 @@ def chat(messages: list[dict[str, str]], mode: str = "music") -> dict:
         parsed = {"message": content, "songs": []}
     if not isinstance(parsed, dict):
         parsed = {"songs": parsed}
+    if mode == "smart":
+        return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content,
+                "filter": smartsearch.to_filter(parsed, tags, genres)}
     return {"message": str(parsed.get("message") or "").strip(), "songs": _songs(parsed.get("songs")), "content": content}

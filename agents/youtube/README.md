@@ -72,6 +72,7 @@ While a request runs the agent may send `{"type": "progress", "id": 1, "message"
 |---|---|---|
 | `resolve` | `url`, `whole` | `{"title", "is_playlist", "has_video", "entries": [{"url", "title", "duration", "uploader", "chapters"}]}` |
 | `download` | `url`, `upload`, `max_minutes`, `album`, `split` | `{"title", "name", "split", "files": [{"name", "title"}]}` |
+| `search` | `queries` | per query the first videos YouTube lists: `[[{"url", "title", "duration", "uploader", "chapters"}]]` (checks the songs of the AI assistant) |
 | `version` | | the yt-dlp version |
 
 For `download` the agent uploads each mp3 with `PUT <upload>/<index>` (raw body, same bearer token) before it answers; `<upload>` is a one-time

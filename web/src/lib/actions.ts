@@ -202,9 +202,10 @@ export function openDownloadsDialog(kind: JobKind = 'downloads') {
   openDialog(DownloadsDialog, { kind });
 }
 
-export function openImportDialog(directory?: string) {
+/** The import dialog for YouTube links; with a `url` it is filled in and looked up at once. */
+export function openImportDialog(directory?: string, url?: string) {
   const target = directory ?? uploadTarget();
-  if (target) openDialog(ImportDialog, { directory: target });
+  if (target) openDialog(ImportDialog, { directory: target, url });
 }
 
 export function uploadTarget(): string | null {

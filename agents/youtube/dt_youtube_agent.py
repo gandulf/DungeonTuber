@@ -3,7 +3,8 @@
     dt-youtube-agent --token <agent token> [--server https://dungeontuber.duckdns.org]
 
 Useful when the server cannot download from YouTube itself (YouTube blocks most data centers): run the agent on a PC at home. The server
-sends {"op": "resolve", "url": ...} to look up links and {"op": "download", "url": ..., "upload": "/api/agents/uploads/<ticket>"}; the agent
+sends {"op": "resolve", "url": ...} to look up links and {"op": "download", "url": ..., "upload": "/api/agents/uploads/<ticket>"}, and {"op": "search", "queries": [...]} to check the
+song suggestions of the AI assistant (the first videos for every query); the agent
 downloads and converts the video, uploads every mp3 with PUT <upload>/<index> (agent token) and answers with the titles. Progress is sent as
 {"type": "progress", "id": <request id>, "message": ..., "percent": ...}. The protocol is the one of the other agents (see server/agents.py).
 """
@@ -95,6 +96,10 @@ class Worker:
             resolved = await asyncio.to_thread(ytimport.resolve, str(request["url"]), None, request.get("whole"))
             logger.info("Looked up {0}: {1}", request["url"], resolved.title or f"{len(resolved.entries)} video(s)")
             return asdict(resolved)
+        if op == "search":
+            found = await asyncio.to_thread(ytimport.search, [str(query) for query in request.get("queries") or []])
+            logger.info("Searched YouTube for {0} song(s)", len(found))
+            return [[asdict(entry) for entry in entries] for entries in found]
         if op == "download":
             async with self._lock:
                 return await asyncio.to_thread(self._download, request, progress)

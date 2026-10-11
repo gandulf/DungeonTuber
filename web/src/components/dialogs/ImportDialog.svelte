@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
@@ -10,11 +11,12 @@
   import Modal from './Modal.svelte';
   import SettingsDialog from './SettingsDialog.svelte';
 
-  let { directory }: { directory: string } = $props();
+  let { directory, url: initialUrl = '' }: { directory: string; url?: string } = $props();
 
   // svelte-ignore state_referenced_locally
   let target = $state(directory);
-  let url = $state('');
+  // svelte-ignore state_referenced_locally
+  let url = $state(initialUrl);
   let preview = $state<ImportPreview | null>(null);
   let selected = $state<Set<string>>(new Set());
   let makePlaylist = $state(prefs.importOptions.makePlaylist);
@@ -55,6 +57,11 @@
       busy = false;
     }
   }
+
+  // a link handed over (e.g. a song the AI assistant found) is looked up right away
+  onMount(() => {
+    if (url) void lookup();
+  });
 
   function toggle(entryUrl: string) {
     const next = new Set(selected);

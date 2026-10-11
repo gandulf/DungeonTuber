@@ -7,8 +7,8 @@
   import { prefs } from './lib/prefs.svelte';
   import { data, loadAuth, loadData } from './lib/stores/data.svelte';
   import { setAnalysis, setDownloads } from './lib/stores/downloads.svelte';
-  import { loadEffects, updateEffectTrack } from './lib/stores/effects.svelte';
-  import { reloadDirTabs, reloadPlaylistTabs, restoreTabs, updateTrack } from './lib/stores/library.svelte';
+  import { effectsChanged, loadEffects, updateEffectTrack } from './lib/stores/effects.svelte';
+  import { globalChanged, reloadDirTabs, reloadPlaylistTabs, restoreTabs, updateTrack } from './lib/stores/library.svelte';
   import { loadLights, setLightState } from './lib/stores/lights.svelte';
   import { applyPlayerSettings, refreshCurrentTrack } from './lib/stores/player.svelte';
   import { applyViewSettings } from './lib/stores/profile.svelte';
@@ -62,7 +62,11 @@
         refreshCurrentTrack(track);
       }),
       onEvent('playlist.changed', ({ path }) => reloadPlaylistTabs(path)),
-      onEvent('library.changed', ({ path }) => reloadDirTabs(path)),
+      onEvent('library.changed', ({ path }) => {
+        reloadDirTabs(path);
+        effectsChanged(path);
+        globalChanged();
+      }),
       onEvent('library.roots', () => void libraryRootsChanged()),
       onEvent('lights.state', (list) => setLightState(list)),
       onEvent('analysis.items', (status) => void setAnalysis(status)),

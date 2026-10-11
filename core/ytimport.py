@@ -204,6 +204,35 @@ def resolve(url: str, progress: Progress | None = None, whole: bool | None = Non
     return Resolved(info.get("title") or "", False, [entry], video)
 
 
+SEARCH_RESULTS = 3
+SEARCH_THREADS = 5
+
+
+def search(queries: list[str], progress: Progress | None = None, results: int = SEARCH_RESULTS) -> list[list[RemoteEntry]]:
+    """The first `results` videos YouTube finds for every query (in parallel, nothing is downloaded); [] for a query without hits.
+    Raises ImportFailed when YouTube cannot be searched at all."""
+    from concurrent.futures import ThreadPoolExecutor
+    from yt_dlp import YoutubeDL
+    from yt_dlp.utils import DownloadError
+
+    def one(query: str) -> list[RemoteEntry] | Exception:
+        try:
+            with YoutubeDL(_options(progress, extract_flat=True, skip_download=True)) as ydl:
+                info = ydl.extract_info(f"ytsearch{results}:{query}", download=False) or {}
+        except DownloadError as e:
+            return e
+        return [entry for entry in (_entry(item) for item in info.get("entries") or [] if item) if entry]
+
+    if not queries:
+        return []
+    with ThreadPoolExecutor(max_workers=min(SEARCH_THREADS, len(queries))) as pool:
+        found = list(pool.map(one, queries))
+    errors = [result for result in found if isinstance(result, Exception)]
+    if len(errors) == len(found):
+        raise ImportFailed(_clean_error(errors[0]))
+    return [[] if isinstance(result, Exception) else result for result in found]
+
+
 def _entry(item: dict) -> RemoteEntry | None:
     url = item.get("webpage_url") or item.get("url") or ""
     if "://" not in url and item.get("id"):

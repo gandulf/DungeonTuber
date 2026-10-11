@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matcher, normalize, songQueries, withoutFillers } from './search';
+import { matcher, normalize, ranker, songQueries, withoutFillers } from './search';
 
 const finds = (query: string, text: string) => matcher(query)(text);
 
@@ -58,5 +58,13 @@ describe('search', () => {
     expect(songQueries('The Good, the Bad and the Ugly - Main Theme')).toEqual(['good bad ugly main theme', 'good bad ugly']);
     expect(songQueries('Concerning Hobbits (From The Lord of the Rings)')).toEqual(['concerning hobbits lord rings', 'concerning hobbits']);
     expect(songQueries('Drunken Sailor')).toEqual(['drunken sailor']);
+  });
+
+  it('ranks the texts: the whole query first, then by missing words', () => {
+    const rank = ranker('fistful of dollars theme');
+    expect(rank('A Fistful of Dollars Theme')).toBe(0);
+    expect(rank('Fistful of Dollars')).toBe(2); // one word missing
+    expect(rank('Dollars')).toBeNull();
+    expect(ranker('')('anything')).toBe(0);
   });
 });

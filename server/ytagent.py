@@ -20,6 +20,7 @@ logger = logging.getLogger(__file__)
 KIND = "youtube"
 
 RESOLVE_TIMEOUT = 180
+SEARCH_TIMEOUT = 60
 DOWNLOAD_TIMEOUT = 6 * 3600  # a long video is downloaded, converted, split and uploaded
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 
@@ -52,6 +53,12 @@ def resolve(url: str, progress=None, whole: bool | None = None) -> Resolved:
     result = _call("resolve", RESOLVE_TIMEOUT, url=url, whole=whole)
     entries = [RemoteEntry(**entry) for entry in result.get("entries") or []]
     return Resolved(result.get("title") or "", bool(result.get("is_playlist")), entries, bool(result.get("has_video")))
+
+
+def search(queries: list[str]) -> list[list[RemoteEntry]]:
+    """Same contract as core.ytimport.search, on the agent."""
+    result = _call("search", SEARCH_TIMEOUT, queries=queries)
+    return [[RemoteEntry(**entry) for entry in entries or []] for entries in result or []]
 
 
 def download(url: str, directory: Path, progress: Callable[[str], None] | None = None, max_minutes: int = DEFAULT_MAX_MINUTES,

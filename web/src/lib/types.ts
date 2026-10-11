@@ -147,6 +147,17 @@ export interface ServerSettings {
 export interface AssistantSong {
   title: string;
   artist: string;
+  /** The check on YouTube: undefined while it runs, found null when YouTube could not be searched. */
+  check?: SongCheck;
+}
+
+/** A suggested song looked up on YouTube; url, title, channel and duration are those of the matching video. */
+export interface SongCheck {
+  found: boolean | null;
+  url?: string;
+  title?: string;
+  channel?: string;
+  duration?: number | null;
 }
 
 export interface AssistantReply {
@@ -154,6 +165,16 @@ export interface AssistantReply {
   songs: AssistantSong[];
   /** The raw answer of the model; it goes back into the conversation. */
   content: string;
+  /** The filter chosen by the smart search. */
+  filter?: SmartFilter;
+}
+
+/** The filter of the smart search: values the app knows (see server/smartsearch.py). */
+export interface SmartFilter {
+  categories: Record<string, number>;
+  tags: string[];
+  genres: string[];
+  bpm: number | null;
 }
 
 export interface AssistantStatus {

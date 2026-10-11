@@ -1,4 +1,5 @@
 import { api } from '../api';
+import { affectsDirectory } from '../paths';
 import type { Effect, Track } from '../types';
 import { errorToast } from './ui.svelte';
 
@@ -20,6 +21,15 @@ export async function loadEffects() {
   } finally {
     effects.loading = false;
   }
+}
+
+let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Reloads the effects after a change of the library; an import that changes many files reloads once. */
+export function effectsChanged(path: string) {
+  if (!affectsDirectory(path, effects.directory)) return;
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => void loadEffects(), 300);
 }
 
 export function updateEffectTrack(track: Track) {

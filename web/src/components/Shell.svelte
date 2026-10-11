@@ -118,7 +118,7 @@
       <MenuBar />
       <FilterPanel />
       <TagBar />
-      {#if library.tabs.length && tab}
+      {#if tab}
         <div class="table-wrap" data-tour="table"><SongTable {tab} /></div>
       {:else}
         <Welcome />

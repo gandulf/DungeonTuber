@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core.i18n import _
-from server import assistant
+from server import assistant, songcheck
 from server.auth import require_admin, require_auth
 
 router = APIRouter(dependencies=[Depends(require_auth)])
@@ -16,9 +16,25 @@ class ChatMessage(BaseModel):
     content: str = Field(min_length=1, max_length=20000)
 
 
+class SearchContext(BaseModel):
+    """The tags and genres the smart search may choose from (those of the songs the filter is applied to)."""
+    tags: list[str] = Field(default=[], max_length=1000)
+    genres: list[str] = Field(default=[], max_length=1000)
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=200)
-    mode: Literal["music", "general"] = "music"
+    mode: Literal["music", "general", "smart"] = "music"
+    context: SearchContext | None = None
+
+
+class SongModel(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    artist: str = Field(default="", max_length=300)
+
+
+class VerifyRequest(BaseModel):
+    songs: list[SongModel] = Field(min_length=1, max_length=20)
 
 
 class AssistantConfig(BaseModel):
@@ -35,9 +51,15 @@ def chat(body: ChatRequest):
     if body.messages[-1].role != "user":
         raise HTTPException(status_code=400, detail="The last message must come from the user")
     try:
-        return assistant.chat([m.model_dump() for m in body.messages], body.mode)
+        return assistant.chat([m.model_dump() for m in body.messages], body.mode, body.context.model_dump() if body.context else None)
     except assistant.AssistantError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.post("/api/assistant/verify")
+def verify(body: VerifyRequest):
+    """Looks the suggested songs up on YouTube (through a YouTube agent when one is connected) and returns the matching videos."""
+    return {"results": songcheck.verify([song.model_dump() for song in body.songs])}
 
 
 @router.get("/api/assistant/config", dependencies=[Depends(require_admin)])

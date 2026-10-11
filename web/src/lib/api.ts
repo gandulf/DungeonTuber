@@ -1,5 +1,5 @@
 import type {
-  AgentInfo, AgentState, AssistantReply, AssistantStatus, AuthState, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
+  AgentInfo, AgentState, AssistantReply, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -58,6 +58,7 @@ export const api = {
   roots: () => get<BrowseItem[]>('/api/roots'),
   browse: (path: string) => get<BrowseResult>(`/api/browse?${qs({ path })}`),
   tracksOfDir: (dir: string) => get<TrackList>(`/api/tracks?${qs({ dir })}`),
+  libraryTracks: () => get<{ tracks: Track[] }>('/api/library/tracks'),
   tracksOfPlaylist: (playlist: string) => get<TrackList>(`/api/tracks?${qs({ playlist })}`),
   track: (id: string) => get<Track>(`/api/tracks/${id}`),
   patchTrack: (id: string, patch: Partial<Omit<Track, 'categories'>> & { categories?: Record<string, number | null>; name?: string }) =>
@@ -124,8 +125,10 @@ export const api = {
   locales: () => get<string[]>('/api/locales'),
 
   // AI assistant (song suggestions)
-  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' = 'music') =>
-    request<AssistantReply>('POST', '/api/assistant/chat', { messages, mode }),
+  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' = 'music',
+                  context?: { tags: string[]; genres: string[] }) =>
+    request<AssistantReply>('POST', '/api/assistant/chat', { messages, mode, context }),
+  assistantVerify: (songs: { title: string; artist: string }[]) => request<{ results: SongCheck[] }>('POST', '/api/assistant/verify', { songs }),
   assistantConfig: () => get<AssistantStatus>('/api/assistant/config'),
   putAssistantConfig: (config: { key?: string; model?: string; instructions?: string; generalInstructions?: string }) => request<AssistantStatus>('PUT', '/api/assistant/config', config),
   assistantModels: () => get<{ models: { id: string; name: string }[]; live: boolean }>('/api/assistant/models'),

@@ -13,13 +13,14 @@ from pydantic import BaseModel, Field
 
 from core.lights import LightSetting
 from core.mp3 import parse_mp3
+from core.settings import AppSettings, SettingKeys
 from core.storage import AlreadyExists, InvalidPath, NotFound
 from server import playlists
 from server.auth import current_user, require_auth
 from server.users import ADMIN
 from server.events import hub
 from server.index import get_index
-from server.paths import Location, safe_id, safe_name, safe_path
+from server.paths import Location, locate, safe_id, safe_name, safe_path
 from server.rescan import rescan
 from server.roots import get_roots
 
@@ -159,6 +160,23 @@ def tracks(dir: str | None = None, playlist: str | None = None, recursive: bool 
             item["index"] = None
         return {"type": "dir", "path": directory.client_path, "name": directory.name, "tracks": data}
     raise HTTPException(status_code=400, detail="dir or playlist required")
+
+
+@router.get("/api/library/tracks")
+def library_tracks():
+    """Every song of the library (the effects directory left out), for the search across the whole library. Known songs come from the
+    database; songs that were never shown are read once (remote ones are imported in the background, like in a folder)."""
+    effects = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, type=str)
+    effects_location = locate(effects) if effects else None
+    skip = effects_location.client_path if effects_location else None
+    locations = []
+    for root in get_roots():
+        locations.extend(loc for loc in _mp3s(Location(root), True)
+                         if not skip or not (loc.client_path == skip or loc.client_path.startswith(skip + "/")))
+    data = get_index().get_many(locations)
+    for item in data:
+        item["index"] = None
+    return {"tracks": data}
 
 
 @router.get("/api/tracks/{track_id}")

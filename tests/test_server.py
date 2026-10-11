@@ -710,3 +710,18 @@ def test_player_settings_are_kept_per_user(client):
     client.post("/api/auth/logout")
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
     assert client.get("/api/user/state").json()["player"] is None
+
+
+def test_the_whole_library_for_the_global_search(client, library, tmp_path):
+    effects_dir = tmp_path / "effects"
+    write_mp3(effects_dir / "Rain.mp3")
+    AppSettings.setValue(SettingKeys.EFFECTS_DIRECTORY, effects_dir.as_posix())
+    client.get("/api/effects")  # the effects are known to the index, but are no songs of the library
+
+    tracks = client.get("/api/library/tracks").json()["tracks"]  # also the songs of folders that were never opened
+    fight = next(t for t in tracks if t["name"] == "fight")
+    client.patch(f"/api/tracks/{fight['id']}", json={"favorite": True})
+
+    tracks = client.get("/api/library/tracks").json()["tracks"]
+    assert sorted(t["name"] for t in tracks) == ["drums", "fight", "inn"]  # neither the effects nor files outside the library
+    assert next(t for t in tracks if t["name"] == "fight")["favorite"] is True
