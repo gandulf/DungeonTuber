@@ -12,6 +12,11 @@ MISSING_TAG_PENALTY = 100
 MISSING_BPM_PENALTY = 100
 
 
+def _key(value: str) -> str:
+    """Tags and genres ignore case: "Pop" and "pop" are the same."""
+    return value.strip().lower()
+
+
 def calculate_score(data: Mp3Entry, filter_config: FilterConfig) -> int | None:
     """Sum of squared category distances, +100 per missing tag/genre, + |bpm difference|. None if no filter is set."""
     score = None
@@ -25,17 +30,17 @@ def calculate_score(data: Mp3Entry, filter_config: FilterConfig) -> int | None:
             else:
                 score += MISSING_CATEGORY_PENALTY
 
-    tags = data.tags or []
-    genres = data.genres or []
+    tags = {_key(tag) for tag in data.tags or []}
+    genres = {_key(genre) for genre in data.genres or []}
 
     for desired_tag in filter_config.tags:
         score = score or 0
-        if desired_tag not in tags and desired_tag not in genres:
+        if _key(desired_tag) not in tags and _key(desired_tag) not in genres:
             score += MISSING_TAG_PENALTY
 
     for desired_genre in filter_config.genres:
         score = score or 0
-        if desired_genre not in genres:
+        if _key(desired_genre) not in genres:
             score += MISSING_TAG_PENALTY
 
     if filter_config.bpm is not None:
@@ -70,7 +75,8 @@ def genre_match_level(desired_values: list[str] | None, values: list[str] | str 
     if isinstance(values, str):
         values = [value.strip() for value in values.split(",")]
 
-    found = sum(1 for desired in desired_values if desired in values)
+    present = {_key(value) for value in values}
+    found = sum(1 for desired in desired_values if _key(desired) in present)
     if found == len(desired_values):
         return 0
     return 1 if found > 0 else 2

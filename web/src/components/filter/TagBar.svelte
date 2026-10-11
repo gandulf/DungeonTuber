@@ -3,6 +3,7 @@
   import { t } from '../../lib/i18n.svelte';
   import { prefs } from '../../lib/prefs.svelte';
   import { availableGenres, availableTags, filter, onFilterChanged } from '../../lib/stores/library.svelte';
+  import { hasTag, toggleTagIn } from '../../lib/tags';
   import Icon from '../Icon.svelte';
 
   const tags = $derived(availableTags());
@@ -73,12 +74,12 @@
   });
 
   function toggleTag(tag: string) {
-    filter.tags = filter.tags.includes(tag) ? filter.tags.filter((x) => x !== tag) : [...filter.tags, tag];
+    filter.tags = toggleTagIn(filter.tags, tag);
     onFilterChanged();
   }
 
   function toggleGenre(genre: string) {
-    filter.genres = filter.genres.includes(genre) ? filter.genres.filter((x) => x !== genre) : [...filter.genres, genre];
+    filter.genres = toggleTagIn(filter.genres, genre);
     onFilterChanged();
   }
 
@@ -95,7 +96,7 @@
         <span class="label"><Icon name="tag" size={14} /></span>
         <div class="chips" class:open={expandTags} bind:this={tagChips}>
           {#each tags as tag (tag)}
-            <button class="chip" class:on={filter.tags.includes(tag)} draggable="true" ondragstart={(e) => onDragStart(e, 'tag', tag)} onclick={() => toggleTag(tag)}>{tag}</button>
+            <button class="chip" class:on={hasTag(filter.tags, tag)} draggable="true" ondragstart={(e) => onDragStart(e, 'tag', tag)} onclick={() => toggleTag(tag)}>{tag}</button>
           {/each}
         </div>
         {#if overflowTags}
@@ -108,7 +109,7 @@
         <span class="label"><Icon name="music" size={14} /></span>
         <div class="chips" class:open={expandGenres} bind:this={genreChips}>
           {#each genres as genre (genre)}
-            <button class="chip genre" class:on={filter.genres.includes(genre)} draggable="true" ondragstart={(e) => onDragStart(e, 'genre', genre)} onclick={() => toggleGenre(genre)}>{genre}</button>
+            <button class="chip genre" class:on={hasTag(filter.genres, genre)} draggable="true" ondragstart={(e) => onDragStart(e, 'genre', genre)} onclick={() => toggleGenre(genre)}>{genre}</button>
           {/each}
         </div>
         {#if overflowGenres}

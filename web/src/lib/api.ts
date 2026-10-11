@@ -1,5 +1,5 @@
 import type {
-  AgentInfo, AgentState, AuthState, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
+  AgentInfo, AgentState, AssistantReply, AssistantStatus, AuthState, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -122,6 +122,14 @@ export const api = {
   resetPresets: () => request<Preset[]>('POST', '/api/presets/reset'),
   version: () => get<VersionInfo>('/api/version'),
   locales: () => get<string[]>('/api/locales'),
+
+  // AI assistant (song suggestions)
+  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' = 'music') =>
+    request<AssistantReply>('POST', '/api/assistant/chat', { messages, mode }),
+  assistantConfig: () => get<AssistantStatus>('/api/assistant/config'),
+  putAssistantConfig: (config: { key?: string; model?: string; instructions?: string; generalInstructions?: string }) => request<AssistantStatus>('PUT', '/api/assistant/config', config),
+  assistantModels: () => get<{ models: { id: string; name: string }[]; live: boolean }>('/api/assistant/models'),
+  deleteAssistantConfig: () => request<AssistantStatus>('DELETE', '/api/assistant/config'),
 
   // remote storages (S3)
   storages: () => get<{ available: boolean; storages: StorageConfig[] }>('/api/storages'),

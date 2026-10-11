@@ -34,6 +34,15 @@ def test_tags_match_tags_or_genres():
     assert calculate_score(entry, FilterConfig(tags=["Happy"])) == 100
 
 
+def test_tags_and_genres_ignore_case():
+    entry = _entry(tags=["Dark"], genre=["Pop"])
+
+    assert calculate_score(entry, FilterConfig(tags=["dark"])) == 0
+    assert calculate_score(entry, FilterConfig(tags=["POP"])) == 0
+    assert calculate_score(entry, FilterConfig(genres=["pop "])) == 0
+    assert genre_match_level(["pop", "Rock"], ["Pop"]) == 1
+
+
 def test_genres_and_bpm():
     entry = _entry(genre=["Rock"], bpm=120)
 

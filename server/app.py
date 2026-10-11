@@ -19,7 +19,7 @@ from server.config import ServerConfig, configure, get_config
 from server.events import hub
 from server.downloads import download_queue
 from server.jobs import analysis_queue, import_queue
-from server.routes import agents, analysis, auth, effects, imports, library, lights, settings, storages
+from server.routes import agents, analysis, assistant, auth, effects, imports, library, lights, settings, storages
 
 logger = logging.getLogger(__file__)
 
@@ -28,9 +28,19 @@ def default_web_dir() -> Path:
     return Path(__file__).resolve().parent / "static"
 
 
+def _ignore_connection_resets(loop: asyncio.AbstractEventLoop, context: dict):
+    """Windows (proactor loop) logs every connection a browser drops, e.g. when it cancels a media request while seeking."""
+    if isinstance(context.get("exception"), (ConnectionResetError, ConnectionAbortedError)):
+        return
+    loop.default_exception_handler(context)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    hub.bind_loop(asyncio.get_running_loop())
+    loop = asyncio.get_running_loop()
+    if loop.get_exception_handler() is None:
+        loop.set_exception_handler(_ignore_connection_resets)
+    hub.bind_loop(loop)
     settings.apply_locale()
     light_registry.load()
     agent_hub.on_change = lambda: hub.publish("agents.state", agent_hub.status())
@@ -52,7 +62,7 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
     app = FastAPI(title="DungeonTuber", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=2048)
 
-    for module in (auth, library, settings, effects, analysis, lights, storages, agents, imports):
+    for module in (auth, library, settings, effects, analysis, lights, storages, agents, imports, assistant):
         app.include_router(module.router)
 
     @app.get("/api/health", include_in_schema=False)

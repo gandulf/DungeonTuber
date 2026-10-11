@@ -4,6 +4,8 @@ import { t } from '../i18n.svelte';
 import { prefs, savePrefs } from '../prefs.svelte';
 import { data } from './data.svelte';
 import { calculateScore, emptyFilter } from '../scoring';
+import { matcher } from '../search';
+import { displayTags, tagNames } from '../tags';
 import type { FilterConfig, Track } from '../types';
 import { errorToast, toast } from './ui.svelte';
 
@@ -190,13 +192,23 @@ function sortValue(row: Row, key: SortKey, playlist: boolean): string | number |
   }
 }
 
+/** The text of a song that the search looks at. */
+const searchText = (track: Track) =>
+  `${track.scene ?? ''} ${track.name} ${track.title ?? ''} ${track.artist ?? ''} ${track.album ?? ''} ${track.summary ?? ''} ${track.tags.join(' ')}`;
+
+/** Whether the search would find anything in the open tab. */
+export function findsInTab(query: string): boolean {
+  const matches = matcher(query);
+  return !!activeTab()?.tracks.some((track) => matches(searchText(track)));
+}
+
 export function visibleRows(): Row[] {
   const tab = activeTab();
   if (!tab) return [];
-  const search = library.search.trim().toLowerCase();
   let rows: Row[] = tab.tracks.map((track) => ({ track, score: calculateScore(track, filter) }));
-  if (search) {
-    rows = rows.filter(({ track }) => `${track.scene ?? ''} ${track.name} ${track.title ?? ''} ${track.summary ?? ''} ${track.tags.join(' ')}`.toLowerCase().includes(search));
+  if (library.search.trim()) {
+    const matches = matcher(library.search);
+    rows = rows.filter(({ track }) => matches(searchText(track)));
   }
   const key = library.sortKey;
   const direction = library.sortAsc ? 1 : -1;
@@ -229,16 +241,18 @@ export function onFilterChanged() {
   }
 }
 
+/** The tags of the songs in the open tab, "Pop" and "pop" listed once, in the same spelling as in the table. */
 export function availableTags(): string[] {
-  const tags = new Set<string>();
-  activeTab()?.tracks.forEach((track) => track.tags.forEach((tag) => tags.add(tag)));
-  return [...tags].sort((a, b) => a.localeCompare(b));
+  return displayTags((activeTab()?.tracks ?? []).flatMap((track) => track.tags), tabTagNames()).sort((a, b) => a.localeCompare(b));
 }
 
 export function availableGenres(): string[] {
-  const genres = new Set<string>();
-  activeTab()?.tracks.forEach((track) => track.genres.forEach((genre) => genres.add(genre)));
-  return [...genres].sort((a, b) => a.localeCompare(b));
+  return displayTags((activeTab()?.tracks ?? []).flatMap((track) => track.genres), tabTagNames()).sort((a, b) => a.localeCompare(b));
+}
+
+/** The spelling to show for every tag and genre of the open tab (see tags.ts). */
+export function tabTagNames(): Map<string, string> {
+  return tagNames((activeTab()?.tracks ?? []).flatMap((track) => [track.tags, track.genres]));
 }
 
 export function extraCategoryKeys(known: string[]): string[] {

@@ -57,7 +57,7 @@
     <button class="icon-btn" class:active={followMusic} aria-pressed={followMusic} disabled={!lights.list.length}
             title="{t('Lights follow music')}: {followMusic ? t('On') : t('Off')}&#10;{t('When on, every light that is switched on takes the light setting of the playing song and changes with its chapter markers. Click to switch it on or off.')}"
             onclick={() => setFollow(!followMusic)}>
-      <Icon name="sparkles" size={15} />
+      <Icon name="music-sync" size={15} />
     </button>
     <button class="icon-btn" title={t('Refresh')} disabled={lights.discovering} onclick={discoverLights}>
       <Icon name="refresh" size={15} class={lights.discovering ? 'spin' : ''} />

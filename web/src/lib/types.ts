@@ -140,6 +140,32 @@ export interface ServerSettings {
   sharePort: number;
   networkUrl: string;
   voxalyzerActive: boolean;
+  assistantConfigured: boolean;
+}
+
+/** A song the AI assistant suggests. */
+export interface AssistantSong {
+  title: string;
+  artist: string;
+}
+
+export interface AssistantReply {
+  message: string;
+  songs: AssistantSong[];
+  /** The raw answer of the model; it goes back into the conversation. */
+  content: string;
+}
+
+export interface AssistantStatus {
+  configured: boolean;
+  model: string;
+  defaultModel: string;
+  /** The last characters of the stored key. */
+  keyHint: string;
+  /** Additional instructions of the SuperAdmin for the song suggestions. */
+  instructions: string;
+  /** Additional instructions of the SuperAdmin for the general chat. */
+  generalInstructions: string;
 }
 
 export interface StorageConfig {

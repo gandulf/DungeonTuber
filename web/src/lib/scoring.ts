@@ -1,6 +1,10 @@
 // Port of core/scoring.py – keep both in sync (see scoring.test.ts).
 import type { FilterConfig, Track } from './types';
 
+// tags and genres ignore case, like core/scoring.py
+const keys = (values: string[] | null | undefined) => new Set((values ?? []).map((value) => value.trim().toLowerCase()));
+const key = (value: string) => value.trim().toLowerCase();
+
 export const MISSING_CATEGORY_PENALTY = 100;
 export const MISSING_TAG_PENALTY = 100;
 export const MISSING_BPM_PENALTY = 100;
@@ -24,17 +28,17 @@ export function calculateScore(track: Pick<Track, 'categories' | 'tags' | 'genre
     }
   }
 
-  const tags = track.tags ?? [];
-  const genres = track.genres ?? [];
+  const tags = keys(track.tags);
+  const genres = keys(track.genres);
 
   for (const tag of filter.tags) {
     score ??= 0;
-    if (!tags.includes(tag) && !genres.includes(tag)) score += MISSING_TAG_PENALTY;
+    if (!tags.has(key(tag)) && !genres.has(key(tag))) score += MISSING_TAG_PENALTY;
   }
 
   for (const genre of filter.genres) {
     score ??= 0;
-    if (!genres.includes(genre)) score += MISSING_TAG_PENALTY;
+    if (!genres.has(key(genre))) score += MISSING_TAG_PENALTY;
   }
 
   if (filter.bpm !== null && filter.bpm !== undefined) {
@@ -60,7 +64,8 @@ export function bpmLevel(desired: number | null | undefined, value: number | nul
 
 export function genreLevel(desired: string[], values: string[] | null | undefined): number | null {
   if (!values || desired.length === 0) return null;
-  const found = desired.filter((genre) => values.includes(genre)).length;
+  const present = keys(values);
+  const found = desired.filter((genre) => present.has(key(genre))).length;
   return found === desired.length ? 0 : found > 0 ? 1 : 2;
 }
 
