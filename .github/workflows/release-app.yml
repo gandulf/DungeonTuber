@@ -416,7 +416,7 @@ jobs:
             artifacts/*.whl
           tag_name: ${{ needs.version.outputs.tag }}
           name: Release ${{ needs.version.outputs.app_version }}
-          draft: true
+          draft: false
           prerelease: ${{ contains(needs.version.outputs.app_version, '-') }}
           body: |
             **Windows:** download and run `DungeonTuber-${{ needs.version.outputs.app_version }}.exe`.
