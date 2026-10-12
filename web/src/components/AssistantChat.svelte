@@ -1,16 +1,18 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { t } from '../lib/i18n.svelte';
+  import { locale, t } from '../lib/i18n.svelte';
   import { markdown } from '../lib/markdown';
-  import { applyFilter, ask, assistant, currentChat, moreSongs, newChat, setMode, SONGS_PER_ANSWER, youtubeSearchUrl, type AssistantMode } from '../lib/stores/assistant.svelte';
+  import { applyFilter, ask, assistant, compose, COMPOSE_DURATIONS, composeOptions, currentChat, moreSongs, newChat, saveComposeOptions, setMode, SONGS_PER_ANSWER,
+           youtubeSearchUrl, type AssistantMode } from '../lib/stores/assistant.svelte';
   import { calculateScore, scorePercent } from '../lib/scoring';
   import { playTrack } from '../lib/stores/player.svelte';
   import { data } from '../lib/stores/data.svelte';
   import { activeTab, findsInTab, library } from '../lib/stores/library.svelte';
   import { songQueries } from '../lib/search';
-  import { openImportDialog } from '../lib/actions';
+  import { openImportDialog, uploadTarget } from '../lib/actions';
   import { openDialog } from '../lib/stores/ui.svelte';
   import type { AssistantSong, SmartFilter, Track } from '../lib/types';
+  import FolderSelect from './dialogs/FolderSelect.svelte';
   import SettingsDialog from './dialogs/SettingsDialog.svelte';
   import Icon from './Icon.svelte';
 
@@ -18,10 +20,12 @@
     music: ['A brawl in a crowded tavern', 'Exploring a haunted crypt', 'The final fight against a dragon', 'A sad farewell at a funeral'],
     general: ['How does an attack work?', 'A name and a short description for a dwarven innkeeper', 'Three plot hooks for a village festival'],
     smart: ['A brawl in a crowded tavern', 'Exploring a haunted crypt', 'A sad farewell at a funeral'],
+    compose: ['A brawl in a crowded tavern', 'Exploring a haunted crypt', 'A festival in an elven forest'],
   };
   const MODES: [AssistantMode, string, string, string][] = [
     ['music', 'New music', 'music', 'New songs for a scene, to find on YouTube and import'],
     ['smart', 'Smart search', 'sliders', 'Finds the best fitting songs of your whole library for a scene: the AI sets the filter, nothing is invented'],
+    ['compose', 'Compose', 'wand', 'Composes a new piece for a scene with AI (ACE-Step) and stores it in your library'],
     ['general', 'General', 'mask', 'Questions about rules, the world and the session'],
   ];
   const TOP_MATCHES = 5;
@@ -29,7 +33,13 @@
   let text = $state('');
   let input = $state<HTMLTextAreaElement | null>(null);
   let log = $state<HTMLElement | null>(null);
-  const configured = $derived(data.settings?.assistantConfigured === true);
+  const assistantConfigured = $derived(data.settings?.assistantConfigured === true);
+  const musicGenConfigured = $derived(data.settings?.musicGenConfigured === true);
+  const groqConfigured = $derived(data.settings?.groqConfigured === true);
+  const composing = $derived(assistant.mode === 'compose');
+  // the smart search runs on Groq or Gemini; the compose mode needs the music generation (without an AI service the text of the
+  // user is the description); the song suggestions and the general chat need Gemini
+  const configured = $derived(composing ? musicGenConfigured : assistant.mode === 'smart' ? groqConfigured || assistantConfigured : assistantConfigured);
   const admin = $derived(data.auth?.is_admin !== false);
   const chat = $derived(currentChat());
   const music = $derived(assistant.mode === 'music');
@@ -60,6 +70,23 @@
     void assistant.mode;
     if (configured) input?.focus();
   });
+
+  $effect(() => {
+    if (composing && !composeOptions.dir) composeOptions.dir = uploadTarget() ?? '';
+  });
+
+  // the lyrics can be written in the languages of the app; until one is chosen, in the language of the app
+  const lyricLanguages = $derived(data.locales.length ? data.locales : [locale()]);
+  $effect(() => {
+    if (composing && !lyricLanguages.includes(composeOptions.language)) composeOptions.language = lyricLanguages.includes(locale()) ? locale() : lyricLanguages[0];
+  });
+  /** What a new description has to change so that the piece matches the options: the vocals or the language of the lyrics. */
+  function outdated(piece: { instrumental: boolean; language: string }): 'vocals' | 'language' | null {
+    if (piece.instrumental !== composeOptions.instrumental) return 'vocals';
+    return !piece.instrumental && piece.language && piece.language !== composeOptions.language ? 'language' : null;
+  }
+
+  const formatDuration = (seconds: number) => (seconds < 60 ? `${seconds} s` : `${seconds / 60} min`);
 
   function send(question = text) {
     if (!question.trim() || chat.busy) return;
@@ -120,17 +147,18 @@
   <div class="log" bind:this={log}>
     {#if !configured}
       <div class="empty">
-        <p>{t('The AI assistant is not configured yet.')}</p>
+        <p>{composing ? t('The music generation is not configured yet.') : t('The AI assistant is not configured yet.')}</p>
         {#if admin}
-          <button class="btn primary" onclick={openSettings}><Icon name="settings" size={14} /> {t('Set up the AI assistant')}</button>
+          <button class="btn primary" onclick={openSettings}><Icon name="settings" size={14} /> {composing ? t('Set up the music generation') : t('Set up the AI assistant')}</button>
         {:else}
-          <p class="muted">{t('Ask the SuperAdmin to enter an API key in the settings.')}</p>
+          <p class="muted">{composing ? t('Ask the SuperAdmin to set up the music generation in the settings.') : t('Ask the SuperAdmin to enter an API key in the settings.')}</p>
         {/if}
       </div>
     {:else if !chat.turns.length}
       <div class="empty">
         <p>{music ? t('Describe a scene of your session and get the {0} best fitting songs. They are new songs that are not in your library yet: open them on YouTube or download them with the download button to import them.', SONGS_PER_ANSWER)
                   : smart ? t('Describe a scene: the AI sets the mood filter and your library ranks its songs. Only songs you have are found.')
+                  : composing ? t('Describe a scene and the AI composes a new piece for it (ACE-Step). The piece is stored in the chosen folder and analyzed like any other song.')
                   : t('Ask about the rules (e.g. DSA), the world or anything else around your session.')}</p>
         <div class="examples">
           {#each EXAMPLES[assistant.mode] as example (example)}
@@ -175,6 +203,48 @@
               <p class="muted">{tab?.loading ? t('Loading…') : t('No song of the library has values for this filter yet; analyze the songs first.')}</p>
             {/if}
             <button class="btn sm apply" onclick={() => { applyFilter(chosen); assistant.open = false; }}><Icon name="filter" size={13} /> {t('Apply filter')}</button>
+          {/if}
+        </div>
+      {:else if composing}
+        <div class="bubble bot">
+          {#if turn.message}<p>{turn.message}</p>{/if}
+          {#if turn.piece}
+            {@const piece = turn.piece}
+            <div class="piece">
+              <strong>{piece.title} <span class="kind">{piece.instrumental ? t('Instrumental') : piece.language ? `${t('Vocals')} · ${t(piece.language)}` : t('Vocals')}</span></strong>
+              <span class="muted caption">{piece.caption}{piece.bpm ? ` · ${piece.bpm} BPM` : ''}</span>
+              {#if piece.lyrics}<details><summary>{t('Lyrics')}</summary><pre>{piece.lyrics}</pre></details>{/if}
+            </div>
+            <ol class="songs">
+              {#each turn.takes ?? [] as take, n (n)}
+                <li class:missing={take.status === 'error'}>
+                  {#if take.status === 'composing'}
+                    <span class="checking"></span>
+                    <span class="name"><span class="muted">{t('Composing… after a break the cloud needs a few minutes to start.')}</span></span>
+                  {:else if take.status === 'error'}
+                    <Icon name="close" size={14} />
+                    <span class="name"><span class="err">{take.error}</span></span>
+                  {:else if take.track}
+                    {@const track = take.track}
+                    <button class="icon-btn" title={t('Play')} aria-label={t('Play')} onclick={() => playTrack(track)}><Icon name="play" size={13} /></button>
+                    <span class="name"><strong>{track.title || track.name}</strong><span class="muted" title={track.path}>{track.path.split('/').at(-2) ?? ''}</span></span>
+                    <button class="icon-btn found" title={t('Show in the open tab')} aria-label={t('Show in the open tab')} onclick={() => searchLibrary(track.title || track.name)}><Icon name="search" size={14} /></button>
+                  {/if}
+                </li>
+              {/each}
+            </ol>
+            <div class="row">
+              <button class="btn sm apply" disabled={!composeOptions.dir} onclick={() => compose(turn)}>
+                <Icon name="wand" size={13} /> {turn.takes?.length ? t('Compose a variation') : t('Compose')}</button>
+              <!-- the description holds the lyrics: switching the vocals needs a new one -->
+              {#if turn === lastTurn && outdated(piece) === 'vocals'}
+                <button class="btn sm apply" disabled={chat.busy} onclick={() => send(composeOptions.instrumental ? t('Make it instrumental, without vocals.') : t('Make it with vocals and write lyrics.'))}>
+                  <Icon name="refresh" size={13} /> {composeOptions.instrumental ? t('Describe again as instrumental') : t('Describe again with vocals')}</button>
+              {:else if turn === lastTurn && outdated(piece) === 'language'}
+                <button class="btn sm apply" disabled={chat.busy} onclick={() => send(t('Write the lyrics in {0}.', t(composeOptions.language)))}>
+                  <Icon name="refresh" size={13} /> {t('Describe again in {0}', t(composeOptions.language))}</button>
+              {/if}
+            </div>
           {/if}
         </div>
       {:else if !music}
@@ -223,9 +293,24 @@
     {#if chat.busy}<div class="bubble bot typing" aria-live="polite"><span></span><span></span><span></span></div>{/if}
   </div>
 
+  {#if configured && composing}
+    <div class="options">
+      <label title={t('Length')}><select bind:value={composeOptions.duration} onchange={saveComposeOptions} aria-label={t('Length')}>
+        {#each COMPOSE_DURATIONS as seconds (seconds)}<option value={seconds}>{formatDuration(seconds)}</option>{/each}
+      </select></label>
+      <label class="check"><input type="checkbox" checked={!composeOptions.instrumental}
+             onchange={(e) => { composeOptions.instrumental = !e.currentTarget.checked; saveComposeOptions(); }} /> {t('Vocals')}</label>
+      {#if !composeOptions.instrumental}
+        <select bind:value={composeOptions.language} onchange={saveComposeOptions} aria-label={t('Language of the lyrics')} title={t('Language of the lyrics')}>
+          {#each lyricLanguages as code (code)}<option value={code}>{t(code)}</option>{/each}
+        </select>
+      {/if}
+      <span class="folder" title={t('Target folder')}><FolderSelect bind:selected={composeOptions.dir} /></span>
+    </div>
+  {/if}
   {#if configured}
     <form class="compose" onsubmit={(e) => { e.preventDefault(); send(); }}>
-      <textarea bind:this={input} bind:value={text} rows="2" placeholder={music ? t('Which songs fit…? e.g. a chase through the sewers') : smart ? t('Describe the scene… e.g. a chase through the sewers') : t('Your question…')} onkeydown={onKeydown}></textarea>
+      <textarea bind:this={input} bind:value={text} rows="2" placeholder={music ? t('Which songs fit…? e.g. a chase through the sewers') : composing ? t('Describe the piece… e.g. a chase through the sewers') : smart ? t('Describe the scene… e.g. a chase through the sewers') : t('Your question…')} onkeydown={onKeydown}></textarea>
       <button class="btn primary send" type="submit" disabled={chat.busy || !text.trim()} title={t('Send')} aria-label={t('Send')}><Icon name="send" size={16} /></button>
     </form>
   {/if}
@@ -291,6 +376,17 @@
   .label { display: block; margin: 2px 0 4px; font-size: var(--fs-xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); }
   .percent { flex: none; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--green); font-weight: 600; }
   .apply { margin-top: 8px; }
+  .piece { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+  .piece .caption { font-size: var(--fs-xs); }
+  .kind { margin-left: 4px; padding: 1px 7px; border-radius: 9px; background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
+  .bot .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .piece summary { cursor: pointer; font-size: var(--fs-xs); color: var(--muted); }
+  .piece pre { margin: 4px 0 0; white-space: pre-wrap; font-family: inherit; font-size: var(--fs-xs); }
+  .err { color: var(--red); font-size: var(--fs-xs); }
+  .options { display: flex; align-items: center; gap: 10px; padding: 8px 10px 0; border-top: 1px solid var(--border); font-size: var(--fs-xs); }
+  .options .check { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .options .folder { flex: 1; min-width: 0; }
+  .options + .compose { border-top: none; }
   .typing { align-self: flex-start; display: flex; gap: 4px; padding: 12px 14px; }
   .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite ease-in-out; }
   .typing span:nth-child(2) { animation-delay: 0.2s; }

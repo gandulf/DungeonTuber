@@ -1,18 +1,28 @@
 import { api } from '../api';
 import { t } from '../i18n.svelte';
-import type { AssistantSong, SmartFilter } from '../types';
+import type { AssistantReply, AssistantSong, ComposePiece, SmartFilter, Track } from '../types';
+import { data } from './data.svelte';
 import { availableGenres, availableTags, filter, onFilterChanged, setGlobal } from './library.svelte';
 
 export type ChatTurn =
   | { role: 'user'; content: string }
   /** `first` is the number of the first song in the running count of all suggestions. */
-  | { role: 'assistant'; content: string; message: string; songs: AssistantSong[]; first: number; filter?: SmartFilter }
+  | { role: 'assistant'; content: string; message: string; songs: AssistantSong[]; first: number; filter?: SmartFilter; piece?: ComposePiece; takes?: Take[] }
   | { role: 'error'; message: string; question: string };
 
+/** One generation of a composed piece; a variation is another take with a new seed. */
+export interface Take {
+  status: 'composing' | 'done' | 'error';
+  track?: Track;
+  seed?: number | null;
+  error?: string;
+}
+
 /** "music" suggests songs for a scene, "general" answers questions about rules, the setting or the session, "smart" sets the filter
- *  so that the songs of the open tab are ranked for a scene (only songs of the library, nothing invented). */
-export type AssistantMode = 'music' | 'general' | 'smart';
-const MODES: AssistantMode[] = ['music', 'general', 'smart'];
+ *  so that the songs of the open tab are ranked for a scene (only songs of the library, nothing invented), "compose" lets the
+ *  music generation (ACE-Step) compose a new piece for a scene. */
+export type AssistantMode = 'music' | 'general' | 'smart' | 'compose';
+const MODES: AssistantMode[] = ['music', 'general', 'smart', 'compose'];
 
 interface Chat {
   turns: ChatTurn[];
@@ -34,8 +44,35 @@ function storedMode(): AssistantMode {
 export const assistant = $state({
   open: false,
   mode: storedMode(),
-  chats: { music: { turns: [], busy: false }, general: { turns: [], busy: false }, smart: { turns: [], busy: false } } as Record<AssistantMode, Chat>,
+  chats: { music: { turns: [], busy: false }, general: { turns: [], busy: false }, smart: { turns: [], busy: false },
+           compose: { turns: [], busy: false } } as Record<AssistantMode, Chat>,
 });
+
+const COMPOSE_KEY = 'dt-compose-options';
+export const COMPOSE_DURATIONS = [30, 60, 120, 180, 300];
+
+function storedComposeOptions(): { duration: number; instrumental: boolean; language: string } {
+  try {
+    const stored = JSON.parse(localStorage.getItem(COMPOSE_KEY) ?? '{}');
+    return { duration: COMPOSE_DURATIONS.includes(stored.duration) ? stored.duration : 120, instrumental: stored.instrumental !== false,
+             language: typeof stored.language === 'string' ? stored.language : '' };
+  } catch {
+    return { duration: 120, instrumental: true, language: '' };
+  }
+}
+
+/** The options of the compose mode: length, with or without vocals, the language of the lyrics ('' until chosen: the language of the
+ *  app) and the folder the pieces are stored in. */
+export const composeOptions = $state({ ...storedComposeOptions(), dir: '' });
+
+export function saveComposeOptions() {
+  try {
+    localStorage.setItem(COMPOSE_KEY, JSON.stringify({ duration: composeOptions.duration, instrumental: composeOptions.instrumental,
+                                                       language: composeOptions.language }));
+  } catch {
+    // the options are only remembered when the browser allows it
+  }
+}
 
 export const SONGS_PER_ANSWER = 10;
 
@@ -75,11 +112,16 @@ export async function ask(text: string) {
     const history = chat.turns.flatMap((turn) => (turn.role === 'error' ? [] : [{ role: turn.role, content: turn.content }]));
     // the smart search ranks the whole library (global search) and may only pick tags and genres its songs have
     if (mode === 'smart') await setGlobal(true);
-    const context = mode === 'smart' ? { tags: availableTags(), genres: availableGenres() } : undefined;
-    const reply = await api.assistantChat(history, mode, context);
+    const context = mode === 'smart' ? { tags: availableTags(), genres: availableGenres() }
+      : mode === 'compose' ? { instrumental: composeOptions.instrumental, duration: composeOptions.duration,
+                               ...(composeOptions.instrumental || !composeOptions.language ? {} : { language: composeOptions.language }) } : undefined;
+    const described = data.settings?.groqConfigured || data.settings?.assistantConfigured;
+    const reply = mode === 'compose' && !described ? describeYourself(text) : await api.assistantChat(history, mode, context);
     const first = chat.turns.reduce((count, turn) => count + (turn.role === 'assistant' ? turn.songs.length : 0), 1);
-    chat.turns.push({ role: 'assistant', content: reply.content, message: reply.message, songs: reply.songs, first, filter: reply.filter });
+    chat.turns.push({ role: 'assistant', content: reply.content, message: reply.message, songs: reply.songs, first, filter: reply.filter,
+                      piece: reply.piece, takes: reply.piece ? [] : undefined });
     if (mode === 'smart' && reply.filter) applyFilter(reply.filter);
+    if (mode === 'compose' && reply.piece) void compose(chat.turns[chat.turns.length - 1]);
     if (mode === 'music' && reply.songs.length) void checkSongs(chat.turns[chat.turns.length - 1]);
   } catch (e) {
     // the question leaves the conversation again, so asking once more does not send it twice
@@ -87,6 +129,27 @@ export async function ask(text: string) {
     chat.turns.push({ role: 'error', message: e instanceof Error ? e.message : String(e), question: text });
   } finally {
     chat.busy = false;
+  }
+}
+
+/** Without an AI service (Groq or Gemini) the text of the user is the description of the piece. */
+function describeYourself(text: string): AssistantReply {
+  const piece: ComposePiece = { title: text.split(/[,.;\n]/)[0].trim().slice(0, 60), caption: text.slice(0, 512), lyrics: '', language: composeOptions.instrumental ? '' : composeOptions.language,
+                                instrumental: composeOptions.instrumental, bpm: null };
+  return { content: text, message: '', songs: [], piece };
+}
+
+/** Lets the music generation compose the piece of an answer (once more for a variation) and stores it in the chosen folder. */
+export async function compose(turn: ChatTurn) {
+  if (turn.role !== 'assistant' || !turn.piece || !turn.takes) return;
+  turn.takes.push({ status: 'composing' });
+  const take = turn.takes[turn.takes.length - 1];
+  try {
+    if (!composeOptions.dir) throw new Error(t('Choose a folder for the composed pieces first.'));
+    const result = await api.compose({ ...turn.piece, dir: composeOptions.dir, duration: composeOptions.duration });
+    Object.assign(take, { status: 'done', track: result.track, seed: result.seed });
+  } catch (e) {
+    Object.assign(take, { status: 'error', error: e instanceof Error ? e.message : String(e) });
   }
 }
 

@@ -145,6 +145,10 @@ export interface ServerSettings {
   networkUrl: string;
   voxalyzerActive: boolean;
   assistantConfigured: boolean;
+  /** Groq has a key: it answers the smart search and the compose mode of the assistant. */
+  groqConfigured: boolean;
+  /** The music generation (ACE-Step on Modal) is set up. */
+  musicGenConfigured: boolean;
 }
 
 /** A song the AI assistant suggests. */
@@ -171,6 +175,25 @@ export interface AssistantReply {
   content: string;
   /** The filter chosen by the smart search. */
   filter?: SmartFilter;
+  /** The piece described in the compose mode. */
+  piece?: ComposePiece;
+}
+
+/** A piece for the music generation (see server/musicgen.py); the caption is the description ACE-Step composes from. */
+export interface ComposePiece {
+  title: string;
+  caption: string;
+  lyrics: string;
+  /** ISO 639-1 code of the lyrics; empty: ACE-Step finds it. */
+  language: string;
+  instrumental: boolean;
+  bpm: number | null;
+}
+
+/** A composed piece stored in the library. */
+export interface ComposeResult {
+  track: Track;
+  seed: number | null;
 }
 
 /** The filter of the smart search: values the app knows (see server/smartsearch.py). */
@@ -191,6 +214,17 @@ export interface AssistantStatus {
   instructions: string;
   /** Additional instructions of the SuperAdmin for the general chat. */
   generalInstructions: string;
+  /** Additional instructions of the SuperAdmin for the compose mode. */
+  composeInstructions: string;
+  /** Additional instructions of the SuperAdmin for the smart search; without them those of the song suggestions are used. */
+  smartInstructions: string;
+  groqConfigured: boolean;
+  groqModel: string;
+  groqDefaultModel: string;
+  groqKeyHint: string;
+  groqModels: { id: string; name: string }[];
+  /** The built-in prompts (e.g. "compose.vocals") with their default and the text in use. */
+  prompts: { name: string; default: string; value: string }[];
 }
 
 export interface StorageConfig {

@@ -45,9 +45,18 @@ def _clean(values: list[str] | None) -> list[str]:
     return result[:MAX_VALUES]
 
 
-def prompt(tags: list[str], genres: list[str]) -> str:
-    return PROMPT.format(min=CATEGORY_MIN, max=CATEGORY_MAX, categories="\n".join(_category_line(c) for c in get_music_categories()),
-                         tags=", ".join(_clean(tags)) or "(none)", genres=", ".join(_clean(genres)) or "(none)")
+PLACEHOLDERS = ("{categories}", "{tags}", "{genres}", "{min}", "{max}")
+
+
+def prompt(tags: list[str], genres: list[str], template: str = PROMPT) -> str:
+    """The prompt with the values of the library; `template` may be one the SuperAdmin changed (the placeholders are replaced
+    as plain text, so other braces in it do no harm)."""
+    values = {"{min}": str(CATEGORY_MIN), "{max}": str(CATEGORY_MAX),
+              "{categories}": "\n".join(_category_line(c) for c in get_music_categories()),
+              "{tags}": ", ".join(_clean(tags)) or "(none)", "{genres}": ", ".join(_clean(genres)) or "(none)"}
+    for placeholder, value in values.items():
+        template = template.replace(placeholder, value)
+    return template
 
 
 def schema(tags: list[str], genres: list[str]) -> dict:

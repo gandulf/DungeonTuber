@@ -57,10 +57,19 @@ class SettingKeys(StrEnum):
     # API key and model of the AI assistant (Google Gemini, see server/assistant.py); the key is never sent back to the browser
     ASSISTANT_API_KEY = "geminiApiKey"
     ASSISTANT_MODEL = "geminiModel"
+    # API key and model of Groq (console.groq.com), used by the smart search and the compose mode of the assistant
+    GROQ_API_KEY = "groqApiKey"
+    GROQ_MODEL = "groqModel"
     # extra instructions of the SuperAdmin, appended to the system prompt of the assistant
     ASSISTANT_INSTRUCTIONS = "assistantInstructions"
     # the same for the general chat of the assistant (rules, setting, ideas)
     ASSISTANT_GENERAL_INSTRUCTIONS = "assistantGeneralInstructions"
+    # the same for the compose mode (the description of a new piece for the music generation)
+    ASSISTANT_COMPOSE_INSTRUCTIONS = "assistantComposeInstructions"
+    # the same for the smart search; without them it uses those of the song suggestions as background
+    ASSISTANT_SMART_INSTRUCTIONS = "assistantSmartInstructions"
+    # the built-in prompts of the assistant that the SuperAdmin changed ({"compose.vocals": "..."}, see server/assistant.py PROMPTS)
+    ASSISTANT_PROMPTS = "assistantPrompts"
     # application key of AcoustID for the metadata lookup (see core/musiclookup.py); never sent back to the browser
     ACOUSTID_API_KEY = "acoustidApiKey"
 

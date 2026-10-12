@@ -57,7 +57,9 @@ def test_chat_needs_a_configured_key(client):
 def test_the_key_is_never_sent_back(client):
     status = client.put("/api/assistant/config", json={"key": "gsk_secret_1234", "model": ""}).json()
     assert status == {"configured": True, "model": assistant.DEFAULT_MODEL, "defaultModel": assistant.DEFAULT_MODEL, "keyHint": "1234",
-                      "instructions": "", "generalInstructions": ""}
+                      "instructions": "", "generalInstructions": "", "composeInstructions": "", "smartInstructions": "", "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
+                      "groqDefaultModel": assistant.GROQ_DEFAULT_MODEL, "groqKeyHint": "", "groqModels": assistant.GROQ_MODELS,
+                      "prompts": assistant.prompts()}
     assert "gsk_secret" not in client.get("/api/assistant/config").text
     assert client.get("/api/settings").json()["assistantConfigured"] is True
     # without a key the stored one is kept
@@ -225,3 +227,150 @@ def test_the_smart_search_without_tags_or_genres(client, gemini):
     assert result["filter"] == {"categories": {"Valence": 8}, "tags": [], "genres": [], "bpm": 120}
     properties = calls[0]["body"]["generationConfig"]["responseSchema"]["properties"]
     assert "tags" not in properties and "genres" not in properties
+
+
+@pytest.fixture
+def services(monkeypatch):
+    """Answers Gemini and Groq requests with the next prepared content of each service and remembers the requests."""
+    calls = []
+    answers = {"gemini": [], "groq": []}
+
+    def urlopen(request, timeout=None):
+        service = "groq" if "api.groq.com" in request.full_url else "gemini"
+        calls.append({"service": service, "headers": dict(request.header_items()), "body": json.loads(request.data)})
+        answer = answers[service].pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        if service == "groq":
+            return _Response(json.dumps({"choices": [{"message": {"role": "assistant", "content": answer}}]}).encode())
+        return _Response(json.dumps({"candidates": [{"content": {"parts": [{"text": answer}]}}]}).encode())
+
+    monkeypatch.setattr(assistant.urllib.request, "urlopen", urlopen)
+    return calls, answers
+
+
+def test_groq_answers_the_smart_search_and_the_compose_mode(client, services):
+    calls, answers = services
+    client.put("/api/assistant/config", json={"key": "gemini_secret_1234", "groqKey": "gsk_groq_secret_5678"})
+    status = client.get("/api/assistant/config").json()
+    assert status["groqConfigured"] is True and status["groqKeyHint"] == "5678"
+    assert "gsk_groq_secret" not in client.get("/api/assistant/config").text
+    assert client.get("/api/settings").json()["groqConfigured"] is True
+    messages = [{"role": "user", "content": "Ein Kampf"}]
+
+    answers["groq"].append(json.dumps({"message": "Kampf!", "categories": [], "tags": ["Battle"], "genres": []}))
+    context = {"tags": ["Battle", "Tavern"], "genres": ["Folk"]}
+    result = client.post("/api/assistant/chat", json={"messages": messages, "mode": "smart", "context": context}).json()
+    assert result["filter"]["tags"] == ["Battle"]
+    request = calls[-1]
+    assert request["service"] == "groq" and request["headers"]["Authorization"] == "Bearer gsk_groq_secret_5678"
+    assert request["headers"]["User-agent"] == assistant.USER_AGENT  # Cloudflare blocks the default agent of urllib
+    body = request["body"]
+    assert body["model"] == assistant.GROQ_DEFAULT_MODEL and body["reasoning_effort"] == "low"
+    assert body["messages"][0]["role"] == "system" and body["messages"][1:] == messages
+    assert body["response_format"]["json_schema"]["strict"] is True
+    schema = body["response_format"]["json_schema"]["schema"]
+    assert schema["type"] == "object" and schema["properties"]["bpm"]["type"] == ["integer", "null"]
+    # strict mode: every property is required, the optional ones may be null, and no other properties are allowed
+    assert set(schema["required"]) == set(schema["properties"]) and schema["additionalProperties"] is False
+    assert schema["properties"]["tags"]["type"] == ["array", "null"] and schema["properties"]["message"]["type"] == "string"
+    item = schema["properties"]["categories"]["items"]
+    assert item["required"] == ["key", "value"] and item["additionalProperties"] is False
+    assert "enum" not in json.dumps(schema)  # the prompt lists the tags and genres already
+
+    answers["groq"].append(json.dumps({"message": "Wild", "title": "Kampf", "caption": "epic orchestral, drums", "lyrics": None, "bpm": None}))
+    result = client.post("/api/assistant/chat", json={"messages": messages, "mode": "compose"}).json()
+    assert result["piece"]["caption"] == "epic orchestral, drums" and calls[-1]["service"] == "groq"
+    assert result["piece"]["bpm"] is None and result["piece"]["lyrics"] == ""
+
+    # an answer Groq rejects as not matching the schema is used anyway: it is checked here
+    failed = {"error": {"message": "Failed to generate JSON. Please adjust your prompt. See 'failed_generation' for more details.",
+                        "type": "invalid_request_error", "code": "json_validate_failed",
+                        "failed_generation": json.dumps({"message": "Wild", "title": "Kampf", "caption": "folk, fiddle", "bpm": "fast"})}}
+    answers["groq"].append(urllib.error.HTTPError(assistant.GROQ_URL, 400, "Bad Request", {}, io.BytesIO(json.dumps(failed).encode())))
+    result = client.post("/api/assistant/chat", json={"messages": messages, "mode": "compose"}).json()
+    assert result["piece"]["caption"] == "folk, fiddle" and result["piece"]["bpm"] is None
+
+    # the song suggestions and the general chat stay with Gemini
+    answers["gemini"].append(json.dumps({"message": "Hier", "songs": [{"title": "Song", "artist": "Band"}]}))
+    assert client.post("/api/assistant/chat", json={"messages": messages}).json()["songs"][0]["title"] == "Song"
+    assert calls[-1]["service"] == "gemini"
+    answers["gemini"].append("Eine Antwort")
+    client.post("/api/assistant/chat", json={"messages": messages, "mode": "general"})
+    assert calls[-1]["service"] == "gemini"
+
+
+def test_groq_without_gemini_serves_only_its_modes(client, services):
+    calls, answers = services
+    client.put("/api/assistant/config", json={"groqKey": "gsk_groq_secret_5678", "groqModel": "openai/gpt-oss-20b"})
+    assert client.get("/api/settings").json()["assistantConfigured"] is False
+    messages = [{"role": "user", "content": "A fight"}]
+    assert client.post("/api/assistant/chat", json={"messages": messages}).status_code == 409
+    assert client.post("/api/assistant/chat", json={"messages": messages, "mode": "general"}).status_code == 409
+
+    answers["groq"].append(json.dumps({"message": "Fight", "categories": []}))
+    assert client.post("/api/assistant/chat", json={"messages": messages, "mode": "smart"}).status_code == 200
+    assert calls[-1]["body"]["model"] == "openai/gpt-oss-20b"
+
+    answers["groq"].append(urllib.error.HTTPError(assistant.GROQ_URL, 429, "Too Many Requests", {},
+                                                  io.BytesIO(b'{"error": {"message": "Rate limit reached"}}')))
+    response = client.post("/api/assistant/chat", json={"messages": messages, "mode": "smart"})
+    assert response.status_code == 502 and "Rate limit reached" in response.json()["detail"]
+
+    answers["groq"].append(urllib.error.HTTPError(assistant.GROQ_URL, 403, "Forbidden", {}, io.BytesIO(b"error code: 1010\n")))
+    response = client.post("/api/assistant/chat", json={"messages": messages, "mode": "smart"})
+    assert "Forbidden: error code: 1010" in response.json()["detail"]
+
+    assert client.delete("/api/assistant/config", params={"service": "groq"}).json()["groqConfigured"] is False
+    assert client.post("/api/assistant/chat", json={"messages": messages, "mode": "smart"}).status_code == 409
+
+
+def test_each_mode_gets_its_own_instructions(client):
+    songs = "Gib bei jeder Anfrage genau 10 Stücke als nummerierte Liste mit YouTube-Links aus."
+    client.put("/api/assistant/config", json={"key": "gemini_secret_1234", "instructions": songs, "generalInstructions": "DSA 4.1",
+                                              "composeInstructions": "Thorwal klingt nordisch."})
+    assert client.get("/api/assistant/config").json()["composeInstructions"] == "Thorwal klingt nordisch."
+
+    # the song suggestions ask for a list of songs: the compose mode must not get them, or it answers with songs
+    compose = assistant.system_prompt("compose")
+    assert songs not in compose and "Thorwal klingt nordisch." in compose
+    assert songs in assistant.system_prompt("music") and "Thorwal" not in assistant.system_prompt("music")
+    assert "DSA 4.1" in assistant.system_prompt("general") and songs not in assistant.system_prompt("general")
+    # the smart search uses them as background only
+    smart = assistant.system_prompt("smart", {"tags": [], "genres": []})
+    assert songs in smart and smart.index(assistant.BACKGROUND_INTRO) < smart.index(songs)
+
+    # instructions of its own replace the background
+    client.put("/api/assistant/config", json={"smartInstructions": "Kämpfe brauchen viel Energie."})
+    smart = assistant.system_prompt("smart", {"tags": [], "genres": []})
+    assert "Kämpfe brauchen viel Energie." in smart and songs not in smart and assistant.BACKGROUND_INTRO not in smart
+    assert client.get("/api/assistant/config").json()["smartInstructions"] == "Kämpfe brauchen viel Energie."
+
+    client.put("/api/assistant/config", json={"composeInstructions": ""})
+    assert "Additional instructions" not in assistant.system_prompt("compose")
+    assert client.get("/api/assistant/config").json()["instructions"] == songs
+
+
+def test_the_built_in_prompts_can_be_changed_and_restored(client):
+    prompts = {entry["name"]: entry for entry in client.get("/api/assistant/config").json()["prompts"]}
+    assert set(prompts) == set(assistant.PROMPTS)
+    assert all(entry["value"] == entry["default"] for entry in prompts.values())
+
+    changed = "Antworte immer als Barde. {categories} | {tags} | {genres} | {min}-{max} {unbekannt}"
+    status = client.put("/api/assistant/config", json={"prompts": {"smart.system": changed, "compose.vocals": "Singe auf Deutsch.",
+                                                                   "unknown.part": "ignored"}}).json()
+    values = {entry["name"]: entry["value"] for entry in status["prompts"]}
+    assert values["smart.system"] == changed and values["compose.vocals"] == "Singe auf Deutsch."
+    assert "unknown.part" not in values
+
+    # the placeholders get the values of the library, other braces stay as they are
+    smart = assistant.system_prompt("smart", {"tags": ["Battle"], "genres": ["Folk"]})
+    assert smart.startswith("Antworte immer als Barde.") and "| Battle | Folk |" in smart and "{unbekannt}" in smart
+    assert "Singe auf Deutsch." in assistant.system_prompt("compose", {"instrumental": False})
+    assert assistant.VOCALS_RULE not in assistant.system_prompt("compose", {"instrumental": False})
+    assert assistant.INSTRUMENTAL_RULE in assistant.system_prompt("compose", {"instrumental": True})
+
+    # empty or the default restores the built-in prompt
+    client.put("/api/assistant/config", json={"prompts": {"smart.system": "", "compose.vocals": assistant.VOCALS_RULE}})
+    assert all(entry["value"] == entry["default"] for entry in client.get("/api/assistant/config").json()["prompts"])
+    assert assistant.system_prompt("smart", {"tags": [], "genres": []}) == assistant.smartsearch.prompt([], [])

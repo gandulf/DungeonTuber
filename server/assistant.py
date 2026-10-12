@@ -1,12 +1,17 @@
-"""AI assistant through the Gemini API of Google (aistudio.google.com), in two modes: "music" suggests songs for a scene of a
+"""AI assistant through the Gemini API of Google (aistudio.google.com) and Groq (console.groq.com). "music" suggests songs for a scene of a
 role playing session, "general" answers questions of the game master (rules like those of DSA, the setting, ideas), "smart" turns a
-scene into the filter of the app so that the songs of the library are ranked by it (see server/smartsearch.py).
+scene into the filter of the app so that the songs of the library are ranked by it (see server/smartsearch.py), "compose" writes the
+description of a new piece that the music generation composes (see server/musicgen.py).
 
-The SuperAdmin stores the API key in the settings; it is never sent back to the browser. The client keeps the conversation
+The smart search and the compose mode run on Groq when a Groq key is stored (an open model like gpt-oss-120b is as good at choosing
+values as Gemini and has a quota of its own); the song suggestions and the general chat need the knowledge of Gemini.
+
+The SuperAdmin stores the API keys in the settings; they are never sent back to the browser. The client keeps the conversation
 and sends it with every request, so the server stays stateless.
 """
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 from urllib.parse import quote
@@ -35,6 +40,16 @@ KNOWN_MODELS = [
 _UNSUITED = ("image", "tts", "audio", "live", "embedding", "robotics", "computer-use")
 # keys of the former Groq connection, removed once the assistant is configured again
 _LEGACY_KEYS = ("assistantApiKey", "assistantModel")
+
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b"
+# models with structured outputs (console.groq.com/docs/structured-outputs)
+GROQ_MODELS = [
+    {"id": "openai/gpt-oss-120b", "name": "GPT-OSS 120B"},
+    {"id": "openai/gpt-oss-20b", "name": "GPT-OSS 20B"},
+]
+GROQ_MODES = ("smart", "compose")
+USER_AGENT = "DungeonTuber (+https://github.com/gandulf/DungeonTuber)"
 SONG_COUNT = 10
 TIMEOUT = 60
 MAX_MESSAGES = 30
@@ -50,6 +65,101 @@ Answer questions about the rules, the world and its lore, and help with ideas fo
 Answer concisely and to the point, so the answer can be read during the session; use Markdown for lists and emphasis.
 When you are not sure about a rule or a fact, say so instead of inventing one.
 Write in the language the user writes in."""
+
+COMPOSE_PROMPT = """You write the description for an AI music generator (ACE-Step) that composes background music for a scene of a
+tabletop role playing session.
+Answer with a JSON object only:
+{"message": "<one short sentence for the user>", "title": "<a short evocative title>", "caption": "<the description>",
+ "lyrics": "<lyrics or empty>", "language": "<ISO 639-1 code of the lyrics, e.g. de or en>", "bpm": <tempo>}
+The caption is ALWAYS in English, also when the user and the instructions below write in another language: the generator only
+understands English captions. Write it as 6 to 12 concrete, comma separated terms, at most 400 characters, in this order:
+1. One main genre, at most one modifier or influence (e.g. "medieval folk dance", "dark orchestral, celtic influence"); never several
+   genres that do not belong together.
+2. The mood: one or two words that agree ("joyful, rowdy"), never opposites like "joyful" and "melancholic" or "serene" and "aggressive".
+3. The 2 to 3 specific real instruments that carry the piece, as precise as possible ("plucked lute" rather than "strings"; e.g.
+   fiddle, bagpipe, frame drum, hurdy-gurdy, cello, french horn, taiko, harp, choir).
+4. The voice if there is one ("rough male vocals", "ethereal female choir").
+5. The rhythm feel in words ("driving", "laid-back", "slow and solemn"), never a number: the tempo is the bpm field alone, and
+   key or BPM in the caption confuse the generator.
+6. The production and the timbre: fidelity, space and texture ("warm live recording", "intimate", "wide hall reverb", "raw",
+   "airy", "punchy").
+For example: "medieval folk dance, joyful, rowdy, lively fiddle, plucked lute, frame drums and hand claps, driving, warm live
+tavern recording".
+Only concrete things the musicians can play: no sentences, no abstract adjectives like "sophisticated", "elegant" or "beautiful".
+Prefer acoustic and orchestral instruments and a recorded production; words like ambient, pads, drones or synth make it sound
+electronic, use them only when the scene asks for it.
+bpm matches the genre and the mood: about 55 to 80 for laments, funerals and suspense, 80 to 110 for exploration and travel, 110 to
+140 for dances, chases and battles.
+Only the title, the message and the lyrics are in the language the user writes in.
+A style reference to one or two artists, composers or soundtracks helps the generator, as one term of the caption ("reminiscent of
+Wardruna", "in the style of the Witcher 3 soundtrack"); it describes the sound, so the lyrics never quote or copy existing songs.
+When the user asks for changes, change the previous description accordingly.
+"""
+INSTRUMENTAL_RULE = """The piece is instrumental: the caption names no voice and starts with the word "instrumental" (e.g.
+"instrumental, medieval folk dance, …"). lyrics holds no words to sing, only the structure of the piece over time: 4 to 6 section
+tags on their own lines, separated by blank lines, each with at most one modifier that names the instruments of the caption or the
+energy, e.g.
+[Intro - solo harp]
+
+[Main Theme - fiddle and lute]
+
+[Build - frame drums]
+
+[Climax - full ensemble]
+
+[Outro - fade out]"""
+VOCALS_RULE = """The piece has vocals: lyrics is never empty. Write them in the language the user writes in, with simple, natural words
+that are easy to sing (no tongue twisters, no long sentences) and the same mood as the caption.
+Structure: section tags on their own lines and a blank line between sections. Start with an [Intro] and end with an [Outro] without
+words (the scene needs room), then [Verse], a [Chorus] that repeats as the hook at least twice, an instrumental break between
+sections and maybe a [Bridge]. Every sung section has words below its tag (a [Chorus] without words stays silent).
+A tag may have one modifier for how it is played or sung: [Chorus - anthemic], [Verse - whispered], [Intro - lute]. Name
+instrumental breaks after the instruments of the caption ([Fiddle Solo], [Instrumental - drums]); tags and caption never disagree.
+Lines of 6 to 10 syllables, lines at the same place of each section about equally long. One core image for the whole song instead
+of a new metaphor in every section, no stacked adjectives, a consistent rhyme (AABB or ABAB). UPPERCASE marks a shouted line, use it
+rarely; (parentheses) mark background voices or a choir echo.
+Name the voice in the caption (for example "rough male vocals" or "ethereal female choir") and the instruments that carry it, so the
+voice does not drown them."""
+# sung words per second: about 2 to 3 is the limit (more sounds rushed); background music needs room for the instruments
+LYRICS_WORDS_PER_SECOND = (1.2, 1.8)
+
+
+# English names of the languages the lyrics may be written in, for the prompt (the code itself also works)
+LANGUAGE_NAMES = {"de": "German", "en": "English", "fr": "French", "es": "Spanish", "it": "Italian", "nl": "Dutch", "pl": "Polish",
+                  "pt": "Portuguese", "ru": "Russian", "cs": "Czech", "sv": "Swedish", "da": "Danish", "no": "Norwegian", "fi": "Finnish",
+                  "ja": "Japanese", "zh": "Chinese", "ko": "Korean", "la": "Latin"}
+
+
+def lyrics_language(language: object) -> str:
+    """The rule for the language of the lyrics that the user chose; empty without a valid choice."""
+    code = str(language or "").strip().lower()
+    if not re.fullmatch(r"[a-z]{2,3}", code):
+        return ""
+    return (f"Write the lyrics in {LANGUAGE_NAMES.get(code, code)} and set language to {code}, whatever language the user writes in "
+            "(this replaces the rule about the language of the lyrics above).")
+
+
+def lyrics_budget(duration: object) -> str:
+    """The length of the lyrics for a piece of `duration` seconds, as a rule for the compose prompt."""
+    if not isinstance(duration, (int, float)) or duration <= 0:
+        return ""
+    low, high = (round(duration * rate / 10) * 10 for rate in LYRICS_WORDS_PER_SECOND)
+    return f"The piece is {round(duration)} seconds long: write {max(low, 20)} to {max(high, 30)} words of lyrics in total, not more."
+MAX_CAPTION_LENGTH = 512
+MAX_LYRICS_LENGTH = 4096
+
+COMPOSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "message": {"type": "STRING"},
+        "title": {"type": "STRING"},
+        "caption": {"type": "STRING"},
+        "lyrics": {"type": "STRING"},
+        "language": {"type": "STRING"},
+        "bpm": {"type": "INTEGER"},
+    },
+    "required": ["message", "title", "caption", "lyrics"],
+}
 
 # the answer Gemini has to give in the music mode (structured output)
 RESPONSE_SCHEMA = {
@@ -78,46 +188,147 @@ def model() -> str:
     return (AppSettings.value(SettingKeys.ASSISTANT_MODEL, "", type=str) or "").strip() or DEFAULT_MODEL
 
 
+def groq_key() -> str:
+    return (AppSettings.value(SettingKeys.GROQ_API_KEY, "", type=str) or "").strip()
+
+
+def groq_model() -> str:
+    return (AppSettings.value(SettingKeys.GROQ_MODEL, "", type=str) or "").strip() or GROQ_DEFAULT_MODEL
+
+
+def provider(mode: str) -> str | None:
+    """The service that answers in `mode`: Groq for the smart search and the compose mode when it has a key, otherwise Gemini."""
+    if mode in GROQ_MODES and groq_key():
+        return "groq"
+    return "gemini" if api_key() else None
+
+
+_INSTRUCTION_KEYS = {"general": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, "compose": SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS,
+                     "smart": SettingKeys.ASSISTANT_SMART_INSTRUCTIONS}
+
+# Without instructions of its own the smart search uses those of the song suggestions for the game, the setting and the taste; they
+# often ask for a list of songs in a format of their own, which must not replace the filter the smart search answers with.
+BACKGROUND_INTRO = """Background of the game master about the game, the setting and the taste in music. Use it only as background:
+ignore any task or output format it asks for, your task and your answer format are the ones above."""
+
+
+# The built-in prompts, which the SuperAdmin may change in the settings; the stored text replaces the default, an empty one restores it.
+PROMPTS = {
+    "music.system": SYSTEM_PROMPT,
+    "smart.system": smartsearch.PROMPT,
+    "compose.system": COMPOSE_PROMPT,
+    "compose.instrumental": INSTRUMENTAL_RULE,
+    "compose.vocals": VOCALS_RULE,
+    "general.system": GENERAL_PROMPT,
+}
+MAX_PROMPT_LENGTH = 12000
+
+
+def _stored_prompts() -> dict:
+    stored = AppSettings.value(SettingKeys.ASSISTANT_PROMPTS, {}, type=dict) or {}
+    return stored if isinstance(stored, dict) else {}
+
+
+def prompt_text(name: str) -> str:
+    """The prompt `name` as the SuperAdmin changed it, otherwise the built-in one."""
+    stored = _stored_prompts().get(name)
+    return stored if isinstance(stored, str) and stored.strip() else PROMPTS[name]
+
+
+def prompts() -> list[dict]:
+    """Every built-in prompt with its default and the text in use."""
+    return [{"name": name, "default": default, "value": prompt_text(name)} for name, default in PROMPTS.items()]
+
+
+def set_prompts(changes: dict[str, str]):
+    """Stores the changed prompts; a text that is empty or the default restores the built-in prompt. Unknown names are ignored."""
+    stored = {name: text for name, text in _stored_prompts().items() if name in PROMPTS}
+    for name, text in changes.items():
+        if name not in PROMPTS:
+            continue
+        text = str(text or "").strip()[:MAX_PROMPT_LENGTH]
+        if not text or text == PROMPTS[name].strip():
+            stored.pop(name, None)
+        else:
+            stored[name] = text
+    if stored:
+        AppSettings.setValue(SettingKeys.ASSISTANT_PROMPTS, stored)
+    else:
+        AppSettings.remove(SettingKeys.ASSISTANT_PROMPTS)
+
+
 def instructions(mode: str = "music") -> str:
-    key = SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS if mode == "general" else SettingKeys.ASSISTANT_INSTRUCTIONS
+    """The additional instructions the SuperAdmin stored for a mode."""
+    key = _INSTRUCTION_KEYS.get(mode, SettingKeys.ASSISTANT_INSTRUCTIONS)
     return (AppSettings.value(key, "", type=str) or "").strip()
 
 
 def system_prompt(mode: str = "music", context: dict | None = None) -> str:
-    extra = instructions(mode)  # the smart search shares the instructions of the song suggestions (game, setting, taste)
+    extra, intro = instructions(mode), "Additional instructions of the game master:"
+    if mode == "smart" and not extra:
+        extra, intro = instructions("music"), BACKGROUND_INTRO
     if mode == "smart":
-        base = smartsearch.prompt((context or {}).get("tags") or [], (context or {}).get("genres") or [])
+        base = smartsearch.prompt((context or {}).get("tags") or [], (context or {}).get("genres") or [], prompt_text("smart.system"))
+    elif mode == "compose":
+        instrumental = (context or {}).get("instrumental", True)
+        base = prompt_text("compose.system") + "\n" + prompt_text("compose.instrumental" if instrumental else "compose.vocals")
+        rules = [] if instrumental else [lyrics_budget((context or {}).get("duration")), lyrics_language((context or {}).get("language"))]
+        base += "".join(f"\n{rule}" for rule in rules if rule)
     else:
-        base = GENERAL_PROMPT if mode == "general" else SYSTEM_PROMPT
-    return base + (f"\n\nAdditional instructions of the game master:\n{extra}" if extra else "")
+        base = prompt_text("general.system" if mode == "general" else "music.system")
+    return f"{base}\n\n{intro}\n{extra}" if extra else base
 
 
-def configured() -> bool:
-    return bool(api_key())
+def configured(mode: str | None = None) -> bool:
+    """Gemini has a key; with a mode: a service that answers in this mode has a key."""
+    return bool(api_key()) if mode is None else provider(mode) is not None
+
+
+def groq_configured() -> bool:
+    return bool(groq_key())
+
+
+def _hint(key: str) -> str:
+    return key[-4:] if len(key) > 8 else ""
 
 
 def status() -> dict:
-    key = api_key()
-    return {"configured": bool(key), "model": model(), "defaultModel": DEFAULT_MODEL, "keyHint": key[-4:] if len(key) > 8 else "",
-            "instructions": instructions(), "generalInstructions": instructions("general")}
+    key, groq = api_key(), groq_key()
+    return {"configured": bool(key), "model": model(), "defaultModel": DEFAULT_MODEL, "keyHint": _hint(key),
+            "instructions": instructions(), "generalInstructions": instructions("general"), "composeInstructions": instructions("compose"),
+            "smartInstructions": instructions("smart"),
+            "groqConfigured": bool(groq), "groqModel": groq_model(), "groqDefaultModel": GROQ_DEFAULT_MODEL, "groqKeyHint": _hint(groq),
+            "groqModels": GROQ_MODELS, "prompts": prompts()}
 
 
-def configure(key: str | None, model_name: str | None, extra_instructions: str | None = None, general_instructions: str | None = None):
-    """Stores a new key, the model ('' for the default) and the additional instructions of both modes; None keeps the stored value."""
-    for legacy in _LEGACY_KEYS:
-        AppSettings.remove(legacy)
+def _store(key_setting: str, model_setting: str, default_model: str, key: str | None, model_name: str | None):
+    """Stores a key ('' removes it) and a model ('' for the default); None keeps the stored value."""
     if key is not None:
         if key.strip():
-            AppSettings.setValue(SettingKeys.ASSISTANT_API_KEY, key.strip())
+            AppSettings.setValue(key_setting, key.strip())
         else:
-            AppSettings.remove(SettingKeys.ASSISTANT_API_KEY)
+            AppSettings.remove(key_setting)
     if model_name is not None:
-        if model_name.strip() and model_name.strip() != DEFAULT_MODEL:
-            AppSettings.setValue(SettingKeys.ASSISTANT_MODEL, model_name.strip())
+        if model_name.strip() and model_name.strip() != default_model:
+            AppSettings.setValue(model_setting, model_name.strip())
         else:
-            AppSettings.remove(SettingKeys.ASSISTANT_MODEL)
+            AppSettings.remove(model_setting)
+
+
+def configure(key: str | None, model_name: str | None, extra_instructions: str | None = None, general_instructions: str | None = None,
+              groq_api_key: str | None = None, groq_model_name: str | None = None, compose_instructions: str | None = None,
+              smart_instructions: str | None = None, changed_prompts: dict[str, str] | None = None):
+    """Stores the keys and models of Gemini and Groq and the additional instructions of both modes; None keeps the stored value."""
+    for legacy in _LEGACY_KEYS:
+        AppSettings.remove(legacy)
+    _store(SettingKeys.ASSISTANT_API_KEY, SettingKeys.ASSISTANT_MODEL, DEFAULT_MODEL, key, model_name)
+    _store(SettingKeys.GROQ_API_KEY, SettingKeys.GROQ_MODEL, GROQ_DEFAULT_MODEL, groq_api_key, groq_model_name)
+    if changed_prompts is not None:
+        set_prompts(changed_prompts)
     for setting, value in ((SettingKeys.ASSISTANT_INSTRUCTIONS, extra_instructions),
-                           (SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, general_instructions)):
+                           (SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, general_instructions),
+                           (SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS, compose_instructions),
+                           (SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, smart_instructions)):
         if value is None:
             continue
         if value.strip():
@@ -126,9 +337,13 @@ def configure(key: str | None, model_name: str | None, extra_instructions: str |
             AppSettings.remove(setting)
 
 
-def remove():
-    AppSettings.remove(SettingKeys.ASSISTANT_API_KEY)
-    AppSettings.remove(SettingKeys.ASSISTANT_MODEL)
+def remove(service: str = "gemini"):
+    if service == "groq":
+        AppSettings.remove(SettingKeys.GROQ_API_KEY)
+        AppSettings.remove(SettingKeys.GROQ_MODEL)
+    else:
+        AppSettings.remove(SettingKeys.ASSISTANT_API_KEY)
+        AppSettings.remove(SettingKeys.ASSISTANT_MODEL)
 
 
 def _post(payload: dict) -> dict:
@@ -137,16 +352,27 @@ def _post(payload: dict) -> dict:
     return _send(request)
 
 
-def _send(request: urllib.request.Request) -> dict:
-    key = api_key()
+def _send(request: urllib.request.Request, service: str = "gemini") -> dict:
+    key = groq_key() if service == "groq" else api_key()
     if not key:
         raise AssistantError(_("The AI assistant is not configured"))
-    request.add_header("x-goog-api-key", key)
+    if service == "groq":
+        request.add_header("Authorization", f"Bearer {key}")
+        # Cloudflare in front of Groq blocks the default agent of urllib (403, "error code: 1010")
+        request.add_header("User-Agent", USER_AGENT)
+    else:
+        request.add_header("x-goog-api-key", key)
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return json.loads(response.read())
     except urllib.error.HTTPError as e:
-        detail = _detail(e)
+        body = _error_body(e)
+        error = body.get("error") if isinstance(body, dict) and isinstance(body.get("error"), dict) else {}
+        # Groq rejects an answer that does not match the schema; the answer itself is checked here anyway
+        if service == "groq" and error.get("code") == "json_validate_failed" and error.get("failed_generation"):
+            logger.warning("Groq answered with invalid JSON, using it anyway: {0}", str(error["failed_generation"])[:200])
+            return {"choices": [{"message": {"content": str(error["failed_generation"])}}]}
+        detail = _detail(e, body)
         if e.code in (401, 403) or (e.code == 400 and "API key" in detail):
             raise AssistantError(_("The AI service rejected the API key ({0})").format(detail)) from e
         if e.code == 429:
@@ -156,12 +382,25 @@ def _send(request: urllib.request.Request) -> dict:
         raise AssistantError(_("The AI service is not reachable: {0}").format(e)) from e
 
 
-def _detail(error: urllib.error.HTTPError) -> str:
+def _error_body(error: urllib.error.HTTPError) -> dict | str:
+    """The error answer: its JSON, or its text (e.g. of a proxy)."""
     try:
-        data = json.loads(error.read())
-        return str(data.get("error", {}).get("message") or error.reason)
-    except (OSError, ValueError, AttributeError):
-        return str(error.reason)
+        body = error.read()
+    except (OSError, AttributeError):
+        return ""
+    try:
+        return json.loads(body)
+    except ValueError:
+        return body.decode("utf-8", "replace").strip()[:200] if isinstance(body, bytes) else ""
+
+
+def _detail(error: urllib.error.HTTPError, body: dict | str | None = None) -> str:
+    """The message of the error answer; a plain text answer as it is."""
+    body = _error_body(error) if body is None else body
+    if isinstance(body, dict):
+        message = body.get("error", {}).get("message") if isinstance(body.get("error"), dict) else None
+        return str(message or error.reason)
+    return f"{error.reason}: {body}" if body else str(error.reason)
 
 
 def models() -> dict:
@@ -197,6 +436,90 @@ def _songs(raw: object) -> list[dict[str, str]]:
     return songs[:SONG_COUNT]
 
 
+_SECTION_TAG = re.compile(r"\[[^\]\n]{1,60}\]")
+
+
+def structure_only(lyrics: str) -> bool:
+    """True if the lyrics only hold section tags (the structure of an instrumental piece), no words to sing."""
+    lines = [line.strip() for line in lyrics.splitlines() if line.strip()]
+    return bool(lines) and all(_SECTION_TAG.fullmatch(line) for line in lines)
+
+
+def to_piece(raw: dict, instrumental: bool = True) -> dict | None:
+    """The piece of a compose answer, cut to what ACE-Step accepts; None without a caption."""
+    caption = " ".join(str(raw.get("caption") or "").split())[:MAX_CAPTION_LENGTH]
+    if not caption:
+        return None
+    bpm = raw.get("bpm")
+    language = str(raw.get("language") or "").strip().lower()
+    lyrics = str(raw.get("lyrics") or "").strip()[:MAX_LYRICS_LENGTH]
+    if instrumental and not structure_only(lyrics):
+        lyrics = ""  # an instrumental piece keeps its structure, but no words to sing
+    return {"title": " ".join(str(raw.get("title") or "").split())[:120] or caption[:60],
+            "caption": caption,
+            "lyrics": lyrics,
+            "language": "" if instrumental or not re.fullmatch(r"[a-z]{2,3}", language) else language,
+            "instrumental": instrumental,
+            "bpm": bpm if isinstance(bpm, int) and 30 <= bpm <= 300 else None}
+
+
+def json_schema(schema: dict, enums: bool = True, strict: bool = False, nullable: bool = False) -> dict:
+    """The Gemini schema (OBJECT, STRING, nullable) as JSON schema for Groq; without enums the lists of tags and genres are not sent
+    twice (the prompt has them, and the answer is checked against them anyway). For the strict mode of Groq every property is
+    required, an optional one may be null, and objects allow no other properties."""
+    result = {}
+    kind = str(schema.get("type", "")).lower()
+    if kind:
+        result["type"] = [kind, "null"] if schema.get("nullable") or nullable else kind
+    if enums and "enum" in schema:
+        result["enum"] = schema["enum"]
+    if "properties" in schema:
+        required = schema.get("required") or []
+        result["properties"] = {name: json_schema(value, enums, strict, strict and name not in required)
+                                for name, value in schema["properties"].items()}
+        if strict:
+            result["required"] = list(schema["properties"])
+            result["additionalProperties"] = False
+    if "items" in schema:
+        result["items"] = json_schema(schema["items"], enums, strict)
+    if "required" in schema and not strict:
+        result["required"] = schema["required"]
+    return result
+
+
+def _gemini_content(system: str, messages: list[dict[str, str]], schema: dict | None) -> str:
+    history = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in messages]
+    payload = {"systemInstruction": {"parts": [{"text": system}]}, "contents": history}
+    if schema:
+        payload["generationConfig"] = {"responseMimeType": "application/json", "responseSchema": schema}
+    data = _post(payload)
+    try:
+        candidate = data["candidates"][0]
+        # thoughts of thinking models are not part of the answer
+        return "".join(part.get("text", "") for part in candidate["content"]["parts"] if not part.get("thought")).strip()
+    except (KeyError, IndexError, TypeError, AttributeError) as e:
+        reason = (data.get("promptFeedback") or {}).get("blockReason") if isinstance(data, dict) else None
+        if reason:
+            raise AssistantError(_("The AI service refused the question ({0})").format(reason)) from e
+        raise AssistantError(_("The AI service sent an unexpected answer")) from e
+
+
+def _groq_content(system: str, messages: list[dict[str, str]], schema: dict | None) -> str:
+    payload = {"model": groq_model(), "messages": [{"role": "system", "content": system}, *messages],
+               "reasoning_effort": "low"}  # choosing values needs little thinking, and the thoughts count against the token quota
+    if schema:
+        # strict: Groq generates only answers that match the schema (constrained decoding)
+        payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "answer", "strict": True,
+                                                                             "schema": json_schema(schema, enums=False, strict=True)}}
+    request = urllib.request.Request(GROQ_URL, data=json.dumps(payload).encode("utf-8"), method="POST",
+                                     headers={"Content-Type": "application/json"})
+    data = _send(request, "groq")
+    try:
+        return str(data["choices"][0]["message"]["content"] or "").strip()
+    except (KeyError, IndexError, TypeError) as e:
+        raise AssistantError(_("The AI service sent an unexpected answer")) from e
+
+
 def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | None = None) -> dict:
     """Sends the conversation (role user or assistant) and returns the message, the suggested songs and the raw answer.
 
@@ -204,24 +527,13 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
     The general mode answers in Markdown and suggests no songs. The smart mode returns a filter (categories, tags, genres, bpm)
     instead of songs; `context` holds the tags and genres it may choose from.
     """
-    history = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"][:MAX_MESSAGE_LENGTH]}]}
-               for m in messages[-MAX_MESSAGES:]]
+    history = [{"role": m["role"], "content": m["content"][:MAX_MESSAGE_LENGTH]} for m in messages[-MAX_MESSAGES:]]
     tags, genres = (context or {}).get("tags") or [], (context or {}).get("genres") or []
-    payload = {"systemInstruction": {"parts": [{"text": system_prompt(mode, context)}]}, "contents": history}
-    if mode == "smart":
-        payload["generationConfig"] = {"responseMimeType": "application/json", "responseSchema": smartsearch.schema(tags, genres)}
-    elif mode != "general":
-        payload["generationConfig"] = {"responseMimeType": "application/json", "responseSchema": RESPONSE_SCHEMA}
-    data = _post(payload)
-    try:
-        candidate = data["candidates"][0]
-        # thoughts of thinking models are not part of the answer
-        content = "".join(part.get("text", "") for part in candidate["content"]["parts"] if not part.get("thought")).strip()
-    except (KeyError, IndexError, TypeError, AttributeError) as e:
-        reason = (data.get("promptFeedback") or {}).get("blockReason") if isinstance(data, dict) else None
-        if reason:
-            raise AssistantError(_("The AI service refused the question ({0})").format(reason)) from e
-        raise AssistantError(_("The AI service sent an unexpected answer")) from e
+    schema = {"smart": smartsearch.schema(tags, genres), "compose": COMPOSE_SCHEMA, "general": None}.get(mode, RESPONSE_SCHEMA)
+    service = provider(mode)
+    if service is None:
+        raise AssistantError(_("The AI assistant is not configured"))
+    content = (_groq_content if service == "groq" else _gemini_content)(system_prompt(mode, context), history, schema)
     if mode == "general":
         return {"message": content, "songs": [], "content": content}
     try:
@@ -234,4 +546,11 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
     if mode == "smart":
         return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content,
                 "filter": smartsearch.to_filter(parsed, tags, genres)}
+    if mode == "compose":
+        instrumental = (context or {}).get("instrumental", True)
+        piece = to_piece(parsed, instrumental) or to_piece({"caption": messages[-1]["content"]}, instrumental)
+        chosen = str((context or {}).get("language") or "")
+        if piece and not instrumental and chosen:
+            piece["language"] = chosen  # the language the user chose, also when the model named another one
+        return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content, "piece": piece}
     return {"message": str(parsed.get("message") or "").strip(), "songs": _songs(parsed.get("songs")), "content": content}

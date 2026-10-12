@@ -168,12 +168,71 @@
     }
   }
 
+  let musicGen = $state<{ configured: boolean; host: string | null }>({ configured: false, host: null });
+  let musicGenUrl = $state('');
+  let musicGenKey = $state('');
+  let musicGenSecret = $state('');
+  if (admin) void api.musicGenConfig().then((result) => (musicGen = result)).catch(() => {});
+
+  async function saveMusicGen() {
+    try {
+      musicGen = await api.putMusicGenConfig(musicGenUrl, musicGenKey, musicGenSecret);
+      musicGenUrl = musicGenKey = musicGenSecret = '';
+      if (data.settings) data.settings.musicGenConfigured = musicGen.configured;
+      toast(t('Music generation saved'), 'success');
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  async function removeMusicGen() {
+    if (!(await askConfirm(t('Remove the music generation settings?')))) return;
+    try {
+      musicGen = await api.deleteMusicGenConfig();
+      if (data.settings) data.settings.musicGenConfigured = musicGen.configured;
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   let assistantStatus = $state<AssistantStatus | null>(null);
   let assistantKey = $state('');
   let assistantModel = $state('');
-  let assistantInstructions = $state('');
-  let assistantGeneralInstructions = $state('');
+  type InstructionMode = 'music' | 'smart' | 'compose' | 'general';
+  /** The additional instructions, one tab per mode of the assistant. */
+  const INSTRUCTION_TABS: { mode: InstructionMode; label: string; icon: string; placeholder: string; hint: string; promptHint: string }[] = [
+    { mode: 'music', label: 'New music', icon: 'music',
+      placeholder: 'e.g. We play Pathfinder in a dark fantasy world. Prefer instrumental film and game soundtracks without vocals.',
+      hint: 'Added to every request, so the assistant better understands your game, setting and taste in music.',
+      promptHint: 'The built-in prompt sets the task and the answer format; your instructions above are added to it. The format of the song list is enforced anyway.' },
+    { mode: 'smart', label: 'Smart search', icon: 'sliders',
+      placeholder: 'e.g. Exploration should stay calm, fights need high energy. Prefer songs without vocals.',
+      hint: 'Added to every smart search. When empty, the instructions for the song suggestions are used as background (game, setting, taste).',
+      promptHint: 'The built-in prompt sets the task and the rules. Keep {categories}, {tags}, {genres}, {min} and {max}: they are replaced by the categories, tags and genres of your library.' },
+    { mode: 'compose', label: 'Compose', icon: 'wand',
+      placeholder: 'e.g. We play DSA in Aventuria. Thorwal sounds Nordic with tagelharpa and drums, the elves ethereal with harp and flute.',
+      hint: 'Added to every new piece the assistant describes for the music generation: setting, regions, instruments, taste. The instructions for the song suggestions are not used there.',
+      promptHint: 'The built-in prompt tells the AI how to write the description and the lyrics for ACE-Step. Depending on the vocals option one of the two rules is added, with vocals also the length of the lyrics.' },
+    { mode: 'general', label: 'General', icon: 'mask', placeholder: 'e.g. We play DSA 4.1 with the core rules and the Aventurian Compendium.',
+      hint: 'Added to every question of the general chat: the rules edition, the setting, house rules or the heroes.',
+      promptHint: 'The built-in prompt sets the role of the assistant; your instructions above are added to it.' },
+  ];
+  /** Names of the parts of a prompt that has more than one (the compose mode). */
+  const PROMPT_PARTS: Record<string, string> = {
+    'compose.system': 'Prompt', 'compose.instrumental': 'Rules for instrumental pieces', 'compose.vocals': 'Rules for pieces with vocals',
+  };
+  /** The built-in prompts as edited here, by name ("compose.vocals"). */
+  let prompts = $state<Record<string, string>>({});
+  const promptsOf = (mode: InstructionMode) => (assistantStatus?.prompts ?? []).filter((entry) => entry.name.startsWith(`${mode}.`));
+  const isDefault = (entry: { name: string; default: string }) => (prompts[entry.name] ?? '').trim() === entry.default.trim();
+  const promptsChanged = (status: AssistantStatus) => status.prompts.some((entry) => (prompts[entry.name] ?? '').trim() !== entry.value.trim());
+  let instructionTab = $state<InstructionMode>('music');
+  let instructions = $state<Record<InstructionMode, string>>({ music: '', smart: '', compose: '', general: '' });
+  const storedInstructions = (status: AssistantStatus): Record<InstructionMode, string> =>
+    ({ music: status.instructions, smart: status.smartInstructions, compose: status.composeInstructions, general: status.generalInstructions });
   let assistantModels = $state<{ id: string; name: string }[]>([]);
+  let groqKey = $state('');
+  let groqModel = $state('');
   if (admin) void api.assistantConfig().then(applyAssistant).catch(() => {});
 
   /** The models of Google (with a stored key) or a built-in list; a stored model that is not listed stays selectable. */
@@ -195,14 +254,38 @@
     if (keyAdded || !assistantModels.length) void loadAssistantModels();
     assistantStatus = result;
     assistantModel = result.model;
-    assistantInstructions = result.instructions;
-    assistantGeneralInstructions = result.generalInstructions;
+    instructions = storedInstructions(result);
+    prompts = Object.fromEntries(result.prompts.map((entry) => [entry.name, entry.value]));
     assistantKey = '';
-    if (data.settings) data.settings.assistantConfigured = result.configured;
+    groqModel = result.groqModel;
+    groqKey = '';
+    if (data.settings) {
+      data.settings.assistantConfigured = result.configured;
+      data.settings.groqConfigured = result.groqConfigured;
+    }
   }
 
-  const assistantPayload = () => ({ ...(assistantKey.trim() ? { key: assistantKey.trim() } : {}), model: assistantModel.trim(), instructions: assistantInstructions.trim(),
-    generalInstructions: assistantGeneralInstructions.trim() });
+  async function saveGroq() {
+    try {
+      applyAssistant(await api.putAssistantConfig({ ...(groqKey.trim() ? { groqKey: groqKey.trim() } : {}), groqModel: groqModel.trim() }));
+      toast(t('Groq saved'), 'success');
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  async function removeGroq() {
+    if (!(await askConfirm(t('Remove the Groq API key?')))) return;
+    try {
+      applyAssistant(await api.deleteAssistantConfig('groq'));
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  const assistantPayload = () => ({ ...(assistantKey.trim() ? { key: assistantKey.trim() } : {}), model: assistantModel.trim(),
+    instructions: instructions.music.trim(), smartInstructions: instructions.smart.trim(), composeInstructions: instructions.compose.trim(),
+    generalInstructions: instructions.general.trim(), prompts: { ...prompts } });
 
   async function saveAssistant() {
     try {
@@ -272,8 +355,9 @@
       const rootList = roots.split('\n').map((r) => r.trim()).filter(Boolean);
       if (desktop && rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
       if (admin && proxy.trim() !== proxySaved) await api.putYoutubeProxy(proxy);
-      if (admin && assistantStatus && (assistantKey.trim() || assistantModel.trim() !== assistantStatus.model || assistantInstructions.trim() !== assistantStatus.instructions
-          || assistantGeneralInstructions.trim() !== assistantStatus.generalInstructions)) {
+      const stored = assistantStatus && storedInstructions(assistantStatus);
+      if (admin && assistantStatus && stored && (assistantKey.trim() || assistantModel.trim() !== assistantStatus.model
+          || INSTRUCTION_TABS.some(({ mode }) => instructions[mode].trim() !== stored[mode]) || promptsChanged(assistantStatus))) {
         applyAssistant(await api.putAssistantConfig(assistantPayload()));
       }
       if (Object.keys(changed).length) await saveSettings(changed);
@@ -471,29 +555,98 @@
           <p class="muted small">{t('All YouTube requests go through this proxy (http, https, socks4 or socks5). Leave empty to use the default of the server (DT_YT_PROXY) or none.')}</p>
         {/if}
       {:else if section === 'assistant'}
-        <p class="muted small">{t('The AI assistant suggests songs for a scene. It uses Google Gemini: create a free API key in Google AI Studio (aistudio.google.com) and enter it here. The free tier of the Flash models is enough for occasional questions. The key stays on the server and is never sent back to the browser; all users can chat with the assistant.')}</p>
-        <span class="small">{assistantStatus?.configured ? t('Configured (key …{0})', assistantStatus.keyHint) : t('Not configured')}</span>
-        <label class="field">{t('API key')}
-          <input type="password" autocomplete="off" placeholder={assistantStatus?.configured ? t('API key (unchanged)') : 'AIza…'} bind:value={assistantKey} /></label>
-        <label class="field">{t('Model')}
-          <select bind:value={assistantModel}>
-            {#each modelOptions as option (option.id)}
-              <option value={option.id}>{option.name}{option.id === assistantStatus?.defaultModel ? ` (${t('Default')})` : ''} – {option.id}</option>
+        <section class="group">
+          <h4><Icon name="edit" size={16} /> {t('Instructions')}</h4>
+          <span class="muted small">{t('Your game, the setting and your taste in music, separately for each mode of the assistant. They are added to every request of the mode.')}</span>
+          <div class="tabs" role="tablist" aria-label={t('Instructions')}>
+            {#each INSTRUCTION_TABS as tab (tab.mode)}
+              <button role="tab" class:active={instructionTab === tab.mode} aria-selected={instructionTab === tab.mode} onclick={() => (instructionTab = tab.mode)}>
+                <Icon name={tab.icon} size={14} /><span>{t(tab.label)}</span>
+                {#if instructions[tab.mode].trim()}<span class="filled" title={t('Instructions')}></span>{/if}
+              </button>
             {/each}
-          </select>
-          <span class="muted small">{t('Only models of the free tier are offered (Flash and Flash-Lite); Flash-Lite answers faster.')}</span></label>
-        <label class="field">{t('Instructions for the song suggestions')}
-          <textarea rows="5" maxlength="4000" placeholder={t('e.g. We play Pathfinder in a dark fantasy world. Prefer instrumental film and game soundtracks without vocals.')} bind:value={assistantInstructions}></textarea>
-          <span class="muted small">{t('Added to every request, so the assistant better understands your game, setting and taste in music.')}</span></label>
-        <label class="field">{t('Instructions for the general chat')}
-          <textarea rows="5" maxlength="4000" placeholder={t('e.g. We play DSA 4.1 with the core rules and the Aventurian Compendium.')} bind:value={assistantGeneralInstructions}></textarea>
-          <span class="muted small">{t('Added to every question of the general chat: the rules edition, the setting, house rules or the heroes.')}</span></label>
-        <div class="row">
-          <a class="btn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
-          <span class="grow"></span>
-          <button class="btn" onclick={saveAssistant}>{t('Save')}</button>
-          {#if assistantStatus?.configured}<button class="btn danger" onclick={removeAssistant}>{t('Remove')}</button>{/if}
-        </div>
+          </div>
+          {#each INSTRUCTION_TABS.filter((tab) => tab.mode === instructionTab) as tab (tab.mode)}
+            <textarea rows="9" maxlength="4000" aria-label={t(tab.label)} placeholder={t(tab.placeholder)} bind:value={instructions[tab.mode]}></textarea>
+            <span class="muted small">{t(tab.hint)}</span>
+            {@const parts = promptsOf(tab.mode)}
+            {#if parts.length}
+              <details class="prompt" open={parts.some((entry) => entry.value.trim() !== entry.default.trim())}>
+                <summary>{t('Prompt of the assistant')}
+                  {#if parts.some((entry) => !isDefault(entry))}<span class="changed">{t('Changed')}</span>{/if}</summary>
+                <span class="muted small">{t(tab.promptHint)}</span>
+                {#each parts as entry (entry.name)}
+                  {#if PROMPT_PARTS[entry.name]}<span class="label-xs">{t(PROMPT_PARTS[entry.name])}</span>{/if}
+                  <textarea class="code" rows={entry.name.endsWith('.system') ? 14 : 7} maxlength="12000" spellcheck="false"
+                            aria-label={t(PROMPT_PARTS[entry.name] ?? 'Prompt of the assistant')} bind:value={prompts[entry.name]}></textarea>
+                  <div class="row">
+                    <span class="grow"></span>
+                    <button class="btn sm" disabled={isDefault(entry)} onclick={() => (prompts[entry.name] = entry.default)}>
+                      <Icon name="refresh" size={13} /> {t('Reset to default')}</button>
+                  </div>
+                {/each}
+              </details>
+            {/if}
+          {/each}
+          <div class="row">
+            <span class="grow"></span>
+            <button class="btn" disabled={!assistantStatus} onclick={saveAssistant}>{t('Save')}</button>
+          </div>
+        </section>
+
+        <span class="label-xs services">{t('Services and API keys')}</span>
+        <section class="group">
+          <h4>Google Gemini</h4>
+          <p class="muted small">{t('The AI assistant suggests songs for a scene. It uses Google Gemini: create a free API key in Google AI Studio (aistudio.google.com) and enter it here. The free tier of the Flash models is enough for occasional questions. The key stays on the server and is never sent back to the browser; all users can chat with the assistant.')}</p>
+          <span class="small">{assistantStatus?.configured ? t('Configured (key …{0})', assistantStatus.keyHint) : t('Not configured')}</span>
+          <label class="field">{t('API key')}
+            <input type="password" autocomplete="off" placeholder={assistantStatus?.configured ? t('API key (unchanged)') : 'AIza…'} bind:value={assistantKey} /></label>
+          <label class="field">{t('Model')}
+            <select bind:value={assistantModel}>
+              {#each modelOptions as option (option.id)}
+                <option value={option.id}>{option.name}{option.id === assistantStatus?.defaultModel ? ` (${t('Default')})` : ''} – {option.id}</option>
+              {/each}
+            </select>
+            <span class="muted small">{t('Only models of the free tier are offered (Flash and Flash-Lite); Flash-Lite answers faster.')}</span></label>
+          <div class="row">
+            <a class="btn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
+            <span class="grow"></span>
+            <button class="btn" onclick={saveAssistant}>{t('Save')}</button>
+            {#if assistantStatus?.configured}<button class="btn danger" onclick={removeAssistant}>{t('Remove')}</button>{/if}
+          </div>
+        </section>
+        <section class="group">
+          <h4>Groq</h4>
+          <span class="muted small">{t('The smart search and the composing of the assistant run on Groq when a key is entered (free tier at console.groq.com); the song suggestions and the general chat stay with Gemini, which knows more songs. Without a Groq key Gemini answers everything.')}</span>
+          <span class="small">{assistantStatus?.groqConfigured ? t('Configured (key …{0})', assistantStatus.groqKeyHint) : t('Not configured')}</span>
+          <label class="field">{t('API key')}
+            <input type="password" autocomplete="off" placeholder={assistantStatus?.groqConfigured ? t('API key (unchanged)') : 'gsk_…'} bind:value={groqKey} /></label>
+          <label class="field">{t('Model')}
+            <select bind:value={groqModel}>
+              {#each assistantStatus?.groqModels ?? [] as option (option.id)}
+                <option value={option.id}>{option.name}{option.id === assistantStatus?.groqDefaultModel ? ` (${t('Default')})` : ''} – {option.id}</option>
+              {/each}
+            </select></label>
+          <div class="row">
+            <a class="btn" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
+            <span class="grow"></span>
+            <button class="btn" disabled={!groqKey.trim() && !assistantStatus?.groqConfigured} onclick={saveGroq}>{t('Save')}</button>
+            {#if assistantStatus?.groqConfigured}<button class="btn danger" onclick={removeGroq}>{t('Remove')}</button>{/if}
+          </div>
+        </section>
+        <section class="group">
+          <h4>{t('Music generation')}</h4>
+          <span class="muted small">{t('Composes new pieces for a scene ("Compose" in the assistant) with ACE-Step 1.5 in a cloud function on Modal, see agents/musicgen/modal_app.py. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser. Without a Groq or Gemini key the description is used as it is.')}</span>
+          <span class="small">{musicGen.configured ? t('Configured ({0})', musicGen.host ?? '') : t('Not configured')}</span>
+          <label class="field">{t('Endpoint URL')}<input type="url" placeholder="https://…modal.run" bind:value={musicGenUrl} /></label>
+          <label class="field">{t('Key')}<input type="text" autocomplete="off" placeholder="wk-…" bind:value={musicGenKey} /></label>
+          <label class="field">{t('Secret')}<input type="password" autocomplete="off" placeholder="ws-…" bind:value={musicGenSecret} /></label>
+          <div class="row">
+            <span class="grow"></span>
+            <button class="btn" disabled={!musicGenUrl.trim() || !musicGenKey.trim() || !musicGenSecret.trim()} onclick={saveMusicGen}>{t('Save')}</button>
+            {#if musicGen.configured}<button class="btn danger" onclick={removeMusicGen}>{t('Remove')}</button>{/if}
+          </div>
+        </section>
       {:else if section === 'categories'}
         <div class="cat-head">
           <span class="muted small">{t('The mood categories songs are rated in.')}</span>
@@ -688,6 +841,21 @@
   .empty { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
   .create { padding-top: 6px; border-top: 1px dashed var(--border-strong); }
   .grow { flex: 1; }
+  .tabs { display: flex; padding: 2px; gap: 2px; border-radius: 9px; background: var(--hover); border: 1px solid var(--border); }
+  .tabs button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 7px;
+                 color: var(--muted); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+  .filled { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .group textarea { resize: vertical; min-height: 140px; }
+  .prompt { padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); }
+  .prompt summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .prompt[open] summary { margin-bottom: 6px; }
+  .prompt > span, .prompt > textarea { display: block; width: 100%; box-sizing: border-box; }
+  .prompt > * + * { margin-top: 6px; }
+  .changed { padding: 1px 8px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); }
+  textarea.code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--fs-xs); line-height: 1.45; min-height: 110px; }
+  .services { margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
   .pw-form { display: flex; flex-direction: column; gap: 12px; }
   .pw-form p { margin: 0; }
   .storage { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); align-items: center; }
