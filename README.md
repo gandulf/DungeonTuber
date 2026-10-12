@@ -169,6 +169,14 @@ Options can be passed as arguments (`dungeontuber-server --help`) or environment
 | `DT_AGENT_TOKEN` | fixed agent token (otherwise create one in Settings → Agents) | – |
 | `DT_S3_BUCKET`, `DT_S3_ENDPOINT`, `DT_S3_ACCESS_KEY`, `DT_S3_SECRET_KEY`, ... | an S3 compatible library (can also be added under Settings → Library) | – |
 | `DT_FAKE_LIGHTS` | `1` simulates WiZ bulbs for testing | – |
+| `DT_GEMINI_API_KEY` / `DT_GEMINI_MODEL` | Google Gemini key and model of the AI assistant | – / `gemini-3.8-flash` |
+| `DT_GROQ_API_KEY` / `DT_GROQ_MODEL` | Groq key and model for the smart search and composing | – / `openai/gpt-oss-120b` |
+| `DT_MUSICGEN_URL`, `DT_MUSICGEN_KEY`, `DT_MUSICGEN_SECRET` | music generation on Modal (see `agents/musicgen`) | – |
+| `DT_VOXALYZER_CLOUD_URL`, `DT_VOXALYZER_CLOUD_KEY`, `DT_VOXALYZER_CLOUD_SECRET` | cloud analysis on Modal (see `agents/voxalyzer`) | – |
+| `DT_MODAL_KEY` / `DT_MODAL_SECRET` | Modal proxy auth token for both cloud functions when they have none of their own | – |
+| `DT_ACOUSTID_API_KEY` | AcoustID application key for the metadata lookup | – |
+
+The API keys and endpoints are used when nothing is saved in the settings (a saved value wins). They are never written to `settings.json`, so they suit Docker secrets, and the settings show where a key comes from.
 
 The SuperAdmin can add more users in **Settings → Security**; they sign in with their own name and password. Users cannot change server settings, and every uploaded song remembers who uploaded it (shown in the song details); users can only delete what they uploaded themselves.
 

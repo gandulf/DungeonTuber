@@ -57,6 +57,7 @@ def test_chat_needs_a_configured_key(client):
 def test_the_key_is_never_sent_back(client):
     status = client.put("/api/assistant/config", json={"key": "gsk_secret_1234", "model": ""}).json()
     assert status == {"configured": True, "model": assistant.DEFAULT_MODEL, "defaultModel": assistant.DEFAULT_MODEL, "keyHint": "1234",
+                      "keySource": "settings", "groqKeySource": None,
                       "instructions": "", "generalInstructions": "", "composeInstructions": "", "smartInstructions": "", "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
                       "groqDefaultModel": assistant.GROQ_DEFAULT_MODEL, "groqKeyHint": "", "groqModels": assistant.GROQ_MODELS,
                       "prompts": assistant.prompts()}
@@ -374,3 +375,26 @@ def test_the_built_in_prompts_can_be_changed_and_restored(client):
     client.put("/api/assistant/config", json={"prompts": {"smart.system": "", "compose.vocals": assistant.VOCALS_RULE}})
     assert all(entry["value"] == entry["default"] for entry in client.get("/api/assistant/config").json()["prompts"])
     assert assistant.system_prompt("smart", {"tags": [], "genres": []}) == assistant.smartsearch.prompt([], [])
+
+
+def test_keys_and_models_can_come_from_the_environment(client, monkeypatch):
+    monkeypatch.setenv("DT_GEMINI_API_KEY", "env_gemini_secret_1111")
+    monkeypatch.setenv("DT_GEMINI_MODEL", "gemini-env-model")
+    monkeypatch.setenv("DT_GROQ_API_KEY", "env_groq_secret_2222")
+    monkeypatch.setenv("DT_GROQ_MODEL", "openai/gpt-oss-20b")
+    status = client.get("/api/assistant/config").json()
+    assert (status["configured"], status["keySource"], status["keyHint"], status["model"]) == (True, "environment", "1111", "gemini-env-model")
+    assert (status["groqConfigured"], status["groqKeySource"], status["groqModel"]) == (True, "environment", "openai/gpt-oss-20b")
+    assert "env_gemini_secret" not in client.get("/api/assistant/config").text
+    assert client.get("/api/settings").json()["groqConfigured"] is True
+    # a stored key wins, removing it falls back to the environment
+    client.put("/api/assistant/config", json={"key": "stored_secret_3333"})
+    assert assistant.api_key() == "stored_secret_3333" and client.get("/api/assistant/config").json()["keySource"] == "settings"
+    assert client.delete("/api/assistant/config").json()["keySource"] == "environment"
+    assert assistant.api_key() == "env_gemini_secret_1111"
+
+
+def test_the_acoustid_key_can_come_from_the_environment(client, monkeypatch):
+    monkeypatch.setenv("DT_ACOUSTID_API_KEY", "acoustid-env-4444")
+    status = client.get("/api/metadata/config").json()
+    assert (status["configured"], status["keySource"], status["keyHint"]) == (True, "environment", "4444")

@@ -6,19 +6,24 @@ from pydantic import BaseModel, Field
 from core import musiclookup
 from core.settings import AppSettings, SettingKeys
 from server.auth import require_admin, require_auth
+from server.config import setting_or_env
 from server.index import get_index
 from server.paths import safe_id
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 
 
+ACOUSTID_KEY_ENV = "DT_ACOUSTID_API_KEY"
+
+
 def _acoustid_key() -> str:
-    return (AppSettings.value(SettingKeys.ACOUSTID_API_KEY, "", type=str) or "").strip()
+    return setting_or_env(SettingKeys.ACOUSTID_API_KEY, ACOUSTID_KEY_ENV)[0]
 
 
 def _status() -> dict:
-    key = _acoustid_key()
-    return {"configured": bool(key), "keyHint": key[-4:] if len(key) > 8 else "", "fpcalc": musiclookup.fpcalc_available()}
+    key, source = setting_or_env(SettingKeys.ACOUSTID_API_KEY, ACOUSTID_KEY_ENV)
+    return {"configured": bool(key), "keyHint": key[-4:] if len(key) > 8 else "", "keySource": source,
+            "fpcalc": musiclookup.fpcalc_available()}
 
 
 @router.get("/api/tracks/{track_id}/lookup")

@@ -10,7 +10,7 @@
   import { askConfirm, closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
   import AgentTokenDialog from './AgentTokenDialog.svelte';
   import CategoryEditDialog, { type CategoryRow } from './CategoryEditDialog.svelte';
-  import type { AgentInfo, AgentState, AgentToken, AssistantStatus, MetadataStatus, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
+  import type { AgentInfo, AgentState, AgentToken, AssistantStatus, CloudStatus, KeySource, MetadataStatus, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import { onEvent } from '../../lib/ws';
   import Modal from './Modal.svelte';
@@ -120,7 +120,7 @@
     }
   }
 
-  let cloud = $state<{ configured: boolean; host: string | null }>({ configured: false, host: null });
+  let cloud = $state<CloudStatus>({ configured: false, host: null, source: null });
   let cloudUrl = $state('');
   let cloudKey = $state('');
   let cloudSecret = $state('');
@@ -168,7 +168,10 @@
     }
   }
 
-  let musicGen = $state<{ configured: boolean; host: string | null }>({ configured: false, host: null });
+  let musicGen = $state<CloudStatus>({ configured: false, host: null, source: null });
+
+  /** " · from the environment variable DT_…" for a value the server got from its environment (it cannot be removed here). */
+  const fromEnv = (source: KeySource | undefined, variable: string) => (source === 'environment' ? ` · ${t('from the environment variable {0}', variable)}` : '');
   let musicGenUrl = $state('');
   let musicGenKey = $state('');
   let musicGenSecret = $state('');
@@ -598,7 +601,7 @@
         <section class="group">
           <h4>Google Gemini</h4>
           <p class="muted small">{t('The AI assistant suggests songs for a scene. It uses Google Gemini: create a free API key in Google AI Studio (aistudio.google.com) and enter it here. The free tier of the Flash models is enough for occasional questions. The key stays on the server and is never sent back to the browser; all users can chat with the assistant.')}</p>
-          <span class="small">{assistantStatus?.configured ? t('Configured (key …{0})', assistantStatus.keyHint) : t('Not configured')}</span>
+          <span class="small">{assistantStatus?.configured ? t('Configured (key …{0})', assistantStatus.keyHint) + fromEnv(assistantStatus.keySource, 'DT_GEMINI_API_KEY') : t('Not configured')}</span>
           <label class="field">{t('API key')}
             <input type="password" autocomplete="off" placeholder={assistantStatus?.configured ? t('API key (unchanged)') : 'AIza…'} bind:value={assistantKey} /></label>
           <label class="field">{t('Model')}
@@ -612,13 +615,13 @@
             <a class="btn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
             <span class="grow"></span>
             <button class="btn" onclick={saveAssistant}>{t('Save')}</button>
-            {#if assistantStatus?.configured}<button class="btn danger" onclick={removeAssistant}>{t('Remove')}</button>{/if}
+            {#if assistantStatus?.keySource === 'settings'}<button class="btn danger" onclick={removeAssistant}>{t('Remove')}</button>{/if}
           </div>
         </section>
         <section class="group">
           <h4>Groq</h4>
           <span class="muted small">{t('The smart search and the composing of the assistant run on Groq when a key is entered (free tier at console.groq.com); the song suggestions and the general chat stay with Gemini, which knows more songs. Without a Groq key Gemini answers everything.')}</span>
-          <span class="small">{assistantStatus?.groqConfigured ? t('Configured (key …{0})', assistantStatus.groqKeyHint) : t('Not configured')}</span>
+          <span class="small">{assistantStatus?.groqConfigured ? t('Configured (key …{0})', assistantStatus.groqKeyHint) + fromEnv(assistantStatus.groqKeySource, 'DT_GROQ_API_KEY') : t('Not configured')}</span>
           <label class="field">{t('API key')}
             <input type="password" autocomplete="off" placeholder={assistantStatus?.groqConfigured ? t('API key (unchanged)') : 'gsk_…'} bind:value={groqKey} /></label>
           <label class="field">{t('Model')}
@@ -631,20 +634,20 @@
             <a class="btn" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
             <span class="grow"></span>
             <button class="btn" disabled={!groqKey.trim() && !assistantStatus?.groqConfigured} onclick={saveGroq}>{t('Save')}</button>
-            {#if assistantStatus?.groqConfigured}<button class="btn danger" onclick={removeGroq}>{t('Remove')}</button>{/if}
+            {#if assistantStatus?.groqKeySource === 'settings'}<button class="btn danger" onclick={removeGroq}>{t('Remove')}</button>{/if}
           </div>
         </section>
         <section class="group">
           <h4>{t('Music generation')}</h4>
           <span class="muted small">{t('Composes new pieces for a scene ("Compose" in the assistant) with ACE-Step 1.5 in a cloud function on Modal, see agents/musicgen/modal_app.py. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser. Without a Groq or Gemini key the description is used as it is.')}</span>
-          <span class="small">{musicGen.configured ? t('Configured ({0})', musicGen.host ?? '') : t('Not configured')}</span>
+          <span class="small">{musicGen.configured ? t('Configured ({0})', musicGen.host ?? '') + fromEnv(musicGen.source, 'DT_MUSICGEN_URL') : t('Not configured')}</span>
           <label class="field">{t('Endpoint URL')}<input type="url" placeholder="https://…modal.run" bind:value={musicGenUrl} /></label>
           <label class="field">{t('Key')}<input type="text" autocomplete="off" placeholder="wk-…" bind:value={musicGenKey} /></label>
           <label class="field">{t('Secret')}<input type="password" autocomplete="off" placeholder="ws-…" bind:value={musicGenSecret} /></label>
           <div class="row">
             <span class="grow"></span>
             <button class="btn" disabled={!musicGenUrl.trim() || !musicGenKey.trim() || !musicGenSecret.trim()} onclick={saveMusicGen}>{t('Save')}</button>
-            {#if musicGen.configured}<button class="btn danger" onclick={removeMusicGen}>{t('Remove')}</button>{/if}
+            {#if musicGen.source === 'settings'}<button class="btn danger" onclick={removeMusicGen}>{t('Remove')}</button>{/if}
           </div>
         </section>
       {:else if section === 'categories'}
@@ -723,17 +726,17 @@
         <label class="check"><input type="checkbox" bind:checked={form.skipNormalizedMusic} /> {t('Skip Normalized Music')}</label>
         <h4>{t('Cloud analysis')}</h4>
         <span class="muted small">{t('Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.')}</span>
-        <span class="small">{cloud.configured ? t('Configured ({0})', cloud.host ?? '') : t('Not configured')}</span>
+        <span class="small">{cloud.configured ? t('Configured ({0})', cloud.host ?? '') + fromEnv(cloud.source, 'DT_VOXALYZER_CLOUD_URL') : t('Not configured')}</span>
         <label class="field">{t('Endpoint URL')}<input type="url" placeholder="https://…modal.run" bind:value={cloudUrl} /></label>
         <label class="field">{t('Key')}<input type="text" autocomplete="off" placeholder="wk-…" bind:value={cloudKey} /></label>
         <label class="field">{t('Secret')}<input type="password" autocomplete="off" placeholder="ws-…" bind:value={cloudSecret} /></label>
         <div class="row">
           <button class="btn" disabled={!cloudUrl.trim() || !cloudKey.trim() || !cloudSecret.trim()} onclick={saveCloud}>{t('Save')}</button>
-          {#if cloud.configured}<button class="btn danger" onclick={removeCloud}>{t('Remove')}</button>{/if}
+          {#if cloud.source === 'settings'}<button class="btn danger" onclick={removeCloud}>{t('Remove')}</button>{/if}
         </div>
         <h4>{t('Metadata lookup')}</h4>
         <span class="muted small">{t('"Normalize metadata…" in the song menu looks up title, artist and album in MusicBrainz. With an AcoustID application key (free for non-commercial use: acoustid.org/new-application) and the program fpcalc (Chromaprint) on the server, songs are also identified by their sound, which also works for badly named files.')}</span>
-        <span class="small">{metadata?.configured ? t('Configured (key …{0})', metadata.keyHint) : t('Not configured')} ·
+        <span class="small">{metadata?.configured ? t('Configured (key …{0})', metadata.keyHint) + fromEnv(metadata.keySource, 'DT_ACOUSTID_API_KEY') : t('Not configured')} ·
           {metadata?.fpcalc ? t('fpcalc found') : t('fpcalc not found: install Chromaprint or put fpcalc into the tools folder of Dungeon Tuber')}</span>
         <label class="field">{t('AcoustID application key')}
           <input type="password" autocomplete="off" placeholder={metadata?.configured ? t('API key (unchanged)') : ''} bind:value={acoustidKey} /></label>
@@ -741,7 +744,7 @@
           <a class="btn" href="https://acoustid.org/new-application" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
           <span class="grow"></span>
           <button class="btn" disabled={!acoustidKey.trim()} onclick={saveAcoustid}>{t('Save')}</button>
-          {#if metadata?.configured}<button class="btn danger" onclick={removeAcoustid}>{t('Remove')}</button>{/if}
+          {#if metadata?.keySource === 'settings'}<button class="btn danger" onclick={removeAcoustid}>{t('Remove')}</button>{/if}
         </div>
       {:else if section === 'player'}
         <label class="check"><input type="checkbox" checked={prefs.crossfade} onchange={(e) => { prefs.crossfade = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Crossfade')}</label>

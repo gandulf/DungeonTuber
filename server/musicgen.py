@@ -27,7 +27,7 @@ from server.voxagent import current_backend
 
 logger = logging.getLogger(__file__)
 
-CONFIG = CloudConfig("musicgen-cloud.json")
+CONFIG = CloudConfig("musicgen-cloud.json", "DT_MUSICGEN")
 
 ARTIST = "ACE-Step"
 # Seconds for one piece: a cold start of the container (the first one downloads the models) and the generation itself.

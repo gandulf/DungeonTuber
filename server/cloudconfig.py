@@ -1,7 +1,9 @@
 """The connection to a cloud function on Modal: its endpoint URL and the key and secret of a Modal proxy auth token.
 
 They are kept in a file next to settings.json (mode 0600) and never sent back to the browser. Used by the cloud analysis
-(server/voxcloud.py) and the music generation (server/musicgen.py); each has a file of its own.
+(server/voxcloud.py) and the music generation (server/musicgen.py); each has a file of its own. Without the file the environment
+variables <prefix>_URL, <prefix>_KEY and <prefix>_SECRET are used; DT_MODAL_KEY and DT_MODAL_SECRET serve all functions that have no
+key and secret of their own.
 """
 import json
 import os
@@ -13,6 +15,7 @@ from core.settings import AppSettings
 from core.utils import get_user_data_dir
 
 FIELDS = ("url", "key", "secret")
+SHARED_ENV = {"key": "DT_MODAL_KEY", "secret": "DT_MODAL_SECRET"}
 
 
 class CloudError(OSError):
@@ -20,14 +23,27 @@ class CloudError(OSError):
 
 
 class CloudConfig:
-    def __init__(self, file_name: str):
+    def __init__(self, file_name: str, env_prefix: str):
         self.file_name = file_name
+        self.env_prefix = env_prefix
+
+    def env_names(self) -> dict[str, str]:
+        return {name: f"{self.env_prefix}_{name.upper()}" for name in FIELDS}
+
+    def from_env(self) -> dict[str, str] | None:
+        values = {name: os.environ.get(env, "").strip() or os.environ.get(SHARED_ENV.get(name, ""), "").strip()
+                  for name, env in self.env_names().items()}
+        return values if all(values.values()) else None
 
     def file(self) -> Path:
         path = AppSettings.path
         return (path.parent if path else get_user_data_dir()) / self.file_name
 
     def load(self) -> dict[str, str] | None:
+        """The stored connection, otherwise the one of the environment variables."""
+        return self.stored() or self.from_env()
+
+    def stored(self) -> dict[str, str] | None:
         try:
             data = json.loads(self.file().read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -52,8 +68,10 @@ class CloudConfig:
         self.file().unlink(missing_ok=True)
 
     def status(self) -> dict:
-        config = self.load()
-        return {"configured": config is not None, "host": urlsplit(config["url"]).netloc if config else None}
+        stored = self.stored()
+        config = stored or self.from_env()
+        return {"configured": config is not None, "host": urlsplit(config["url"]).netloc if config else None,
+                "source": ("settings" if stored else "environment") if config else None}
 
 
 def auth_headers(config: dict[str, str]) -> dict[str, str]:

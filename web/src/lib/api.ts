@@ -1,5 +1,5 @@
 import type {
-  AgentInfo, AgentState, AssistantReply, ComposePiece, ComposeResult, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, Preset, ServerSettings, Track, TrackList,
+  AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -99,9 +99,9 @@ export const api = {
   resolveImport: (url: string, whole?: boolean) => request<ImportPreview>('POST', '/api/import/resolve', { url, whole }),
   startImport: (body: { dir: string; entries: { url: string; title: string }[]; album?: string; playlist?: string; folder?: string; analyze?: boolean; split?: boolean }) =>
     request<{ queued: number; pending: number }>('POST', '/api/import', body),
-  cloudAnalysis: () => get<{ configured: boolean; host: string | null }>('/api/analysis/cloud'),
-  putCloudAnalysis: (url: string, key: string, secret: string) => request<{ configured: boolean; host: string | null }>('PUT', '/api/analysis/cloud', { url, key, secret }),
-  deleteCloudAnalysis: () => request<{ configured: boolean; host: string | null }>('DELETE', '/api/analysis/cloud'),
+  cloudAnalysis: () => get<CloudStatus>('/api/analysis/cloud'),
+  putCloudAnalysis: (url: string, key: string, secret: string) => request<CloudStatus>('PUT', '/api/analysis/cloud', { url, key, secret }),
+  deleteCloudAnalysis: () => request<CloudStatus>('DELETE', '/api/analysis/cloud'),
   // metadata lookup (AcoustID, MusicBrainz)
   lookupTrack: (id: string) => get<LookupResult>(`/api/tracks/${id}/lookup`),
   metadataConfig: () => get<MetadataStatus>('/api/metadata/config'),
@@ -139,9 +139,9 @@ export const api = {
   assistantModels: () => get<{ models: { id: string; name: string }[]; live: boolean }>('/api/assistant/models'),
   // music generation (ACE-Step on Modal)
   compose: (piece: ComposePiece & { dir: string; duration: number; seed?: number | null }) => request<ComposeResult>('POST', '/api/assistant/compose', piece),
-  musicGenConfig: () => get<{ configured: boolean; host: string | null }>('/api/assistant/musicgen'),
-  putMusicGenConfig: (url: string, key: string, secret: string) => request<{ configured: boolean; host: string | null }>('PUT', '/api/assistant/musicgen', { url, key, secret }),
-  deleteMusicGenConfig: () => request<{ configured: boolean; host: string | null }>('DELETE', '/api/assistant/musicgen'),
+  musicGenConfig: () => get<CloudStatus>('/api/assistant/musicgen'),
+  putMusicGenConfig: (url: string, key: string, secret: string) => request<CloudStatus>('PUT', '/api/assistant/musicgen', { url, key, secret }),
+  deleteMusicGenConfig: () => request<CloudStatus>('DELETE', '/api/assistant/musicgen'),
   deleteAssistantConfig: (service: 'gemini' | 'groq' = 'gemini') => request<AssistantStatus>('DELETE', `/api/assistant/config?service=${service}`),
 
   // remote storages (S3)

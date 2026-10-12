@@ -19,6 +19,7 @@ from urllib.parse import quote
 from core.i18n import _
 from core.settings import AppSettings, SettingKeys
 from server import smartsearch
+from server.config import setting_or_env
 
 logger = logging.getLogger(__file__)
 
@@ -180,20 +181,25 @@ class AssistantError(OSError):
     pass
 
 
+# keys and models from the environment (e.g. Docker secrets); a value stored in the settings wins
+GEMINI_KEY_ENV, GEMINI_MODEL_ENV = "DT_GEMINI_API_KEY", "DT_GEMINI_MODEL"
+GROQ_KEY_ENV, GROQ_MODEL_ENV = "DT_GROQ_API_KEY", "DT_GROQ_MODEL"
+
+
 def api_key() -> str:
-    return (AppSettings.value(SettingKeys.ASSISTANT_API_KEY, "", type=str) or "").strip()
+    return setting_or_env(SettingKeys.ASSISTANT_API_KEY, GEMINI_KEY_ENV)[0]
 
 
 def model() -> str:
-    return (AppSettings.value(SettingKeys.ASSISTANT_MODEL, "", type=str) or "").strip() or DEFAULT_MODEL
+    return setting_or_env(SettingKeys.ASSISTANT_MODEL, GEMINI_MODEL_ENV)[0] or DEFAULT_MODEL
 
 
 def groq_key() -> str:
-    return (AppSettings.value(SettingKeys.GROQ_API_KEY, "", type=str) or "").strip()
+    return setting_or_env(SettingKeys.GROQ_API_KEY, GROQ_KEY_ENV)[0]
 
 
 def groq_model() -> str:
-    return (AppSettings.value(SettingKeys.GROQ_MODEL, "", type=str) or "").strip() or GROQ_DEFAULT_MODEL
+    return setting_or_env(SettingKeys.GROQ_MODEL, GROQ_MODEL_ENV)[0] or GROQ_DEFAULT_MODEL
 
 
 def provider(mode: str) -> str | None:
@@ -295,6 +301,8 @@ def _hint(key: str) -> str:
 def status() -> dict:
     key, groq = api_key(), groq_key()
     return {"configured": bool(key), "model": model(), "defaultModel": DEFAULT_MODEL, "keyHint": _hint(key),
+            "keySource": setting_or_env(SettingKeys.ASSISTANT_API_KEY, GEMINI_KEY_ENV)[1],
+            "groqKeySource": setting_or_env(SettingKeys.GROQ_API_KEY, GROQ_KEY_ENV)[1],
             "instructions": instructions(), "generalInstructions": instructions("general"), "composeInstructions": instructions("compose"),
             "smartInstructions": instructions("smart"),
             "groqConfigured": bool(groq), "groqModel": groq_model(), "groqDefaultModel": GROQ_DEFAULT_MODEL, "groqKeyHint": _hint(groq),

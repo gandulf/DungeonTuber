@@ -90,7 +90,7 @@ def _wait(condition, seconds=5):
 
 
 def test_nothing_is_configured_by_default(client):
-    assert client.get("/api/analysis/cloud").json() == {"configured": False, "host": None}
+    assert client.get("/api/analysis/cloud").json() == {"configured": False, "host": None, "source": None}
     assert client.get("/api/analysis").json()["backend"] is None
     assert client.get("/api/settings").json()["voxalyzerActive"] is False
 
@@ -102,7 +102,7 @@ def test_configuration_is_validated_and_the_secret_stays_private(client, cloud):
 
     saved = client.put("/api/analysis/cloud", json={"url": cloud.url, "key": KEY, "secret": SECRET})
     assert saved.status_code == 200
-    assert saved.json() == {"configured": True, "host": f"127.0.0.1:{cloud.server_address[1]}"}
+    assert saved.json() == {"configured": True, "host": f"127.0.0.1:{cloud.server_address[1]}", "source": "settings"}
     assert SECRET not in json.dumps(client.get("/api/analysis/cloud").json())
     assert client.get("/api/analysis").json()["backend"] == "cloud"
     assert client.get("/api/settings").json()["voxalyzerActive"] is True
@@ -151,3 +151,18 @@ def test_config_file_is_private(tmp_path):
     assert voxcloud.config_file().parent == tmp_path
     if sys.platform != "win32":
         assert voxcloud.config_file().stat().st_mode & 0o077 == 0
+
+
+def test_the_connection_can_come_from_the_environment(client, cloud, monkeypatch):
+    monkeypatch.setenv("DT_VOXALYZER_CLOUD_URL", cloud.url)
+    monkeypatch.setenv("DT_MODAL_KEY", KEY)  # the shared token of all Modal functions
+    assert client.get("/api/analysis/cloud").json()["configured"] is False  # the secret is missing
+    monkeypatch.setenv("DT_VOXALYZER_CLOUD_SECRET", SECRET)
+    status = client.get("/api/analysis/cloud").json()
+    assert status == {"configured": True, "host": f"127.0.0.1:{cloud.server_address[1]}", "source": "environment"}
+    assert voxcloud.load_config() == {"url": cloud.url, "key": KEY, "secret": SECRET}
+    assert not voxcloud.config_file().exists()  # nothing is written
+    # a stored connection wins, removing it falls back to the environment
+    client.put("/api/analysis/cloud", json={"url": "https://other.modal.run", "key": "k", "secret": "s"})
+    assert client.get("/api/analysis/cloud").json()["source"] == "settings"
+    assert client.delete("/api/analysis/cloud").json()["source"] == "environment"

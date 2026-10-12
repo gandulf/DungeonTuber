@@ -8,6 +8,11 @@ DT_S3_BUCKET (+ DT_S3_PREFIX, DT_S3_ENDPOINT, DT_S3_PUBLIC_ENDPOINT, DT_S3_REGIO
 S3 compatible library (needs the boto3 extra), DT_PASSWORD (sets/updates the login password on start), DT_FAKE_LIGHTS=1,
 DT_AGENT_TOKEN (token for agents such as the WiZ light agent, see agents/wiz),
 DT_FORWARDED_ALLOW_IPS (proxies whose X-Forwarded-* headers are trusted, default 127.0.0.1).
+
+API keys and endpoints (a value stored in the settings wins; these are never written to settings.json):
+DT_GEMINI_API_KEY, DT_GEMINI_MODEL, DT_GROQ_API_KEY, DT_GROQ_MODEL (AI assistant), DT_MUSICGEN_URL/_KEY/_SECRET (music generation),
+DT_VOXALYZER_CLOUD_URL/_KEY/_SECRET (cloud analysis), DT_MODAL_KEY/DT_MODAL_SECRET (shared Modal proxy auth token),
+DT_ACOUSTID_API_KEY (metadata lookup).
 """
 import argparse
 import getpass

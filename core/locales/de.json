@@ -692,5 +692,6 @@
   "The built-in prompt sets the role of the assistant; your instructions above are added to it.": "Der eingebaute Prompt legt die Rolle des Assistenten fest; deine Anweisungen oben werden ihm hinzugefügt.",
   "Language of the lyrics": "Sprache des Liedtexts",
   "Write the lyrics in {0}.": "Schreibe den Liedtext auf {0}.",
-  "Describe again in {0}": "Neu beschreiben: {0}"
+  "Describe again in {0}": "Neu beschreiben: {0}",
+  "from the environment variable {0}": "aus der Umgebungsvariable {0}"
 }

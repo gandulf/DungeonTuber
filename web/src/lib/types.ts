@@ -210,6 +210,8 @@ export interface AssistantStatus {
   defaultModel: string;
   /** The last characters of the stored key. */
   keyHint: string;
+  keySource: KeySource;
+  groqKeySource: KeySource;
   /** Additional instructions of the SuperAdmin for the song suggestions. */
   instructions: string;
   /** Additional instructions of the SuperAdmin for the general chat. */
@@ -365,8 +367,19 @@ export interface LookupResult {
   errors: string[];
 }
 
+/** Where a key comes from: stored in the settings, an environment variable of the server (DT_…), or nowhere. */
+export type KeySource = 'settings' | 'environment' | null;
+
 export interface MetadataStatus {
   configured: boolean;
   keyHint: string;
+  keySource: KeySource;
   fpcalc: boolean;
+}
+
+/** The connection to a cloud function on Modal (cloud analysis, music generation). */
+export interface CloudStatus {
+  configured: boolean;
+  host: string | null;
+  source: KeySource;
 }

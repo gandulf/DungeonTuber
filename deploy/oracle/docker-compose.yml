@@ -18,6 +18,20 @@ services:
       DT_LIBRARY: /music
       DT_FORWARDED_ALLOW_IPS: "*"       # trust X-Forwarded-* headers from Caddy (the port is not published)
       # an OCI Object Storage / other S3 library can be added here, see docker-compose.yml in the repository root (DT_S3_*)
+      # API keys and endpoints (optional; a value saved in Settings wins, these are never written to settings.json):
+      # DT_GEMINI_API_KEY: "AIza..."                  # AI assistant: song suggestions and general chat (aistudio.google.com)
+      # DT_GEMINI_MODEL: "gemini-3.8-flash"
+      # DT_GROQ_API_KEY: "gsk_..."                    # AI assistant: smart search and composing (console.groq.com)
+      # DT_GROQ_MODEL: "openai/gpt-oss-120b"
+      # DT_MUSICGEN_URL: "https://...modal.run"       # music generation, see agents/musicgen
+      # DT_MUSICGEN_KEY: "wk-..."
+      # DT_MUSICGEN_SECRET: "ws-..."
+      # DT_VOXALYZER_CLOUD_URL: "https://...modal.run"  # cloud analysis, see agents/voxalyzer
+      # DT_VOXALYZER_CLOUD_KEY: "wk-..."
+      # DT_VOXALYZER_CLOUD_SECRET: "ws-..."
+      # DT_MODAL_KEY: "wk-..."                        # one Modal proxy auth token for both functions instead of the keys above
+      # DT_MODAL_SECRET: "ws-..."
+      # DT_ACOUSTID_API_KEY: "..."                    # metadata lookup by sound (acoustid.org/new-application)
     volumes:
       - dt-data:/data                   # settings.json + library.db
       - ./music:/music                  # sudo chown -R 1000:1000 ./music (the container runs as uid 1000)

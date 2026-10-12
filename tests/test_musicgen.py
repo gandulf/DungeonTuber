@@ -84,7 +84,7 @@ def client(tmp_path, library):
 
 
 def test_nothing_is_configured_by_default(client, library):
-    assert client.get("/api/assistant/musicgen").json() == {"configured": False, "host": None}
+    assert client.get("/api/assistant/musicgen").json() == {"configured": False, "host": None, "source": None}
     assert client.get("/api/settings").json()["musicGenConfigured"] is False
     response = client.post("/api/assistant/compose", json={**PIECE, "dir": (library / "Battle").as_posix()})
     assert response.status_code == 409
@@ -95,7 +95,7 @@ def test_configuration_is_validated_and_the_secret_stays_private(client, cloud):
     assert client.put("/api/assistant/musicgen", json={"url": cloud.url, "key": KEY, "secret": " "}).status_code == 400
 
     saved = client.put("/api/assistant/musicgen", json={"url": cloud.url, "key": KEY, "secret": SECRET})
-    assert saved.json() == {"configured": True, "host": f"127.0.0.1:{cloud.server_address[1]}"}
+    assert saved.json() == {"configured": True, "host": f"127.0.0.1:{cloud.server_address[1]}", "source": "settings"}
     assert SECRET not in client.get("/api/assistant/musicgen").text
     assert client.get("/api/settings").json()["musicGenConfigured"] is True
     # the cloud analysis has a configuration of its own
@@ -222,3 +222,12 @@ def test_the_language_of_the_lyrics_reaches_the_cloud_function(client, library, 
     assert assistant.to_piece({"caption": "folk", "lyrics": structure}, instrumental=True)["lyrics"] == structure
     assert assistant.to_piece({"caption": "folk", "lyrics": structure + "\nla la"}, instrumental=True)["lyrics"] == ""
     assert not assistant.structure_only("") and assistant.structure_only("[Instrumental]")
+
+
+def test_the_music_generation_can_be_set_up_by_the_environment(client, library, cloud, monkeypatch):
+    for name, value in (("DT_MUSICGEN_URL", cloud.url), ("DT_MUSICGEN_KEY", KEY), ("DT_MUSICGEN_SECRET", SECRET), ("DT_MODAL_KEY", "shared")):
+        monkeypatch.setenv(name, value)
+    assert client.get("/api/settings").json()["musicGenConfigured"] is True
+    assert client.get("/api/assistant/musicgen").json()["source"] == "environment"
+    result = client.post("/api/assistant/compose", json={**PIECE, "dir": (library / "Battle").as_posix()})
+    assert result.status_code == 200 and cloud.posts[-1][0]["Modal-Key"] == KEY  # its own key wins over the shared one

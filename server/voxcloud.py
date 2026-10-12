@@ -21,7 +21,7 @@ logger = logging.getLogger(__file__)
 
 __all__ = ["CloudError", "CloudVoxalyzerBackend", "config_file", "current_backend", "delete_config", "load_config", "save_config", "status"]
 
-CONFIG = CloudConfig("voxalyzer-cloud.json")
+CONFIG = CloudConfig("voxalyzer-cloud.json", "DT_VOXALYZER_CLOUD")
 
 # Seconds for one analysis: the upload, a cold start of the container (GPU + models) and the analysis itself.
 ANALYZE_TIMEOUT = 600

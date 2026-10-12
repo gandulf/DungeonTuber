@@ -1,4 +1,5 @@
 """Server runtime configuration (library roots, auth secrets, local mode)."""
+import os
 import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -46,3 +47,13 @@ def get_library_roots() -> list[Path]:
     """Local directories the server may expose."""
     from server.roots import get_local_roots
     return [root.storage.root for root in get_local_roots()]
+
+
+def setting_or_env(key: str, env: str) -> tuple[str, str | None]:
+    """A value the SuperAdmin stored in the settings, otherwise the environment variable `env` (e.g. an API key of a Docker
+    deployment, which then never ends up in settings.json); with its source "settings", "environment" or None."""
+    stored = (AppSettings.value(key, "", type=str) or "").strip()
+    if stored:
+        return stored, "settings"
+    value = os.environ.get(env, "").strip()
+    return (value, "environment") if value else ("", None)
