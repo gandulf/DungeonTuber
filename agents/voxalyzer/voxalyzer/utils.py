@@ -43,6 +43,20 @@ def get_path(path:str):
     return file_path
 
 
+def mood_tags(cluster: str, labels: list[str], probabilities, limit: int = 3, threshold: float = 0.1,
+              ignore: frozenset[str] = frozenset()) -> list[str]:
+    """The MIREX mood cluster plus the strongest mood/theme labels (at most `limit`, each at least `threshold`), capitalized
+    and without duplicates. Labels in `ignore` (themes like "advertising" that say nothing about the mood) are skipped."""
+    ranked = sorted(((float(p), label) for label, p in zip(labels, probabilities) if label not in ignore), reverse=True)
+    tags = [cluster]
+    for probability, label in ranked:
+        if probability < threshold or len(tags) > limit:
+            break
+        if label.capitalize() not in tags:
+            tags.append(label.capitalize())
+    return tags
+
+
 def get_best(labels: list[str], probabilities, threshold:float = 0.33):
     items = list(zip(labels, probabilities))
     # Sort by highest probability

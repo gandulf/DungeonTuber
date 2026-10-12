@@ -17,7 +17,7 @@ from voxalyzer.memory import (
     comprehensive_memory_cleanup
 )
 from voxalyzer.models import model_path
-from voxalyzer.utils import get_best, to_ten, rescale, AnalyzeResult
+from voxalyzer.utils import get_best, mood_tags, to_ten, rescale, AnalyzeResult
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,13 @@ DISCOGS_MOODS_LABELS = [
     "movie", "nature", "party", "positive", "powerful", "relaxing", "retro", "romantic", "sad", "sexy",
     "slow", "soft", "soundscape", "space", "sport", "summer", "trailer", "travel", "upbeat", "uplifting"
 ]
+
+# Themes of the mood/theme model that say nothing about the mood of a piece; they never become tags.
+DISCOGS_MOODS_IGNORED = frozenset({
+    "advertising", "background", "children", "christmas", "commercial", "corporate", "holiday", "sport", "summer", "travel"
+})
+MOOD_TAG_LIMIT = int(os.getenv("MOOD_TAG_LIMIT", "3"))  # mood/theme tags per track besides the MIREX cluster
+MOOD_TAG_THRESHOLD = float(os.getenv("MOOD_TAG_THRESHOLD", "0.1"))  # their minimum probability
 
 DEFINED_TENSORS = {
     # Takes spectrograms, outputs embeddings
@@ -742,6 +749,8 @@ def analyze_track(file_path, onnx_sessions, top_n_moods=3):
         #discog_moods = dict(sorted(discog_moods.items(), key=lambda i: i[1], reverse=True)[:top_n_moods])
 
         discog_moods = get_best(DISCOGS_MOODS_LABELS, averaged_logits)
+        # the five MIREX clusters alone are too coarse to tell the tracks of a library apart
+        tags = mood_tags(tag, DISCOGS_MOODS_LABELS, averaged_logits, MOOD_TAG_LIMIT, MOOD_TAG_THRESHOLD, DISCOGS_MOODS_IGNORED)
 
     except Exception as e:
         logger.error(f"Discogs Moods inference failed for {os.path.basename(file_path)}: {e}", exc_info=True)
@@ -764,7 +773,7 @@ def analyze_track(file_path, onnx_sessions, top_n_moods=3):
     except Exception as cleanup_error:
         logger.warning(f"Error during final tensor cleanup: {cleanup_error}")
 
-    return {"moods": moods, "genres": genres,"discog_moods": discog_moods, "tags": [tag], "categories": categories, **features}, processed_embeddings
+    return {"moods": moods, "genres": genres,"discog_moods": discog_moods, "tags": tags, "categories": categories, **features}, processed_embeddings
 
 
 def load_onnx_sessions():
