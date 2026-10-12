@@ -10,7 +10,7 @@
   import { askConfirm, closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
   import AgentTokenDialog from './AgentTokenDialog.svelte';
   import CategoryEditDialog, { type CategoryRow } from './CategoryEditDialog.svelte';
-  import type { AgentInfo, AgentState, AgentToken, AssistantStatus, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
+  import type { AgentInfo, AgentState, AgentToken, AssistantStatus, MetadataStatus, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import { onEvent } from '../../lib/ws';
   import Modal from './Modal.svelte';
@@ -136,6 +136,29 @@
     }
   }
 
+  let metadata = $state<MetadataStatus | null>(null);
+  let acoustidKey = $state('');
+  if (admin) void api.metadataConfig().then((result) => (metadata = result)).catch(() => {});
+
+  async function saveAcoustid() {
+    try {
+      metadata = await api.putMetadataConfig(acoustidKey);
+      acoustidKey = '';
+      toast(t('AcoustID key saved'), 'success');
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  async function removeAcoustid() {
+    if (!(await askConfirm(t('Remove the AcoustID key?')))) return;
+    try {
+      metadata = await api.deleteMetadataConfig();
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   async function removeCloud() {
     if (!(await askConfirm(t('Remove the cloud analysis settings?')))) return;
     try {
@@ -244,7 +267,7 @@
     saving = true;
     try {
       const changed: Partial<Record<keyof ServerSettings, unknown>> = {};
-      const keys: (keyof ServerSettings)[] = ['locale', 'skipAnalyzedMusic', 'lightsEnabled', 'lightsBroadcastIP', 'lightsTimeout', 'shareOnNetwork', 'sharePort'];
+      const keys: (keyof ServerSettings)[] = ['locale', 'skipAnalyzedMusic', 'skipNormalizedMusic', 'lightsEnabled', 'lightsBroadcastIP', 'lightsTimeout', 'shareOnNetwork', 'sharePort'];
       for (const key of keys) if (form[key] !== s[key]) changed[key] = form[key];
       const rootList = roots.split('\n').map((r) => r.trim()).filter(Boolean);
       if (desktop && rootList.join('\n') !== s.libraryRoots.join('\n')) changed.libraryRoots = rootList;
@@ -544,6 +567,7 @@
         </section>
       {:else if section === 'analyzer'}
         <label class="check"><input type="checkbox" bind:checked={form.skipAnalyzedMusic} /> {t('Skip Analyzed Music')}</label>
+        <label class="check"><input type="checkbox" bind:checked={form.skipNormalizedMusic} /> {t('Skip Normalized Music')}</label>
         <h4>{t('Cloud analysis')}</h4>
         <span class="muted small">{t('Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.')}</span>
         <span class="small">{cloud.configured ? t('Configured ({0})', cloud.host ?? '') : t('Not configured')}</span>
@@ -553,6 +577,18 @@
         <div class="row">
           <button class="btn" disabled={!cloudUrl.trim() || !cloudKey.trim() || !cloudSecret.trim()} onclick={saveCloud}>{t('Save')}</button>
           {#if cloud.configured}<button class="btn danger" onclick={removeCloud}>{t('Remove')}</button>{/if}
+        </div>
+        <h4>{t('Metadata lookup')}</h4>
+        <span class="muted small">{t('"Normalize metadata…" in the song menu looks up title, artist and album in MusicBrainz. With an AcoustID application key (free for non-commercial use: acoustid.org/new-application) and the program fpcalc (Chromaprint) on the server, songs are also identified by their sound, which also works for badly named files.')}</span>
+        <span class="small">{metadata?.configured ? t('Configured (key …{0})', metadata.keyHint) : t('Not configured')} ·
+          {metadata?.fpcalc ? t('fpcalc found') : t('fpcalc not found: install Chromaprint or put fpcalc into the tools folder of Dungeon Tuber')}</span>
+        <label class="field">{t('AcoustID application key')}
+          <input type="password" autocomplete="off" placeholder={metadata?.configured ? t('API key (unchanged)') : ''} bind:value={acoustidKey} /></label>
+        <div class="row">
+          <a class="btn" href="https://acoustid.org/new-application" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
+          <span class="grow"></span>
+          <button class="btn" disabled={!acoustidKey.trim()} onclick={saveAcoustid}>{t('Save')}</button>
+          {#if metadata?.configured}<button class="btn danger" onclick={removeAcoustid}>{t('Remove')}</button>{/if}
         </div>
       {:else if section === 'player'}
         <label class="check"><input type="checkbox" checked={prefs.crossfade} onchange={(e) => { prefs.crossfade = (e.currentTarget as HTMLInputElement).checked; savePrefs(); }} /> {t('Crossfade')}</label>

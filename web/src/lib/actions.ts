@@ -9,6 +9,7 @@ import { playTrack, refreshCurrentTrack } from './stores/player.svelte';
 import { askConfirm, askText, errorToast, openDialog, toast, ui, type MenuItem } from './stores/ui.svelte';
 import type { JobKind } from './stores/downloads.svelte';
 import type { BrowseItem, Track } from './types';
+import { metadataPatch, sureMatch } from './normalize';
 import { isMp3, itemsFromDrop, type UploadItem } from './upload';
 import EditSongDialog from '../components/dialogs/EditSongDialog.svelte';
 import DownloadsDialog from '../components/dialogs/DownloadsDialog.svelte';
@@ -71,8 +72,56 @@ export async function libraryRootsChanged() {
 }
 
 /** Edits the tags of a song; opened from a playlist, its scene name there comes first. */
-export function editSong(track: Track, playlist?: string) {
-  openDialog(EditSongDialog, { track, playlist });
+let normalizing = false;
+
+/** Batch normalize: looks up one song after the other (the server keeps the rate limits of the databases) and applies
+ *  sure matches (see sureMatch) at once. The songs without a sure match stay selected, to be checked one by one. */
+export async function normalizeTracks(tracks: Track[]) {
+  if (normalizing) return;
+  normalizing = true;
+  let cancelled = false;
+  ui.progressCancel = () => (cancelled = true);
+  let updated = 0;
+  const unsure: Track[] = [];
+  const failed: string[] = [];
+  // songs normalized before are left alone (Analyzer settings); the database is not even asked for them
+  const skip = data.settings?.skipNormalizedMusic !== false;
+  const skipped = skip ? tracks.filter((track) => track.normalized).length : 0;
+  if (skip) tracks = tracks.filter((track) => !track.normalized);
+  try {
+    for (const [index, track] of tracks.entries()) {
+      if (cancelled) break;
+      ui.progress = t('Normalizing {0} of {1}: {2}', index + 1, tracks.length, track.title || track.name);
+      try {
+        const match = sureMatch((await api.lookupTrack(track.id)).candidates);
+        if (!match) {
+          unsure.push(track);
+          continue;
+        }
+        const patch = metadataPatch(track, match);
+        if (!Object.keys(patch).length) continue;
+        const result = await api.patchTrack(track.id, patch);
+        updateTrack(result);
+        refreshCurrentTrack(result);
+        updated++;
+      } catch (e) {
+        failed.push(`${track.name}: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+  } finally {
+    ui.progress = null;
+    ui.progressCancel = null;
+    normalizing = false;
+  }
+  library.selection = unsure.map((track) => track.id);
+  const summary = t('Normalized: {0} updated, {1} without a sure match', updated, unsure.length);
+  toast(skipped ? `${summary}, ${t('{0} skipped (normalized before)', skipped)}` : summary, updated || !unsure.length ? 'success' : 'info');
+  if (failed.length) toast(t('{0} songs could not be normalized: {1}', failed.length, failed[0]), 'error');
+}
+
+/** `normalize`: looks up the correct metadata (AcoustID, MusicBrainz) right away. */
+export function editSong(track: Track, playlist?: string, normalize = false) {
+  openDialog(EditSongDialog, { track, playlist, normalize });
 }
 
 /** Edits a song picked in the file tree (which only knows its id). */
@@ -232,7 +281,10 @@ export function trackMenu(tracks: Track[]): MenuItem[] {
   if (single) {
     items.push({ label: t('Play'), icon: 'play', action: () => playTrack(single) });
     items.push({ label: t('Edit Song…'), icon: 'edit', tour: 'menu-edit', action: () => editSong(single, tab?.type === 'playlist' ? tab.path : undefined) });
+    items.push({ label: t('Normalize metadata…'), icon: 'search', action: () => editSong(single, tab?.type === 'playlist' ? tab.path : undefined, true) });
     items.push({ label: t('Favorite'), icon: 'star', checked: single.favorite, action: () => toggleFavorite(single) });
+  } else if (tracks.length > 1) {
+    items.push({ label: t('Normalize metadata…'), icon: 'search', action: () => void normalizeTracks(tracks) });
   }
   if (data.settings?.voxalyzerActive !== false) {
     items.push({ label: t('Analyze'), icon: 'sparkles', tour: 'menu-analyze', action: () => analyze(tracks.map((track) => track.path)) });

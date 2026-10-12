@@ -8,7 +8,7 @@ from os import PathLike
 from pathlib import Path
 from typing import TypedDict, Iterator, Iterable
 
-from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, TRCK, APIC, Encoding, PictureType, CHAP, CTOC
+from mutagen.id3 import ID3, TXXX, COMM, TIT2, TCON, TALB, TPE1, TBPM, TRCK, APIC, UFID, Encoding, PictureType, CHAP, CTOC
 from mutagen.mp3 import MP3
 
 from core.lights import LightSetting
@@ -38,7 +38,7 @@ def _read_cover_frame(tags) -> APIC | None:
 
 class Mp3Entry(object):
     __slots__ = ["index", "name", "path", "title", "artist", "album", "track", "summary", "genres", "length", "favorite", "categories", "_tags",
-                 "_has_cover", "bpm", "light", "chapters", "__weakref__"]
+                 "_has_cover", "bpm", "light", "chapters", "normalized", "__weakref__"]
 
     index: int | None
     name: str | None
@@ -54,6 +54,8 @@ class Mp3Entry(object):
     _has_cover: bool | None
     bpm: int | None
     light: LightSetting | None
+    # set when the metadata came from AcoustID / MusicBrainz: {"source", "recording_id", "at"} (see update_mp3_normalized)
+    normalized: dict | None
 
     categories: dict[str, int]
     _tags: list[str]
@@ -88,6 +90,7 @@ class Mp3Entry(object):
         self.index = None
         self.light = None
         self.chapters = []
+        self.normalized = None
 
     @property
     def length_in_ms(self):
@@ -167,6 +170,7 @@ class Mp3Entry(object):
             "categories": dict(self.categories),
             "bpm": self.bpm,
             "light": self.light.to_dict() if self.light else None,
+            "normalized": dict(self.normalized) if self.normalized else None,
             "chapters": [{"title": c["title"], "time": c["time"], "light": c["light"].to_dict() if c.get("light") else None}
                          for c in self.chapters],
         }
@@ -335,6 +339,8 @@ def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
             light = audio.tags.get("TXXX:ai_light")
             if light and light.text and light.text[0]:
                 entry.light = LightSetting.json_load(light.text[0])
+
+            entry.normalized = _parse_normalized(audio.tags.get("TXXX:dt_normalized"))
 
             chapter_list: list[Chapter] = []
             for key in audio.tags.keys():
@@ -565,6 +571,36 @@ def update_mp3_source(path: str | PathLike[str] | MP3, url: str | None, save: bo
 
     if save:
         audio.save()
+
+
+MUSICBRAINZ_UFID_OWNER = "http://musicbrainz.org"
+
+
+def update_mp3_normalized(path: str | PathLike[str] | MP3, normalized: dict | None, save: bool = True):
+    """Marks the file as normalized: TXXX:dt_normalized holds the source of the metadata (acoustid / musicbrainz), the
+    MusicBrainz recording id and the date; the recording id also goes into the UFID frame other taggers (Picard) use."""
+    audio = _audio(path)
+
+    if normalized:
+        audio.tags.add(TXXX(Encoding.UTF8, desc="dt_normalized", text=[json.dumps(normalized, ensure_ascii=False)]))
+        if normalized.get("recording_id"):
+            audio.tags.add(UFID(owner=MUSICBRAINZ_UFID_OWNER, data=normalized["recording_id"].encode("ascii", errors="ignore")))
+    else:
+        audio.tags.delall("TXXX:dt_normalized")
+        audio.tags.delall(f"UFID:{MUSICBRAINZ_UFID_OWNER}")
+
+    if save:
+        audio.save()
+
+
+def _parse_normalized(frame) -> dict | None:
+    if not frame or not frame.text or not frame.text[0]:
+        return None
+    try:
+        value = json.loads(frame.text[0])
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def update_mp3_light(path: str | PathLike[str] | MP3, light: LightSetting | None, save: bool = True):

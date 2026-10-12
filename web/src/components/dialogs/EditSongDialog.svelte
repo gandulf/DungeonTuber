@@ -1,16 +1,19 @@
 <script lang="ts">
   import { api, coverUrl } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
+  import { fileNameFor, normalizedFlag } from '../../lib/normalize';
   import { reloadPlaylistTabs, updateTrack } from '../../lib/stores/library.svelte';
   import { refreshCurrentTrack } from '../../lib/stores/player.svelte';
   import { updateEffectTrack } from '../../lib/stores/effects.svelte';
   import { closeDialog, errorToast } from '../../lib/stores/ui.svelte';
-  import type { LightSetting, Track } from '../../lib/types';
+  import type { LightSetting, LookupCandidate, LookupResult, Normalized, Track } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import LightEditor from './LightEditor.svelte';
   import Modal from './Modal.svelte';
 
-  /** `playlist`: the song was opened from this playlist, so its scene name there can be edited too. */
-  let { track, playlist }: { track: Track; playlist?: string } = $props();
+  /** `playlist`: the song was opened from this playlist, so its scene name there can be edited too.
+   *  `normalize`: looks up the metadata at once (the "Normalize metadata…" menu entry). */
+  let { track, playlist, normalize = false }: { track: Track; playlist?: string; normalize?: boolean } = $props();
 
   // svelte-ignore state_referenced_locally
   let form = $state({
@@ -39,6 +42,43 @@
 
   const split = (value: string) => value.split(',').map((s) => s.trim()).filter(Boolean);
 
+  // --- normalize: the metadata of AcoustID / MusicBrainz -----------------------------------------------------------
+
+  let lookup = $state<LookupResult | null>(null);
+  let lookingUp = $state(false);
+  let picked = $state<LookupCandidate | null>(null);
+
+  async function findMetadata() {
+    lookingUp = true;
+    picked = null;
+    try {
+      lookup = await api.lookupTrack(track.id);
+    } catch (e) {
+      errorToast(e);
+    } finally {
+      lookingUp = false;
+    }
+  }
+
+  // svelte-ignore state_referenced_locally
+  if (normalize) void findMetadata();
+
+  /** Fills the fields with the candidate; nothing is written before Save. */
+  function apply(candidate: LookupCandidate) {
+    picked = candidate;
+    form.title = candidate.title;
+    form.artist = candidate.artist;
+    if (candidate.album) form.album = candidate.album;
+    if (candidate.track) form.track = candidate.track;
+    form.name = fileNameFor(candidate);
+  }
+
+  /** The flag of the song, or the one it gets on Save after a match was picked. */
+  const flag = $derived<Normalized | null>(picked ? normalizedFlag(picked) : (track.normalized ?? null));
+  const sourceName = (source: string) => (source === 'acoustid' ? 'AcoustID' : 'MusicBrainz');
+
+  const minutes = (seconds: number | null) => (seconds ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : '');
+
   function pickCover(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -58,6 +98,7 @@
       let updated = await api.patchTrack(track.id, {
         title: form.title, artist: form.artist, album: form.album, track: form.track || null, genres: split(form.genres), bpm: form.bpm || null,
         tags: split(form.tags), summary: form.summary, favorite: form.favorite, light,
+        ...(picked ? { normalized: normalizedFlag(picked) } : {}),
         ...(form.name.trim() && form.name.trim() !== track.file.replace(/\.mp3$/i, '') ? { name: form.name.trim() } : {}),
       });
       if (cover) updated = { ...(await api.putCover(updated.id, cover)), previous_id: track.id };
@@ -82,8 +123,46 @@
       </label>
       <span class="muted hint">{t('Select Image')}</span>
       <label class="check"><input type="checkbox" bind:checked={form.favorite} /> {t('Favorite')}</label>
+      <button class="btn sm" type="button" disabled={lookingUp} title={t('Looks up title, artist and album in MusicBrainz and AcoustID')} onclick={findMetadata}>
+        <Icon name={lookingUp ? 'refresh' : 'search'} size={14} class={lookingUp ? 'spin' : ''} /> {t('Normalize…')}
+      </button>
+      {#if flag}
+        {@const tip = (picked ? t('Normalized on Save with {0}', sourceName(flag.source)) : t('Normalized with {0} on {1}', sourceName(flag.source), flag.at ?? '–'))
+          + (flag.recording_id ? ` · ${t('Open in MusicBrainz')}` : '')}
+        {#if flag.recording_id}
+          <a class="normalized" class:pending={!!picked} href="https://musicbrainz.org/recording/{flag.recording_id}" target="_blank" rel="noopener noreferrer" title={tip}>
+            <Icon name="check" size={12} /> {t('Normalized')}
+          </a>
+        {:else}
+          <span class="normalized" class:pending={!!picked} title={tip}><Icon name="check" size={12} /> {t('Normalized')}</span>
+        {/if}
+      {/if}
     </div>
     <div class="fields">
+      {#if lookup}
+        <div class="wide lookup">
+          <div class="lookup-head">
+            <span class="label-xs">{t('Matches')}</span>
+            <span class="muted small">{t('Pick one to fill the fields; nothing is saved before Save.')}</span>
+            <span class="grow"></span>
+            <button class="icon-btn" type="button" title={t('Close')} aria-label={t('Close')} onclick={() => (lookup = null)}><Icon name="close" size={14} /></button>
+          </div>
+          {#each lookup.candidates as candidate, i (i)}
+            <button type="button" class="candidate" class:picked={picked === candidate} onclick={() => apply(candidate)}>
+              <span class="ellipsis"><strong>{candidate.title}</strong> · {candidate.artist}</span>
+              <span class="muted small ellipsis">
+                {[candidate.album, candidate.year, candidate.track ? `#${candidate.track}` : '', minutes(candidate.length)].filter(Boolean).join(' · ')}
+              </span>
+              <span class="score" class:high={candidate.score >= 90} title={candidate.source === 'acoustid' ? t('Found by the audio fingerprint (AcoustID)') : t('Found by title and artist (MusicBrainz)')}>
+                {candidate.score}% <span class="src">{candidate.source === 'acoustid' ? 'AcoustID' : 'MusicBrainz'}</span>
+              </span>
+            </button>
+          {:else}
+            <p class="muted small">{t('No matches found.')}</p>
+          {/each}
+          {#each lookup.errors as error (error)}<p class="warn small">{error}</p>{/each}
+        </div>
+      {/if}
       {#if playlist}
         <label class="wide scene">
           <span>{t('Scene name')} <span class="muted">· {t('Only used in this playlist')}</span></span>
@@ -136,5 +215,21 @@
   .check { display: flex; align-items: center; gap: 6px; }
   .small { font-size: var(--fs-xs); }
   .path { font-size: var(--fs-xs); overflow-wrap: anywhere; }
+  .lookup { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); max-height: 260px; overflow: auto; }
+  .lookup-head { display: flex; align-items: center; gap: 8px; }
+  .grow { flex: 1; }
+  .candidate { display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'name score' 'meta score'; gap: 0 10px; align-items: center; text-align: left; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid transparent; }
+  .candidate:hover { background: var(--hover); }
+  .candidate.picked { border-color: var(--accent); background: var(--accent-soft); }
+  .candidate > :nth-child(1) { grid-area: name; min-width: 0; }
+  .candidate > :nth-child(2) { grid-area: meta; min-width: 0; }
+  .score { grid-area: score; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); text-align: right; }
+  .score.high { color: var(--green); }
+  .src { display: block; font-weight: 400; color: var(--faint); }
+  .warn { color: var(--danger, #d9534f); margin: 0; }
+  .lookup p { margin: 0; }
+  .normalized { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: var(--fs-xs); font-weight: 600;
+    background: var(--green-soft); color: var(--green); text-decoration: none; }
+  .normalized.pending { background: transparent; border: 1px dashed var(--green); }
   @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
 </style>

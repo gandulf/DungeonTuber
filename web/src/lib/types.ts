@@ -32,6 +32,8 @@ export interface Track {
   categories: Record<string, number>;
   bpm: number | null;
   light: LightSetting | null;
+  /** Set when the metadata was normalized with AcoustID / MusicBrainz. */
+  normalized?: Normalized | null;
   chapters: Chapter[];
   has_cover: boolean;
   index: number | null;
@@ -131,6 +133,8 @@ export interface AgentState {
 export interface ServerSettings {
   locale: string;
   skipAnalyzedMusic: boolean;
+  /** Batch normalize skips songs that were normalized already. */
+  skipNormalizedMusic: boolean;
   lightsEnabled: boolean;
   lightsBroadcastIP: string;
   lightsTimeout: number;
@@ -299,4 +303,36 @@ export interface FilterConfig {
   tags: string[];
   genres: string[];
   bpm: number | null;
+}
+
+/** A match of the metadata lookup (AcoustID by fingerprint, MusicBrainz by text, see core/musiclookup.py). */
+export interface LookupCandidate {
+  title: string;
+  artist: string;
+  album: string | null;
+  track: number | null;
+  year: string | null;
+  length: number | null;
+  score: number;
+  source: 'acoustid' | 'musicbrainz';
+  recording_id: string;
+}
+
+/** Set on songs whose metadata was taken from a match (written into the file as TXXX:dt_normalized). */
+export interface Normalized {
+  source: 'acoustid' | 'musicbrainz';
+  recording_id: string;
+  /** Date of the normalization (YYYY-MM-DD). */
+  at?: string;
+}
+
+export interface LookupResult {
+  candidates: LookupCandidate[];
+  errors: string[];
+}
+
+export interface MetadataStatus {
+  configured: boolean;
+  keyHint: string;
+  fpcalc: boolean;
 }

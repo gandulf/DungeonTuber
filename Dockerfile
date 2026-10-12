@@ -23,6 +23,22 @@ COPY server/ server/
 COPY --from=web /src/server/static/ server/static/
 RUN python -m build --wheel --no-isolation --outdir /dist
 
+# --- fpcalc (Chromaprint) ------------------------------------------------------
+# audio fingerprints for the AcoustID metadata lookup (core/musiclookup.py): the static build of the release, checked by its hash
+FROM alpine:3.20 AS fpcalc
+ARG TARGETARCH
+RUN set -eu; \
+    version=1.6.1; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) arch=x86_64; sha=fc16cd37a70168040bc9ceb45f1d4d1216f5a75bc4c9cf8564bea70ac6a45733 ;; \
+      arm64) arch=arm64;  sha=7eaf5d655c4aa172ab28e3c870b8bb61dd2c327ac94de145676f88842cf6215a ;; \
+      *) echo "no fpcalc build for ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    wget -q -O /tmp/fpcalc.tar.gz "https://github.com/acoustid/chromaprint/releases/download/v${version}/chromaprint-fpcalc-${version}-linux-${arch}.tar.gz"; \
+    echo "${sha}  /tmp/fpcalc.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/fpcalc.tar.gz -C /tmp; \
+    install -m 755 "$(find /tmp -type f -name fpcalc | head -n 1)" /fpcalc
+
 # --- runtime -----------------------------------------------------------------
 FROM python:3.12-slim
 LABEL org.opencontainers.image.title="DungeonTuber" \
@@ -38,11 +54,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DT_LIBRARY=/music
 
 # Static builds copied from small images (no package installation): ffmpeg/ffprobe convert the audio of imported YouTube links,
-# deno runs the JavaScript yt-dlp needs for YouTube
+# deno runs the JavaScript yt-dlp needs for YouTube, fpcalc identifies songs by their sound (AcoustID)
 COPY --from=mwader/static-ffmpeg:7.1.1 /ffmpeg /ffprobe /usr/local/bin/
 COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+COPY --from=fpcalc /fpcalc /usr/local/bin/fpcalc
 
-RUN useradd --create-home --uid 1000 dungeontuber     && mkdir -p /data /music && chown dungeontuber:dungeontuber /data
+RUN fpcalc -version \
+    && useradd --create-home --uid 1000 dungeontuber     && mkdir -p /data /music && chown dungeontuber:dungeontuber /data
 
 # optional extras of the wheel: "s3" adds boto3 for S3 compatible library storage (--build-arg EXTRAS= to leave it out)
 ARG EXTRAS=s3

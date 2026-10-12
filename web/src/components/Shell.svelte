@@ -4,6 +4,7 @@
   import { prefs, savePrefs } from '../lib/prefs.svelte';
   import { openDownloadsDialog } from '../lib/actions';
   import { t } from '../lib/i18n.svelte';
+  import Icon from './Icon.svelte';
   import { data } from '../lib/stores/data.svelte';
   import { assistant } from '../lib/stores/assistant.svelte';
   import { analysis, downloads, type JobKind } from '../lib/stores/downloads.svelte';
@@ -147,6 +148,9 @@
     <div class="status">
       {#if !ui.connected}<span class="offline">● offline – reconnecting…</span>{/if}
       {#if ui.progress}<span class="spinner"></span><span class="ellipsis">{ui.progress}</span>{/if}
+      {#if ui.progress && ui.progressCancel}
+        <button class="icon-btn mini" title={t('Cancel')} aria-label={t('Cancel')} onclick={() => ui.progressCancel?.()}><Icon name="close" size={12} /></button>
+      {/if}
       <span class="grow"></span>
       {@render job('analysis')}
       {@render job('downloads')}

@@ -49,6 +49,8 @@ class SettingKeys(StrEnum):
     CATEGORIES = "categories"
 
     SKIP_ANALYZED_MUSIC = "skipAnalyzedMusic"
+    # batch normalize leaves songs alone that were normalized already (TXXX:dt_normalized, see core/mp3.py)
+    SKIP_NORMALIZED_MUSIC = "skipNormalizedMusic"
     IMPORT_MAX_MINUTES = "importMaxMinutes"
     # Proxy for all yt-dlp requests (e.g. a residential proxy); overrides the DT_YT_PROXY environment variable
     YOUTUBE_PROXY = "youtubeProxy"
@@ -59,6 +61,8 @@ class SettingKeys(StrEnum):
     ASSISTANT_INSTRUCTIONS = "assistantInstructions"
     # the same for the general chat of the assistant (rules, setting, ideas)
     ASSISTANT_GENERAL_INSTRUCTIONS = "assistantGeneralInstructions"
+    # application key of AcoustID for the metadata lookup (see core/musiclookup.py); never sent back to the browser
+    ACOUSTID_API_KEY = "acoustidApiKey"
 
     LIGHTS_ENABLED = "lightsEnabled"
     LIGHTS_CONFIG = "lightsConfig"

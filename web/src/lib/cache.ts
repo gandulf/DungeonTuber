@@ -116,3 +116,23 @@ export async function cached<T>(key: string, fetch: () => Promise<T>, show: (val
   }
   return value;
 }
+
+/** Like `cached`, but resolves as soon as a value was shown (the cached one, else the fetched one); the current value
+ *  still replaces it in the background. */
+export function cachedFirst<T>(key: string, fetch: () => Promise<T>, show: (value: T) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    cached(key, fetch, (value) => {
+      show(value);
+      resolve();
+    }).then(() => resolve(), reject);
+  });
+}
+
+/** Stores a value that changed in the app (e.g. saved settings), so the next start shows it at once. */
+export function remember(key: string, value: unknown) {
+  const full = `${scope}\u0000${key}`;
+  const json = JSON.stringify(value);
+  if (json === memory.get(full)) return;
+  memory.set(full, json);
+  void write(full, json);
+}

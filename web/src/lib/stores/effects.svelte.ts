@@ -1,4 +1,5 @@
 import { api } from '../api';
+import { cached } from '../cache';
 import { affectsDirectory } from '../paths';
 import type { Effect, Track } from '../types';
 import { errorToast } from './ui.svelte';
@@ -13,9 +14,11 @@ export const effects = $state({
 export async function loadEffects() {
   effects.loading = true;
   try {
-    const result = await api.effects();
-    effects.directory = result.directory;
-    effects.list = result.effects;
+    // the effects of the last start show at once, the current ones replace them when they differ
+    await cached('effects', () => api.effects(), (result) => {
+      effects.directory = result.directory;
+      effects.list = result.effects;
+    });
   } catch (e) {
     errorToast(e);
   } finally {

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from core.lights import LightSetting
 from core.mp3 import (Mp3Entry, _audio, parse_mp3, update_mp3_album, update_mp3_artist, update_mp3_bpm, update_mp3_categories,
-                      update_mp3_chapters, update_mp3_cover_data, update_mp3_favorite, update_mp3_genre, update_mp3_light, update_mp3_summary,
+                      update_mp3_chapters, update_mp3_cover_data, update_mp3_favorite, update_mp3_genre, update_mp3_light, update_mp3_normalized, update_mp3_summary,
                       update_mp3_tags, update_mp3_title, update_mp3_track)
 from core.storage import NotFound, StorageError
 from core.utils import get_user_data_dir
@@ -24,7 +24,7 @@ from server.users import ADMIN
 logger = logging.getLogger(__file__)
 
 # update fields the database understands (see TrackIndex.update)
-FIELDS = ("title", "artist", "album", "track", "summary", "genres", "tags", "bpm", "favorite", "categories", "light")
+FIELDS = ("title", "artist", "album", "track", "summary", "genres", "tags", "bpm", "favorite", "categories", "light", "normalized")
 
 
 def track_dict(entry: Mp3Entry, location: Location) -> dict:
@@ -42,7 +42,7 @@ def stub_dict(location: Location) -> dict:
     """What the client sees of a remote track that has not been imported yet."""
     return {"path": location.client_path, "id": location.id, "file": location.name, "name": location.stem, "title": None, "artist": None,
             "album": None, "track": None, "summary": "", "genres": [], "tags": [], "length": -1, "favorite": False, "categories": {}, "bpm": None,
-            "light": None, "chapters": [], "has_cover": False, "index": None, "pending": True}
+            "light": None, "normalized": None, "chapters": [], "has_cover": False, "index": None, "pending": True}
 
 
 def _like_prefix(prefix: str) -> str:
@@ -269,7 +269,7 @@ class TrackIndex:
         audio = _audio(path)
         writers = {"title": update_mp3_title, "artist": update_mp3_artist, "album": update_mp3_album, "track": update_mp3_track,
                    "summary": update_mp3_summary, "genres": update_mp3_genre, "tags": update_mp3_tags, "bpm": update_mp3_bpm, "favorite": update_mp3_favorite,
-                   "categories": update_mp3_categories, "light": update_mp3_light}
+                   "categories": update_mp3_categories, "light": update_mp3_light, "normalized": update_mp3_normalized}
         for field, write in writers.items():
             if field in changes:
                 write(audio, changes[field], False)
@@ -291,6 +291,8 @@ class TrackIndex:
                 value = dict(value or {})
             elif field == "favorite":
                 value = bool(value)
+            elif field == "normalized":
+                value = dict(value) if value else None
             data[field] = value
 
     def set_chapters(self, location: Location, chapters: list[dict]) -> dict | None:
@@ -396,6 +398,7 @@ def entry_from_dict(data: dict) -> Mp3Entry:
     entry.favorite = data.get("favorite", False)
     if data.get("light"):
         entry.light = LightSetting(**data["light"])
+    entry.normalized = data.get("normalized")
     return entry
 
 

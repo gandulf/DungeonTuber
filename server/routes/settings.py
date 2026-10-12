@@ -21,6 +21,7 @@ router = APIRouter(dependencies=[Depends(require_auth)])
 SERVER_SETTINGS: dict[str, tuple[type, object]] = {
     SettingKeys.LOCALE: (str, ""),
     SettingKeys.SKIP_ANALYZED_MUSIC: (bool, True),
+    SettingKeys.SKIP_NORMALIZED_MUSIC: (bool, True),
     SettingKeys.LIGHTS_ENABLED: (bool, True),
     SettingKeys.LIGHTS_BROADCAST_IP: (str, None),
     SettingKeys.LIGHTS_TIMEOUT: (float, 5.0),

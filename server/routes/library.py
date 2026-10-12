@@ -4,8 +4,10 @@ import io
 import logging
 import mimetypes
 import tempfile
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
@@ -198,6 +200,12 @@ class LightModel(BaseModel):
                             color=self.color, scene=self.scene)
 
 
+class NormalizedModel(BaseModel):
+    """The metadata was taken from a match of AcoustID / MusicBrainz (see core/musiclookup.py)."""
+    source: Literal["acoustid", "musicbrainz"]
+    recording_id: str = Field("", max_length=64, pattern=r"^[0-9a-fA-F-]*$")
+
+
 class TrackPatch(BaseModel):
     title: str | None = None
     artist: str | None = None
@@ -210,6 +218,7 @@ class TrackPatch(BaseModel):
     favorite: bool | None = None
     categories: dict[str, float | int | None] | None = None
     light: LightModel | None = None
+    normalized: NormalizedModel | None = None
     name: str | None = None
 
 
@@ -254,6 +263,8 @@ def patch_track(track_id: str, patch: TrackPatch):
     if "light" in fields:
         setting = patch.light.to_setting() if patch.light else None
         changes["light"] = None if setting is None or setting.is_empty() else setting
+    if "normalized" in fields:
+        changes["normalized"] = {**patch.normalized.model_dump(), "at": date.today().isoformat()} if patch.normalized else None
 
     with storage_errors():
         if changes:

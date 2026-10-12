@@ -22,6 +22,8 @@ export interface MenuItem {
 export const ui = $state({
   toasts: [] as Toast[],
   progress: null as string | null,
+  /** Stops the running task of `progress` (a cancel button next to it), null when it cannot be stopped. */
+  progressCancel: null as (() => void) | null,
   menu: null as { x: number; y: number; items: MenuItem[] } | null,
   dialog: null as { component: Component<any>; props: Record<string, unknown> } | null,
   connected: true,

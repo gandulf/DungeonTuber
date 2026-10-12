@@ -1,5 +1,6 @@
 // Server-side (per GM) data: auth, settings, categories, presets.
 import { api } from '../api';
+import { cachedFirst, remember } from '../cache';
 import { setLocale } from '../i18n.svelte';
 import { prefs, savePrefs } from '../prefs.svelte';
 import type { AuthState, MusicCategory, Preset, ServerSettings, UserState, VersionInfo } from '../types';
@@ -43,17 +44,58 @@ export async function loadAuth() {
   return data.auth;
 }
 
+/** Applies a loaded value, except when the app changed it since the last one was applied (e.g. a favorite added right
+ *  after the start): then the late answer of the server would undo that change. */
+function unlessChanged<T>(current: () => unknown, apply: (value: T) => void): (value: T) => void {
+  let applied: string | undefined;
+  return (value) => {
+    if (applied !== undefined && JSON.stringify($state.snapshot(current())) !== applied) return;
+    apply(value);
+    applied = JSON.stringify(value);
+  };
+}
+
+function applyLocale() {
+  if (data.settings) setLocale(data.user.locale || data.settings.locale);
+}
+
+/** Loads what the app needs to start. The values of the last start (see cache.ts) are used at once, so the app shows
+ *  without waiting for the server; the current ones replace them as they arrive. */
 export async function loadData() {
-  const [settings, categories, presets, locales, user] = await Promise.all([api.settings(), api.categories(), api.presets(), api.locales(), api.userState()]);
-  data.settings = settings;
-  data.user = user;
-  prefs.accent = user.accent; // the browser remembers it, so the next start has the colour before the server answers
-  savePrefs();
-  data.categories = categories;
-  data.presets = presets;
-  data.locales = locales;
-  setLocale(user.locale || settings.locale);
+  await Promise.all([
+    cachedFirst('settings', api.settings, unlessChanged(() => data.settings, (settings) => {
+      data.settings = settings;
+      applyLocale();
+    })),
+    cachedFirst('user', api.userState, unlessChanged(() => data.user, (user) => {
+      data.user = user;
+      prefs.accent = user.accent; // the browser remembers it, so the next start has the colour before the server answers
+      savePrefs();
+      applyLocale();
+    })),
+    cachedFirst('categories', api.categories, unlessChanged(() => data.categories, (categories) => (data.categories = categories))),
+    cachedFirst('presets', api.presets, unlessChanged(() => data.presets, (presets) => (data.presets = presets))),
+    cachedFirst('locales', api.locales, (locales) => (data.locales = locales)),
+  ]);
+  rememberChanges();
   api.version().then((version) => (data.version = version)).catch(() => undefined);
+}
+
+let remembering = false;
+
+/** Changes made while the app runs (saved settings, favorites, ...) are kept for the next start. Started only after
+ *  loadData, so the empty defaults never overwrite the cache. */
+function rememberChanges() {
+  if (remembering) return;
+  remembering = true;
+  $effect.root(() => {
+    $effect(() => {
+      if (data.settings) remember('settings', $state.snapshot(data.settings));
+    });
+    $effect(() => remember('user', $state.snapshot(data.user)));
+    $effect(() => remember('categories', $state.snapshot(data.categories)));
+    $effect(() => remember('presets', $state.snapshot(data.presets)));
+  });
 }
 
 export async function saveSettings(values: Partial<Record<keyof ServerSettings, unknown>>) {

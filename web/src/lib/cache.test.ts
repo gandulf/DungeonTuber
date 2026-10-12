@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { cached, clearCache, setCacheScope } from './cache';
+import { cached, cachedFirst, clearCache, remember, setCacheScope } from './cache';
 
 describe('cached', () => {
   beforeEach(async () => {
@@ -31,6 +31,28 @@ describe('cached', () => {
 
   it('throws when the server cannot be reached and nothing is cached', async () => {
     await expect(cached('a', () => Promise.reject(new Error('offline')), () => undefined)).rejects.toThrow('offline');
+  });
+
+  it('cachedFirst resolves with the cached value before the server answers', async () => {
+    await cached('a', async () => 1, () => undefined);
+    let answer: (value: number) => void = () => undefined;
+    const shown: number[] = [];
+    await cachedFirst('a', () => new Promise<number>((resolve) => (answer = resolve)), (v) => shown.push(v));
+    expect(shown).toEqual([1]);
+    answer(2);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(shown).toEqual([1, 2]);
+  });
+
+  it('cachedFirst throws when the server cannot be reached and nothing is cached', async () => {
+    await expect(cachedFirst('a', () => Promise.reject(new Error('offline')), () => undefined)).rejects.toThrow('offline');
+  });
+
+  it('remember stores a value changed in the app', async () => {
+    remember('a', { saved: true });
+    const shown: unknown[] = [];
+    await cached('a', () => Promise.reject(new Error('offline')), (v) => shown.push(v));
+    expect(shown).toEqual([{ saved: true }]);
   });
 
   it('keeps the entries of every user apart', async () => {

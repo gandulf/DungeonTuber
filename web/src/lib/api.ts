@@ -1,5 +1,5 @@
 import type {
-  AgentInfo, AgentState, AssistantReply, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, MusicCategory, Preset, ServerSettings, Track, TrackList,
+  AgentInfo, AgentState, AssistantReply, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -102,6 +102,11 @@ export const api = {
   cloudAnalysis: () => get<{ configured: boolean; host: string | null }>('/api/analysis/cloud'),
   putCloudAnalysis: (url: string, key: string, secret: string) => request<{ configured: boolean; host: string | null }>('PUT', '/api/analysis/cloud', { url, key, secret }),
   deleteCloudAnalysis: () => request<{ configured: boolean; host: string | null }>('DELETE', '/api/analysis/cloud'),
+  // metadata lookup (AcoustID, MusicBrainz)
+  lookupTrack: (id: string) => get<LookupResult>(`/api/tracks/${id}/lookup`),
+  metadataConfig: () => get<MetadataStatus>('/api/metadata/config'),
+  putMetadataConfig: (key: string) => request<MetadataStatus>('PUT', '/api/metadata/config', { key }),
+  deleteMetadataConfig: () => request<MetadataStatus>('DELETE', '/api/metadata/config'),
   youtubeCookies: () => get<{ set: boolean; updated: number | null }>('/api/import/cookies'),
   putYoutubeCookies: (content: string) => request<{ set: boolean; updated: number | null }>('PUT', '/api/import/cookies', { content }),
   youtubeProxy: () => get<{ value: string; fromEnv: boolean }>('/api/import/proxy'),
