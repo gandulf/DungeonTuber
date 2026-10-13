@@ -1,5 +1,5 @@
 import type {
-  AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, Preset, ServerSettings, Track, TrackList,
+  AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, SoundDescription, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -130,18 +130,23 @@ export const api = {
   locales: () => get<string[]>('/api/locales'),
 
   // AI assistant (song suggestions)
-  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' | 'compose' = 'music',
-    context?: { tags?: string[]; genres?: string[]; instrumental?: boolean; duration?: number; language?: string }) =>
+  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' | 'compose' | 'effects' = 'music',
+    context?: { tags?: string[]; genres?: string[]; instrumental?: boolean; duration?: number; language?: string; kind?: string }) =>
     request<AssistantReply>('POST', '/api/assistant/chat', { messages, mode, context }),
   assistantVerify: (songs: { title: string; artist: string }[]) => request<{ results: SongCheck[] }>('POST', '/api/assistant/verify', { songs }),
   assistantConfig: () => get<AssistantStatus>('/api/assistant/config'),
-  putAssistantConfig: (config: { key?: string; model?: string; instructions?: string; generalInstructions?: string; composeInstructions?: string; smartInstructions?: string; prompts?: Record<string, string>; groqKey?: string; groqModel?: string }) => request<AssistantStatus>('PUT', '/api/assistant/config', config),
+  putAssistantConfig: (config: { key?: string; model?: string; instructions?: string; generalInstructions?: string; composeInstructions?: string; smartInstructions?: string; effectsInstructions?: string; prompts?: Record<string, string>; groqKey?: string; groqModel?: string }) => request<AssistantStatus>('PUT', '/api/assistant/config', config),
   assistantModels: () => get<{ models: { id: string; name: string }[]; live: boolean }>('/api/assistant/models'),
   // music generation (ACE-Step on Modal)
   compose: (piece: ComposePiece & { dir: string; duration: number; seed?: number | null }) => request<ComposeResult>('POST', '/api/assistant/compose', piece),
   musicGenConfig: () => get<CloudStatus>('/api/assistant/musicgen'),
   putMusicGenConfig: (url: string, key: string, secret: string) => request<CloudStatus>('PUT', '/api/assistant/musicgen', { url, key, secret }),
   deleteMusicGenConfig: () => request<CloudStatus>('DELETE', '/api/assistant/musicgen'),
+  // sound generation (Stable Audio 3 on Modal)
+  sound: (sound: SoundDescription & { dir: string; seed?: number | null }) => request<ComposeResult>('POST', '/api/assistant/sound', sound),
+  soundGenConfig: () => get<CloudStatus>('/api/assistant/soundgen'),
+  putSoundGenConfig: (url: string, key: string, secret: string) => request<CloudStatus>('PUT', '/api/assistant/soundgen', { url, key, secret }),
+  deleteSoundGenConfig: () => request<CloudStatus>('DELETE', '/api/assistant/soundgen'),
   deleteAssistantConfig: (service: 'gemini' | 'groq' = 'gemini') => request<AssistantStatus>('DELETE', `/api/assistant/config?service=${service}`),
 
   // remote storages (S3)

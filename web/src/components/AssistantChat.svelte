@@ -2,8 +2,10 @@
   import { tick } from 'svelte';
   import { locale, t } from '../lib/i18n.svelte';
   import { markdown } from '../lib/markdown';
-  import { applyFilter, ask, assistant, compose, COMPOSE_DURATIONS, composeOptions, currentChat, moreSongs, newChat, saveComposeOptions, setMode, SONGS_PER_ANSWER,
-           youtubeSearchUrl, type AssistantMode } from '../lib/stores/assistant.svelte';
+  import { applyFilter, ask, assistant, compose, COMPOSE_DURATIONS, composeOptions, CREATE_KINDS, createSound, currentChat, effectOptions, moreSongs, newChat,
+           saveComposeOptions, saveEffectOptions, setMode, SONGS_PER_ANSWER, SOUND_DURATIONS, youtubeSearchUrl, type AssistantMode, type ChatTurn, type CreateKind,
+           type Take } from '../lib/stores/assistant.svelte';
+  import { effects } from '../lib/stores/effects.svelte';
   import { calculateScore, scorePercent } from '../lib/scoring';
   import { playTrack } from '../lib/stores/player.svelte';
   import { data } from '../lib/stores/data.svelte';
@@ -20,12 +22,19 @@
     music: ['A brawl in a crowded tavern', 'Exploring a haunted crypt', 'The final fight against a dragon', 'A sad farewell at a funeral'],
     general: ['How does an attack work?', 'A name and a short description for a dwarven innkeeper', 'Three plot hooks for a village festival'],
     smart: ['A brawl in a crowded tavern', 'Exploring a haunted crypt', 'A sad farewell at a funeral'],
-    compose: ['A brawl in a crowded tavern', 'Exploring a haunted crypt', 'A festival in an elven forest'],
+    create: ['A brawl in a crowded tavern', 'Rain on a tent at night', 'A heavy door slams shut in a dungeon', 'A festival in an elven forest'],
+  };
+  /** Music is composed by the music generation (ACE-Step), the other kinds are created by the sound generation (Stable Audio). */
+  const KIND_LABELS: Record<CreateKind, string> = { song: 'Music', music: 'Background music', ambience: 'Ambience', sfx: 'Sound effect' };
+  /** What the user asks for when the kind of a description is not the chosen one any more. */
+  const KIND_REQUESTS: Record<CreateKind, string> = {
+    song: 'Make it a piece of music instead.', music: 'Make it instrumental background music instead.', ambience: 'Make it an ambience instead.',
+    sfx: 'Make it a sound effect instead.',
   };
   const MODES: [AssistantMode, string, string, string][] = [
     ['music', 'New music', 'music', 'New songs for a scene, to find on YouTube and import'],
     ['smart', 'Smart search', 'sliders', 'Finds the best fitting songs of your whole library for a scene: the AI sets the filter, nothing is invented'],
-    ['compose', 'Compose', 'wand', 'Composes a new piece for a scene with AI (ACE-Step) and stores it in your library'],
+    ['create', 'Generate', 'wand', 'Generates music (ACE-Step), sound effects, ambiences and background music (Stable Audio) for a scene with AI and stores them in your library'],
     ['general', 'General', 'mask', 'Questions about rules, the world and the session'],
   ];
   const TOP_MATCHES = 5;
@@ -35,11 +44,16 @@
   let log = $state<HTMLElement | null>(null);
   const assistantConfigured = $derived(data.settings?.assistantConfigured === true);
   const musicGenConfigured = $derived(data.settings?.musicGenConfigured === true);
+  const soundGenConfigured = $derived(data.settings?.soundGenConfigured === true);
   const groqConfigured = $derived(data.settings?.groqConfigured === true);
-  const composing = $derived(assistant.mode === 'compose');
-  // the smart search runs on Groq or Gemini; the compose mode needs the music generation (without an AI service the text of the
-  // user is the description); the song suggestions and the general chat need Gemini
-  const configured = $derived(composing ? musicGenConfigured : assistant.mode === 'smart' ? groqConfigured || assistantConfigured : assistantConfigured);
+  const creating = $derived(assistant.mode === 'create');
+  // the kinds whose generator is set up: music needs the music generation, the sounds the sound generation
+  const kinds = $derived(CREATE_KINDS.filter((kind) => (kind === 'song' ? musicGenConfigured : soundGenConfigured)));
+  const composing = $derived(creating && effectOptions.kind === 'song');
+  const sounding = $derived(creating && effectOptions.kind !== 'song');
+  // the smart search runs on Groq or Gemini; the create mode needs the music or the sound generation (without an AI service the text
+  // of the user is the description); the song suggestions and the general chat need Gemini
+  const configured = $derived(creating ? kinds.length > 0 : assistant.mode === 'smart' ? groqConfigured || assistantConfigured : assistantConfigured);
   const admin = $derived(data.auth?.is_admin !== false);
   const chat = $derived(currentChat());
   const music = $derived(assistant.mode === 'music');
@@ -74,6 +88,13 @@
   $effect(() => {
     if (composing && !composeOptions.dir) composeOptions.dir = uploadTarget() ?? '';
   });
+  $effect(() => {
+    if (creating && kinds.length && !kinds.includes(effectOptions.kind)) effectOptions.kind = kinds[0];
+  });
+  // sounds go into the effects folder until another folder is chosen
+  $effect(() => {
+    if (sounding && !effectOptions.dir) effectOptions.dir = effects.directory || data.settings?.effectsDirectory || uploadTarget() || '';
+  });
 
   // the lyrics can be written in the languages of the app; until one is chosen, in the language of the app
   const lyricLanguages = $derived(data.locales.length ? data.locales : [locale()]);
@@ -87,6 +108,9 @@
   }
 
   const formatDuration = (seconds: number) => (seconds < 60 ? `${seconds} s` : `${seconds / 60} min`);
+
+  /** The kind of the description of an answer: music for a piece, the kind of the sound otherwise. */
+  const describedKind = (turn: { piece?: unknown; sound?: { kind: CreateKind } }): CreateKind | null => (turn.piece ? 'song' : turn.sound?.kind ?? null);
 
   function send(question = text) {
     if (!question.trim() || chat.busy) return;
@@ -147,11 +171,12 @@
   <div class="log" bind:this={log}>
     {#if !configured}
       <div class="empty">
-        <p>{composing ? t('The music generation is not configured yet.') : t('The AI assistant is not configured yet.')}</p>
+        <p>{creating ? t('The music and the sound generation are not configured yet.') : t('The AI assistant is not configured yet.')}</p>
         {#if admin}
-          <button class="btn primary" onclick={openSettings}><Icon name="settings" size={14} /> {composing ? t('Set up the music generation') : t('Set up the AI assistant')}</button>
+          <button class="btn primary" onclick={openSettings}><Icon name="settings" size={14} />
+            {creating ? t('Set up the music or the sound generation') : t('Set up the AI assistant')}</button>
         {:else}
-          <p class="muted">{composing ? t('Ask the SuperAdmin to set up the music generation in the settings.') : t('Ask the SuperAdmin to enter an API key in the settings.')}</p>
+          <p class="muted">{creating ? t('Ask the SuperAdmin to set up the music or the sound generation in the settings.') : t('Ask the SuperAdmin to enter an API key in the settings.')}</p>
         {/if}
       </div>
     {:else if !chat.turns.length}
@@ -159,6 +184,7 @@
         <p>{music ? t('Describe a scene of your session and get the {0} best fitting songs. They are new songs that are not in your library yet: open them on YouTube or download them with the download button to import them.', SONGS_PER_ANSWER)
                   : smart ? t('Describe a scene: the AI sets the mood filter and your library ranks its songs. Only songs you have are found.')
                   : composing ? t('Describe a scene and the AI composes a new piece for it (ACE-Step). The piece is stored in the chosen folder and analyzed like any other song.')
+                  : sounding ? t('Describe a sound and the AI creates it (Stable Audio): a sound effect, an ambience or background music. It is stored in your effects folder, or in the folder you choose.')
                   : t('Ask about the rules (e.g. DSA), the world or anything else around your session.')}</p>
         <div class="examples">
           {#each EXAMPLES[assistant.mode] as example (example)}
@@ -205,45 +231,41 @@
             <button class="btn sm apply" onclick={() => { applyFilter(chosen); assistant.open = false; }}><Icon name="filter" size={13} /> {t('Apply filter')}</button>
           {/if}
         </div>
-      {:else if composing}
+      {:else if creating}
         <div class="bubble bot">
           {#if turn.message}<p>{turn.message}</p>{/if}
           {#if turn.piece}
             {@const piece = turn.piece}
             <div class="piece">
-              <strong>{piece.title} <span class="kind">{piece.instrumental ? t('Instrumental') : piece.language ? `${t('Vocals')} · ${t(piece.language)}` : t('Vocals')}</span></strong>
+              <strong>{piece.title} <span class="kind">{t('Music')} · {piece.instrumental ? t('Instrumental') : piece.language ? `${t('Vocals')} · ${t(piece.language)}` : t('Vocals')}</span></strong>
               <span class="muted caption">{piece.caption}{piece.bpm ? ` · ${piece.bpm} BPM` : ''}</span>
               {#if piece.lyrics}<details><summary>{t('Lyrics')}</summary><pre>{piece.lyrics}</pre></details>{/if}
             </div>
-            <ol class="songs">
-              {#each turn.takes ?? [] as take, n (n)}
-                <li class:missing={take.status === 'error'}>
-                  {#if take.status === 'composing'}
-                    <span class="checking"></span>
-                    <span class="name"><span class="muted">{t('Composing… after a break the cloud needs a few minutes to start.')}</span></span>
-                  {:else if take.status === 'error'}
-                    <Icon name="close" size={14} />
-                    <span class="name"><span class="err">{take.error}</span></span>
-                  {:else if take.track}
-                    {@const track = take.track}
-                    <button class="icon-btn" title={t('Play')} aria-label={t('Play')} onclick={() => playTrack(track)}><Icon name="play" size={13} /></button>
-                    <span class="name"><strong>{track.title || track.name}</strong><span class="muted" title={track.path}>{track.path.split('/').at(-2) ?? ''}</span></span>
-                    <button class="icon-btn found" title={t('Show in the open tab')} aria-label={t('Show in the open tab')} onclick={() => searchLibrary(track.title || track.name)}><Icon name="search" size={14} /></button>
-                  {/if}
-                </li>
-              {/each}
-            </ol>
+            {@render takes(turn.takes ?? [], t('Composing… after a break the cloud needs a few minutes to start.'), true)}
             <div class="row">
-              <button class="btn sm apply" disabled={!composeOptions.dir} onclick={() => compose(turn)}>
+              <button class="btn sm apply" disabled={!composeOptions.dir || !musicGenConfigured} onclick={() => compose(turn)}>
                 <Icon name="wand" size={13} /> {turn.takes?.length ? t('Compose a variation') : t('Compose')}</button>
               <!-- the description holds the lyrics: switching the vocals needs a new one -->
-              {#if turn === lastTurn && outdated(piece) === 'vocals'}
+              {#if turn === lastTurn && composing && outdated(piece) === 'vocals'}
                 <button class="btn sm apply" disabled={chat.busy} onclick={() => send(composeOptions.instrumental ? t('Make it instrumental, without vocals.') : t('Make it with vocals and write lyrics.'))}>
                   <Icon name="refresh" size={13} /> {composeOptions.instrumental ? t('Describe again as instrumental') : t('Describe again with vocals')}</button>
-              {:else if turn === lastTurn && outdated(piece) === 'language'}
+              {:else if turn === lastTurn && composing && outdated(piece) === 'language'}
                 <button class="btn sm apply" disabled={chat.busy} onclick={() => send(t('Write the lyrics in {0}.', t(composeOptions.language)))}>
                   <Icon name="refresh" size={13} /> {t('Describe again in {0}', t(composeOptions.language))}</button>
               {/if}
+              {@render redescribe(turn)}
+            </div>
+          {:else if turn.sound}
+            {@const sound = turn.sound}
+            <div class="piece">
+              <strong>{sound.title} <span class="kind">{t(KIND_LABELS[sound.kind])}{sound.duration ? ` · ${formatDuration(sound.duration)}` : ''}</span></strong>
+              <span class="muted caption">{sound.caption}</span>
+            </div>
+            {@render takes(turn.takes ?? [], t('Creating… after a break the cloud needs a few minutes to start.'), false)}
+            <div class="row">
+              <button class="btn sm apply" disabled={!effectOptions.dir || !soundGenConfigured} onclick={() => createSound(turn)}>
+                <Icon name="waves" size={13} /> {turn.takes?.length ? t('Create a variation') : t('Create')}</button>
+              {@render redescribe(turn)}
             </div>
           {/if}
         </div>
@@ -293,28 +315,69 @@
     {#if chat.busy}<div class="bubble bot typing" aria-live="polite"><span></span><span></span><span></span></div>{/if}
   </div>
 
-  {#if configured && composing}
+  {#if configured && creating}
     <div class="options">
-      <label title={t('Length')}><select bind:value={composeOptions.duration} onchange={saveComposeOptions} aria-label={t('Length')}>
-        {#each COMPOSE_DURATIONS as seconds (seconds)}<option value={seconds}>{formatDuration(seconds)}</option>{/each}
-      </select></label>
-      <label class="check"><input type="checkbox" checked={!composeOptions.instrumental}
-             onchange={(e) => { composeOptions.instrumental = !e.currentTarget.checked; saveComposeOptions(); }} /> {t('Vocals')}</label>
-      {#if !composeOptions.instrumental}
-        <select bind:value={composeOptions.language} onchange={saveComposeOptions} aria-label={t('Language of the lyrics')} title={t('Language of the lyrics')}>
-          {#each lyricLanguages as code (code)}<option value={code}>{t(code)}</option>{/each}
+      <select bind:value={effectOptions.kind} onchange={saveEffectOptions} aria-label={t('Kind')} title={t('Kind')}>
+        {#each kinds as kind (kind)}<option value={kind}>{t(KIND_LABELS[kind])}</option>{/each}
+      </select>
+      {#if composing}
+        <select bind:value={composeOptions.duration} onchange={saveComposeOptions} aria-label={t('Length')} title={t('Length')}>
+          {#each COMPOSE_DURATIONS as seconds (seconds)}<option value={seconds}>{formatDuration(seconds)}</option>{/each}
         </select>
+        <label class="check"><input type="checkbox" checked={!composeOptions.instrumental}
+               onchange={(e) => { composeOptions.instrumental = !e.currentTarget.checked; saveComposeOptions(); }} /> {t('Vocals')}</label>
+        {#if !composeOptions.instrumental}
+          <select bind:value={composeOptions.language} onchange={saveComposeOptions} aria-label={t('Language of the lyrics')} title={t('Language of the lyrics')}>
+            {#each lyricLanguages as code (code)}<option value={code}>{t(code)}</option>{/each}
+          </select>
+        {/if}
+        <span class="folder" title={t('Target folder')}><FolderSelect bind:selected={composeOptions.dir} /></span>
+      {:else}
+        <select bind:value={effectOptions.duration} onchange={saveEffectOptions} aria-label={t('Length')} title={t('Length')}>
+          {#each SOUND_DURATIONS as seconds (seconds)}<option value={seconds}>{seconds ? formatDuration(seconds) : t('As suggested')}</option>{/each}
+        </select>
+        <span class="folder" title={t('Target folder')}><FolderSelect bind:selected={effectOptions.dir} /></span>
       {/if}
-      <span class="folder" title={t('Target folder')}><FolderSelect bind:selected={composeOptions.dir} /></span>
     </div>
   {/if}
   {#if configured}
     <form class="compose" onsubmit={(e) => { e.preventDefault(); send(); }}>
-      <textarea bind:this={input} bind:value={text} rows="2" placeholder={music ? t('Which songs fit…? e.g. a chase through the sewers') : composing ? t('Describe the piece… e.g. a chase through the sewers') : smart ? t('Describe the scene… e.g. a chase through the sewers') : t('Your question…')} onkeydown={onKeydown}></textarea>
+      <textarea bind:this={input} bind:value={text} rows="2" placeholder={music ? t('Which songs fit…? e.g. a chase through the sewers') : composing ? t('Describe the piece… e.g. a chase through the sewers') : sounding ? t('Describe the sound… e.g. rain on a tent at night') : smart ? t('Describe the scene… e.g. a chase through the sewers') : t('Your question…')} onkeydown={onKeydown}></textarea>
       <button class="btn primary send" type="submit" disabled={chat.busy || !text.trim()} title={t('Send')} aria-label={t('Send')}><Icon name="send" size={16} /></button>
     </form>
   {/if}
 </div>
+
+{#snippet takes(list: Take[], working: string, findable: boolean)}
+  <ol class="songs">
+    {#each list as take, n (n)}
+      <li class:missing={take.status === 'error'}>
+        {#if take.status === 'composing'}
+          <span class="checking"></span>
+          <span class="name"><span class="muted">{working}</span></span>
+        {:else if take.status === 'error'}
+          <Icon name="close" size={14} />
+          <span class="name"><span class="err">{take.error}</span></span>
+        {:else if take.track}
+          {@const track = take.track}
+          <button class="icon-btn" title={t('Play')} aria-label={t('Play')} onclick={() => playTrack(track)}><Icon name="play" size={13} /></button>
+          <span class="name"><strong>{track.title || track.name}</strong><span class="muted" title={track.path}>{track.path.split('/').at(-2) ?? ''}</span></span>
+          {#if findable}
+            <button class="icon-btn found" title={t('Show in the open tab')} aria-label={t('Show in the open tab')} onclick={() => searchLibrary(track.title || track.name)}><Icon name="search" size={14} /></button>
+          {/if}
+        {/if}
+      </li>
+    {/each}
+  </ol>
+{/snippet}
+
+<!-- a description is written for its kind (a piece of music or a sound): another kind needs a new one -->
+{#snippet redescribe(turn: ChatTurn)}
+  {#if turn === lastTurn && turn.role === 'assistant' && describedKind(turn) !== effectOptions.kind}
+    <button class="btn sm apply" disabled={chat.busy} onclick={() => send(t(KIND_REQUESTS[effectOptions.kind]))}>
+      <Icon name="refresh" size={13} /> {t('Describe again as {0}', t(KIND_LABELS[effectOptions.kind]))}</button>
+  {/if}
+{/snippet}
 
 <style>
   .chat {

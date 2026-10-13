@@ -11,6 +11,7 @@ DT_FORWARDED_ALLOW_IPS (proxies whose X-Forwarded-* headers are trusted, default
 
 API keys and endpoints (a value stored in the settings wins; these are never written to settings.json):
 DT_GEMINI_API_KEY, DT_GEMINI_MODEL, DT_GROQ_API_KEY, DT_GROQ_MODEL (AI assistant), DT_MUSICGEN_URL/_KEY/_SECRET (music generation),
+DT_SOUNDGEN_URL/_KEY/_SECRET (sound generation),
 DT_VOXALYZER_CLOUD_URL/_KEY/_SECRET (cloud analysis), DT_MODAL_KEY/DT_MODAL_SECRET (shared Modal proxy auth token),
 DT_ACOUSTID_API_KEY (metadata lookup).
 """

@@ -172,6 +172,7 @@ Options can be passed as arguments (`dungeontuber-server --help`) or environment
 | `DT_GEMINI_API_KEY` / `DT_GEMINI_MODEL` | Google Gemini key and model of the AI assistant | – / `gemini-3.8-flash` |
 | `DT_GROQ_API_KEY` / `DT_GROQ_MODEL` | Groq key and model for the smart search and composing | – / `openai/gpt-oss-120b` |
 | `DT_MUSICGEN_URL`, `DT_MUSICGEN_KEY`, `DT_MUSICGEN_SECRET` | music generation on Modal (see `agents/musicgen`) | – |
+| `DT_SOUNDGEN_URL`, `DT_SOUNDGEN_KEY`, `DT_SOUNDGEN_SECRET` | sound generation on Modal (see `agents/soundgen`) | – |
 | `DT_VOXALYZER_CLOUD_URL`, `DT_VOXALYZER_CLOUD_KEY`, `DT_VOXALYZER_CLOUD_SECRET` | cloud analysis on Modal (see `agents/voxalyzer`) | – |
 | `DT_MODAL_KEY` / `DT_MODAL_SECRET` | Modal proxy auth token for both cloud functions when they have none of their own | – |
 | `DT_ACOUSTID_API_KEY` | AcoustID application key for the metadata lookup | – |

@@ -8,8 +8,9 @@ Agents are small programs that connect *out* to a DungeonTuber server (see **Set
 | `dt-voxalyzer.exe` | [`voxalyzer`](voxalyzer/README.md) | analyses songs (categories, tags, genres, BPM) |
 | `dt-youtube.exe` | [`youtube`](youtube/README.md) | downloads YouTube audio with yt-dlp and uploads it |
 
-Two cloud functions on Modal are called by the server instead (no agent connects): the [cloud analysis](voxalyzer/README.md) and
-the [music generation](musicgen/README.md) of the AI assistant (ACE-Step 1.5).
+Cloud functions on Modal are called instead (no agent connects): the [cloud analysis](voxalyzer/README.md), the
+[music generation](musicgen/README.md) of the AI assistant (ACE-Step 1.5) and the [sound generation](soundgen/README.md)
+(Stable Audio 3: background music, ambiences and sound effects).
 
 ## One configuration for all agents on a machine
 

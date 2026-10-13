@@ -149,6 +149,8 @@ export interface ServerSettings {
   groqConfigured: boolean;
   /** The music generation (ACE-Step on Modal) is set up. */
   musicGenConfigured: boolean;
+  /** The sound generation (Stable Audio 3 on Modal) is set up. */
+  soundGenConfigured: boolean;
 }
 
 /** A song the AI assistant suggests. */
@@ -177,6 +179,20 @@ export interface AssistantReply {
   filter?: SmartFilter;
   /** The piece described in the compose mode. */
   piece?: ComposePiece;
+  /** The sound described in the effects mode. */
+  sound?: SoundDescription;
+}
+
+/** What the sound generation creates: a sound effect, an ambience (a steady background of a place) or instrumental music. */
+export type SoundKind = 'sfx' | 'ambience' | 'music';
+
+/** A sound for the sound generation (see server/soundgen.py); the caption is the description Stable Audio creates it from. */
+export interface SoundDescription {
+  title: string;
+  caption: string;
+  kind: SoundKind;
+  /** Seconds the assistant suggests; null: the default of the kind. */
+  duration: number | null;
 }
 
 /** A piece for the music generation (see server/musicgen.py); the caption is the description ACE-Step composes from. */
@@ -220,6 +236,8 @@ export interface AssistantStatus {
   composeInstructions: string;
   /** Additional instructions of the SuperAdmin for the smart search; without them those of the song suggestions are used. */
   smartInstructions: string;
+  /** Additional instructions of the SuperAdmin for the effects mode. */
+  effectsInstructions: string;
   groqConfigured: boolean;
   groqModel: string;
   groqDefaultModel: string;

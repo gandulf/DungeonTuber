@@ -26,6 +26,9 @@ services:
       # DT_MUSICGEN_URL: "https://...modal.run"       # music generation, see agents/musicgen
       # DT_MUSICGEN_KEY: "wk-..."
       # DT_MUSICGEN_SECRET: "ws-..."
+      # DT_SOUNDGEN_URL: "https://...modal.run"       # sound generation, see agents/soundgen
+      # DT_SOUNDGEN_KEY: "wk-..."
+      # DT_SOUNDGEN_SECRET: "ws-..."
       # DT_VOXALYZER_CLOUD_URL: "https://...modal.run"  # cloud analysis, see agents/voxalyzer
       # DT_VOXALYZER_CLOUD_KEY: "wk-..."
       # DT_VOXALYZER_CLOUD_SECRET: "ws-..."

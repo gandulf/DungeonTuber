@@ -1,12 +1,12 @@
 """The AI assistant (Google Gemini): song suggestions for a scene, a general chat for the game master, new pieces composed by the
-music generation (ACE-Step on Modal), and their configuration."""
+music generation (ACE-Step on Modal), sounds of the sound generation (Stable Audio 3 on Modal), and their configuration."""
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core.i18n import _
-from server import assistant, musicgen, songcheck
+from server import assistant, musicgen, songcheck, soundgen
 from server.auth import current_user, require_admin, require_auth
 from server.paths import safe_path
 
@@ -25,11 +25,12 @@ class SearchContext(BaseModel):
     instrumental: bool = True  # compose mode: a piece without vocals
     duration: int | None = Field(default=None, ge=10, le=600)  # compose mode: the length of the piece in seconds (for the lyrics)
     language: str | None = Field(default=None, pattern=r"^[a-z]{2,3}$")  # compose mode: the language of the lyrics
+    kind: Literal["sfx", "ambience", "music"] | None = None  # effects mode: the kind of sound
 
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=200)
-    mode: Literal["music", "general", "smart", "compose"] = "music"
+    mode: Literal["music", "general", "smart", "compose", "effects"] = "music"
     context: SearchContext | None = None
 
 
@@ -55,6 +56,15 @@ class ComposeRequest(BaseModel):
     analyze: bool = True
 
 
+class SoundRequest(BaseModel):
+    dir: str  # the folder the sound is stored in, usually the effects folder
+    title: str = Field(default="", max_length=200)
+    caption: str = Field(min_length=1, max_length=assistant.MAX_CAPTION_LENGTH)
+    kind: Literal["sfx", "ambience", "music"] = "sfx"
+    duration: int | None = Field(default=None, ge=soundgen.MIN_SECONDS, le=soundgen.MAX_SECONDS)  # None: the default of the kind
+    seed: int | None = Field(default=None, ge=0, le=2 ** 31 - 1)
+
+
 class CloudRequest(BaseModel):
     url: str
     key: str
@@ -68,6 +78,7 @@ class AssistantConfig(BaseModel):
     generalInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     composeInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     smartInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
+    effectsInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     # the built-in prompts by name (see assistant.PROMPTS); empty or the default restores the built-in one
     prompts: dict[str, Annotated[str, Field(max_length=assistant.MAX_PROMPT_LENGTH)]] | None = Field(default=None, max_length=20)
     groqKey: str | None = None  # None keeps the stored key
@@ -106,7 +117,7 @@ def get_models():
 @router.put("/api/assistant/config", dependencies=[Depends(require_admin)])
 def put_config(body: AssistantConfig):
     assistant.configure(body.key, body.model, body.instructions, body.generalInstructions, body.groqKey, body.groqModel,
-                         body.composeInstructions, body.smartInstructions, body.prompts)
+                         body.composeInstructions, body.smartInstructions, body.prompts, body.effectsInstructions)
     return assistant.status()
 
 
@@ -147,3 +158,36 @@ def put_musicgen(body: CloudRequest):
 def delete_musicgen():
     musicgen.delete_config()
     return musicgen.status()
+
+
+@router.post("/api/assistant/sound")
+def sound(body: SoundRequest, user: str = Depends(current_user)):
+    """Generates the sound in the cloud function and stores it in `dir`; takes from a few seconds to some minutes (cold start)."""
+    if not soundgen.configured():
+        raise HTTPException(status_code=409, detail=_("The sound generation is not configured"))
+    directory = safe_path(body.dir, kind="dir")
+    try:
+        return soundgen.create(body.model_dump(exclude={"dir"}), directory, user)
+    except soundgen.SoundGenError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/api/assistant/soundgen", dependencies=[Depends(require_admin)])
+def soundgen_status():
+    """Whether the sound generation is configured (the key and the secret are never sent back)."""
+    return soundgen.status()
+
+
+@router.put("/api/assistant/soundgen", dependencies=[Depends(require_admin)])
+def put_soundgen(body: CloudRequest):
+    try:
+        soundgen.save_config(body.url, body.key, body.secret)
+    except soundgen.CloudError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return soundgen.status()
+
+
+@router.delete("/api/assistant/soundgen", dependencies=[Depends(require_admin)])
+def delete_soundgen():
+    soundgen.delete_config()
+    return soundgen.status()

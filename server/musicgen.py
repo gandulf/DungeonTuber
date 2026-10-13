@@ -99,22 +99,31 @@ def compose(piece: dict, directory: Location, user: str, analyze: bool = True) -
     """Generates the piece and stores it in `directory`; returns the track of the library and the seed."""
     title = str(piece.get("title") or "").strip() or _("Composition")
     data, seed = generate({key: piece.get(key) for key in ("caption", "lyrics", "language", "instrumental", "duration", "bpm", "seed")})
+    track = store(data, directory, user, title=title, artist=ARTIST, summary=str(piece.get("caption") or ""), bpm=piece.get("bpm"),
+                  analyze=analyze, invalid=_("The music generation sent an unexpected answer"))
+    return {"track": track, "seed": seed}
+
+
+def store(data: bytes, directory: Location, user: str, *, title: str, artist: str, summary: str, bpm: object = None,
+          analyze: bool = True, invalid: str) -> dict:
+    """Tags the generated mp3 (title, artist, the description as comment) and stores it in `directory` like an upload; returns the
+    track of the library. `invalid` is the error for an answer that is no mp3."""
     with tempfile.TemporaryDirectory(prefix="dt-musicgen-") as tmp:
         path = Path(tmp) / "piece.mp3"
         path.write_bytes(data)
         try:
             audio = _audio(path)
             update_mp3_title(audio, title, False)
-            update_mp3_artist(audio, ARTIST, False)
-            update_mp3_summary(audio, str(piece.get("caption") or ""), False)
-            if isinstance(piece.get("bpm"), int):
-                update_mp3_bpm(audio, piece["bpm"], False)
+            update_mp3_artist(audio, artist, False)
+            update_mp3_summary(audio, summary, False)
+            if isinstance(bpm, int):
+                update_mp3_bpm(audio, bpm, False)
             audio.save()
         except Exception as e:  # mutagen raises its own errors for files that are not mp3
-            raise MusicGenError(_("The music generation sent an unexpected answer")) from e
+            raise MusicGenError(invalid) from e
         entry = parse_mp3(path)
         if entry is None:
-            raise MusicGenError(_("The music generation sent an unexpected answer"))
+            raise MusicGenError(invalid)
         target = _target(directory, title)
         with open(path, "rb") as source:
             try:
@@ -131,7 +140,7 @@ def compose(piece: dict, directory: Location, user: str, analyze: bool = True) -
     if analyze and current_backend() is not None:
         with contextlib.suppress(ConnectionError):  # the agent went away; the piece is stored anyway
             analysis_queue.submit([target])
-    return {"track": index.known(target), "seed": seed}
+    return index.known(target)
 
 
-__all__ = ["CloudError", "MusicGenError", "compose", "configured", "delete_config", "generate", "save_config", "status"]
+__all__ = ["CloudError", "MusicGenError", "compose", "configured", "delete_config", "generate", "save_config", "status", "store"]

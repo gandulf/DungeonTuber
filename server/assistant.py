@@ -1,9 +1,10 @@
 """AI assistant through the Gemini API of Google (aistudio.google.com) and Groq (console.groq.com). "music" suggests songs for a scene of a
 role playing session, "general" answers questions of the game master (rules like those of DSA, the setting, ideas), "smart" turns a
 scene into the filter of the app so that the songs of the library are ranked by it (see server/smartsearch.py), "compose" writes the
-description of a new piece that the music generation composes (see server/musicgen.py).
+description of a new piece that the music generation composes (see server/musicgen.py), "effects" the description of a sound
+effect, an ambience or background music for the sound generation (see server/soundgen.py).
 
-The smart search and the compose mode run on Groq when a Groq key is stored (an open model like gpt-oss-120b is as good at choosing
+The smart search, the compose and the effects mode run on Groq when a Groq key is stored (an open model like gpt-oss-120b is as good at choosing
 values as Gemini and has a quota of its own); the song suggestions and the general chat need the knowledge of Gemini.
 
 The SuperAdmin stores the API keys in the settings; they are never sent back to the browser. The client keeps the conversation
@@ -49,7 +50,7 @@ GROQ_MODELS = [
     {"id": "openai/gpt-oss-120b", "name": "GPT-OSS 120B"},
     {"id": "openai/gpt-oss-20b", "name": "GPT-OSS 20B"},
 ]
-GROQ_MODES = ("smart", "compose")
+GROQ_MODES = ("smart", "compose", "effects")
 USER_AGENT = "DungeonTuber (+https://github.com/gandulf/DungeonTuber)"
 SONG_COUNT = 10
 TIMEOUT = 60
@@ -122,6 +123,33 @@ rarely; (parentheses) mark background voices or a choir echo.
 Name the voice in the caption (for example "rough male vocals" or "ethereal female choir") and the instruments that carry it, so the
 voice does not drown them."""
 # sung words per second: about 2 to 3 is the limit (more sounds rushed); background music needs room for the instruments
+EFFECTS_PROMPT = """You write the description for an AI sound generator (Stable Audio 3) that creates sound effects, ambiences and
+instrumental background music for a scene of a tabletop role playing session; the game master layers them under the music.
+Answer with a JSON object only:
+{"message": "<one short sentence for the user>", "title": "<a short name for the sound, e.g. Rain on the tent>",
+ "caption": "<the description>", "duration": <seconds>}
+The caption is ALWAYS in English, also when the user and the instructions below write in another language: the generator only
+understands English. It learned from the descriptions of Freesound and AudioSparx, so describe the sound the way they do, in one to
+three plain sentences or comma separated terms, at most 400 characters:
+- A sound effect: the source (exactly what object, creature or material makes the sound), the action (how it is triggered and how it
+  ends, e.g. "slamming shut with a fast decay") and the recording (close mic, dry room, stone hall reverb, distance).
+  Example: "A heavy oak door slamming shut in a stone hall, deep wooden thud with a short metallic rattle of the latch, natural reverb".
+- An ambience: the place and 3 to 5 layered sources from near to far, steady and without a melody, e.g. "Field recording of a night
+  forest, crickets and rustling leaves close by, a distant owl, light wind in the trees, calm and continuous".
+- Background music: the genre, 2 or 3 real instruments and how they are played, the mood and the tempo, e.g. "A sombre medieval folk
+  piece, solo lute with delicate finger picking, low hurdy-gurdy drone, cavernous reverb, 70 BPM". No voices: the generator cannot sing.
+Only things that can be heard: no story, no names of persons or places, no abstract words like "epic" or "beautiful" alone.
+duration fits the sound: 1 to 5 seconds for single effects (a door, a sword hit, a spell), 5 to 20 for short sequences (a fight,
+a collapsing tunnel), 30 to 120 for ambiences and loops, 60 to 180 for music.
+Only the title and the message are in the language the user writes in.
+When the user asks for changes, change the previous description accordingly.
+"""
+EFFECT_KINDS = {
+    "sfx": "The user wants a sound effect.",
+    "ambience": "The user wants an ambience: a steady background of the place that can be looped.",
+    "music": "The user wants instrumental background music.",
+}
+
 LYRICS_WORDS_PER_SECOND = (1.2, 1.8)
 
 
@@ -161,6 +189,18 @@ COMPOSE_SCHEMA = {
     },
     "required": ["message", "title", "caption", "lyrics"],
 }
+
+EFFECTS_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "message": {"type": "STRING"},
+        "title": {"type": "STRING"},
+        "caption": {"type": "STRING"},
+        "duration": {"type": "INTEGER"},
+    },
+    "required": ["message", "title", "caption"],
+}
+MAX_SOUND_SECONDS = 380
 
 # the answer Gemini has to give in the music mode (structured output)
 RESPONSE_SCHEMA = {
@@ -210,7 +250,7 @@ def provider(mode: str) -> str | None:
 
 
 _INSTRUCTION_KEYS = {"general": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, "compose": SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS,
-                     "smart": SettingKeys.ASSISTANT_SMART_INSTRUCTIONS}
+                     "smart": SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, "effects": SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS}
 
 # Without instructions of its own the smart search uses those of the song suggestions for the game, the setting and the taste; they
 # often ask for a list of songs in a format of their own, which must not replace the filter the smart search answers with.
@@ -225,6 +265,7 @@ PROMPTS = {
     "compose.system": COMPOSE_PROMPT,
     "compose.instrumental": INSTRUMENTAL_RULE,
     "compose.vocals": VOCALS_RULE,
+    "effects.system": EFFECTS_PROMPT,
     "general.system": GENERAL_PROMPT,
 }
 MAX_PROMPT_LENGTH = 12000
@@ -280,6 +321,8 @@ def system_prompt(mode: str = "music", context: dict | None = None) -> str:
         base = prompt_text("compose.system") + "\n" + prompt_text("compose.instrumental" if instrumental else "compose.vocals")
         rules = [] if instrumental else [lyrics_budget((context or {}).get("duration")), lyrics_language((context or {}).get("language"))]
         base += "".join(f"\n{rule}" for rule in rules if rule)
+    elif mode == "effects":
+        base = prompt_text("effects.system") + "\n" + EFFECT_KINDS[effect_kind((context or {}).get("kind"))]
     else:
         base = prompt_text("general.system" if mode == "general" else "music.system")
     return f"{base}\n\n{intro}\n{extra}" if extra else base
@@ -304,7 +347,7 @@ def status() -> dict:
             "keySource": setting_or_env(SettingKeys.ASSISTANT_API_KEY, GEMINI_KEY_ENV)[1],
             "groqKeySource": setting_or_env(SettingKeys.GROQ_API_KEY, GROQ_KEY_ENV)[1],
             "instructions": instructions(), "generalInstructions": instructions("general"), "composeInstructions": instructions("compose"),
-            "smartInstructions": instructions("smart"),
+            "smartInstructions": instructions("smart"), "effectsInstructions": instructions("effects"),
             "groqConfigured": bool(groq), "groqModel": groq_model(), "groqDefaultModel": GROQ_DEFAULT_MODEL, "groqKeyHint": _hint(groq),
             "groqModels": GROQ_MODELS, "prompts": prompts()}
 
@@ -325,8 +368,9 @@ def _store(key_setting: str, model_setting: str, default_model: str, key: str | 
 
 def configure(key: str | None, model_name: str | None, extra_instructions: str | None = None, general_instructions: str | None = None,
               groq_api_key: str | None = None, groq_model_name: str | None = None, compose_instructions: str | None = None,
-              smart_instructions: str | None = None, changed_prompts: dict[str, str] | None = None):
-    """Stores the keys and models of Gemini and Groq and the additional instructions of both modes; None keeps the stored value."""
+              smart_instructions: str | None = None, changed_prompts: dict[str, str] | None = None,
+              effects_instructions: str | None = None):
+    """Stores the keys and models of Gemini and Groq and the additional instructions of the modes; None keeps the stored value."""
     for legacy in _LEGACY_KEYS:
         AppSettings.remove(legacy)
     _store(SettingKeys.ASSISTANT_API_KEY, SettingKeys.ASSISTANT_MODEL, DEFAULT_MODEL, key, model_name)
@@ -336,7 +380,8 @@ def configure(key: str | None, model_name: str | None, extra_instructions: str |
     for setting, value in ((SettingKeys.ASSISTANT_INSTRUCTIONS, extra_instructions),
                            (SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, general_instructions),
                            (SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS, compose_instructions),
-                           (SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, smart_instructions)):
+                           (SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, smart_instructions),
+                           (SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS, effects_instructions)):
         if value is None:
             continue
         if value.strip():
@@ -471,6 +516,23 @@ def to_piece(raw: dict, instrumental: bool = True) -> dict | None:
             "bpm": bpm if isinstance(bpm, int) and 30 <= bpm <= 300 else None}
 
 
+def effect_kind(kind: object) -> str:
+    """The kind of sound of the effects mode: sfx, ambience or music (sfx for anything else)."""
+    return kind if isinstance(kind, str) and kind in EFFECT_KINDS else "sfx"
+
+
+def to_sound(raw: dict, kind: object = "sfx") -> dict | None:
+    """The sound of an effects answer, cut to what Stable Audio accepts; None without a caption."""
+    caption = " ".join(str(raw.get("caption") or "").split())[:MAX_CAPTION_LENGTH]
+    if not caption:
+        return None
+    duration = raw.get("duration")
+    return {"title": " ".join(str(raw.get("title") or "").split())[:120] or caption[:60],
+            "caption": caption,
+            "kind": effect_kind(kind),
+            "duration": duration if isinstance(duration, int) and 1 <= duration <= MAX_SOUND_SECONDS else None}
+
+
 def json_schema(schema: dict, enums: bool = True, strict: bool = False, nullable: bool = False) -> dict:
     """The Gemini schema (OBJECT, STRING, nullable) as JSON schema for Groq; without enums the lists of tags and genres are not sent
     twice (the prompt has them, and the answer is checked against them anyway). For the strict mode of Groq every property is
@@ -537,7 +599,8 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
     """
     history = [{"role": m["role"], "content": m["content"][:MAX_MESSAGE_LENGTH]} for m in messages[-MAX_MESSAGES:]]
     tags, genres = (context or {}).get("tags") or [], (context or {}).get("genres") or []
-    schema = {"smart": smartsearch.schema(tags, genres), "compose": COMPOSE_SCHEMA, "general": None}.get(mode, RESPONSE_SCHEMA)
+    schema = {"smart": smartsearch.schema(tags, genres), "compose": COMPOSE_SCHEMA, "effects": EFFECTS_SCHEMA,
+              "general": None}.get(mode, RESPONSE_SCHEMA)
     service = provider(mode)
     if service is None:
         raise AssistantError(_("The AI assistant is not configured"))
@@ -561,4 +624,8 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
         if piece and not instrumental and chosen:
             piece["language"] = chosen  # the language the user chose, also when the model named another one
         return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content, "piece": piece}
+    if mode == "effects":
+        kind = (context or {}).get("kind")
+        sound = to_sound(parsed, kind) or to_sound({"caption": messages[-1]["content"]}, kind)
+        return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content, "sound": sound}
     return {"message": str(parsed.get("message") or "").strip(), "songs": _songs(parsed.get("songs")), "content": content}

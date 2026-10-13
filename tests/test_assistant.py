@@ -58,7 +58,7 @@ def test_the_key_is_never_sent_back(client):
     status = client.put("/api/assistant/config", json={"key": "gsk_secret_1234", "model": ""}).json()
     assert status == {"configured": True, "model": assistant.DEFAULT_MODEL, "defaultModel": assistant.DEFAULT_MODEL, "keyHint": "1234",
                       "keySource": "settings", "groqKeySource": None,
-                      "instructions": "", "generalInstructions": "", "composeInstructions": "", "smartInstructions": "", "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
+                      "instructions": "", "generalInstructions": "", "composeInstructions": "", "smartInstructions": "", "effectsInstructions": "", "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
                       "groqDefaultModel": assistant.GROQ_DEFAULT_MODEL, "groqKeyHint": "", "groqModels": assistant.GROQ_MODELS,
                       "prompts": assistant.prompts()}
     assert "gsk_secret" not in client.get("/api/assistant/config").text

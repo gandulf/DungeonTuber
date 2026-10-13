@@ -188,6 +188,33 @@
     }
   }
 
+  let soundGen = $state<CloudStatus>({ configured: false, host: null, source: null });
+  let soundGenUrl = $state('');
+  let soundGenKey = $state('');
+  let soundGenSecret = $state('');
+  if (admin) void api.soundGenConfig().then((result) => (soundGen = result)).catch(() => {});
+
+  async function saveSoundGen() {
+    try {
+      soundGen = await api.putSoundGenConfig(soundGenUrl, soundGenKey, soundGenSecret);
+      soundGenUrl = soundGenKey = soundGenSecret = '';
+      if (data.settings) data.settings.soundGenConfigured = soundGen.configured;
+      toast(t('Sound generation saved'), 'success');
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  async function removeSoundGen() {
+    if (!(await askConfirm(t('Remove the sound generation settings?')))) return;
+    try {
+      soundGen = await api.deleteSoundGenConfig();
+      if (data.settings) data.settings.soundGenConfigured = soundGen.configured;
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   async function removeMusicGen() {
     if (!(await askConfirm(t('Remove the music generation settings?')))) return;
     try {
@@ -201,7 +228,7 @@
   let assistantStatus = $state<AssistantStatus | null>(null);
   let assistantKey = $state('');
   let assistantModel = $state('');
-  type InstructionMode = 'music' | 'smart' | 'compose' | 'general';
+  type InstructionMode = 'music' | 'smart' | 'compose' | 'effects' | 'general';
   /** The additional instructions, one tab per mode of the assistant. */
   const INSTRUCTION_TABS: { mode: InstructionMode; label: string; icon: string; placeholder: string; hint: string; promptHint: string }[] = [
     { mode: 'music', label: 'New music', icon: 'music',
@@ -216,6 +243,10 @@
       placeholder: 'e.g. We play DSA in Aventuria. Thorwal sounds Nordic with tagelharpa and drums, the elves ethereal with harp and flute.',
       hint: 'Added to every new piece the assistant describes for the music generation: setting, regions, instruments, taste. The instructions for the song suggestions are not used there.',
       promptHint: 'The built-in prompt tells the AI how to write the description and the lyrics for ACE-Step. Depending on the vocals option one of the two rules is added, with vocals also the length of the lyrics.' },
+    { mode: 'effects', label: 'Effects', icon: 'waves',
+      placeholder: 'e.g. We play DSA in Aventuria. Dungeons are damp and echoing, magic sounds crystalline and bright rather than electronic.',
+      hint: 'Added to every sound the assistant describes for the sound generation: setting, places, how magic and creatures sound.',
+      promptHint: 'The built-in prompt tells the AI how to describe sound effects, ambiences and background music for Stable Audio. The kind of sound chosen in the assistant is added to it.' },
     { mode: 'general', label: 'General', icon: 'mask', placeholder: 'e.g. We play DSA 4.1 with the core rules and the Aventurian Compendium.',
       hint: 'Added to every question of the general chat: the rules edition, the setting, house rules or the heroes.',
       promptHint: 'The built-in prompt sets the role of the assistant; your instructions above are added to it.' },
@@ -230,9 +261,10 @@
   const isDefault = (entry: { name: string; default: string }) => (prompts[entry.name] ?? '').trim() === entry.default.trim();
   const promptsChanged = (status: AssistantStatus) => status.prompts.some((entry) => (prompts[entry.name] ?? '').trim() !== entry.value.trim());
   let instructionTab = $state<InstructionMode>('music');
-  let instructions = $state<Record<InstructionMode, string>>({ music: '', smart: '', compose: '', general: '' });
+  let instructions = $state<Record<InstructionMode, string>>({ music: '', smart: '', compose: '', effects: '', general: '' });
   const storedInstructions = (status: AssistantStatus): Record<InstructionMode, string> =>
-    ({ music: status.instructions, smart: status.smartInstructions, compose: status.composeInstructions, general: status.generalInstructions });
+    ({ music: status.instructions, smart: status.smartInstructions, compose: status.composeInstructions, effects: status.effectsInstructions,
+       general: status.generalInstructions });
   let assistantModels = $state<{ id: string; name: string }[]>([]);
   let groqKey = $state('');
   let groqModel = $state('');
@@ -288,7 +320,7 @@
 
   const assistantPayload = () => ({ ...(assistantKey.trim() ? { key: assistantKey.trim() } : {}), model: assistantModel.trim(),
     instructions: instructions.music.trim(), smartInstructions: instructions.smart.trim(), composeInstructions: instructions.compose.trim(),
-    generalInstructions: instructions.general.trim(), prompts: { ...prompts } });
+    effectsInstructions: instructions.effects.trim(), generalInstructions: instructions.general.trim(), prompts: { ...prompts } });
 
   async function saveAssistant() {
     try {
@@ -648,6 +680,19 @@
             <span class="grow"></span>
             <button class="btn" disabled={!musicGenUrl.trim() || !musicGenKey.trim() || !musicGenSecret.trim()} onclick={saveMusicGen}>{t('Save')}</button>
             {#if musicGen.source === 'settings'}<button class="btn danger" onclick={removeMusicGen}>{t('Remove')}</button>{/if}
+          </div>
+        </section>
+        <section class="group">
+          <h4>{t('Sound generation')}</h4>
+          <span class="muted small">{t('Creates sound effects, ambiences and background music ("Generate" in the assistant) with Stable Audio 3 in a cloud function on Modal, see agents/soundgen/modal_app.py. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser. Without a Groq or Gemini key the description is used as it is.')}</span>
+          <span class="small">{soundGen.configured ? t('Configured ({0})', soundGen.host ?? '') + fromEnv(soundGen.source, 'DT_SOUNDGEN_URL') : t('Not configured')}</span>
+          <label class="field">{t('Endpoint URL')}<input type="url" placeholder="https://…modal.run" bind:value={soundGenUrl} /></label>
+          <label class="field">{t('Key')}<input type="text" autocomplete="off" placeholder="wk-…" bind:value={soundGenKey} /></label>
+          <label class="field">{t('Secret')}<input type="password" autocomplete="off" placeholder="ws-…" bind:value={soundGenSecret} /></label>
+          <div class="row">
+            <span class="grow"></span>
+            <button class="btn" disabled={!soundGenUrl.trim() || !soundGenKey.trim() || !soundGenSecret.trim()} onclick={saveSoundGen}>{t('Save')}</button>
+            {#if soundGen.source === 'settings'}<button class="btn danger" onclick={removeSoundGen}>{t('Remove')}</button>{/if}
           </div>
         </section>
       {:else if section === 'categories'}

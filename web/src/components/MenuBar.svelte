@@ -46,7 +46,7 @@
           title={library.global ? t('Global search: the best {0} songs of the whole library. Click to search the open tab again.', 50)
                                 : t('Search the whole library instead of the open tab')}
           onclick={() => void setGlobal(!library.global)}><Icon name="globe" size={17} /></button>
-  {#if data.settings?.assistantConfigured || data.settings?.groqConfigured || data.settings?.musicGenConfigured || data.auth?.is_admin !== false}
+  {#if data.settings?.assistantConfigured || data.settings?.groqConfigured || data.settings?.musicGenConfigured || data.settings?.soundGenConfigured || data.auth?.is_admin !== false}
     <button class="assistant" class:active={assistant.open} class:labelled={showLabel} title={t('AI Assistant')} aria-label={t('AI Assistant')} aria-pressed={assistant.open}
             data-tour="assistant" bind:clientWidth={buttonWidth} onclick={toggleAssistant}>
       <Icon name="sparkles" size={17} />{#if showLabel}<span>{t('AI Assistant')}</span>{/if}

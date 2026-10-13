@@ -68,6 +68,8 @@ class SettingKeys(StrEnum):
     ASSISTANT_COMPOSE_INSTRUCTIONS = "assistantComposeInstructions"
     # the same for the smart search; without them it uses those of the song suggestions as background
     ASSISTANT_SMART_INSTRUCTIONS = "assistantSmartInstructions"
+    # the same for the effects mode (the description of a sound effect, an ambience or background music for the sound generation)
+    ASSISTANT_EFFECTS_INSTRUCTIONS = "assistantEffectsInstructions"
     # the built-in prompts of the assistant that the SuperAdmin changed ({"compose.vocals": "..."}, see server/assistant.py PROMPTS)
     ASSISTANT_PROMPTS = "assistantPrompts"
     # application key of AcoustID for the metadata lookup (see core/musiclookup.py); never sent back to the browser
