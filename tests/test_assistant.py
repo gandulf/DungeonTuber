@@ -1,6 +1,7 @@
 import io
 import json
 import urllib.error
+import urllib.parse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -237,7 +238,8 @@ def services(monkeypatch):
     answers = {"gemini": [], "groq": []}
 
     def urlopen(request, timeout=None):
-        service = "groq" if "api.groq.com" in request.full_url else "gemini"
+        host = urllib.parse.urlparse(request.full_url).hostname or ""
+        service = "groq" if host.lower() == "api.groq.com" else "gemini"
         calls.append({"service": service, "headers": dict(request.header_items()), "body": json.loads(request.data)})
         answer = answers[service].pop(0)
         if isinstance(answer, Exception):
