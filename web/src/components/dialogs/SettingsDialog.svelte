@@ -13,6 +13,8 @@
   import type { AgentInfo, AgentState, AgentToken, AssistantStatus, CloudStatus, KeySource, MetadataStatus, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import { onEvent } from '../../lib/ws';
+  import { keyField, secretField } from '../../lib/autofill';
+  import CloudConnectionDialog from './CloudConnectionDialog.svelte';
   import Modal from './Modal.svelte';
   import UsersPanel, { type PasswordRequest } from './UsersPanel.svelte';
 
@@ -121,19 +123,15 @@
   }
 
   let cloud = $state<CloudStatus>({ configured: false, host: null, source: null });
-  let cloudUrl = $state('');
-  let cloudKey = $state('');
-  let cloudSecret = $state('');
   if (admin) void api.cloudAnalysis().then((result) => (cloud = result)).catch(() => {});
 
-  async function saveCloud() {
-    try {
-      cloud = await api.putCloudAnalysis(cloudUrl, cloudKey, cloudSecret);
-      cloudUrl = cloudKey = cloudSecret = '';
-      toast(t('Cloud analysis saved'), 'success');
-    } catch (e) {
-      errorToast(e);
-    }
+  /** The popup that takes the URL, key and secret of a cloud function on Modal (they are never shown again once stored). */
+  let connection = $state<{ title: string; save: (url: string, key: string, secret: string) => Promise<void> } | null>(null);
+  const editConnection = (title: string, save: (url: string, key: string, secret: string) => Promise<void>) => (connection = { title, save });
+
+  async function saveCloud(url: string, key: string, secret: string) {
+    cloud = await api.putCloudAnalysis(url, key, secret);
+    toast(t('Cloud analysis saved'), 'success');
   }
 
   let metadata = $state<MetadataStatus | null>(null);
@@ -172,37 +170,21 @@
 
   /** " · from the environment variable DT_…" for a value the server got from its environment (it cannot be removed here). */
   const fromEnv = (source: KeySource | undefined, variable: string) => (source === 'environment' ? ` · ${t('from the environment variable {0}', variable)}` : '');
-  let musicGenUrl = $state('');
-  let musicGenKey = $state('');
-  let musicGenSecret = $state('');
   if (admin) void api.musicGenConfig().then((result) => (musicGen = result)).catch(() => {});
 
-  async function saveMusicGen() {
-    try {
-      musicGen = await api.putMusicGenConfig(musicGenUrl, musicGenKey, musicGenSecret);
-      musicGenUrl = musicGenKey = musicGenSecret = '';
-      if (data.settings) data.settings.musicGenConfigured = musicGen.configured;
-      toast(t('Music generation saved'), 'success');
-    } catch (e) {
-      errorToast(e);
-    }
+  async function saveMusicGen(url: string, key: string, secret: string) {
+    musicGen = await api.putMusicGenConfig(url, key, secret);
+    if (data.settings) data.settings.musicGenConfigured = musicGen.configured;
+    toast(t('Music generation saved'), 'success');
   }
 
   let soundGen = $state<CloudStatus>({ configured: false, host: null, source: null });
-  let soundGenUrl = $state('');
-  let soundGenKey = $state('');
-  let soundGenSecret = $state('');
   if (admin) void api.soundGenConfig().then((result) => (soundGen = result)).catch(() => {});
 
-  async function saveSoundGen() {
-    try {
-      soundGen = await api.putSoundGenConfig(soundGenUrl, soundGenKey, soundGenSecret);
-      soundGenUrl = soundGenKey = soundGenSecret = '';
-      if (data.settings) data.settings.soundGenConfigured = soundGen.configured;
-      toast(t('Sound generation saved'), 'success');
-    } catch (e) {
-      errorToast(e);
-    }
+  async function saveSoundGen(url: string, key: string, secret: string) {
+    soundGen = await api.putSoundGenConfig(url, key, secret);
+    if (data.settings) data.settings.soundGenConfigured = soundGen.configured;
+    toast(t('Sound generation saved'), 'success');
   }
 
   async function removeSoundGen() {
@@ -554,8 +536,8 @@
             <input type="text" placeholder={t('Region (optional)')} bind:value={row.region} />
             <input type="url" placeholder={t('Public endpoint URL for browsers (optional)')} title={t('Used for direct streaming when browsers reach the storage under another address than the server does.')} bind:value={row.public_endpoint_url} />
             <span class="muted small id">{row.id ? `s3://${row.id}` : ''}</span>
-            <input type="text" autocomplete="off" placeholder={row.has_credentials ? t('Access key (unchanged)') : t('Access key')} bind:value={row.access_key} />
-            <input type="password" autocomplete="new-password" placeholder={row.has_credentials ? t('Secret key (unchanged)') : t('Secret key')} bind:value={row.secret_key} />
+            <input type="text" {...keyField} placeholder={row.has_credentials ? t('Access key (unchanged)') : t('Access key')} bind:value={row.access_key} />
+            <input type="password" {...secretField} placeholder={row.has_credentials ? t('Secret key (unchanged)') : t('Secret key')} bind:value={row.secret_key} />
             <label class="check small" title={t('The browser streams directly from the bucket. Needs a CORS rule on the bucket.')}>
               <input type="checkbox" bind:checked={row.direct} /> {t('Direct streaming')}</label>
             <div class="row actions">
@@ -586,7 +568,7 @@
             {#if cookies.set}<button class="btn danger" onclick={removeCookies}>{t('Remove')}</button>{/if}
           </div>
           <label class="field">{t('Proxy for YouTube downloads')}
-            <input type="text" autocomplete="off" placeholder={proxyFromEnv ? t('Default from the server configuration') : 'http://user:password@host:port'} bind:value={proxy} /></label>
+            <input type="text" {...keyField} placeholder={proxyFromEnv ? t('Default from the server configuration') : 'http://user:password@host:port'} bind:value={proxy} /></label>
           <p class="muted small">{t('All YouTube requests go through this proxy (http, https, socks4 or socks5). Leave empty to use the default of the server (DT_YT_PROXY) or none.')}</p>
         {/if}
       {:else if section === 'assistant'}
@@ -635,7 +617,7 @@
           <p class="muted small">{t('The AI assistant suggests songs for a scene. It uses Google Gemini: create a free API key in Google AI Studio (aistudio.google.com) and enter it here. The free tier of the Flash models is enough for occasional questions. The key stays on the server and is never sent back to the browser; all users can chat with the assistant.')}</p>
           <span class="small">{assistantStatus?.configured ? t('Configured (key …{0})', assistantStatus.keyHint) + fromEnv(assistantStatus.keySource, 'DT_GEMINI_API_KEY') : t('Not configured')}</span>
           <label class="field">{t('API key')}
-            <input type="password" autocomplete="off" placeholder={assistantStatus?.configured ? t('API key (unchanged)') : 'AIza…'} bind:value={assistantKey} /></label>
+            <input type="password" {...secretField} placeholder={assistantStatus?.configured ? t('API key (unchanged)') : 'AIza…'} bind:value={assistantKey} /></label>
           <label class="field">{t('Model')}
             <select bind:value={assistantModel}>
               {#each modelOptions as option (option.id)}
@@ -655,7 +637,7 @@
           <span class="muted small">{t('The smart search and the composing of the assistant run on Groq when a key is entered (free tier at console.groq.com); the song suggestions and the general chat stay with Gemini, which knows more songs. Without a Groq key Gemini answers everything.')}</span>
           <span class="small">{assistantStatus?.groqConfigured ? t('Configured (key …{0})', assistantStatus.groqKeyHint) + fromEnv(assistantStatus.groqKeySource, 'DT_GROQ_API_KEY') : t('Not configured')}</span>
           <label class="field">{t('API key')}
-            <input type="password" autocomplete="off" placeholder={assistantStatus?.groqConfigured ? t('API key (unchanged)') : 'gsk_…'} bind:value={groqKey} /></label>
+            <input type="password" {...secretField} placeholder={assistantStatus?.groqConfigured ? t('API key (unchanged)') : 'gsk_…'} bind:value={groqKey} /></label>
           <label class="field">{t('Model')}
             <select bind:value={groqModel}>
               {#each assistantStatus?.groqModels ?? [] as option (option.id)}
@@ -673,12 +655,9 @@
           <h4>{t('Music generation')}</h4>
           <span class="muted small">{t('Composes new pieces for a scene ("Compose" in the assistant) with ACE-Step 1.5 in a cloud function on Modal, see agents/musicgen/modal_app.py. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser. Without a Groq or Gemini key the description is used as it is.')}</span>
           <span class="small">{musicGen.configured ? t('Configured ({0})', musicGen.host ?? '') + fromEnv(musicGen.source, 'DT_MUSICGEN_URL') : t('Not configured')}</span>
-          <label class="field">{t('Endpoint URL')}<input type="url" placeholder="https://…modal.run" bind:value={musicGenUrl} /></label>
-          <label class="field">{t('Key')}<input type="text" autocomplete="off" placeholder="wk-…" bind:value={musicGenKey} /></label>
-          <label class="field">{t('Secret')}<input type="password" autocomplete="off" placeholder="ws-…" bind:value={musicGenSecret} /></label>
           <div class="row">
             <span class="grow"></span>
-            <button class="btn" disabled={!musicGenUrl.trim() || !musicGenKey.trim() || !musicGenSecret.trim()} onclick={saveMusicGen}>{t('Save')}</button>
+            <button class="btn" onclick={() => editConnection(t('Music generation'), saveMusicGen)}>{musicGen.source === 'settings' ? t('Change…') : t('Set up…')}</button>
             {#if musicGen.source === 'settings'}<button class="btn danger" onclick={removeMusicGen}>{t('Remove')}</button>{/if}
           </div>
         </section>
@@ -686,12 +665,9 @@
           <h4>{t('Sound generation')}</h4>
           <span class="muted small">{t('Creates sound effects, ambiences and background music ("Generate" in the assistant) with Stable Audio 3 in a cloud function on Modal, see agents/soundgen/modal_app.py. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser. Without a Groq or Gemini key the description is used as it is.')}</span>
           <span class="small">{soundGen.configured ? t('Configured ({0})', soundGen.host ?? '') + fromEnv(soundGen.source, 'DT_SOUNDGEN_URL') : t('Not configured')}</span>
-          <label class="field">{t('Endpoint URL')}<input type="url" placeholder="https://…modal.run" bind:value={soundGenUrl} /></label>
-          <label class="field">{t('Key')}<input type="text" autocomplete="off" placeholder="wk-…" bind:value={soundGenKey} /></label>
-          <label class="field">{t('Secret')}<input type="password" autocomplete="off" placeholder="ws-…" bind:value={soundGenSecret} /></label>
           <div class="row">
             <span class="grow"></span>
-            <button class="btn" disabled={!soundGenUrl.trim() || !soundGenKey.trim() || !soundGenSecret.trim()} onclick={saveSoundGen}>{t('Save')}</button>
+            <button class="btn" onclick={() => editConnection(t('Sound generation'), saveSoundGen)}>{soundGen.source === 'settings' ? t('Change…') : t('Set up…')}</button>
             {#if soundGen.source === 'settings'}<button class="btn danger" onclick={removeSoundGen}>{t('Remove')}</button>{/if}
           </div>
         </section>
@@ -772,11 +748,8 @@
         <h4>{t('Cloud analysis')}</h4>
         <span class="muted small">{t('Analyzes on demand in a cloud function (Modal, see agents/voxalyzer/modal_app.py) when no agent is connected. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser.')}</span>
         <span class="small">{cloud.configured ? t('Configured ({0})', cloud.host ?? '') + fromEnv(cloud.source, 'DT_VOXALYZER_CLOUD_URL') : t('Not configured')}</span>
-        <label class="field">{t('Endpoint URL')}<input type="url" placeholder="https://…modal.run" bind:value={cloudUrl} /></label>
-        <label class="field">{t('Key')}<input type="text" autocomplete="off" placeholder="wk-…" bind:value={cloudKey} /></label>
-        <label class="field">{t('Secret')}<input type="password" autocomplete="off" placeholder="ws-…" bind:value={cloudSecret} /></label>
         <div class="row">
-          <button class="btn" disabled={!cloudUrl.trim() || !cloudKey.trim() || !cloudSecret.trim()} onclick={saveCloud}>{t('Save')}</button>
+          <button class="btn" onclick={() => editConnection(t('Cloud analysis'), saveCloud)}>{cloud.source === 'settings' ? t('Change…') : t('Set up…')}</button>
           {#if cloud.source === 'settings'}<button class="btn danger" onclick={removeCloud}>{t('Remove')}</button>{/if}
         </div>
         <h4>{t('Metadata lookup')}</h4>
@@ -784,7 +757,7 @@
         <span class="small">{metadata?.configured ? t('Configured (key …{0})', metadata.keyHint) + fromEnv(metadata.keySource, 'DT_ACOUSTID_API_KEY') : t('Not configured')} ·
           {metadata?.fpcalc ? t('fpcalc found') : t('fpcalc not found: install Chromaprint or put fpcalc into the tools folder of Dungeon Tuber')}</span>
         <label class="field">{t('AcoustID application key')}
-          <input type="password" autocomplete="off" placeholder={metadata?.configured ? t('API key (unchanged)') : ''} bind:value={acoustidKey} /></label>
+          <input type="password" {...secretField} placeholder={metadata?.configured ? t('API key (unchanged)') : ''} bind:value={acoustidKey} /></label>
         <div class="row">
           <a class="btn" href="https://acoustid.org/new-application" target="_blank" rel="noopener noreferrer"><Icon name="lock" size={14} /> {t('Get an API key')}</a>
           <span class="grow"></span>
@@ -841,6 +814,10 @@
   {/if}
   {#if editing}
     <CategoryEditDialog row={editing.row} onsave={saveCategory} onclose={() => (editing = null)} />
+  {/if}
+  {#if connection}
+    <CloudConnectionDialog title={connection.title} save={connection.save} onclose={() => (connection = null)}
+      hint={t('The URL that "modal deploy" prints, and the key and secret of a proxy auth token (Modal dashboard: Settings, Proxy Auth Tokens). Stored values are never shown again, so enter all three.')} />
   {/if}
   {#if passwordDialog}
     <Modal title={passwordDialog.title} onclose={() => (passwordDialog = null)} width="420px">

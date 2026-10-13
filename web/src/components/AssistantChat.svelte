@@ -403,6 +403,9 @@
   .text :global(hr) { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
   .grow { flex: 1; }
   .log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+  /* the answers can be copied elsewhere: the desktop window (pywebview) turns text selection off for the whole page */
+  .log :is(.bubble, .piece, .caption, .name, p, pre, li) { -webkit-user-select: text; user-select: text; cursor: text; }
+  .log :is(button, a, .chip) { -webkit-user-select: none; user-select: none; cursor: pointer; }
   .empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; color: var(--muted); font-size: var(--fs-sm); }
   .empty p { margin: 0; }
   .examples { display: flex; flex-wrap: wrap; gap: 6px; }
