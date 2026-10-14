@@ -1,8 +1,8 @@
 import json
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from core import i18n
 from core.settings import AppSettings, SettingKeys
@@ -61,6 +61,8 @@ class UserStateRequest(BaseModel):
     tabs: TabsState | None = None
     accent: str | None = None  # one of ACCENTS, "" for the default
     tour_done: bool | None = None
+    tour_seen: list[Annotated[str, StringConstraints(max_length=64)]] | None = Field(None, max_length=200)  # ids of the tour steps the user has seen
+    news_off: bool | None = None  # no "What's new" popup for steps of the tour that the user has not seen
     player: PlayerSettings | None = None
     view: dict[str, Any] | None = None  # see VIEW_KEYS
     locale: str | None = None  # the language of the user, "" for the default of the server
@@ -167,7 +169,8 @@ def get_user_state(user: str = Depends(current_user)):
     if favorites is None and user == ADMIN:  # the favorites from before they were per user
         favorites = AppSettings.value(SettingKeys.FAVORITES, [], type=list)
     return {"favorites": favorites or [], "tabs": index.user_state(user, "tabs"), "accent": index.user_state(user, "accent") or "",
-            "tour_done": bool(index.user_state(user, "tour_done")), "player": index.user_state(user, "player"),
+            "tour_done": bool(index.user_state(user, "tour_done")), "tour_seen": index.user_state(user, "tour_seen") or [],
+            "news_off": bool(index.user_state(user, "news_off")), "player": index.user_state(user, "player"),
             "view": index.user_state(user, "view"), "locale": index.user_state(user, "locale") or ""}
 
 
@@ -184,6 +187,10 @@ def put_user_state(body: UserStateRequest, user: str = Depends(current_user)):
         index.set_user_state(user, "accent", body.accent)
     if body.tour_done is not None:
         index.set_user_state(user, "tour_done", body.tour_done)
+    if body.tour_seen is not None:
+        index.set_user_state(user, "tour_seen", list(dict.fromkeys(body.tour_seen)))
+    if body.news_off is not None:
+        index.set_user_state(user, "news_off", body.news_off)
     if body.player is not None:
         index.set_user_state(user, "player", body.player.model_dump())
     if body.view is not None:

@@ -62,7 +62,7 @@ def search(queries: list[str]) -> list[list[RemoteEntry]]:
 
 
 def download(url: str, directory: Path, progress: Callable[[str], None] | None = None, max_minutes: int = DEFAULT_MAX_MINUTES,
-             album: str | None = None, percent: Callable[[int], None] | None = None, split: bool = False) -> Downloaded:
+             album: str | None = None, percent: Callable[[int], None] | None = None, split: bool = False, limit_minutes: int = 0) -> Downloaded:
     """Same contract as core.ytimport.download; the files arrive in `directory` as <index>.mp3."""
     ticket = secrets.token_urlsafe(24)
     _uploads[ticket] = directory
@@ -75,7 +75,7 @@ def download(url: str, directory: Path, progress: Callable[[str], None] | None =
 
     try:
         result = _call("download", DOWNLOAD_TIMEOUT, on_progress, url=url, upload=f"/api/agents/uploads/{ticket}", max_minutes=max_minutes,
-                       album=album, split=split)
+                       album=album, split=split, limit_minutes=limit_minutes)
     finally:
         _uploads.pop(ticket, None)
     files = result.get("files") or []

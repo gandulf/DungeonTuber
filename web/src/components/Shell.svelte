@@ -12,6 +12,7 @@
   import { activeTab, library } from '../lib/stores/library.svelte';
   import { cycleRepeat, next, player, previous, setVolume, toggleEffect, toggleMute, togglePlay } from '../lib/stores/player.svelte';
   import { closeMenu, ui } from '../lib/stores/ui.svelte';
+  import { unseenTourSteps } from '../lib/tourSteps';
   import AssistantChat from './AssistantChat.svelte';
   import ConfirmDialog from './dialogs/ConfirmDialog.svelte';
   import PromptDialog from './dialogs/PromptDialog.svelte';
@@ -31,9 +32,24 @@
   const tab = $derived(activeTab());
   const showRight = $derived(prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false));
 
+  let newsChecked = false; // the "What's new" popup is offered once per page load
+
   $effect(() => {
     // the server remembers it per user: the desktop app gets a new port (and so an empty browser storage) on every start
-    if (!prefs.tourDone && !data.user.tour_done) setTimeout(() => (ui.tour = true), 600);
+    if (!prefs.tourDone && !data.user.tour_done) {
+      newsChecked = true; // the tour shows everything
+      setTimeout(() => (ui.tour = true), 600);
+    } else if (!newsChecked && data.user.tour_done) {
+      newsChecked = true;
+      const news = data.user.news_off ? [] : unseenTourSteps();
+      if (news.length) {
+        setTimeout(() => {
+          if (ui.tour || ui.dialog) return;
+          ui.tourNews = news.map((step) => step.id);
+          ui.tour = true;
+        }, 800);
+      }
+    }
   });
 
   $effect(() => {
@@ -167,7 +183,7 @@
   {@const Dialog = ui.dialog.component}
   <Dialog {...ui.dialog.props} />
 {/if}
-{#if ui.tour}<Tour />{/if}
+{#if ui.tour}<Tour news={ui.tourNews} />{/if}
 
 <style>
   .app { height: 100%; display: flex; flex-direction: column; position: relative; isolation: isolate; }

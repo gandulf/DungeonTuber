@@ -28,6 +28,8 @@ export const ui = $state({
   dialog: null as { component: Component<any>; props: Record<string, unknown> } | null,
   connected: true,
   tour: false,
+  /** Ids of the tour steps to show instead of the whole tour (the "What's new" tour of the steps a user has not seen yet). */
+  tourNews: null as string[] | null,
   narrow: window.matchMedia('(max-width: 900px)').matches,
   mobilePanel: null as 'tree' | 'side' | null,
 });

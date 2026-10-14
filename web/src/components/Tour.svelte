@@ -4,15 +4,22 @@
   import { editSong, openImportDialog, openUploadDialog, trackMenu, uploadTarget } from '../lib/actions';
   import { t } from '../lib/i18n.svelte';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
+  import { tourInfo } from '../lib/tourSteps';
+  import { assistant } from '../lib/stores/assistant.svelte';
   import { data } from '../lib/stores/data.svelte';
   import { visibleRows } from '../lib/stores/library.svelte';
   import Icon from './Icon.svelte';
   import { appMenu } from '../lib/menus';
+  import type { UserState } from '../lib/types';
   import { closeDialog, closeMenu, openMenu, ui } from '../lib/stores/ui.svelte';
 
+  /** `news`: the ids of the steps to show (the "What's new" tour), otherwise the whole tour is shown. */
+  let { news = null }: { news?: string[] | null } = $props();
+
   interface Step {
+    /** Stable name of the step; the ids of the steps a user has seen are stored, so new steps can be announced later. Never reuse or rename one. */
+    id: string;
     target: string;
-    text: string;
     /** Steps that show something which is not on screen yet are available only when this returns true. */
     when?: () => boolean;
     /** Opens the dialog or menu that contains the target. */
@@ -46,37 +53,42 @@
   const hasFolder = () => !!document.querySelector('[data-tour="tree"] button.row') && !!uploadTarget();
 
   const allSteps: Step[] = [
-    { target: 'tree', text: 'Tour Directory Tree' },
-    { target: 'tree', text: 'Tour Upload' },
-    { target: 'menu-upload', text: 'Tour Menu Upload', when: hasFolder, open: openTreeMenu },
-    { target: 'upload-drop', text: 'Tour Upload Dialog', when: () => !!uploadTarget(), open: () => openUploadDialog() },
-    { target: 'menu-import', text: 'Tour Menu Import', when: hasFolder, open: openTreeMenu },
-    { target: 'import-url', text: 'Tour Import Dialog', when: () => !!uploadTarget(), open: () => openImportDialog() },
-    { target: 'table', text: 'Tour Song Table' },
-    { target: 'menu-edit', text: 'Tour Menu Edit', when: () => !!firstTrack(), open: openTrackMenu },
-    { target: 'edit-form', text: 'Tour Edit Song', when: () => !!firstTrack(), open: () => firstTrack() && editSong(firstTrack()!) },
-    { target: 'menu-analyze', text: 'Tour Analyze', when: () => !!firstTrack() && data.settings?.voxalyzerActive !== false, open: openTrackMenu },
-    { target: 'russel', text: 'Tour Russel Widget' },
-    { target: 'slider', text: 'Tour Category Slider' },
-    { target: 'bpm', text: 'Tour BPM Widget' },
-    { target: 'tags', text: 'Tour Tags Widget' },
-    { target: 'presets', text: 'Tour Presets Widget' },
-    { target: 'player', text: 'Tour Player' },
-    { target: 'effects', text: 'Tour Effectslist' },
-    { target: 'lights', text: 'Tour Lights' },
-    { target: 'tabs', text: 'Tour Tabs' },
-    { target: 'search', text: 'Tour Search' },
-    { target: 'menubar', text: 'Tour Menubar' },
-    { target: 'menu-view-sub', text: 'Tour View Modes', when: () => !!find('menubar'), open: openViewMenu },
+    { target: 'tree', id: 'tree' },
+    { target: 'tree', id: 'upload' },
+    { target: 'menu-upload', id: 'menu-upload', when: hasFolder, open: openTreeMenu },
+    { target: 'upload-drop', id: 'upload-dialog', when: () => !!uploadTarget(), open: () => openUploadDialog() },
+    { target: 'menu-import', id: 'menu-import', when: hasFolder, open: openTreeMenu },
+    { target: 'import-url', id: 'import-dialog', when: () => !!uploadTarget(), open: () => openImportDialog() },
+    { target: 'table', id: 'table' },
+    { target: 'menu-edit', id: 'menu-edit', when: () => !!firstTrack(), open: openTrackMenu },
+    { target: 'edit-form', id: 'edit-song', when: () => !!firstTrack(), open: () => firstTrack() && editSong(firstTrack()!) },
+    { target: 'menu-analyze', id: 'analyze', when: () => !!firstTrack() && data.settings?.voxalyzerActive !== false, open: openTrackMenu },
+    { target: 'russel', id: 'russel' },
+    { target: 'slider', id: 'slider' },
+    { target: 'bpm', id: 'bpm' },
+    { target: 'tags', id: 'tags' },
+    { target: 'presets', id: 'presets' },
+    { target: 'player', id: 'player' },
+    { target: 'effects', id: 'effects' },
+    { target: 'lights', id: 'lights' },
+    { target: 'tabs', id: 'tabs' },
+    { target: 'search', id: 'search' },
+    { target: 'global-search', id: 'global-search' },
+    { target: 'assistant-chat', id: 'assistant', when: () => !!find('assistant'), open: () => { assistant.open = true; } },
+    { target: 'menubar', id: 'menubar' },
+    { target: 'menu-view-sub', id: 'view-modes', when: () => !!find('menubar'), open: openViewMenu },
   ];
 
   const find = (target: string) => document.querySelector<HTMLElement>(`[data-tour="${target}"]`);
-  const steps = allSteps.filter((step) => (step.when ? step.when() : find(step.target)));
+  // svelte-ignore state_referenced_locally
+  const steps = allSteps.filter((step) => (!news || news.includes(step.id)) && (step.when ? step.when() : find(step.target)));
+  let dontShow = $state(false);
   let index = $state(0);
   let rect = $state<DOMRect | null>(null);
   let dialog = $state<HTMLDialogElement | null>(null);
   let nextButton = $state<HTMLButtonElement | null>(null);
   let direction = 1;
+  const seen = new Set<string>(); // the steps shown so far
   let run = 0;
 
   /** The target is ready once it is rendered and visible (a menu is hidden until it has been measured) and, inside a dialog, that dialog is open. */
@@ -110,6 +122,7 @@
     if (!step) return finish();
     closeDialog();
     closeMenu();
+    assistant.open = false;
     await step.open?.();
     const element = await waitFor(step.target);
     if (current !== run) return;
@@ -120,6 +133,7 @@
       index = Math.max(0, next);
       return;
     }
+    seen.add(step.id);
     element.scrollIntoView({ block: 'nearest' });
     rect = element.getBoundingClientRect();
     raise();
@@ -151,11 +165,20 @@
     run++;
     closeDialog();
     closeMenu();
+    assistant.open = false;
     ui.tour = false;
     prefs.tourDone = true;
     savePrefs();
     data.user.tour_done = true;
-    void api.putUserState({ tour_done: true }).catch(() => undefined);
+    // the news count as seen even when closed early, so they are not announced again
+    data.user.tour_seen = [...new Set([...data.user.tour_seen, ...seen, ...(news ?? [])])];
+    const state: Partial<UserState> = { tour_done: true, tour_seen: data.user.tour_seen };
+    if (news && dontShow) {
+      data.user.news_off = true;
+      state.news_off = true;
+    }
+    ui.tourNews = null;
+    void api.putUserState(state).catch(() => undefined);
   }
 
   function onKey(event: KeyboardEvent) {
@@ -165,15 +188,24 @@
     event.preventDefault(); // a focused button must not click as well
   }
 
+  const info = $derived(tourInfo(steps[index]?.id));
   const pad = 6;
   const bubble = $derived.by(() => {
     if (!rect) return { left: 40, top: 40 };
     const width = 320;
-    const below = rect.bottom + 14 + 140 < window.innerHeight;
+    const height = 190;
+    const below = rect.bottom + 14 + height < window.innerHeight;
+    const above = rect.top - 14 - height > 0;
     const right = rect.right + 14 + width < window.innerWidth;
-    if (rect.width < window.innerWidth * 0.5 && right) return { left: rect.right + 14, top: Math.min(Math.max(10, rect.top), Math.max(10, window.innerHeight - 190)) };
-    if (below) return { left: Math.min(Math.max(10, rect.left), window.innerWidth - width - 10), top: rect.bottom + 14 };
-    return { left: Math.min(Math.max(10, rect.left), window.innerWidth - width - 10), top: Math.max(10, rect.top - 160) };
+    const left = rect.left - 14 - width > 0;
+    const sideTop = Math.min(Math.max(10, rect.top), Math.max(10, window.innerHeight - height - 50));
+    const column = Math.min(Math.max(10, rect.left), window.innerWidth - width - 10);
+    const wide = rect.width >= window.innerWidth * 0.5;
+    if (!wide && right) return { left: rect.right + 14, top: sideTop };
+    if (!wide && left) return { left: rect.left - 14 - width, top: sideTop }; // e.g. the assistant popup at the right edge
+    if (below) return { left: column, top: rect.bottom + 14 };
+    if (above) return { left: column, top: rect.top - 14 - height };
+    return { left: column, top: Math.max(10, window.innerHeight - height - 10) }; // nothing fits around the target: the bottom edge, as little over it as possible
   });
 </script>
 
@@ -183,7 +215,12 @@
   {#if steps.length && rect}
     <div class="hole" style:left="{rect.left - pad}px" style:top="{rect.top - pad}px" style:width="{rect.width + pad * 2}px" style:height="{rect.height + pad * 2}px"></div>
     <div class="bubble panel" style:left="{bubble.left}px" style:top="{bubble.top}px">
-      <p>{@html t(steps[index].text)}</p>
+      {#if news}<span class="kicker muted">{t("What's new")}</span>{/if}
+      <h3>{t(info?.title ?? '')}</h3>
+      <p>{@html t(info?.text ?? '')}</p>
+      {#if news}
+        <label class="check"><input type="checkbox" bind:checked={dontShow} /> {t('Do not show this again')}</label>
+      {/if}
       <div class="actions">
         <span class="muted">{index + 1} / {steps.length}</span>
         <span class="grow"></span>
@@ -204,6 +241,9 @@
   .tour::backdrop { background: transparent; }
   .hole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(10, 12, 20, 0.6); transition: all 0.35s ease; pointer-events: none; outline: 2px solid var(--accent); }
   .bubble { position: fixed; width: 320px; padding: 14px 16px; box-shadow: var(--shadow); transition: all 0.35s ease; }
+  h3 { margin: 0 0 4px; font-size: var(--fs-md, 1em); }
+  .kicker { display: block; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: 0.04em; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: var(--fs-sm); }
   p { margin: 0 0 12px; line-height: 1.45; white-space: pre-line; }
   .actions { display: flex; gap: 6px; align-items: center; }
   .grow { flex: 1; }

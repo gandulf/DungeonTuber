@@ -47,6 +47,7 @@ class Batch:
     playlist: str | None = None  # name of an m3u playlist to create from the imported songs
     analyze: bool = False  # hand every imported song to the analysis agent
     split: bool = False  # one song per chapter, in a folder named after the video
+    limit_minutes: int = 0  # only the first minutes of every video (0: all of it)
     items: list[Item] = field(default_factory=list)
 
 
@@ -142,7 +143,7 @@ class DownloadQueue:
         current_user_var.set(batch.user)  # a download agent of this user is preferred
         with tempfile.TemporaryDirectory(prefix="dt-import-") as tmp:
             result = (ytagent.download if ytagent.available() else download)(item.url, Path(tmp), lambda message: self._update(item, message=message), max_minutes(), batch.album, percent,
-                              batch.split)
+                              batch.split, batch.limit_minutes)
             self._update(item, title=result.title, message=_("Saving..."))
             directory = make_folder(batch.directory, result.title, batch.user) if result.parts else batch.directory
             stored = []

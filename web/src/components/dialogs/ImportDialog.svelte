@@ -24,11 +24,17 @@
   let makeFolder = $state(prefs.importOptions.makeFolder);
   let analyze = $state(prefs.importOptions.analyze);
   let split = $state(prefs.importOptions.split);
+  let limitMinutes = $state(prefs.importOptions.limitMinutes);
   let folderName = $state('');
   let busy = $state(false);
   let error = $state('');
 
-  const tooLong = (duration?: number | null) => !!preview && !!duration && duration > preview.maxMinutes * 60;
+  const LIMITS = [0, 5, 10, 15, 30, 60];
+  const limitLabel = (minutes: number) => (minutes === 0 ? t('Whole video') : minutes === 60 ? t('1 h') : t('{0} min', minutes));
+
+  // only the first minutes of a long video are downloaded, so only those count against the maximum length
+  const tooLong = (duration?: number | null) =>
+    !!preview && !!duration && Math.min(duration, limitMinutes ? limitMinutes * 60 : Infinity) > preview.maxMinutes * 60;
   const canSplit = $derived(!!preview && (preview.playlist || preview.entries.some((entry) => (entry.chapters ?? 0) > 1)));
   const chosen = $derived(preview ? preview.entries.filter((entry) => selected.has(entry.url) && !tooLong(entry.duration)) : []);
 
@@ -77,6 +83,7 @@
       options.makeFolder = makeFolder;
     }
     if (canSplit) options.split = split;
+    options.limitMinutes = limitMinutes;
     if (data.settings?.voxalyzerActive !== false) options.analyze = analyze;
     savePrefs();
   }
@@ -89,6 +96,7 @@
       dir: target,
       entries: chosen.map((entry) => ({ url: entry.url, title: entry.title })),
       split: split && canSplit,
+      limit_minutes: limitMinutes,
       analyze: analyze && data.settings?.voxalyzerActive !== false,
       folder: preview.playlist && makeFolder && folderName.trim() ? folderName.trim() : undefined,
       album: preview.playlist ? preview.title : undefined,
@@ -158,6 +166,12 @@
       <span class="label-xs">{t('Target folder')}</span>
       <FolderSelect bind:selected={target} />
     </div>
+    <label class="check" title={t('Longer videos are cut off after this time.')}>
+      {t('Maximum duration')}
+      <select bind:value={limitMinutes}>
+        {#each LIMITS as minutes (minutes)}<option value={minutes}>{limitLabel(minutes)}</option>{/each}
+      </select>
+    </label>
     {#if canSplit}
       <label class="check" title={t('Videos without chapters are imported as one song.')}>
         <input type="checkbox" bind:checked={split} /> {t('Split chapters into separate songs')}

@@ -97,7 +97,7 @@ export const api = {
 
   // import of YouTube links
   resolveImport: (url: string, whole?: boolean) => request<ImportPreview>('POST', '/api/import/resolve', { url, whole }),
-  startImport: (body: { dir: string; entries: { url: string; title: string }[]; album?: string; playlist?: string; folder?: string; analyze?: boolean; split?: boolean }) =>
+  startImport: (body: { dir: string; entries: { url: string; title: string }[]; album?: string; playlist?: string; folder?: string; analyze?: boolean; split?: boolean; limit_minutes?: number }) =>
     request<{ queued: number; pending: number }>('POST', '/api/import', body),
   cloudAnalysis: () => get<CloudStatus>('/api/analysis/cloud'),
   putCloudAnalysis: (url: string, key: string, secret: string) => request<CloudStatus>('PUT', '/api/analysis/cloud', { url, key, secret }),

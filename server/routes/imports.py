@@ -3,7 +3,7 @@ import os
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.i18n import _
 from core.settings import AppSettings, SettingKeys
@@ -36,6 +36,7 @@ class ImportRequest(BaseModel):
     folder: str | None = None  # download into a new subfolder with this name
     analyze: bool = False  # analyze the songs with the analysis agent once they are stored
     split: bool = False  # videos with chapters become one song per chapter
+    limit_minutes: int = Field(0, ge=0, le=24 * 60)  # download only the first minutes of every video (0: all of it)
 
 
 @router.post("/api/import/resolve")
@@ -63,7 +64,7 @@ def start_import(body: ImportRequest, user: str = Depends(current_user)):
     if body.folder and body.folder.strip():
         with storage_errors():
             directory = make_folder(directory, body.folder, user)
-    queued = download_queue.submit(Batch(directory, entries, user, body.album or None, body.playlist or None, body.analyze, body.split))
+    queued = download_queue.submit(Batch(directory, entries, user, body.album or None, body.playlist or None, body.analyze, body.split, body.limit_minutes))
     return {"queued": queued, **download_queue.status()}
 
 

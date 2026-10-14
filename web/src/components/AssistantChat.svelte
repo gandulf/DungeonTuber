@@ -148,7 +148,7 @@
   }
 </script>
 
-<div class="chat" role="dialog" aria-label={t('AI Assistant')} tabindex="-1"
+<div class="chat" role="dialog" data-tour="assistant-chat" aria-label={t('AI Assistant')} tabindex="-1"
          onkeydown={(e) => e.key === 'Escape' && (assistant.open = false)}>
   <header>
     <Icon name="sparkles" size={17} />

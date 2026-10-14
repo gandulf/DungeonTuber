@@ -499,7 +499,7 @@ def test_favorites_and_open_tabs_are_per_user(client, library):
     # anna starts with nothing and her changes do not touch the SuperAdmin's
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
     assert client.get(f"/api/tracks/{_id(song)}").json()["favorite"] is False
-    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "player": None, "view": None, "locale": ""}
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "tour_seen": [], "news_off": False, "player": None, "view": None, "locale": ""}
     assert client.patch(f"/api/tracks/{_id(song)}", json={"favorite": True}).json()["favorite"] is True
     client.put("/api/user/state", json={"favorites": [f"{root}/Tavern"]})
     drums = library["root"] / "Battle" / "drums.mp3"
@@ -517,7 +517,7 @@ def test_favorites_and_open_tabs_are_per_user(client, library):
     client.delete("/api/users/anna")
     client.post("/api/users", json={"name": "anna", "password": "pw1234"})
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
-    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "player": None, "view": None, "locale": ""}
+    assert client.get("/api/user/state").json() == {"favorites": [], "tabs": None, "accent": "", "tour_done": False, "tour_seen": [], "news_off": False, "player": None, "view": None, "locale": ""}
     assert client.get(f"/api/tracks/{_id(drums)}").json()["favorite"] is False
 
 
@@ -695,6 +695,18 @@ def test_tour_done_is_remembered(client):
     assert client.get("/api/user/state").json()["tour_done"] is False
     assert client.put("/api/user/state", json={"tour_done": True}).json()["tour_done"] is True
     assert client.get("/api/user/state").json()["tour_done"] is True
+
+
+def test_seen_tour_steps_are_remembered(client):
+    assert client.get("/api/user/state").json()["tour_seen"] == []
+    assert client.put("/api/user/state", json={"tour_seen": ["tree", "search", "tree"]}).json()["tour_seen"] == ["tree", "search"]
+    assert client.get("/api/user/state").json()["tour_seen"] == ["tree", "search"]
+
+
+def test_news_can_be_switched_off(client):
+    assert client.get("/api/user/state").json()["news_off"] is False
+    assert client.put("/api/user/state", json={"news_off": True}).json()["news_off"] is True
+    assert client.get("/api/user/state").json()["news_off"] is True
 
 
 def test_player_settings_are_kept_per_user(client):

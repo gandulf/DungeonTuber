@@ -97,7 +97,7 @@ def client(tmp_path):
     set_index(None)
 
 
-def fake_download(url, directory, progress=None, max_minutes=240, album=None, percent=None, split=False):
+def fake_download(url, directory, progress=None, max_minutes=240, album=None, percent=None, split=False, limit_minutes=0):
     if "broken" in url:
         raise ImportFailed("Video unavailable")
     name = url.rsplit("=", 1)[1]
@@ -184,7 +184,7 @@ def test_import_can_analyze_the_new_songs(client, monkeypatch):
 
 
 def test_import_splits_chapters_into_a_folder(client, monkeypatch):
-    def split_download(url, directory, progress=None, max_minutes=240, album=None, percent=None, split=False):
+    def split_download(url, directory, progress=None, max_minutes=240, album=None, percent=None, split=False, limit_minutes=0):
         parts = [Downloaded(write_mp3(Path(directory) / f"p{n}.mp3"), f"0{n} Part {n}.mp3", f"Part {n}") for n in (1, 2)] if split else []
         return Downloaded(write_mp3(Path(directory) / "whole.mp3"), "Long: Video.mp3", "Long Video", parts)
 

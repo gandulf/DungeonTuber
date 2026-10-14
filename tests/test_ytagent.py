@@ -104,13 +104,13 @@ def test_lookup_and_download_go_through_the_agent(client, monkeypatch):
         found = client.post("/api/import/resolve", json={"url": "https://www.youtube.com/watch?v=abc"}).json()
         assert found["title"] == "Agent lookup" and found["entries"][0]["title"] == "From the agent"
 
-        response = client.post("/api/import", json={"dir": target, "entries": [{"url": "https://www.youtube.com/watch?v=abc", "title": "x"}]})
+        response = client.post("/api/import", json={"dir": target, "entries": [{"url": "https://www.youtube.com/watch?v=abc", "title": "x"}], "limit_minutes": 10})
         assert response.status_code == 200
         status = wait_idle()
         assert (status["done"], status["failed"]) == (1, 0) and status["items"][0]["state"] == "done"
         assert (client.root / "Agent Song.mp3").read_bytes() == client.mp3
         download = [r for r in pump.requests if r["op"] == "download"][0]
-        assert download["max_minutes"] == 240 and download["split"] is False
+        assert download["max_minutes"] == 240 and download["split"] is False and download["limit_minutes"] == 10
 
 
 def test_split_parts_and_errors_of_the_agent(client):

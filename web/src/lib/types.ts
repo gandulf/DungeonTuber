@@ -276,6 +276,10 @@ export interface UserState {
   tabs: { open: { type: 'dir' | 'playlist'; path: string }[]; active: string | null } | null;
   accent: string;
   tour_done: boolean;
+  /** Ids of the tour steps the user has seen (Tour.svelte), so steps added later can be shown as news. */
+  tour_seen: string[];
+  /** No "What's new" popup for tour steps the user has not seen. */
+  news_off: boolean;
   player: PlayerSettings | null;
   /** The view preferences (see stores/profile.svelte.ts). */
   view: Partial<ViewSettings> | null;
@@ -298,7 +302,7 @@ export interface ViewSettings {
   rowStyle: 'small' | 'medium' | 'large';
   effectsGrid: boolean;
   effectsTitle: boolean;
-  importOptions: { makePlaylist: boolean; makeFolder: boolean; split: boolean; analyze: boolean };
+  importOptions: { makePlaylist: boolean; makeFolder: boolean; split: boolean; analyze: boolean; limitMinutes: number };
 }
 
 /** The player options that follow a user from device to device. */

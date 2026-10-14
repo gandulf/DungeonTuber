@@ -282,18 +282,21 @@ def _chapters(info: dict) -> list[dict]:
 
 
 def download(url: str, directory: Path, progress: Progress | None = None, max_minutes: int = DEFAULT_MAX_MINUTES,
-             album: str | None = None, percent: Callable[[int], None] | None = None, split: bool = False) -> Downloaded:
+             album: str | None = None, percent: Callable[[int], None] | None = None, split: bool = False, limit_minutes: int = 0) -> Downloaded:
     """Downloads one video as mp3 into `directory` (a scratch folder of the caller) and writes title, artist, cover, chapters and the source.
-    With `split` a video with chapters becomes one tagged mp3 per chapter (`Downloaded.parts`) instead of one file."""
+    With `split` a video with chapters becomes one tagged mp3 per chapter (`Downloaded.parts`) instead of one file.
+    With `limit_minutes` only the first minutes of a longer video are downloaded (0: all of it)."""
     from yt_dlp import YoutubeDL
-    from yt_dlp.utils import DownloadError
+    from yt_dlp.utils import DownloadError, download_range_func
 
     url = check_url(url)
+    limit = max(0, limit_minutes) * 60
 
     def check(info, *, incomplete=False):  # rejects before anything is downloaded
         if info.get("is_live") or info.get("live_status") in ("is_live", "is_upcoming"):
             raise ImportFailed(_("Live streams cannot be imported"))
-        if info.get("duration") and info["duration"] > max_minutes * 60:
+        duration = min(info["duration"], limit) if info.get("duration") and limit else info.get("duration")
+        if duration and duration > max_minutes * 60:
             raise ImportFailed(_("Longer than {0} minutes: {1}").format(max_minutes, info.get("title") or url))
 
     def hook(status):
@@ -305,6 +308,8 @@ def download(url: str, directory: Path, progress: Progress | None = None, max_mi
     options = _options(progress, format="bestaudio/best", noplaylist=True, writethumbnail=True, ffmpeg_location=ffmpeg,
                        outtmpl={"default": str(directory / "%(id)s.%(ext)s")}, match_filter=check, progress_hooks=[hook],
                        postprocessors=[{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}])
+    if limit:  # a video shorter than the limit is downloaded completely
+        options["download_ranges"] = download_range_func(None, [(0, limit)])
     try:
         with YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -317,7 +322,7 @@ def download(url: str, directory: Path, progress: Progress | None = None, max_mi
 
     title = info.get("track") or info.get("title") or info["id"]
     cover = _cover(directory, info["id"])
-    chapters = _chapters(info)
+    chapters = [chapter for chapter in _chapters(info) if not limit or chapter["time"] < limit * 1000]  # the cut off ones have no audio
     if split and len(chapters) > 1:
         if progress:
             progress(_("Splitting {0}...").format(title))

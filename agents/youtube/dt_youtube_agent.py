@@ -81,7 +81,8 @@ class Worker:
         with tempfile.TemporaryDirectory(prefix="dt-youtube-") as tmp:
             result = ytimport.download(str(request["url"]), Path(tmp), lambda message: progress(message=message),
                                        int(request.get("max_minutes") or DEFAULT_MAX_MINUTES), album,
-                                       lambda value: progress(percent=value), bool(request.get("split")))
+                                       lambda value: progress(percent=value), bool(request.get("split")),
+                                       int(request.get("limit_minutes") or 0))
             songs = result.parts or [result]
             progress(message=_("Uploading {0}...").format(result.title))
             for index, song in enumerate(songs):
