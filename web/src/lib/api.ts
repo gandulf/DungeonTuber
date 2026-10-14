@@ -59,6 +59,8 @@ export const api = {
   browse: (path: string) => get<BrowseResult>(`/api/browse?${qs({ path })}`),
   tracksOfDir: (dir: string) => get<TrackList>(`/api/tracks?${qs({ dir })}`),
   libraryTracks: () => get<{ tracks: Track[] }>('/api/library/tracks'),
+  /** Groups (lists of track ids) of songs whose files are identical; the server reads each file once. */
+  libraryDuplicates: () => get<{ groups: string[][] }>('/api/library/duplicates'),
   tracksOfPlaylist: (playlist: string) => get<TrackList>(`/api/tracks?${qs({ playlist })}`),
   track: (id: string) => get<Track>(`/api/tracks/${id}`),
   patchTrack: (id: string, patch: Partial<Omit<Track, 'categories'>> & { categories?: Record<string, number | null>; name?: string }) =>

@@ -33,7 +33,7 @@ export const TOUR_INFO: TourInfo[] = [
   { id: 'lights', title: 'Lights', text: 'Tour Lights' },
   { id: 'tabs', title: 'Tabs', text: 'Tour Tabs' },
   { id: 'search', title: 'Search', text: 'Tour Search' },
-  { id: 'global-search', title: 'Global search', text: 'Tour Global Search' },
+  { id: 'global-search', title: 'Browse and Explore', text: 'Tour Global Search' },
   {
     id: 'assistant', title: 'AI Assistant', text: 'Tour AI Assistant',
     available: () => !!(data.settings?.assistantConfigured || data.settings?.groqConfigured || data.settings?.musicGenConfigured || data.settings?.soundGenConfigured)

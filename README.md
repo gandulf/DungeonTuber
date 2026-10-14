@@ -39,7 +39,7 @@ docker run -d -p 8765:8765 -e DT_PASSWORD=change-me \
   -v /path/to/music:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
 ```
 
-Open `http://<server>:8765` and sign in as `admin` with the password you set. Drop mp3 files or folders on the file tree to upload them, or copy them into the music folder and choose *Rescan Library* in the menu.
+Open `http://<server>:8765` and sign in as `admin` with the password you set. Drop mp3 files or folders on the file tree to upload them, or copy them into the music folder and choose *Library → Reload* in the menu.
 
 For access over the internet use [`deploy/docker-compose.yml`](deploy/docker-compose.yml) (automatic HTTPS with Caddy) or follow the step-by-step guide for a free Oracle Cloud VM with a DuckDNS name: [`deploy/oracle`](deploy/oracle/README.md). Details for all variants are in [Installation & Deployment](#-installation--deployment).
 
@@ -49,7 +49,7 @@ For access over the internet use [`deploy/docker-compose.yml`](deploy/docker-com
 
 ### 1. Building Your Library
 * **Upload:** Drag mp3 files or whole folders onto the file tree, or use *Upload songs…* in the menu or the context menu of a folder. Folder structures are kept.
-* **Existing music:** Copy files into the library folder of the server (or add an S3 bucket under **Settings → Library**) and choose *Rescan Library*.
+* **Existing music:** Copy files into the library folder of the server (or add an S3 bucket under **Settings → Library**) and choose *Library → Reload*.
 * **Analysis:** If a Voxalyzer agent is connected (see [Agents](#-agents)), choose *Analyze* on a song or folder. Without an agent the analysis functions are disabled.
 
 ### 2. Filtering by Mood

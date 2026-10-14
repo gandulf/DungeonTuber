@@ -39,7 +39,7 @@ docker run -d -p 8765:8765 -e DT_PASSWORD=aendern \
   -v /pfad/zur/musik:/music -v dungeontuber-data:/data ghcr.io/gandulf/dungeontuber
 ```
 
-Öffne `http://<server>:8765` und melde dich als `admin` mit dem gesetzten Passwort an. Ziehe mp3-Dateien oder Ordner auf den Dateibaum, um sie hochzuladen, oder kopiere sie in den Musikordner und wähle im Menü *Bibliothek neu einlesen*.
+Öffne `http://<server>:8765` und melde dich als `admin` mit dem gesetzten Passwort an. Ziehe mp3-Dateien oder Ordner auf den Dateibaum, um sie hochzuladen, oder kopiere sie in den Musikordner und wähle im Menü *Bibliothek → Neu einlesen*.
 
 Für den Zugriff über das Internet nutze [`deploy/docker-compose.yml`](deploy/docker-compose.yml) (automatisches HTTPS mit Caddy) oder folge der Schritt-für-Schritt-Anleitung für eine kostenlose Oracle-Cloud-VM mit DuckDNS-Namen: [`deploy/oracle`](deploy/oracle/README.md). Details zu allen Varianten stehen unter [Installation & Betrieb](#-installation--betrieb).
 
@@ -49,7 +49,7 @@ Für den Zugriff über das Internet nutze [`deploy/docker-compose.yml`](deploy/d
 
 ### 1. Bibliothek aufbauen
 * **Hochladen:** Ziehe mp3-Dateien oder ganze Ordner auf den Dateibaum, oder nutze *Lieder hochladen…* im Menü oder im Kontextmenü eines Ordners. Ordnerstrukturen bleiben erhalten.
-* **Vorhandene Musik:** Kopiere Dateien in den Bibliotheksordner des Servers (oder füge unter **Einstellungen → Bibliothek** einen S3-Bucket hinzu) und wähle *Bibliothek neu einlesen*.
+* **Vorhandene Musik:** Kopiere Dateien in den Bibliotheksordner des Servers (oder füge unter **Einstellungen → Bibliothek** einen S3-Bucket hinzu) und wähle *Bibliothek → Neu einlesen*.
 * **Analyse:** Ist ein Voxalyzer-Agent verbunden (siehe [Agenten](#-agenten)), wähle *Analysieren* bei einem Song oder Ordner. Ohne Agent sind die Analyse-Funktionen deaktiviert.
 
 ### 2. Nach Stimmung filtern

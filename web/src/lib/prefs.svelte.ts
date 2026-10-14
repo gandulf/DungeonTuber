@@ -16,6 +16,9 @@ export interface Prefs {
   /** The valence/arousal map next to the mood sliders. */
   showMoodMap: boolean;
   moodCollapsed: boolean;
+  /** The rows of tags and genres above the song table are unfolded (otherwise they show one row). */
+  tagsExpanded: boolean;
+  genresExpanded: boolean;
   crossfade: boolean;
   normalize: boolean;
   showEffects: boolean;
@@ -57,6 +60,8 @@ const defaults: Prefs = {
   shuffle: false,
   showMoodMap: true,
   moodCollapsed: false,
+  tagsExpanded: false,
+  genresExpanded: false,
   crossfade: true,
   normalize: true,
   showEffects: true,

@@ -1,6 +1,7 @@
 // Open song tabs (folders / playlists), their tracks and the shared filter.
 import { api } from '../api';
 import { cached } from '../cache';
+import { findDuplicates, type DuplicateKind } from '../duplicates';
 import { t } from '../i18n.svelte';
 import { prefs, savePrefs } from '../prefs.svelte';
 import { data } from './data.svelte';
@@ -24,6 +25,8 @@ export interface Tab {
   owner?: string | null;
   /** The whole library of the global search (see globalTab), not a folder or playlist. */
   global?: boolean;
+  /** The songs that exist more than once in the library (see duplicatesTab). */
+  duplicates?: boolean;
 }
 
 export type SortKey = string; // 'index' | 'name' | 'score' | 'bpm' | 'genre' | 'artist' | 'album' | 'favorite' | 'cat:<key>'
@@ -37,6 +40,8 @@ export const library = $state({
   selection: [] as string[], // track ids
   /** The search covers the whole library (the best GLOBAL_LIMIT songs) instead of the open tab. */
   global: false,
+  /** The table shows the songs that exist more than once in the library. */
+  duplicates: false,
 });
 
 /** How many songs the global search shows. */
@@ -47,11 +52,43 @@ export const globalTab: Tab = $state({
   key: 'global', type: 'dir', path: '', name: '', tracks: [], loaded: false, loading: false, error: null, global: true,
 });
 
+/** The duplicates among the songs of the whole library; computed from globalTab (which is loaded when the duplicates are shown). */
+export const duplicatesTab: Tab = $state({
+  key: 'duplicates', type: 'dir', path: '', name: '', tracks: [], loaded: false, loading: false, error: null, duplicates: true,
+});
+
+/** Track id -> its group of duplicates (sorting by 'duplicate' keeps a group together), and how many groups there are. */
+export const duplicateInfo = $state({
+  groups: {} as Record<string, string>,
+  kinds: {} as Record<string, DuplicateKind>,
+  groupCount: 0,
+  /** Groups of songs with identical files, found by the server; the songs with the same artist and title are found in the browser. */
+  exact: [] as string[][],
+  /** The server is still comparing the contents of the files. */
+  comparing: false,
+});
+
+$effect.root(() => {
+  $effect(() => {
+    const result = findDuplicates(globalTab.tracks, duplicateInfo.exact);
+    duplicatesTab.tracks = result.tracks;
+    duplicateInfo.groups = result.groups;
+    duplicateInfo.kinds = result.kinds;
+    duplicateInfo.groupCount = result.groupCount;
+  });
+  $effect(() => {
+    duplicatesTab.loading = globalTab.loading;
+    duplicatesTab.loaded = globalTab.loaded;
+    duplicatesTab.error = globalTab.error;
+  });
+});
+
 export const filter: FilterConfig = $state({ categories: {}, tags: [], genres: [], bpm: null });
 
 const tabKey = (type: string, path: string) => `${type}:${path}`;
 
 export function activeTab(): Tab | null {
+  if (library.duplicates) return duplicatesTab;
   if (library.global) return globalTab;
   return library.tabs.find((tab) => tab.key === library.active) ?? null;
 }
@@ -73,12 +110,45 @@ export async function loadGlobal(force = false) {
   }
 }
 
+/** Shows every song that exists more than once in the library in the table, the duplicates of a song next to each other. */
+export async function showDuplicates() {
+  library.duplicates = true;
+  library.global = false;
+  library.selection = [];
+  library.search = '';
+  library.sortKey = 'duplicate';
+  library.sortAsc = true;
+  duplicatesTab.name = t('Duplicates');
+  duplicateInfo.exact = [];
+  await loadGlobal(true); // the library may have changed since it was loaded
+  // the songs with the same title show up right away; the files with the same content follow once the server has compared them
+  duplicateInfo.comparing = true;
+  try {
+    duplicateInfo.exact = (await api.libraryDuplicates()).groups;
+  } catch (e) {
+    errorToast(e);
+  } finally {
+    duplicateInfo.comparing = false;
+  }
+}
+
+/** Leaves the duplicates for the tab that was open before. */
+export function closeDuplicates() {
+  library.duplicates = false;
+  library.selection = [];
+  const tab = activeTab();
+  if (tab && library.sortKey === 'duplicate') library.sortKey = tab.type === 'playlist' ? 'index' : 'name';
+  library.sortAsc = library.sortKey !== 'score';
+}
+
 /** Switches the search across the whole library on or off. */
 export async function setGlobal(on: boolean) {
   library.global = on;
+  library.duplicates = false;
   library.selection = [];
   globalTab.name = t('Whole library');
   if (on) {
+    if (library.sortKey === 'duplicate') library.sortKey = 'name';
     if (!emptyFilter(filter)) {
       library.sortKey = 'score';
       library.sortAsc = false;
@@ -150,7 +220,8 @@ export async function loadTab(key: string, force = false) {
 }
 
 export function selectTab(key: string) {
-  library.global = false; // picking a folder or playlist leaves the global search
+  library.global = false; // picking a folder or playlist leaves the global search and the duplicates
+  library.duplicates = false;
   library.active = key;
   library.selection = [];
   library.search = '';
@@ -245,6 +316,7 @@ function sortValue(row: Row, key: SortKey, playlist: boolean): string | number |
     case 'album': return (track.album ?? '').toLowerCase();
     case 'summary': return (track.summary ?? '').toLowerCase();
     case 'favorite': return track.favorite ? 0 : 1;
+    case 'duplicate': return duplicateInfo.groups[track.id] ?? null;
     case 'length': return track.length;
     default:
       if (key.startsWith('cat:')) return track.categories[key.slice(4)] ?? null;

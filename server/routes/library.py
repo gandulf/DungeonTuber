@@ -164,10 +164,8 @@ def tracks(dir: str | None = None, playlist: str | None = None, recursive: bool 
     raise HTTPException(status_code=400, detail="dir or playlist required")
 
 
-@router.get("/api/library/tracks")
-def library_tracks():
-    """Every song of the library (the effects directory left out), for the search across the whole library. Known songs come from the
-    database; songs that were never shown are read once (remote ones are imported in the background, like in a folder)."""
+def _library_locations() -> list[Location]:
+    """Every song of the library, the effects directory left out."""
     effects = AppSettings.value(SettingKeys.EFFECTS_DIRECTORY, type=str)
     effects_location = locate(effects) if effects else None
     skip = effects_location.client_path if effects_location else None
@@ -175,10 +173,24 @@ def library_tracks():
     for root in get_roots():
         locations.extend(loc for loc in _mp3s(Location(root), True)
                          if not skip or not (loc.client_path == skip or loc.client_path.startswith(skip + "/")))
-    data = get_index().get_many(locations)
+    return locations
+
+
+@router.get("/api/library/tracks")
+def library_tracks():
+    """Every song of the library (the effects directory left out), for the search across the whole library. Known songs come from the
+    database; songs that were never shown are read once (remote ones are imported in the background, like in a folder)."""
+    data = get_index().get_many(_library_locations())
     for item in data:
         item["index"] = None
     return {"tracks": data}
+
+
+@router.get("/api/library/duplicates")
+def library_duplicates():
+    """Groups of songs whose files are identical (same SHA-256), as lists of track ids. The hashes are stored, so only new or changed files
+    of the same size as another file are read."""
+    return {"groups": get_index().duplicate_groups(_library_locations())}
 
 
 @router.get("/api/tracks/{track_id}")

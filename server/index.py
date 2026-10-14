@@ -3,6 +3,7 @@
 Local files are imported from their ID3 tags and edits are written back to the mp3 (re-imported when the file changes on disk).
 Remote files (S3) are imported once by downloading them; afterwards the database is authoritative and edits stay there.
 """
+import hashlib
 import json
 import logging
 import posixpath
@@ -45,6 +46,56 @@ def stub_dict(location: Location) -> dict:
             "light": None, "normalized": None, "chapters": [], "has_cover": False, "index": None, "pending": True}
 
 
+def audio_span(path: Path) -> tuple[int, int]:
+    """Start and end of the audio data of an mp3 file: what is left without the ID3v2 tag(s) at the start and the ID3v1 and APE tags at the end,
+    so editing the tags does not change it."""
+    size = path.stat().st_size
+    with open(path, "rb") as source:
+        start = 0
+        while True:
+            source.seek(start)
+            head = source.read(10)
+            if len(head) < 10 or head[:3] != b"ID3":
+                break
+            tag = 10 + ((head[6] & 0x7F) << 21 | (head[7] & 0x7F) << 14 | (head[8] & 0x7F) << 7 | (head[9] & 0x7F)) + (10 if head[5] & 0x10 else 0)
+            if start + tag > size:
+                break
+            start += tag
+        end = size
+        if end - start >= 128:
+            source.seek(end - 128)
+            if source.read(3) == b"TAG":
+                end -= 128
+                if end - start >= 227:
+                    source.seek(end - 227)
+                    if source.read(4) == b"TAG+":
+                        end -= 227
+        if end - start >= 32:
+            source.seek(end - 32)
+            footer = source.read(32)
+            if footer[:8] == b"APETAGEX":
+                total = int.from_bytes(footer[12:16], "little") + (32 if int.from_bytes(footer[20:24], "little") & (1 << 31) else 0)
+                if total <= end - start:
+                    end -= total
+    return start, end
+
+
+def audio_hash(path: Path) -> str:
+    """SHA-256 of the audio data of an mp3 file (see audio_span)."""
+    start, end = audio_span(path)
+    digest = hashlib.sha256()
+    with open(path, "rb") as source:
+        source.seek(start)
+        remaining = end - start
+        while remaining > 0:
+            chunk = source.read(min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            digest.update(chunk)
+            remaining -= len(chunk)
+    return digest.hexdigest()
+
+
 def _like_prefix(prefix: str) -> str:
     return prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "/%"
 
@@ -62,6 +113,8 @@ class TrackIndex:
         self._conn.execute("CREATE TABLE IF NOT EXISTS favorites (user TEXT, path TEXT, value INTEGER, PRIMARY KEY (user, path))")
         self._conn.execute("CREATE TABLE IF NOT EXISTS user_state (user TEXT, key TEXT, value TEXT, PRIMARY KEY (user, key))")
         self._conn.execute("CREATE TABLE IF NOT EXISTS private (path TEXT PRIMARY KEY)")
+        self._conn.execute("DROP TABLE IF EXISTS hashes")  # the first version hashed the whole file
+        self._conn.execute("CREATE TABLE IF NOT EXISTS audio_hashes (path TEXT PRIMARY KEY, mtime REAL, size INTEGER, audio_size INTEGER, hash TEXT)")
         self._conn.commit()
 
     # --- reading ---------------------------------------------------------
@@ -238,6 +291,78 @@ class TrackIndex:
             row = self._conn.execute("SELECT data, mime FROM covers WHERE path = ?", (location.client_path,)).fetchone()
         return (bytes(row[0]), row[1]) if row else None
 
+    def _audio_row(self, location: Location, mtime: float, size: int) -> tuple[int | None, str | None]:
+        """(size of the audio data, its hash) of a file as stored for its current modification time and size; the hash is None until it was needed.
+        The size of the audio of a local file is read from its tag headers, so it is known for every file without reading the rest."""
+        key = location.client_path
+        with self._lock:
+            row = self._conn.execute("SELECT mtime, size, audio_size, hash FROM audio_hashes WHERE path = ?", (key,)).fetchone()
+        if row and row[0] == mtime and row[1] == size:
+            return row[2], row[3]
+        audio_size = None
+        if location.root.is_local:
+            try:
+                start, end = audio_span(location.local_path)
+                audio_size = end - start
+            except OSError as e:
+                logger.warning("Could not read {0} for the duplicates: {1}", key, e)
+        self._store_audio(key, mtime, size, audio_size, None)
+        return audio_size, None
+
+    def _store_audio(self, key: str, mtime: float, size: int, audio_size: int | None, digest: str | None):
+        with self._lock:
+            self._conn.execute("INSERT OR REPLACE INTO audio_hashes (path, mtime, size, audio_size, hash) VALUES (?, ?, ?, ?, ?)",
+                               (key, mtime, size, audio_size, digest))
+            self._conn.commit()
+
+    def _audio_digest(self, location: Location, mtime: float, size: int) -> str | None:
+        """The hash of the audio data of a file (remote files are downloaded), stored so that the file is read only once."""
+        audio_size, digest = self._audio_row(location, mtime, size)
+        if digest:
+            return digest
+        try:
+            if location.root.is_local:
+                digest = audio_hash(location.local_path)
+            else:
+                with location.storage.local_file(location.rel) as tmp:
+                    start, end = audio_span(tmp)
+                    audio_size = end - start
+                    digest = audio_hash(tmp)
+        except (OSError, StorageError) as e:
+            logger.warning("Could not read {0} for the duplicates: {1}", location.client_path, e)
+            return None
+        self._store_audio(location.client_path, mtime, size, audio_size, digest)
+        return digest
+
+    def duplicate_groups(self, locations: list[Location]) -> list[list[str]]:
+        """Ids of the songs whose audio data is the same, whatever their tags say, one list per group. Only files whose audio data has the same
+        size can be the same, so only those are read. The size is known without reading for local files; a remote file is compared by its file
+        size (its tags would need a download), so remote copies with different tags are only found by their titles. Songs that are not
+        imported yet are left out."""
+        with self._lock:
+            known = {path: (mtime, size) for path, mtime, size in self._conn.execute("SELECT path, mtime, size FROM tracks").fetchall()}
+        candidates: dict[tuple[bool, int], list[tuple[Location, float, int]]] = {}
+        for location in locations:
+            stored = known.get(location.client_path)
+            if not stored:
+                continue
+            mtime, size = stored
+            if location.root.is_local:
+                audio_size = self._audio_row(location, mtime, size)[0]
+                key = (True, audio_size if audio_size is not None else size)
+            else:
+                key = (False, size)
+            candidates.setdefault(key, []).append((location, mtime, size))
+        by_hash: dict[str, list[str]] = {}
+        for group in candidates.values():
+            if len(group) < 2:
+                continue
+            for location, mtime, size in group:
+                digest = self._audio_digest(location, mtime, size)
+                if digest:
+                    by_hash.setdefault(digest, []).append(location.id)
+        return [ids for ids in by_hash.values() if len(ids) > 1]
+
     def invalidate(self, location: Location):
         with self._lock:
             self._conn.execute("DELETE FROM tracks WHERE path = ?", (location.client_path,))
@@ -327,6 +452,9 @@ class TrackIndex:
         """Follows a moved or renamed file or directory."""
         old_key, new_key = old.client_path, new.client_path
         self._move_uploads(old_key, new_key)
+        with self._lock:  # computed again when needed
+            self._conn.execute("DELETE FROM audio_hashes WHERE path = ? OR path LIKE ? ESCAPE '\\'", (old_key, _like_prefix(old_key)))
+            self._conn.commit()
         if old.root.is_local:
             self.invalidate(old)
             return
@@ -370,7 +498,7 @@ class TrackIndex:
 
     def forget_paths(self, paths: list[str]):
         with self._lock:
-            for table in ("tracks", "covers", "uploads", "favorites", "private"):
+            for table in ("tracks", "covers", "uploads", "favorites", "private", "audio_hashes"):
                 self._conn.executemany(f"DELETE FROM {table} WHERE path = ?", [(path,) for path in paths])
             self._conn.commit()
 
@@ -378,7 +506,7 @@ class TrackIndex:
         """Drops a deleted file or directory."""
         key = location.client_path
         with self._lock:
-            for table in ("tracks", "covers", "uploads", "favorites", "private"):
+            for table in ("tracks", "covers", "uploads", "favorites", "private", "audio_hashes"):
                 self._conn.execute(f"DELETE FROM {table} WHERE path = ? OR path LIKE ? ESCAPE '\\'", (key, _like_prefix(key)))
             self._conn.commit()
 

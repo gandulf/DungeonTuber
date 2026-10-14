@@ -161,7 +161,7 @@
 
   <nav class="nav">
     <div class="nav-section">
-      <span class="label-xs">{t('Library')}</span>
+      <span class="label-xs">{t('Favorites')}</span>
       {#each favoriteFolders as path (path)}
         <button class="nav-item" title={path} onclick={() => openTab('dir', path)}
                 oncontextmenu={(e) => openMenu(e, [
@@ -173,7 +173,7 @@
           <Icon name="bookmark" size={16} /><span class="ellipsis">{lastPart(path)}</span>
         </button>
       {:else}
-        <span class="empty muted">{t('Right-click a folder to add it to the library.')}</span>
+        <span class="empty muted">{t('Right-click a folder to add it to your favorites.')}</span>
       {/each}
     </div>
 
@@ -203,7 +203,7 @@
 
     <div class="nav-section files">
       <div class="row">
-        <span class="label-xs">{t('Files')}</span>
+        <span class="label-xs">{t('Library')}</span>
         <span class="grow"></span>
         <button class="icon-btn mini" title={t('Refresh')} onclick={refresh}><Icon name="refresh" size={14} /></button>
       </div>

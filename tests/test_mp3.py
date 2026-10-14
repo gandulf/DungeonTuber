@@ -1,11 +1,11 @@
-from mutagen.id3 import ID3, TRCK, Encoding
+from mutagen.id3 import COMM, ID3, TRCK, Encoding
 from mutagen.mp3 import MP3
 
 from conftest import write_mp3
 from core.lights import LightSetting
 from core.mp3 import (EffectEntry, Mp3Entry, list_mp3s, parse_mp3, parse_track_number, update_categories_and_tags, update_mp3_category, update_mp3_chapters,
-                      update_mp3_cover_data, update_mp3_data, update_mp3_favorite, update_mp3_light, update_mp3_tags,
-                      update_mp3_track)
+                      update_mp3_cover_data, update_mp3_data, update_mp3_favorite, update_mp3_light, update_mp3_summary,
+                      update_mp3_tags, update_mp3_track)
 
 
 def test_parse_untagged_file(mp3_file):
@@ -186,3 +186,18 @@ def test_track_number_is_read_and_written(mp3_file):
     update_mp3_track(mp3_file, None)
     assert parse_mp3(mp3_file).track is None
     assert [parse_track_number(v) for v in ("05", " 2 / 9", "x", "0", None)] == [5, 2, None, None, None]
+
+
+def test_summary_can_be_removed_when_the_file_has_comments_of_other_languages(mp3_file):
+    tags = ID3()
+    tags.add(COMM(Encoding.UTF8, lang="eng", desc="", text=["Written by another tagger"]))
+    tags.add(COMM(Encoding.UTF8, lang="deu", desc="Beschreibung", text=["Von einem anderen Programm"]))
+    tags.save(mp3_file)
+    assert parse_mp3(mp3_file).summary == "Written by another tagger"
+
+    update_mp3_summary(mp3_file, "Our own summary")
+    assert parse_mp3(mp3_file).summary == "Our own summary"
+
+    update_mp3_summary(mp3_file, "")
+    assert parse_mp3(mp3_file).summary == ""
+    assert not ID3(mp3_file).getall("COMM")

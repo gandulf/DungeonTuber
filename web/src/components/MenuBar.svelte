@@ -33,19 +33,23 @@
 
 <header class="topbar">
   {#if ui.narrow}
-    <button class="icon-btn" title={t('Files')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'tree' ? null : 'tree'; }}><Icon name="library" size={18} /></button>
+    <button class="icon-btn" title={t('Library')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'tree' ? null : 'tree'; }}><Icon name="library" size={18} /></button>
   {/if}
   <div class="tabs-area" data-tour="tabs" bind:clientWidth={areaWidth}>
     {#if library.tabs.length}<Tabs />{:else}<span class="hint muted">{t('Welcome to Dungeon Tuber')}</span>{/if}
   </div>
-  <label class="search" class:active={library.search || library.global} data-tour="search">
+  <label class="search" class:active={!!library.search} data-tour="search">
     <Icon name="search" size={15} />
     <input type="search" placeholder={library.global ? t('Search the whole library…') : t('Search tracks…')} bind:value={library.search} />
   </label>
-  <button class="icon-btn global" class:active={library.global} aria-pressed={library.global} data-tour="global-search"
-          title={library.global ? t('Global search: the best {0} songs of the whole library. Click to search the open tab again.', 50)
-                                : t('Search the whole library instead of the open tab')}
-          onclick={() => void setGlobal(!library.global)}><Icon name="globe" size={17} /></button>
+  <button class="mode" class:explore={library.global} role="switch" aria-checked={library.global} aria-label={t('Browse or explore')} data-tour="global-search"
+          title={library.global ? t('Explore: the best {0} songs of the whole library. Click to browse the open tab again.', 50)
+                                : t('Browse: search the open tab. Click to explore the whole library instead.')}
+          onclick={() => void setGlobal(!library.global)}>
+    <span class="thumb"></span>
+    <span class="opt" class:on={!library.global}>{t('Browse')}</span>
+    <span class="opt" class:on={library.global}>{t('Explore')}</span>
+  </button>
   {#if data.settings?.assistantConfigured || data.settings?.groqConfigured || data.settings?.musicGenConfigured || data.settings?.soundGenConfigured || data.auth?.is_admin !== false}
     <button class="assistant" class:active={assistant.open} class:labelled={showLabel} title={t('AI Assistant')} aria-label={t('AI Assistant')} aria-pressed={assistant.open}
             data-tour="assistant" bind:clientWidth={buttonWidth} onclick={toggleAssistant}>
@@ -70,8 +74,14 @@
   .search input { border: none; background: none; padding: 0; width: 0; flex: 1; min-width: 0; margin-left: 0; opacity: 0; color: var(--text); transition: opacity 0.15s, margin-left 0.2s; }
   .search:focus-within input, .search.active input { margin-left: 8px; opacity: 1; }
   .search input:focus { box-shadow: none; }
-  .global { width: 36px; height: 36px; border-radius: 10px; border: 1px solid transparent; }
-  .global.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+  /* iOS style switch: the thumb slides under the label of the active mode */
+  .mode { position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center; flex: none; height: 36px; padding: 3px; box-sizing: border-box; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; transition: border-color 0.15s; }
+  .mode:hover { border-color: var(--border-strong); }
+  .mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 999px; background: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.4, 1); }
+  .mode.explore .thumb { transform: translateX(100%); }
+  .opt { position: relative; padding: 0 10px; text-align: center; white-space: nowrap; color: var(--muted); transition: color 0.2s; }
+  .opt.on { color: var(--accent-text); }
   .assistant { display: flex; align-items: center; justify-content: center; gap: 7px; flex: none; height: 36px; min-width: 36px; padding: 0 9px; box-sizing: border-box; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); font: inherit; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s; }
   .assistant.labelled { padding: 0 12px 0 10px; }
   .assistant:hover { color: var(--text); border-color: var(--border-strong); }

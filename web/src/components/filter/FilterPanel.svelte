@@ -52,6 +52,7 @@
 
   const hasCircumplex = $derived(prefs.filter.circumplex && categories.some((c) => c.key === VALENCE) && categories.some((c) => c.key === AROUSAL));
   const visible = $derived(prefs.filter.presets || prefs.filter.sliders || hasCircumplex || prefs.filter.bpm);
+  const sliderCard = $derived(prefs.filter.sliders || prefs.filter.bpm); // the card with the sliders is shown
   const showMap = $derived(prefs.showMoodMap && hasCircumplex && !small);
 
   const groups = $derived.by(() => {
@@ -127,6 +128,30 @@
     ]);
   }
 
+  // the presets are reordered by dragging one onto another: it lands before or after it, depending on the half it is dropped on
+  let draggedPreset = $state<string | null>(null);
+  let dropAt = $state<{ name: string; after: boolean } | null>(null);
+
+  function dragOverPreset(event: DragEvent, name: string) {
+    if (draggedPreset === null || draggedPreset === name) return;
+    event.preventDefault();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    dropAt = { name, after: event.clientX > rect.left + rect.width / 2 };
+  }
+
+  async function dropPreset() {
+    const target = dropAt;
+    const name = draggedPreset;
+    draggedPreset = dropAt = null;
+    if (!target || name === null) return;
+    const moved = data.presets.find((p) => p.name === name);
+    if (!moved) return;
+    const rest = data.presets.filter((p) => p.name !== name);
+    const index = rest.findIndex((p) => p.name === target.name) + (target.after ? 1 : 0);
+    const order = [...rest.slice(0, index), moved, ...rest.slice(index)];
+    if (order.some((p, i) => p.name !== data.presets[i].name)) await savePresets(order);
+  }
+
   function toggleMap() {
     prefs.showMoodMap = !prefs.showMoodMap;
     prefs.moodCollapsed = false;
@@ -150,21 +175,28 @@
   </div>
 {/snippet}
 
+{#snippet mapToggle()}
+  <button class="btn sm map-toggle" class:on={prefs.showMoodMap} aria-pressed={prefs.showMoodMap} onclick={toggleMap}>
+    <Icon name="compass" size={14} /> {t('Map')}
+  </button>
+{/snippet}
+
 {#if visible}
   <section class="mood" aria-label={t('Filter')}>
     <div class="head">
-      {#if hasCircumplex && !small}
-        <button class="btn sm map-toggle" class:on={prefs.showMoodMap} aria-pressed={prefs.showMoodMap} onclick={toggleMap}>
-          <Icon name="compass" size={14} /> {t('Mood Explorer')}
-        </button>
-      {:else if !small}
-        <span class="card-title">{t('Mood')}</span>
+      {#if hasCircumplex && !small && !sliderCard}
+        {@render mapToggle()}  <!-- otherwise it sits in the head of the slider card -->
       {/if}
 
       {#if prefs.filter.presets}
         <div class="presets">
           {#each data.presets as preset (preset.name)}
-            <button class="preset" class:on={selectedPreset === preset.name} aria-pressed={selectedPreset === preset.name} onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')}>
+            <button class="preset" class:on={selectedPreset === preset.name} class:dragging={draggedPreset === preset.name}
+                    class:before={dropAt?.name === preset.name && !dropAt.after} class:after={dropAt?.name === preset.name && dropAt.after}
+                    aria-pressed={selectedPreset === preset.name} onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')}
+                    draggable="true" ondragstart={(e) => { draggedPreset = preset.name; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }}
+                    ondragover={(e) => dragOverPreset(e, preset.name)} ondragleave={() => (dropAt = null)} ondrop={(e) => { e.preventDefault(); void dropPreset(); }}
+                    ondragend={() => (draggedPreset = dropAt = null)}>
               <Icon name="bookmark" size={13} /> {preset.name}
             </button>
           {/each}
@@ -193,7 +225,7 @@
                         onchange={(v, a) => { filter.categories[VALENCE] = v; filter.categories[AROUSAL] = a; onFilterChanged(); }} />
           </div>
         {/if}
-        {#if prefs.filter.sliders || prefs.filter.bpm}
+        {#if sliderCard}
           <div class="card fine" data-tour="slider">
             <div class="card-head">
               <div>
@@ -201,6 +233,7 @@
                 <p class="card-sub">{t('Fine tune the sound')}</p>
               </div>
               <div class="head-tools">
+                {#if hasCircumplex && !small}{@render mapToggle()}{/if}
                 {#if groups.length > 1}
                   <div class="seg small">
                     {#each groups as [group] (group)}
@@ -208,14 +241,15 @@
                     {/each}
                   </div>
                 {/if}
-                <button class="help" title={t('What do the mood sliders mean?')} aria-label={t('What do the mood sliders mean?')}
-                        onclick={() => openDialog(CategoryHelpDialog, { categories })}>?</button>
               </div>
             </div>
             {#if current}{@render sliders(prefs.filter.sliders ? current[1] : [])}{/if}
             <div class="card-foot">
               <button class="btn sm" data-tour="presets" onclick={savePreset}><Icon name="bookmark" size={14} /> {t('Save as Preset')}</button>
-              {#if active}<button class="btn sm ghost" onclick={clearFilter}>{t('Reset')}</button>{/if}
+              {#if active}<button class="btn sm ghost" onclick={clearFilter}><Icon name="refresh" size={13} /> {t('Reset')}</button>{/if}
+              <span class="grow"></span>
+              <button class="help" title={t('What do the mood sliders mean?')} aria-label={t('What do the mood sliders mean?')}
+                      onclick={() => openDialog(CategoryHelpDialog, { categories })}>?</button>
             </div>
           </div>
         {/if}
@@ -230,18 +264,21 @@
   .presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .preset { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 9px; font-size: var(--fs-sm); color: var(--gold); background: var(--gold-soft); border: 1px solid transparent; }
   .preset:hover { border-color: var(--gold); }
+  .preset.dragging { opacity: 0.4; }
+  .preset.before { box-shadow: -4px 0 0 -1px var(--accent); }
+  .preset.after { box-shadow: 4px 0 0 -1px var(--accent); }
   .preset.on { color: var(--bg); background: var(--gold); border-color: var(--gold); font-weight: 600; }
   .grow { flex: 1; }
-  .cards { display: grid; grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 1.2fr); gap: 12px; height: min(36vh, 290px); }
+  .cards { display: grid; grid-template-columns: minmax(200px, 0.6fr) minmax(320px, 1.4fr); gap: 12px; height: min(36vh, 290px); }
   .cards.single { grid-template-columns: 1fr; }
   .card { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
   .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
   .map-toggle.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
-  .head-tools { display: flex; align-items: center; gap: 6px; }
+  .head-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
   .help { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--fs-xs); font-weight: 700; line-height: 1; }
   .help:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
   .seg.small button { padding: 3px 10px; font-size: var(--fs-xs); }
-  .slider-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); column-gap: 26px; row-gap: 2px; overflow-x: hidden; overflow-y: auto; padding-right: 4px; align-content: start; }
+  .slider-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); column-gap: 26px; row-gap: 2px; overflow-x: hidden; overflow-y: auto; padding: 18px 4px 0 0; margin-top: -18px; align-content: start; } /* the top padding gives the value tip above the first row room inside the scroll area */
   .slider-list.wide { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }
   .slider-list > :global(*) { min-width: 0; }
   .card-foot { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }

@@ -6,6 +6,7 @@ import type { ViewSettings } from '../types';
 
 const currentView = (): ViewSettings => ({
   showEffects: prefs.showEffects, showLights: prefs.showLights, filter: prefs.filter, moodCollapsed: prefs.moodCollapsed, showMoodMap: prefs.showMoodMap,
+  tagsExpanded: prefs.tagsExpanded, genresExpanded: prefs.genresExpanded,
   columns: prefs.columns, columnWidths: prefs.columnWidths, hiddenCategories: prefs.hiddenCategories, titleInsteadOfFile: prefs.titleInsteadOfFile,
   summaryUnderTitle: prefs.summaryUnderTitle, rowStyle: prefs.rowStyle, effectsGrid: prefs.effectsGrid, effectsTitle: prefs.effectsTitle, importOptions: prefs.importOptions,
 });

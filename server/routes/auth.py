@@ -51,7 +51,7 @@ class PlayerSettings(BaseModel):
     dynamicColumns: bool = False
 
 
-VIEW_KEYS = ("showEffects", "showLights", "filter", "moodCollapsed", "showMoodMap", "columns", "columnWidths", "hiddenCategories", "titleInsteadOfFile",
+VIEW_KEYS = ("showEffects", "showLights", "filter", "moodCollapsed", "showMoodMap", "tagsExpanded", "genresExpanded", "columns", "columnWidths", "hiddenCategories", "titleInsteadOfFile",
              "summaryUnderTitle", "rowStyle", "effectsGrid", "effectsTitle", "importOptions")  # the view preferences a user takes along (web/src/lib/stores/profile.svelte.ts)
 MAX_VIEW_BYTES = 20000
 

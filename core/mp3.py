@@ -307,18 +307,10 @@ def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
                 except (ValueError, IndexError):
                     entry.bpm = None
 
-            # Get Summary (COMM)
-            if "COMM::XXX" in audio.tags:
-                comm_frame = audio.tags.get("COMM::XXX")
-                if comm_frame.text:
-                    entry.summary = comm_frame.text[0]
-            else:
-                for key in audio.tags.keys():
-                    if key.startswith("COMM"):
-                        comm_frame = audio.tags[key]
-                        if comm_frame.text:
-                            entry.summary = comm_frame.text[0]
-                        break
+            # Get Summary (COMM): ours (no language) first, otherwise the first comment that has text (other taggers write one per language)
+            comments = [audio.tags["COMM::XXX"]] if "COMM::XXX" in audio.tags else []
+            comments += [frame for key, frame in audio.tags.items() if key.startswith("COMM") and key != "COMM::XXX"]
+            entry.summary = next((frame.text[0] for frame in comments if frame.text and frame.text[0]), "")
 
             # Get Categories (TXXX:ai_categories)
             txxx_cats = audio.tags.get("TXXX:ai_categories")
@@ -442,7 +434,9 @@ def update_mp3_favorite(path: PathLike[str] | MP3, favorite: bool, save: bool = 
 def update_mp3_summary(path: str | PathLike[str] | MP3, new_summary: str, save: bool = True):
     audio = _audio(path)
 
-    audio.tags.add(COMM(Encoding.UTF8, text=[new_summary] if new_summary else ""))
+    audio.tags.delall("COMM")  # also the comments of other languages and descriptions, otherwise they show up again once ours is empty
+    if new_summary:
+        audio.tags.add(COMM(Encoding.UTF8, text=[new_summary]))
 
     if save:
         audio.save()

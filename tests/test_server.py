@@ -709,6 +709,47 @@ def test_news_can_be_switched_off(client):
     assert client.get("/api/user/state").json()["news_off"] is True
 
 
+def test_identical_audio_is_found_whatever_the_tags_say(client, library):
+    root = library["root"]  # fight, drums and inn are the same silent frames
+    copy = write_mp3(root / "Copies" / "Inn copy.mp3", frames=60)
+    write_mp3(root / "Taverns" / "Inn.mp3", frames=60)
+    write_mp3(root / "Copies" / "Other.mp3", frames=61)  # its own audio size: never read
+    tracks = client.get("/api/library/tracks").json()["tracks"]  # the songs are known to the index
+    names = {t["id"]: t["name"] for t in tracks}
+
+    def groups() -> list[list[str]]:
+        found = client.get("/api/library/duplicates").json()["groups"]
+        return sorted(sorted(names[i] for i in group) for group in found)
+
+    assert groups() == [["Inn", "Inn copy"], ["drums", "fight", "inn"]]
+
+    # the tags of one copy are edited (this rewrites the ID3 tag of the file): the audio is still the same
+    copy_id = next(i for i, name in names.items() if name == "Inn copy")
+    assert client.patch(f"/api/tracks/{copy_id}", json={"title": "Edited title", "artist": "Somebody else"}).status_code == 200
+    assert copy.stat().st_size > 60 * 417
+    assert groups() == [["Inn", "Inn copy"], ["drums", "fight", "inn"]]
+
+    copy.write_bytes(copy.read_bytes() + bytes([0]))  # changed audio: no longer the same
+    names = {t["id"]: t["name"] for t in client.get("/api/library/tracks").json()["tracks"]}
+    assert groups() == [["drums", "fight", "inn"]]
+
+
+def test_audio_span_skips_the_tags(tmp_path):
+    from server.index import audio_hash, audio_span
+    audio = b"\xff\xfb\x90\x64" * 100
+    v2 = b"ID3\x04\x00\x00" + bytes([0, 0, 0, 20]) + b"x" * 20  # 10 byte header and 20 bytes of frames
+    v1 = b"TAG" + b"y" * 125
+    ape = b"z" * 10 + b"APETAGEX" + bytes(4) + (42).to_bytes(4, "little") + bytes(4) + bytes(4) + bytes(8)  # footer: 32 bytes, tag size 42
+    plain = tmp_path / "plain.mp3"
+    plain.write_bytes(audio)
+    tagged = tmp_path / "tagged.mp3"
+    tagged.write_bytes(v2 + audio + ape + v1)
+
+    assert audio_span(plain) == (0, len(audio))
+    assert audio_span(tagged) == (len(v2), len(v2) + len(audio))
+    assert audio_hash(plain) == audio_hash(tagged)
+
+
 def test_player_settings_are_kept_per_user(client):
     set_password("secret")
     client.post("/api/auth/login", json={"password": "secret"})

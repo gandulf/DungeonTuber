@@ -294,6 +294,8 @@ export interface ViewSettings {
   filter: { presets: boolean; circumplex: boolean; sliders: boolean; bpm: boolean; tags: boolean; genres: boolean };
   moodCollapsed: boolean;
   showMoodMap: boolean;
+  tagsExpanded: boolean;
+  genresExpanded: boolean;
   columns: Record<string, boolean>;
   columnWidths: Record<string, number>;
   hiddenCategories: string[];

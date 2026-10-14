@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from '../lib/i18n.svelte';
-  import { closeAllTabs, closeOtherTabs, closeTab, library, loadTab, moveTab, selectTab } from '../lib/stores/library.svelte';
+  import { closeAllTabs, closeDuplicates, closeOtherTabs, closeTab, library, loadTab, moveTab, selectTab } from '../lib/stores/library.svelte';
   import { openMenu } from '../lib/stores/ui.svelte';
   import Icon from './Icon.svelte';
 
@@ -48,7 +48,7 @@
 <div class="wrap" bind:clientWidth={width}>
 <div class="tabs" role="tablist">
   {#each shown as { tab, index } (tab.key)}
-    <div class="tab" class:active={tab.key === library.active && !library.global} role="tab" tabindex="0" aria-selected={tab.key === library.active}
+    <div class="tab" class:active={tab.key === library.active && !library.global && !library.duplicates} role="tab" tabindex="0" aria-selected={tab.key === library.active}
          title={tab.path} draggable="true"
          onclick={() => selectTab(tab.key)} onkeydown={(e) => e.key === 'Enter' && selectTab(tab.key)}
          onauxclick={(e) => e.button === 1 && closeTab(tab.key)} oncontextmenu={(e) => menu(e, tab.key)}
@@ -62,6 +62,15 @@
       </button>
     </div>
   {/each}
+  {#if library.duplicates}
+    <div class="tab active" role="tab" tabindex="0" aria-selected="true" title={t('Duplicates')}>
+      <Icon name="copy" size={15} />
+      <span class="name">{t('Duplicates')}</span>
+      <button class="close" aria-label={t('Close')} onclick={(e) => { e.stopPropagation(); closeDuplicates(); }}>
+        <Icon name="close" size={12} />
+      </button>
+    </div>
+  {/if}
 </div>
 {#if hidden.length}
   <button class="more" title={t('More tabs')} aria-label={t('More tabs')} onclick={showHidden}>

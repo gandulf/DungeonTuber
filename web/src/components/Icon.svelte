@@ -68,6 +68,7 @@
     youtube: 'M3 8.5A3.5 3.5 0 0 1 6.5 5h11A3.5 3.5 0 0 1 21 8.5v7a3.5 3.5 0 0 1-3.5 3.5h-11A3.5 3.5 0 0 1 3 15.5zM10 9.5v5l4.5-2.5z',
     wand: 'M4 20L15 9M13 7l4 4M17 3v3M15.5 4.5h3M20 8v2M19 9h2M9 3v2M8 4h2',
     send: 'M21 3L10 14M21 3l-6.5 18-4.5-7-7-4.5z',
+    copy: 'M9 9h11v11H9zM5 15V5a1 1 0 0 1 1-1h10',
     mask: 'M3 6c3 0 6-1.5 9-1.5S18 6 21 6c0 7-4 13-9 13S3 13 3 6zM8 10h2M14 10h2M9 15s1 1 3 1 3-1 3-1',
   };
   export type IconName = keyof typeof paths | string;

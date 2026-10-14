@@ -1,11 +1,11 @@
 // Application menu (former File / View / Help menus).
 import { api } from './api';
 import { clearCache } from './cache';
-import { analyze, newPlaylist, openImportDialog, openUploadDialog, rescanLibrary } from './actions';
+import { newPlaylist, openImportDialog, openUploadDialog, rescanLibrary } from './actions';
 import { t } from './i18n.svelte';
 import { applyViewMode, prefs, savePrefs, type ThemeMode } from './prefs.svelte';
 import { data } from './stores/data.svelte';
-import { activeTab } from './stores/library.svelte';
+import { activeTab, showDuplicates } from './stores/library.svelte';
 import { openDialog, ui, type MenuItem } from './stores/ui.svelte';
 import AboutDialog from '../components/dialogs/AboutDialog.svelte';
 import SettingsDialog from '../components/dialogs/SettingsDialog.svelte';
@@ -40,9 +40,10 @@ export function appMenu(): MenuItem[] {
     { label: t('New Playlist…'), icon: 'playlist', action: () => newPlaylist() },
     { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog() },
     { label: t('Import from YouTube…'), icon: 'cloud', action: () => openImportDialog() },
-    { label: t('Analyze Directory'), icon: 'sparkles', disabled: !tab || tab.type !== 'dir' || data.settings?.voxalyzerActive === false,
-      action: () => tab && analyze([tab.path]) },
-    { label: t('Rescan Library'), icon: 'refresh', action: () => rescanLibrary(tab?.type === 'dir' ? tab.path : undefined) },
+    { label: t('Library'), icon: 'library', children: [
+      { label: t('Reload'), icon: 'refresh', action: () => rescanLibrary(tab?.type === 'dir' && !tab.duplicates ? tab.path : undefined) },
+      { label: t('Find Duplicates'), icon: 'copy', action: () => void showDuplicates() },
+    ] },
     { separator: true },
     { label: t('View'), icon: 'grid', tour: 'menu-view', children: [
       { label: t('Simple Mode'), action: () => applyViewMode('simple') },
