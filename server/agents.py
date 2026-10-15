@@ -6,6 +6,7 @@ server: {"id": 1, "op": "discover", ...} -> {"id": 1, "ok": true, "result": ...}
 import asyncio
 import hashlib
 import hmac
+import ipaddress
 import itertools
 import json
 import logging
@@ -27,6 +28,9 @@ HELLO_TIMEOUT = 10
 CALL_TIMEOUT = 15
 CLOSE_UNAUTHORIZED = 4401
 CLOSE_REMOVED = 4403  # the agent was removed: it must not reconnect
+# The settings of an agent kind that the administrator edits on the server: they are sent to the agent when it connects and whenever they change.
+# What an agent needs to connect (server, token, name) stays on its machine; an unset value leaves the agent's own default.
+AGENT_SETTINGS = {"lights": ("broadcast", "wait")}  # broadcast address of the bulb network, seconds to wait for bulbs to answer a search
 SINGLE_KINDS = {"lights"}  # one agent for the whole server (the bulbs of one network); the other kinds may run in several instances
 
 
@@ -40,6 +44,54 @@ def _digest(token: str) -> str:
 
 def _stored_tokens() -> list[dict]:
     return list(AppSettings.value(SettingKeys.AGENT_TOKENS, [], type=list) or [])
+
+
+def clean_agent_settings(kind: str, values: dict) -> dict:
+    """The valid settings of an agent kind; unset ones (None or empty) are left out. Raises ValueError with a message for the user."""
+    if kind not in AGENT_SETTINGS:
+        raise ValueError("This agent has no settings")
+    cleaned: dict = {}
+    broadcast = values.get("broadcast")
+    if "broadcast" in AGENT_SETTINGS[kind] and broadcast not in (None, ""):
+        try:
+            cleaned["broadcast"] = str(ipaddress.IPv4Address(str(broadcast).strip()))
+        except ValueError:
+            raise ValueError("Invalid broadcast address") from None
+    wait = values.get("wait")
+    if "wait" in AGENT_SETTINGS[kind] and wait not in (None, ""):
+        try:
+            seconds = float(wait)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid timeout") from None
+        if not 1 <= seconds <= 60:
+            raise ValueError("The timeout must be between 1 and 60 seconds")
+        cleaned["wait"] = seconds
+    return cleaned
+
+
+def _settings_key(token_id: str | None, name: str) -> str:
+    return f"{token_id}|{name}"
+
+
+def stored_agent_settings(kind: str, token_id: str | None, name: str) -> dict:
+    """What the administrator configured for the agent with this token and name ({} for kinds without settings)."""
+    if kind not in AGENT_SETTINGS:
+        return {}
+    stored = AppSettings.value(SettingKeys.AGENT_SETTINGS, {}, type=dict) or {}
+    return dict(stored.get(_settings_key(token_id, name)) or {})
+
+
+def save_agent_settings(kind: str, token_id: str | None, name: str, values: dict) -> dict:
+    """Validates and stores the settings of an agent; returns what was stored."""
+    cleaned = clean_agent_settings(kind, values)
+    stored = dict(AppSettings.value(SettingKeys.AGENT_SETTINGS, {}, type=dict) or {})
+    key = _settings_key(token_id, name)
+    if cleaned:
+        stored[key] = cleaned
+    else:
+        stored.pop(key, None)
+    AppSettings.setValue(SettingKeys.AGENT_SETTINGS, stored)
+    return cleaned
 
 
 def create_agent_token(user: str, name: str, token: str | None = None) -> tuple[str, dict]:
@@ -186,8 +238,12 @@ class AgentHub:
                     agent.leases -= 1
 
     def status(self) -> list[dict]:
-        return [{"id": agent.id, "kind": agent.kind, "name": agent.name, "user": self.owner(agent)}
+        return [{"id": agent.id, "kind": agent.kind, "name": agent.name, "user": self.owner(agent),
+                 **({"settings": stored_agent_settings(agent.kind, agent.token_id, agent.name)} if agent.kind in AGENT_SETTINGS else {})}
                 for agents in self._agents.values() for agent in agents]
+
+    def find(self, agent_id: int) -> "Agent | None":
+        return next((agent for agents in self._agents.values() for agent in agents if agent.id == agent_id), None)
 
     @staticmethod
     def owner(agent: "Agent") -> str | None:
@@ -243,7 +299,8 @@ class AgentHub:
             for other in previous:
                 other.fail_all()
                 await other.websocket.close(code=1000)
-            await websocket.send_text(json.dumps({"type": "welcome"}))
+            settings = stored_agent_settings(kind, token_id, agent.name)
+            await websocket.send_text(json.dumps({"type": "welcome", **({"settings": settings} if settings else {})}))
             logger.info("Agent %s (%s) connected", agent.name, kind)
             # runs next to the receive loop: the hook itself talks to the agent
             hook = asyncio.create_task(self._run(self._on_connect.get(kind), agent))

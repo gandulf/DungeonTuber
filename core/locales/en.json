@@ -762,5 +762,16 @@
   "No duplicates found.": "No duplicates found.",
   "{0} songs in {1} groups of duplicates": "{0} songs in {1} groups of duplicates",
   "Identical audio": "Identical audio",
-  "Comparing file contents…": "Comparing file contents…"
+  "Comparing file contents…": "Comparing file contents…",
+  "Play once": "Play once",
+  "Click to switch between looping and playing once": "Click to switch between looping and playing once",
+  "Agent settings saved": "Agent settings saved",
+  "Sent to the agent at once and whenever it connects. An empty field uses the value of the agent itself.": "Sent to the agent at once and whenever it connects. An empty field uses the value of the agent itself.",
+  "The bulbs are searched by the connected light agent. Its broadcast address and timeout are set under Agents.": "The bulbs are searched by the connected light agent. Its broadcast address and timeout are set under Agents.",
+  "A server outside your home network cannot reach the bulbs. The Windows agent dt-wiz-light.exe runs on a computer in the same network as the bulbs and controls them for the server. Download the agent, create an agent token under Agents, download the agents.json offered with the token and save it in the same folder as the agent.": "A server outside your home network cannot reach the bulbs. The Windows agent dt-wiz-light.exe runs on a computer in the same network as the bulbs and controls them for the server. Download the agent, create an agent token under Agents, download the agents.json offered with the token and save it in the same folder as the agent.",
+  "{0} light agent(s) connected": "{0} light agent(s) connected",
+  "Download dt-wiz-light.exe": "Download dt-wiz-light.exe",
+  "An address that ends in 0 is the address of the network, not a broadcast address. A broadcast address ends in 255.": "An address that ends in 0 is the address of the network, not a broadcast address. A broadcast address ends in 255.",
+  "A broadcast address of a home network ends in 255 (e.g. 192.168.1.255). Other numbers only fit networks with a different subnet mask.": "A broadcast address of a home network ends in 255 (e.g. 192.168.1.255). Other numbers only fit networks with a different subnet mask.",
+  "This server is reached through {0}, which only works on this computer; in the desktop app the port also changes with every start. For an agent on another computer, open Dungeon Tuber under the address of a server that the agent can reach and create the token there.": "This server is reached through {0}, which only works on this computer; in the desktop app the port also changes with every start. For an agent on another computer, open Dungeon Tuber under the address of a server that the agent can reach and create the token there."
 }

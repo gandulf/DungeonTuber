@@ -16,7 +16,8 @@
     if (event.ctrlKey || event.metaKey) {
       lights.selected = lights.selected.includes(light.mac) ? lights.selected.filter((m) => m !== light.mac) : [...lights.selected, light.mac];
     } else {
-      lights.selected = [light.mac];
+      // a click on the only selected light hides its settings again
+      lights.selected = lights.selected.length === 1 && lights.selected[0] === light.mac ? [] : [light.mac];
     }
   }
 

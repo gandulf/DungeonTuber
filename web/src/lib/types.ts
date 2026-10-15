@@ -115,6 +115,8 @@ export interface AgentInfo {
   kind: string;
   name: string;
   user: string | null;
+  /** What the server configured on the agent (light agents only): broadcast address and seconds to wait for bulbs. */
+  settings?: { broadcast?: string; wait?: number };
 }
 
 export interface AgentToken {
@@ -303,6 +305,7 @@ export interface ViewSettings {
   summaryUnderTitle: boolean;
   rowStyle: 'small' | 'medium' | 'large';
   effectsGrid: boolean;
+  effectsLoop: boolean;
   effectsTitle: boolean;
   importOptions: { makePlaylist: boolean; makeFolder: boolean; split: boolean; analyze: boolean; limitMinutes: number };
 }

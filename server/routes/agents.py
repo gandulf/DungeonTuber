@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 
-from server.agents import agent_hub, agent_tokens, bearer_token, create_agent_token, delete_agent_token, valid_agent_token
+from server.agents import AgentError, agent_hub, agent_tokens, bearer_token, create_agent_token, delete_agent_token, save_agent_settings, valid_agent_token
 from server.auth import current_user
 from server.users import ADMIN
 from server import ytagent
@@ -43,6 +43,29 @@ async def remove_agent(agent_id: int, user: str = Depends(current_user)):
     """Disconnects an agent (the SuperAdmin any, everybody else their own); it is told not to reconnect."""
     if not await agent_hub.remove(agent_id, None if user == ADMIN else user):
         raise HTTPException(404, "No such agent connected")
+    return {"connected": agent_hub.status()}
+
+
+class AgentSettingsRequest(BaseModel):
+    broadcast: str | None = None  # broadcast address of the bulb network (light agent)
+    wait: float | None = None  # seconds to wait for bulbs to answer a search (light agent)
+
+
+@router.put("/api/agents/{agent_id}/settings")
+async def put_agent_settings(agent_id: int, body: AgentSettingsRequest, user: str = Depends(current_user)):
+    """Sets what the agent is configured with (the SuperAdmin any agent, everybody else their own): stored on the server, sent to the agent
+    at once and again whenever it connects. A value that is left empty leaves the agent's own default."""
+    agent = agent_hub.find(agent_id)
+    if agent is None or (user != ADMIN and agent_hub.owner(agent) != user):
+        raise HTTPException(404, "No such agent connected")
+    try:
+        settings = save_agent_settings(agent.kind, agent.token_id, agent.name, body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    try:
+        await agent.call("configure", **{"broadcast": "", "wait": 0, **settings})
+    except (AgentError, ConnectionError, TimeoutError, OSError):
+        pass  # an agent that does not know the request gets the settings when it connects again
     return {"connected": agent_hub.status()}
 
 

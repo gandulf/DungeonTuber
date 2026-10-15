@@ -21,9 +21,10 @@ export async function discoverLights() {
   lights.discovering = true;
   try {
     const result = await api.discoverLights();
+    const first = !lights.list.length; // later searches keep the selection, also an empty one (the settings are hidden)
     lights.list = result.lights;
     lights.scenes = result.scenes;
-    if (!lights.selected.length && result.lights.length) lights.selected = [result.lights[0].mac];
+    if (first && !lights.selected.length && result.lights.length) lights.selected = [result.lights[0].mac];
   } catch (e) {
     errorToast(e);
   } finally {

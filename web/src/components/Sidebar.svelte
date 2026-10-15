@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '../lib/api';
   import { cached } from '../lib/cache';
-  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, editPlaylist, editSongById, newPlaylist, openImportDialog, openItem, openUploadDialog, uploadFiles } from '../lib/actions';
+  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, editPlaylist, newPlaylist, openImportDialog, openItem, openUploadDialog, trackMenu, uploadFiles } from '../lib/actions';
   import { itemsFromDrop } from '../lib/upload';
   import { t } from '../lib/i18n.svelte';
   import { openSettings, setTheme } from '../lib/menus';
@@ -112,13 +112,12 @@
         { label: t('Import from YouTube…'), icon: 'cloud', tour: 'menu-import', action: () => openImportDialog(item.path) },
       );
     }
-    if (item.type === 'mp3') items.push({ label: t('Edit Song…'), icon: 'edit', action: () => editSongById(item.id) });
     if (item.type === 'm3u') {
       items.push(data.user.favorites.includes(item.path)
         ? { label: t('Remove from favorites'), icon: 'bookmark', action: () => removeFavorite(item.path) }
         : { label: t('Add to favorites'), icon: 'bookmark', action: () => addFavorite(item.path) });
     }
-    if (item.type !== 'm3u' && data.settings?.voxalyzerActive !== false) {
+    if (item.type === 'dir' && data.settings?.voxalyzerActive !== false) {
       items.push({ label: t('Analyze'), icon: 'sparkles', action: () => analyze([item.path]) });
     }
     items.push({ separator: true }, { label: t('Refresh'), icon: 'refresh', action: refresh });
@@ -128,6 +127,19 @@
       items.push({ label: t('Delete'), icon: 'trash', action: () => deleteItems([{ path: item.path, name: item.name, dir: item.type === 'dir' }]) });
     }
     return items;
+  }
+
+  /** A song of the tree gets the menu of the song table, without what only makes sense in a playlist. It needs the song's data, so the menu opens once it is loaded. */
+  async function songMenu(event: MouseEvent, item: BrowseItem) {
+    event.preventDefault();
+    event.stopPropagation();
+    const position = { clientX: event.clientX, clientY: event.clientY };
+    try {
+      const track = await api.track(item.id);
+      openMenu(position, trackMenu([track], true));
+    } catch (e) {
+      errorToast(e);
+    }
   }
 
   function treeMenu(event: MouseEvent) {
@@ -211,7 +223,7 @@
            ondragover={(e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); dropTarget = true; } }}
            ondragleave={() => (dropTarget = false)} ondrop={onDrop} oncontextmenu={treeMenu}>
         {#each roots as item (item.path)}
-          <TreeNode {item} depth={1} version={refreshKey} bind:selected onOpen={openItem} onMenu={(e, i) => openMenu(e, itemMenu(i))} />
+          <TreeNode {item} depth={1} version={refreshKey} bind:selected onOpen={openItem} onMenu={(e, i) => (i.type === 'mp3' ? void songMenu(e, i) : openMenu(e, itemMenu(i)))} />
         {/each}
       </div>
     </div>

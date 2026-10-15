@@ -37,6 +37,9 @@ const engine = new AudioEngine({
     player.error = message || t('Error loading file');
     player.playing = false;
   },
+  onEffectEnded() {
+    player.effectPlaying = false;
+  },
   onState(playing) {
     player.playing = playing;
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
@@ -68,6 +71,7 @@ export function applyPlayerSettings(saved: PlayerSettings | null) {
 }
 
 $effect.root(() => {
+  $effect(() => engine.setEffectLoop(prefs.effectsLoop));
   $effect(() => {
     const serialized = JSON.stringify(currentSettings());
     if (!settingsLoaded || serialized === known) return;
@@ -240,6 +244,12 @@ export function toggleEffect() {
     engine.playEffect(mediaUrl(player.effect.intensities[player.effectIntensity].id));
     player.effectPlaying = true;
   }
+}
+
+/** Effects repeat until they are stopped, or play once. */
+export function setEffectLoop(loop: boolean) {
+  prefs.effectsLoop = loop;
+  savePrefs();
 }
 
 export function setEffectsVolume(volume: number) {

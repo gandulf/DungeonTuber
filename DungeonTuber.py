@@ -94,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
 
     import webview
 
+    webview.settings["ALLOW_DOWNLOADS"] = True  # otherwise the window silently drops downloads such as agents.json (WebView2 then asks where to save)
     window = webview.create_window(f"{APP_TITLE} {get_current_version()}", url, width=1400, height=900, min_size=(900, 600),
                                    background_color="#16181d")
 

@@ -125,6 +125,41 @@ def test_agent_connection_needs_the_agent_token(client):
                 pass
 
 
+def test_light_agent_is_configured_by_the_server(client):
+    set_agent_token("secret-agent-token")
+
+    with _connect(client, "secret-agent-token") as websocket:
+        websocket.send_text(json.dumps({"type": "hello", "kind": "lights", "name": "home"}))
+        assert json.loads(websocket.receive_text()) == {"type": "welcome"}  # nothing configured yet: the agent keeps its own values
+        pump = _Pump(websocket)
+        pump.start()
+        agent = next(a for a in client.get("/api/agents").json()["connected"] if a["name"] == "home")
+        assert agent["settings"] == {}
+
+        response = client.put(f"/api/agents/{agent['id']}/settings", json={"broadcast": "192.168.1.255", "wait": 3})
+        assert response.status_code == 200
+        assert next(a for a in response.json()["connected"] if a["name"] == "home")["settings"] == {"broadcast": "192.168.1.255", "wait": 3.0}
+        assert _wait(lambda: any(r["op"] == "configure" for r in pump.requests))
+        assert [r for r in pump.requests if r["op"] == "configure"][0]["broadcast"] == "192.168.1.255"
+        assert (pump.bulbs.broadcast, pump.bulbs.wait) == ("192.168.1.255", 3.0)
+
+        assert client.put(f"/api/agents/{agent['id']}/settings", json={"broadcast": "not an address"}).status_code == 400
+        assert client.put(f"/api/agents/{agent['id']}/settings", json={"wait": 500}).status_code == 400
+        assert client.put("/api/agents/9999/settings", json={}).status_code == 404
+
+    # sent again when the agent connects
+    with _connect(client, "secret-agent-token") as websocket:
+        websocket.send_text(json.dumps({"type": "hello", "kind": "lights", "name": "home"}))
+        assert json.loads(websocket.receive_text()) == {"type": "welcome", "settings": {"broadcast": "192.168.1.255", "wait": 3.0}}
+        agent = next(a for a in client.get("/api/agents").json()["connected"] if a["name"] == "home")
+        # empty values: the agent's own defaults again
+        assert client.put(f"/api/agents/{agent['id']}/settings", json={}).json()["connected"][0]["settings"] == {}
+
+    bulbs = dt_wiz_agent.Bulbs("255.255.255.255", 5, fake=True)
+    assert bulbs.configure("10.0.0.255", 2) == {"broadcast": "10.0.0.255", "wait": 2.0}
+    assert bulbs.configure(None, None) == {"broadcast": "255.255.255.255", "wait": 5}
+
+
 def test_lights_through_agent(client):
     set_agent_token("secret-agent-token")
     assert client.get("/api/lights").json()["agent"] is False

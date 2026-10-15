@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { analyze, editSong } from '../lib/actions';
+  import { analyze, canDelete, deleteItems, editSong } from '../lib/actions';
   import { t } from '../lib/i18n.svelte';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
   import { matcher } from '../lib/search';
   import { data, saveSettings } from '../lib/stores/data.svelte';
   import { effects, loadEffects } from '../lib/stores/effects.svelte';
-  import { player, playEffect, setEffectIntensity, setEffectsVolume, toggleEffect } from '../lib/stores/player.svelte';
+  import { player, playEffect, setEffectIntensity, setEffectLoop, setEffectsVolume, toggleEffect } from '../lib/stores/player.svelte';
   import { openDialog, openMenu } from '../lib/stores/ui.svelte';
   import type { Effect } from '../lib/types';
   import SelectFolderDialog from './dialogs/SelectFolderDialog.svelte';
@@ -48,11 +48,14 @@
       ...(effect && variant ? [
         { label: t('Play'), icon: 'play', action: () => playEffect(effect, 0) },
         { label: t('Edit Song…'), icon: 'edit', action: () => editSong(variant) },
+        { label: t('Normalize metadata…'), icon: 'search', action: () => editSong(variant, undefined, true) },
         ...(data.settings?.voxalyzerActive !== false ? [{ label: t('Analyze'), icon: 'sparkles', action: () => analyze([variant.path]) }] : []),
+        // an effect is one file per intensity: deleting it removes all of them
+        ...(effect.intensities.every((file) => canDelete(file.uploaded_by)) ? [{ label: t('Delete file'), icon: 'trash',
+          action: () => void deleteItems(effect.intensities.map((file) => ({ path: file.path, name: file.name }))).then(loadEffects) }] : []),
         { separator: true },
       ] : []),
       ...(admin ? [{ label: t('Select Effects Directory'), icon: 'folder', action: chooseDirectory }] : []),
-      { label: t('Refresh'), icon: 'refresh', action: loadEffects },
       { label: t('Use mp3 title instead of file name'), checked: prefs.effectsTitle, action: () => { prefs.effectsTitle = !prefs.effectsTitle; savePrefs(); } },
     ]);
   }
@@ -110,7 +113,9 @@
       <Icon name={player.effectPlaying ? 'pause' : 'play'} size={15} />
     </button>
     <div class="now-fx">
-      <span class="label-xs">{t('Now looping')}</span>
+      <button class="label-xs mode" title={t('Click to switch between looping and playing once')} aria-pressed={prefs.effectsLoop} onclick={() => setEffectLoop(!prefs.effectsLoop)}>
+        {prefs.effectsLoop ? t('Now looping') : t('Play once')}
+      </button>
       <span class="ellipsis">{playingEffect ? label(playingEffect) : t('Nothing')}</span>
     </div>
   </div>
@@ -174,7 +179,9 @@
   .controls { display: flex; align-items: center; gap: 12px; }
   .playfx { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); flex: none; }
   .playfx.on { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-color: transparent; box-shadow: 0 0 16px var(--accent-glow); }
-  .now-fx { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+  .now-fx { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; gap: 2px; }
+  .mode { padding: 0; cursor: pointer; font: inherit; text-transform: uppercase; border-bottom: 1px dashed transparent; }
+  .mode:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .empty { padding: 12px 6px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .empty p { margin: 0; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }

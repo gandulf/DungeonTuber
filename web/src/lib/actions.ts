@@ -124,15 +124,6 @@ export function editSong(track: Track, playlist?: string, normalize = false) {
   openDialog(EditSongDialog, { track, playlist, normalize });
 }
 
-/** Edits a song picked in the file tree (which only knows its id). */
-export async function editSongById(id: string) {
-  try {
-    editSong(await api.track(id));
-  } catch (e) {
-    errorToast(e);
-  }
-}
-
 export async function toggleFavorite(track: Track) {
   try {
     const updated = await api.patchTrack(track.id, { favorite: !track.favorite });
@@ -273,8 +264,9 @@ export function playlistMenu(ids: string[]): MenuItem[] {
   ];
 }
 
-export function trackMenu(tracks: Track[]): MenuItem[] {
-  const tab = activeTab();
+/** The context menu of songs. `inTree`: the songs were picked in the folder tree, so the open playlist has nothing to do with them. */
+export function trackMenu(tracks: Track[], inTree = false): MenuItem[] {
+  const tab = inTree ? null : activeTab();
   const ids = tracks.map((track) => track.id);
   const single = tracks.length === 1 ? tracks[0] : null;
   const items: MenuItem[] = [];

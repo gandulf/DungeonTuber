@@ -7,6 +7,8 @@ export interface DeckCallbacks {
   onEnded(): void;
   onError(message: string): void;
   onState(playing: boolean): void;
+  /** An effect that does not loop has played to its end. */
+  onEffectEnded?(): void;
 }
 
 const CROSSFADE_SECONDS = 1;
@@ -99,6 +101,7 @@ export class AudioEngine {
     this.callbacks = callbacks;
     this.effect.loop = true;
     this.effect.crossOrigin = 'use-credentials';
+    this.effect.addEventListener('ended', () => this.callbacks.onEffectEnded?.());
     this.decks.forEach((deck, index) => {
       const audio = deck.audio;
       audio.addEventListener('timeupdate', () => index === this.active && this.callbacks.onTime(audio.currentTime, audio.duration || 0));
@@ -246,6 +249,11 @@ export class AudioEngine {
     const playing = !this.effect.paused;
     this.effect.src = url;
     if (playing) void this.effect.play().catch(() => undefined);
+  }
+
+  /** Whether an effect repeats until it is stopped or plays once. */
+  setEffectLoop(loop: boolean) {
+    this.effect.loop = loop;
   }
 
   pauseEffect() {

@@ -52,7 +52,7 @@ class PlayerSettings(BaseModel):
 
 
 VIEW_KEYS = ("showEffects", "showLights", "filter", "moodCollapsed", "showMoodMap", "tagsExpanded", "genresExpanded", "columns", "columnWidths", "hiddenCategories", "titleInsteadOfFile",
-             "summaryUnderTitle", "rowStyle", "effectsGrid", "effectsTitle", "importOptions")  # the view preferences a user takes along (web/src/lib/stores/profile.svelte.ts)
+             "summaryUnderTitle", "rowStyle", "effectsGrid", "effectsLoop", "effectsTitle", "importOptions")  # the view preferences a user takes along (web/src/lib/stores/profile.svelte.ts)
 MAX_VIEW_BYTES = 20000
 
 

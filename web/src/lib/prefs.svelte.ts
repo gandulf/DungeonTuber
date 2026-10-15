@@ -36,6 +36,8 @@ export interface Prefs {
   summaryUnderTitle: boolean;
   rowStyle: RowStyle;
   effectsGrid: boolean;
+  /** An effect repeats until it is stopped (otherwise it plays once). */
+  effectsLoop: boolean;
   effectsTitle: boolean;
   treeRoot: string | null;
   expanded: string[];
@@ -78,6 +80,7 @@ const defaults: Prefs = {
   summaryUnderTitle: true,
   rowStyle: 'medium',
   effectsGrid: true,
+  effectsLoop: true,
   effectsTitle: false,
   treeRoot: null,
   expanded: [],

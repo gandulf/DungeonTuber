@@ -86,6 +86,8 @@ class SettingKeys(StrEnum):
     SERVER_SECRET = "serverSecret"
     # SHA-256 of the token that agents (WiZ lights, analysis) use to connect; see server/agents.py
     AGENT_TOKENS = "agentTokens"  # tokens of the users: list of dicts with id, name, user, hash, created, used
+    # what the administrator configured for a connected agent (sent to it on connecting): "<token id>|<agent name>" -> settings of its kind
+    AGENT_SETTINGS = "agentSettings"
 
 
 def default_settings_path() -> str:

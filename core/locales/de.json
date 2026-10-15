@@ -762,5 +762,16 @@
   "No duplicates found.": "Keine Duplikate gefunden.",
   "{0} songs in {1} groups of duplicates": "{0} Songs in {1} Gruppen von Duplikaten",
   "Identical audio": "Identische Audiodaten",
-  "Comparing file contents…": "Dateiinhalte werden verglichen…"
+  "Comparing file contents…": "Dateiinhalte werden verglichen…",
+  "Play once": "Einmal abspielen",
+  "Click to switch between looping and playing once": "Klicken, um zwischen Schleife und einmaligem Abspielen zu wechseln",
+  "Agent settings saved": "Agenten-Einstellungen gespeichert",
+  "Sent to the agent at once and whenever it connects. An empty field uses the value of the agent itself.": "Wird sofort und bei jeder Verbindung an den Agenten gesendet. Ein leeres Feld verwendet den Wert des Agenten selbst.",
+  "The bulbs are searched by the connected light agent. Its broadcast address and timeout are set under Agents.": "Die Lampen werden vom verbundenen Licht-Agenten gesucht. Dessen Broadcast-Adresse und Timeout stellst du unter Agenten ein.",
+  "A server outside your home network cannot reach the bulbs. The Windows agent dt-wiz-light.exe runs on a computer in the same network as the bulbs and controls them for the server. Download the agent, create an agent token under Agents, download the agents.json offered with the token and save it in the same folder as the agent.": "Ein Server außerhalb deines Heimnetzes erreicht die Lampen nicht. Der Windows-Agent dt-wiz-light.exe läuft auf einem Computer im selben Netzwerk wie die Lampen und steuert sie für den Server. Lade den Agenten herunter, erstelle unter Agenten ein Agenten-Token, lade die dazu angebotene agents.json herunter und speichere sie im selben Ordner wie den Agenten.",
+  "{0} light agent(s) connected": "{0} Licht-Agent(en) verbunden",
+  "Download dt-wiz-light.exe": "dt-wiz-light.exe herunterladen",
+  "An address that ends in 0 is the address of the network, not a broadcast address. A broadcast address ends in 255.": "Eine Adresse, die auf 0 endet, ist die Adresse des Netzwerks, keine Broadcast-Adresse. Eine Broadcast-Adresse endet auf 255.",
+  "A broadcast address of a home network ends in 255 (e.g. 192.168.1.255). Other numbers only fit networks with a different subnet mask.": "Die Broadcast-Adresse eines Heimnetzes endet auf 255 (z. B. 192.168.1.255). Andere Zahlen passen nur zu Netzwerken mit einer anderen Subnetzmaske.",
+  "This server is reached through {0}, which only works on this computer; in the desktop app the port also changes with every start. For an agent on another computer, open Dungeon Tuber under the address of a server that the agent can reach and create the token there.": "Dieser Server wird über {0} erreicht, das nur auf diesem Computer funktioniert; in der Desktop-App ändert sich außerdem der Port bei jedem Start. Für einen Agenten auf einem anderen Computer öffne Dungeon Tuber unter der Adresse eines Servers, den der Agent erreicht, und erstelle das Token dort."
 }

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import AgentSettings from './AgentSettings.svelte';
+  import IpInput from '../IpInput.svelte';
   import { onDestroy, tick } from 'svelte';
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
@@ -20,6 +22,7 @@
 
   type Section = 'general' | 'library' | 'categories' | 'lights' | 'analyzer' | 'agents' | 'youtube' | 'assistant' | 'player' | 'security';
   const AGENT_URL = 'https://github.com/gandulf/DungeonTuber/releases/latest/download/dt-youtube.exe';
+  const LIGHT_AGENT_URL = 'https://github.com/gandulf/DungeonTuber/releases/latest/download/dt-wiz-light.exe';
   let { initialSection = 'general' }: { initialSection?: Section } = $props();
   const admin = data.auth?.is_admin !== false;
   // library folders can only be edited in the desktop app; a server gets them at startup
@@ -327,6 +330,7 @@
   let tokenName = $state('');
   void api.agents().then((result) => (agents = result)).catch(() => {});
   const youtubeAgents = $derived(agents?.connected.filter((a) => a.kind === 'youtube').length ?? 0);
+  const lightAgents = $derived(agents?.connected.filter((a) => a.kind === 'lights') ?? []);
   const stopAgentEvents = onEvent('agents.state', (connected) => agents && (agents = { ...agents, connected }));
   onDestroy(stopAgentEvents);
   const agentLabels: Record<string, string> = { lights: 'WiZ light agent', voxalyzer: 'Voxalyzer analysis agent', youtube: 'YouTube download agent' };
@@ -698,10 +702,36 @@
         </div>
       {:else if section === 'lights'}
         <label class="check"><input type="checkbox" bind:checked={form.lightsEnabled} /> {t('Enabled')} ({t('Wiz Lights')})</label>
-        <label class="field">{t('Broadcast Space')}<input type="text" bind:value={form.lightsBroadcastIP} />
-          <span class="muted small">{t('Take the ip address of you local wlan network and replace the last number with 255.')}</span></label>
-        <label class="field">{t('Timeout')} (s)<input type="number" min="1" max="60" step="0.5" bind:value={form.lightsTimeout} />
-          <span class="muted small">{t('Time to search for bulbs in seconds')}</span></label>
+        <section class="group">
+          <h4>{t('WiZ light agent')}</h4>
+          <p class="muted small">{t('A server outside your home network cannot reach the bulbs. The Windows agent dt-wiz-light.exe runs on a computer in the same network as the bulbs and controls them for the server. Download the agent, create an agent token under Agents, download the agents.json offered with the token and save it in the same folder as the agent.')}</p>
+          <div class="row">
+            <span class="small">{lightAgents.length > 0 ? t('{0} light agent(s) connected', lightAgents.length) : t('No agent connected')}</span>
+            <span class="grow"></span>
+            <a class="btn primary" href={LIGHT_AGENT_URL} target="_blank" rel="noopener"><Icon name="download" size={14} /> {t('Download dt-wiz-light.exe')}</a>
+          </div>
+          <span class="muted small">{t('Always the latest release from GitHub.')}</span>
+          {#each lightAgents as agent (agent.id)}
+            <div class="item">
+              <span class="dot on" title={t('Connected agents')}></span>
+              <div class="info">
+                <strong>{agent.name}</strong>
+                <span class="meta">{#if agent.user}<span class="pill violet">{agent.user}</span>{/if}</span>
+              </div>
+            </div>
+            {#if agent.settings && (admin || agent.user === data.auth?.user)}
+              {#key agent.id}<AgentSettings {agent} onsaved={(connected) => agents && (agents = { ...agents, connected })} />{/key}
+            {/if}
+          {/each}
+        </section>
+        {#if lightAgents.length}
+          <span class="muted small">{t('The bulbs are searched by the connected light agent. Its broadcast address and timeout are set under Agents.')}</span>
+        {:else}
+          <div class="field">{t('Broadcast Space')}<IpInput bind:value={form.lightsBroadcastIP} label={t('Broadcast Space')} broadcast />
+            <span class="muted small">{t('Take the ip address of you local wlan network and replace the last number with 255.')}</span></div>
+          <label class="field">{t('Timeout')} (s)<input type="number" min="1" max="60" step="0.5" bind:value={form.lightsTimeout} />
+            <span class="muted small">{t('Time to search for bulbs in seconds')}</span></label>
+        {/if}
       {:else if section === 'agents'}
         <span class="muted small">{t('Programs on other machines that connect to this server: WiZ light agents (see agents/wiz), Voxalyzer analysis agents (see agents/voxalyzer) and YouTube download agents (see agents/youtube).')}</span>
         <section class="group">
@@ -715,6 +745,9 @@
               </div>
               {#if admin || agent.user === data.auth?.user}<button class="icon-btn" title={t('Remove')} onclick={() => removeAgent(agent)}><Icon name="trash" size={14} /></button>{/if}
             </div>
+            {#if agent.settings && (admin || agent.user === data.auth?.user)}
+              {#key agent.id}<AgentSettings {agent} onsaved={(connected) => agents && (agents = { ...agents, connected })} />{/key}
+            {/if}
           {:else}
             <p class="empty">{t('No agent connected')}</p>
           {/each}

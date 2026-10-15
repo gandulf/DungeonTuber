@@ -35,6 +35,9 @@
     <button class="btn" onclick={download}><Icon name="download" size={14} /> {t('Download agents.json')}</button>
   </div>
   <p class="muted small">{t('Put agents.json next to the agents: all agents on a machine then start without arguments.')}</p>
+  {#if ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)}
+    <p class="note">{t('This server is reached through {0}, which only works on this computer; in the desktop app the port also changes with every start. For an agent on another computer, open Dungeon Tuber under the address of a server that the agent can reach and create the token there.', location.origin)}</p>
+  {/if}
   {#snippet footer()}
     <button class="btn" onclick={onclose}>{t('Close')}</button>
   {/snippet}
@@ -45,4 +48,5 @@
   .token { font-family: monospace; margin: 8px 0 12px; }
   .row { display: flex; gap: 8px; }
   p { margin: 12px 0 0; }
+  .note { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--gold-soft); color: var(--gold); font-size: var(--fs-sm); }
 </style>

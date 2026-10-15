@@ -6,6 +6,9 @@ Runs on a machine in the same network as the WiZ bulbs, connects *out* to the Du
 
 Settings can also be given as environment variables: DT_SERVER, DT_AGENT_TOKEN, DT_AGENT_NAME, DT_BROADCAST, DT_FAKE_LIGHTS=1, and server,
 token and name in the agents.json shared with the other DungeonTuber agents (see agentconfig.py).
+
+The broadcast address and the time to wait for bulbs can also be set on the server (Settings > Agents): the server sends them when the agent
+connects and whenever they change, and they replace the local values (the options above are the default of an agent without server settings).
 """
 import argparse
 import asyncio
@@ -96,10 +99,17 @@ class Bulbs:
     """The bulbs found by the last discovery, by MAC address."""
 
     def __init__(self, broadcast: str, wait: float, fake: bool):
-        self.broadcast = broadcast
-        self.wait = wait
+        self.default_broadcast = self.broadcast = broadcast
+        self.default_wait = self.wait = wait
         self.fake = fake
         self._bulbs: dict[str, FakeBulb | RealBulb] = {}
+
+    def configure(self, broadcast: str | None = None, wait: float | None = None) -> dict:
+        """Takes the settings of the server; an empty value (None, "" or 0) brings back the local default."""
+        self.broadcast = str(broadcast).strip() if broadcast else self.default_broadcast
+        self.wait = float(wait) if wait else self.default_wait
+        logger.info("Settings: broadcast %s, wait %s s", self.broadcast, self.wait)
+        return {"broadcast": self.broadcast, "wait": self.wait}
 
     async def discover(self) -> list[dict]:
         if self.fake:
@@ -121,6 +131,8 @@ class Bulbs:
         op = request.get("op")
         if op == "discover":
             return await self.discover()
+        if op == "configure":
+            return self.configure(request.get("broadcast"), request.get("wait"))
         bulb = self._bulb(request.get("mac"))
         if op == "state":
             return await bulb.state()
@@ -154,8 +166,11 @@ async def run(url: str, token: str, name: str, bulbs: Bulbs, once: bool = False)
         try:
             async with connect(url, additional_headers={"Authorization": f"Bearer {token}"}) as websocket:
                 await websocket.send(json.dumps({"type": "hello", "kind": "lights", "name": name}))
-                if json.loads(await websocket.recv()).get("type") != "welcome":
+                welcome = json.loads(await websocket.recv())
+                if welcome.get("type") != "welcome":
                     raise WebSocketException("Unexpected answer of the server")
+                settings = welcome.get("settings") or {}
+                bulbs.configure(settings.get("broadcast"), settings.get("wait"))  # also brings back the local defaults when the server has none
                 logger.info("Connected to %s", url)
                 delay = 1
                 tasks: set[asyncio.Task] = set()

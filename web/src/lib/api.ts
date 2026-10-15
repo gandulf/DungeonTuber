@@ -171,6 +171,8 @@ export const api = {
   agents: () => get<AgentState>('/api/agents'),
   removeAgent: (id: number) => request<{ connected: AgentInfo[] }>('DELETE', `/api/agents/${id}`),
   createAgentToken: (name: string) => request<{ token: string; id: string }>('POST', '/api/agents/tokens', { name }),
+  putAgentSettings: (id: number, settings: { broadcast?: string | null; wait?: number | null }) =>
+    request<{ connected: AgentInfo[] }>('PUT', `/api/agents/${id}/settings`, settings),
   deleteAgentToken: (id: string) => request<AgentState>('DELETE', `/api/agents/tokens/${id}`),
 };
 
