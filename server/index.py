@@ -24,6 +24,8 @@ from server.users import ADMIN
 
 logger = logging.getLogger(__file__)
 
+VISIT_GAP = 30 * 60  # seconds of silence after which the next page load of a user is a new visit
+
 # update fields the database understands (see TrackIndex.update)
 FIELDS = ("title", "artist", "album", "track", "summary", "genres", "tags", "bpm", "favorite", "categories", "light", "normalized")
 
@@ -148,6 +150,32 @@ class TrackIndex:
         with self._lock:
             self._conn.execute("INSERT OR REPLACE INTO user_state (user, key, value) VALUES (?, ?, ?)", (user, key, json.dumps(value)))
             self._conn.commit()
+
+    def record_login(self, user: str):
+        """Counts a sign in and remembers when it was (the user state: last_login as a Unix time, login_count)."""
+        with self._lock:
+            row = self._conn.execute("SELECT value FROM user_state WHERE user = ? AND key = 'login_count'", (user,)).fetchone()
+            count = (json.loads(row[0]) if row else 0) + 1
+            self._conn.execute("INSERT OR REPLACE INTO user_state (user, key, value) VALUES (?, 'login_count', ?)", (user, json.dumps(count)))
+            self._conn.execute("INSERT OR REPLACE INTO user_state (user, key, value) VALUES (?, 'last_login', ?)", (user, json.dumps(int(time.time()))))
+            self._conn.commit()
+
+    def record_visit(self, user: str, now: float | None = None) -> bool:
+        """Counts a visit of the site (a page load of a signed in user, also with a session that already existed). Page loads within VISIT_GAP seconds
+        of the last activity belong to the same visit; `last_seen` is the time of the last page load. True when a new visit was counted."""
+        now = now if now is not None else time.time()
+        with self._lock:
+            def stored(key: str):
+                row = self._conn.execute("SELECT value FROM user_state WHERE user = ? AND key = ?", (user, key)).fetchone()
+                return json.loads(row[0]) if row else None
+
+            last = stored("last_seen")
+            new = last is None or now - last > VISIT_GAP
+            if new:
+                self._conn.execute("INSERT OR REPLACE INTO user_state (user, key, value) VALUES (?, 'visits', ?)", (user, json.dumps((stored("visits") or 0) + 1)))
+            self._conn.execute("INSERT OR REPLACE INTO user_state (user, key, value) VALUES (?, 'last_seen', ?)", (user, json.dumps(int(now))))
+            self._conn.commit()
+        return new
 
     def forget_user(self, user: str):
         with self._lock:

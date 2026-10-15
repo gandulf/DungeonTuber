@@ -82,7 +82,11 @@
   {#each others as user (user.name)}
     <div class="item">
       <Icon name="smile" size={15} />
-      <strong class="grow ellipsis">{user.name}</strong>
+      <div class="grow who">
+        <strong class="ellipsis">{user.name}</strong>
+        <span class="muted small" title={user.last_seen ? t('Last seen {0}', new Date(user.last_seen * 1000).toLocaleString()) : ''}>
+          {user.last_login ? t('Last login {0}', new Date(user.last_login * 1000).toLocaleString()) : t('Never logged in')} · {t('{0} logins', user.logins)} · {t('{0} visits', user.visits)}</span>
+      </div>
       <button class="btn sm" onclick={() => reset(user)}><Icon name="lock" size={14} /> {t('Change password')}</button>
       <button class="icon-btn" title={t('Remove')} aria-label={t('Remove')} onclick={() => remove(user)}><Icon name="trash" size={14} /></button>
     </div>
@@ -98,5 +102,6 @@
   .count { font-size: var(--fs-xs); font-weight: 600; padding: 1px 8px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
   .item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
   .grow { flex: 1; min-width: 0; }
+  .who { display: flex; flex-direction: column; gap: 1px; }
   .empty { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 </style>

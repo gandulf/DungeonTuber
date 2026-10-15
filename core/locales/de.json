@@ -773,5 +773,10 @@
   "Download dt-wiz-light.exe": "dt-wiz-light.exe herunterladen",
   "An address that ends in 0 is the address of the network, not a broadcast address. A broadcast address ends in 255.": "Eine Adresse, die auf 0 endet, ist die Adresse des Netzwerks, keine Broadcast-Adresse. Eine Broadcast-Adresse endet auf 255.",
   "A broadcast address of a home network ends in 255 (e.g. 192.168.1.255). Other numbers only fit networks with a different subnet mask.": "Die Broadcast-Adresse eines Heimnetzes endet auf 255 (z. B. 192.168.1.255). Andere Zahlen passen nur zu Netzwerken mit einer anderen Subnetzmaske.",
-  "This server is reached through {0}, which only works on this computer; in the desktop app the port also changes with every start. For an agent on another computer, open Dungeon Tuber under the address of a server that the agent can reach and create the token there.": "Dieser Server wird über {0} erreicht, das nur auf diesem Computer funktioniert; in der Desktop-App ändert sich außerdem der Port bei jedem Start. Für einen Agenten auf einem anderen Computer öffne Dungeon Tuber unter der Adresse eines Servers, den der Agent erreicht, und erstelle das Token dort."
+  "This server is reached through {0}, which only works on this computer; in the desktop app the port also changes with every start. For an agent on another computer, open Dungeon Tuber under the address of a server that the agent can reach and create the token there.": "Dieser Server wird über {0} erreicht, das nur auf diesem Computer funktioniert; in der Desktop-App ändert sich außerdem der Port bei jedem Start. Für einen Agenten auf einem anderen Computer öffne Dungeon Tuber unter der Adresse eines Servers, den der Agent erreicht, und erstelle das Token dort.",
+  "Last login {0}": "Letzte Anmeldung {0}",
+  "Never logged in": "Noch nie angemeldet",
+  "{0} logins": "{0} Anmeldungen",
+  "{0} visits": "{0} Besuche",
+  "Last seen {0}": "Zuletzt gesehen {0}"
 }

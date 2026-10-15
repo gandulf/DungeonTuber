@@ -1,4 +1,5 @@
 import io
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,7 +11,7 @@ from core.settings import AppSettings, SettingKeys
 from server.app import create_app
 from server.auth import set_password
 from server.config import ServerConfig
-from server.index import TrackIndex, set_index
+from server.index import TrackIndex, get_index, set_index
 from server.paths import path_to_id
 
 
@@ -748,6 +749,54 @@ def test_audio_span_skips_the_tags(tmp_path):
     assert audio_span(plain) == (0, len(audio))
     assert audio_span(tagged) == (len(v2), len(v2) + len(audio))
     assert audio_hash(plain) == audio_hash(tagged)
+
+
+def test_the_logins_of_the_users_are_counted(client):
+    set_password("secret")
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+
+    def anna() -> dict:
+        return next(u for u in client.get("/api/users").json() if u["name"] == "anna")
+
+    assert (anna()["last_login"], anna()["logins"]) == (None, 0)
+    assert client.post("/api/auth/login", json={"username": "anna", "password": "wrong"}).status_code == 401  # a failed attempt does not count
+    for _ in range(2):
+        client.post("/api/auth/logout")
+        assert client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"}).status_code == 200
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"password": "secret"})
+
+    assert anna()["logins"] == 2 and time.time() - anna()["last_login"] < 60
+    admin = next(u for u in client.get("/api/users").json() if u["name"] == "admin")
+    assert admin["logins"] == 2  # the sign in before and the one after
+
+    client.delete("/api/users/anna")  # what is kept for a user goes with the user
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    assert anna()["logins"] == 0
+
+
+def test_visits_are_counted_for_every_page_load_after_a_pause(client):
+    set_password("secret")
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+
+    def anna() -> dict:
+        client.post("/api/auth/logout")
+        client.post("/api/auth/login", json={"password": "secret"})
+        return next(u for u in client.get("/api/users").json() if u["name"] == "anna")
+
+    assert client.get("/api/auth/me").json()["user"] == "anna"  # a page load with the session of the login
+    client.get("/api/auth/me")  # and a reload: the same visit
+    assert anna()["visits"] == 1 and time.time() - anna()["last_seen"] < 60
+
+    index = get_index()
+    assert index.record_visit("anna", now=time.time() + 10 * 60) is False  # still the same visit
+    assert index.record_visit("anna", now=time.time() + 3 * 3600) is True  # a new one hours later
+    assert anna()["visits"] == 2
+    assert client.get("/api/auth/me").status_code == 200 and anna()["visits"] == 2  # the page load of the SuperAdmin is not Anna's
 
 
 def test_player_settings_are_kept_per_user(client):

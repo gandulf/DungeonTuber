@@ -91,6 +91,8 @@ def _checked(password: str | None) -> str:
 @router.get("/api/auth/me")
 def me(request: Request):
     user = user_of(_client(request), request.cookies.get(COOKIE_NAME))
+    if user:
+        get_index().record_visit(user)  # the page asks this on every load, also with a session that is already signed in
     return {"authenticated": user is not None, "local": get_config().local_mode, "password_set": password_set(),
             "user": user, "is_admin": user == ADMIN}
 
@@ -101,6 +103,7 @@ def login(body: LoginRequest, request: Request, response: Response):
     if user is None:
         raise HTTPException(status_code=401, detail="Wrong user name or password")
     _set_session(request, response, user)
+    get_index().record_login(user)
     return {"authenticated": True, "user": user, "is_admin": user == ADMIN}
 
 
@@ -133,7 +136,13 @@ def change_own_password(body: PasswordRequest, request: Request, response: Respo
 
 @router.get("/api/users", dependencies=[Depends(require_admin)])
 def list_users():
-    return [{"name": ADMIN, "admin": True, "created": None}] + [{**public(u), "admin": False} for u in all_users()]
+    index = get_index()
+
+    def logins(name: str) -> dict:
+        return {"last_login": index.user_state(name, "last_login"), "logins": index.user_state(name, "login_count") or 0,
+                "last_seen": index.user_state(name, "last_seen"), "visits": index.user_state(name, "visits") or 0}
+
+    return [{"name": ADMIN, "admin": True, "created": None, **logins(ADMIN)}] + [{**public(u), "admin": False, **logins(u["name"])} for u in all_users()]
 
 
 @router.post("/api/users", dependencies=[Depends(require_admin)])

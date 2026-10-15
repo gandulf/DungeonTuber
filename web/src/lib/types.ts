@@ -329,6 +329,12 @@ export interface UserInfo {
   name: string;
   admin: boolean;
   created: number | null;
+  /** Unix time of the last sign in (null: never) and how often the user signed in. */
+  last_login: number | null;
+  logins: number;
+  /** Unix time of the last page load, and the visits of the site (page loads after a pause of 30 minutes count anew), also with an existing session. */
+  last_seen: number | null;
+  visits: number;
 }
 
 export interface ImportEntry {
