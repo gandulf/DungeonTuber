@@ -232,6 +232,8 @@ export interface AssistantStatus {
   groqKeySource: KeySource;
   /** Additional instructions of the SuperAdmin for the song suggestions. */
   instructions: string;
+  /** The instructions the modes have until they are changed (the other modes have none). */
+  defaultInstructions: Partial<Record<'music' | 'smart' | 'compose', string>>;
   /** Additional instructions of the SuperAdmin for the general chat. */
   generalInstructions: string;
   /** Additional instructions of the SuperAdmin for the compose mode. */

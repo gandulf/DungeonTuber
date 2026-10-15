@@ -6,6 +6,7 @@ import urllib.parse
 import pytest
 from fastapi.testclient import TestClient
 
+from core.settings import AppSettings, SettingKeys
 from server import assistant
 from server.app import create_app
 from server.auth import set_password
@@ -59,7 +60,10 @@ def test_the_key_is_never_sent_back(client):
     status = client.put("/api/assistant/config", json={"key": "gsk_secret_1234", "model": ""}).json()
     assert status == {"configured": True, "model": assistant.DEFAULT_MODEL, "defaultModel": assistant.DEFAULT_MODEL, "keyHint": "1234",
                       "keySource": "settings", "groqKeySource": None,
-                      "instructions": "", "generalInstructions": "", "composeInstructions": "", "smartInstructions": "", "effectsInstructions": "", "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
+                      "instructions": assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip(),
+                      "defaultInstructions": {"music": assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip(), "smart": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(),
+                                              "compose": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip()},
+                      "generalInstructions": "", "composeInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "smartInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "effectsInstructions": "", "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
                       "groqDefaultModel": assistant.GROQ_DEFAULT_MODEL, "groqKeyHint": "", "groqModels": assistant.GROQ_MODELS,
                       "prompts": assistant.prompts()}
     assert "gsk_secret" not in client.get("/api/assistant/config").text
@@ -99,7 +103,8 @@ def test_chat_returns_the_suggested_songs(client, gemini):
     request = calls[0]
     assert request["headers"]["X-goog-api-key"] == "gsk_secret_1234"
     assert request["url"].endswith(f"/models/{assistant.DEFAULT_MODEL}:generateContent")
-    assert request["body"]["systemInstruction"]["parts"][0]["text"] == assistant.SYSTEM_PROMPT
+    system = request["body"]["systemInstruction"]["parts"][0]["text"]  # the song suggestions have default instructions
+    assert system.startswith(assistant.SYSTEM_PROMPT) and system.endswith(assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip())
     assert request["body"]["contents"] == [{"role": "user", "parts": [{"text": "A dark dungeon"}]}]
     assert request["body"]["generationConfig"]["responseMimeType"] == "application/json"
 
@@ -140,7 +145,7 @@ def test_instructions_extend_the_system_prompt(client, gemini):
     system = calls[0]["body"]["systemInstruction"]["parts"][0]["text"]
     assert system.startswith(assistant.SYSTEM_PROMPT) and system.endswith("We play Call of Cthulhu in the 1920s.")
 
-    assert client.put("/api/assistant/config", json={"instructions": ""}).json()["instructions"] == ""
+    assert client.put("/api/assistant/config", json={"instructions": ""}).json()["instructions"] == assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip()
     assert client.put("/api/assistant/config", json={"instructions": "x" * 5000}).status_code == 422
 
 
@@ -202,7 +207,7 @@ def test_the_general_chat_answers_in_text_with_its_own_instructions(client, gemi
 
 def test_the_smart_search_answers_with_a_filter_of_known_values(client, gemini):
     calls, answers = gemini
-    client.put("/api/assistant/config", json={"key": "gsk_secret_1234", "instructions": "We play DSA."})
+    client.put("/api/assistant/config", json={"key": "gsk_secret_1234", "instructions": "We play DSA.", "smartInstructions": "We play DSA."})
     answers.append(json.dumps({"message": "Dunkel und angespannt", "bpm": 300,
                                "categories": [{"key": "Darkness", "value": 9.4}, {"key": "Arousal", "value": 14}, {"key": "Invented", "value": 5}],
                                "tags": ["DARK", "unknown", "Ritual", "Combat"], "genres": ["ambient", "Metal"]}))
@@ -339,19 +344,37 @@ def test_each_mode_gets_its_own_instructions(client):
     assert songs not in compose and "Thorwal klingt nordisch." in compose
     assert songs in assistant.system_prompt("music") and "Thorwal" not in assistant.system_prompt("music")
     assert "DSA 4.1" in assistant.system_prompt("general") and songs not in assistant.system_prompt("general")
-    # the smart search uses them as background only
+    # the smart search has instructions of its own (the default), the ones of the song suggestions are not used there
     smart = assistant.system_prompt("smart", {"tags": [], "genres": []})
-    assert songs in smart and smart.index(assistant.BACKGROUND_INTRO) < smart.index(songs)
+    assert songs not in smart and smart.endswith(assistant.DEFAULT_SETTING_INSTRUCTIONS.strip())
 
-    # instructions of its own replace the background
     client.put("/api/assistant/config", json={"smartInstructions": "Kämpfe brauchen viel Energie."})
     smart = assistant.system_prompt("smart", {"tags": [], "genres": []})
-    assert "Kämpfe brauchen viel Energie." in smart and songs not in smart and assistant.BACKGROUND_INTRO not in smart
+    assert "Kämpfe brauchen viel Energie." in smart and songs not in smart
     assert client.get("/api/assistant/config").json()["smartInstructions"] == "Kämpfe brauchen viel Energie."
 
-    client.put("/api/assistant/config", json={"composeInstructions": ""})
-    assert "Additional instructions" not in assistant.system_prompt("compose")
     assert client.get("/api/assistant/config").json()["instructions"] == songs
+
+
+def test_the_modes_have_default_instructions_until_they_are_changed(client):
+    music, setting = assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip(), assistant.DEFAULT_SETTING_INSTRUCTIONS.strip()
+    status = client.get("/api/assistant/config").json()
+    assert (status["instructions"], status["smartInstructions"], status["composeInstructions"]) == (music, setting, setting)
+    assert "Barde von Aventurien" in music and "Thorwal" in setting
+    assert status["generalInstructions"] == "" and status["effectsInstructions"] == ""  # no defaults for these
+    assert assistant.system_prompt("music").endswith(music)
+    assert assistant.system_prompt("compose").endswith(setting)
+    assert assistant.system_prompt("smart", {"tags": [], "genres": []}).endswith(setting)
+
+    status = client.put("/api/assistant/config", json={"instructions": "Only lutes.", "smartInstructions": "Nur Flöten."}).json()
+    assert (status["instructions"], status["smartInstructions"]) == ("Only lutes.", "Nur Flöten.")
+    assert assistant.system_prompt("music").endswith("Only lutes.") and assistant.system_prompt("smart", {"tags": [], "genres": []}).endswith("Nur Flöten.")
+
+    # empty, or the default text itself, brings the default back (nothing is stored then)
+    status = client.put("/api/assistant/config", json={"instructions": "", "smartInstructions": setting}).json()
+    assert (status["instructions"], status["smartInstructions"]) == (music, setting)
+    assert not AppSettings.contains(SettingKeys.ASSISTANT_INSTRUCTIONS) and not AppSettings.contains(SettingKeys.ASSISTANT_SMART_INSTRUCTIONS)
+    assert client.put("/api/assistant/config", json={"generalInstructions": ""}).json()["generalInstructions"] == ""
 
 
 def test_the_built_in_prompts_can_be_changed_and_restored(client):
@@ -376,7 +399,7 @@ def test_the_built_in_prompts_can_be_changed_and_restored(client):
     # empty or the default restores the built-in prompt
     client.put("/api/assistant/config", json={"prompts": {"smart.system": "", "compose.vocals": assistant.VOCALS_RULE}})
     assert all(entry["value"] == entry["default"] for entry in client.get("/api/assistant/config").json()["prompts"])
-    assert assistant.system_prompt("smart", {"tags": [], "genres": []}) == assistant.smartsearch.prompt([], [])
+    assert assistant.system_prompt("smart", {"tags": [], "genres": []}).startswith(assistant.smartsearch.prompt([], []))
 
 
 def test_keys_and_models_can_come_from_the_environment(client, monkeypatch):

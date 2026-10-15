@@ -218,15 +218,15 @@
   const INSTRUCTION_TABS: { mode: InstructionMode; label: string; icon: string; placeholder: string; hint: string; promptHint: string }[] = [
     { mode: 'music', label: 'New music', icon: 'music',
       placeholder: 'e.g. We play Pathfinder in a dark fantasy world. Prefer instrumental film and game soundtracks without vocals.',
-      hint: 'Added to every request, so the assistant better understands your game, setting and taste in music.',
+      hint: 'The role and the rules of the song suggestions, added to every request. The default is the "Barde von Aventurien" for DSA; adapt it to your game. The answer itself (10 songs with title and artist) is always in the format the app needs. "Reset to default" inserts the default text again; saved empty, the default is used.',
       promptHint: 'The built-in prompt sets the task and the answer format; your instructions above are added to it. The format of the song list is enforced anyway.' },
     { mode: 'smart', label: 'Smart search', icon: 'sliders',
       placeholder: 'e.g. Exploration should stay calm, fights need high energy. Prefer songs without vocals.',
-      hint: 'Added to every smart search. When empty, the instructions for the song suggestions are used as background (game, setting, taste).',
+      hint: 'Your game, the setting and your taste in music, added to every smart search. The default describes the regions of Aventuria and their sound. "Reset to default" inserts it again; saved empty, the default is used.',
       promptHint: 'The built-in prompt sets the task and the rules. Keep {categories}, {tags}, {genres}, {min} and {max}: they are replaced by the categories, tags and genres of your library.' },
     { mode: 'compose', label: 'Compose', icon: 'wand',
       placeholder: 'e.g. We play DSA in Aventuria. Thorwal sounds Nordic with tagelharpa and drums, the elves ethereal with harp and flute.',
-      hint: 'Added to every new piece the assistant describes for the music generation: setting, regions, instruments, taste. The instructions for the song suggestions are not used there.',
+      hint: 'Your game, the setting and your taste in music, added to every new piece the assistant describes for the music generation. The default describes the regions of Aventuria and their instruments. "Reset to default" inserts it again; saved empty, the default is used.',
       promptHint: 'The built-in prompt tells the AI how to write the description and the lyrics for ACE-Step. Depending on the vocals option one of the two rules is added, with vocals also the length of the lyrics.' },
     { mode: 'effects', label: 'Effects', icon: 'waves',
       placeholder: 'e.g. We play DSA in Aventuria. Dungeons are damp and echoing, magic sounds crystalline and bright rather than electronic.',
@@ -246,6 +246,8 @@
   const isDefault = (entry: { name: string; default: string }) => (prompts[entry.name] ?? '').trim() === entry.default.trim();
   const promptsChanged = (status: AssistantStatus) => status.prompts.some((entry) => (prompts[entry.name] ?? '').trim() !== entry.value.trim());
   let instructionTab = $state<InstructionMode>('music');
+  /** The default text of the instructions that are open (undefined for the modes that have none). */
+  const instructionDefault = $derived(assistantStatus?.defaultInstructions[instructionTab as 'music' | 'smart' | 'compose']);
   let instructions = $state<Record<InstructionMode, string>>({ music: '', smart: '', compose: '', effects: '', general: '' });
   const storedInstructions = (status: AssistantStatus): Record<InstructionMode, string> =>
     ({ music: status.instructions, smart: status.smartInstructions, compose: status.composeInstructions, effects: status.effectsInstructions,
@@ -611,6 +613,10 @@
           {/each}
           <div class="row">
             <span class="grow"></span>
+            {#if instructionDefault !== undefined}
+              <button class="btn" disabled={instructions[instructionTab].trim() === instructionDefault} onclick={() => (instructions[instructionTab] = instructionDefault)}>
+                <Icon name="refresh" size={14} /> {t('Reset to default')}</button>
+            {/if}
             <button class="btn" disabled={!assistantStatus} onclick={saveAssistant}>{t('Save')}</button>
           </div>
         </section>
