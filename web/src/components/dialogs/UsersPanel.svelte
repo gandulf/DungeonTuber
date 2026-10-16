@@ -87,7 +87,7 @@
         <span class="muted small" title={user.last_seen ? t('Last seen {0}', new Date(user.last_seen * 1000).toLocaleString()) : ''}>
           {user.last_login ? t('Last login {0}', new Date(user.last_login * 1000).toLocaleString()) : t('Never logged in')} · {t('{0} logins', user.logins)} · {t('{0} visits', user.visits)}</span>
       </div>
-      <button class="btn sm" onclick={() => reset(user)}><Icon name="lock" size={14} /> {t('Change password')}</button>
+      <button class="icon-btn" title={t('Change password')} aria-label={t('Change password')} onclick={() => reset(user)}><Icon name="edit" size={14} /></button>
       <button class="icon-btn" title={t('Remove')} aria-label={t('Remove')} onclick={() => remove(user)}><Icon name="trash" size={14} /></button>
     </div>
   {:else}

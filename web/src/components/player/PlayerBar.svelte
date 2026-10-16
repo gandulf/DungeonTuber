@@ -108,7 +108,7 @@
   .play:hover:not(:disabled) { transform: scale(1.05); filter: brightness(1.08); }
   .right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   @media (max-width: 900px) {
-    .player { grid-template-columns: 1fr; gap: 10px; padding: 10px 14px; }
+    .player { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 14px; }
     .now { display: none; }
     .right { justify-content: center; }
   }

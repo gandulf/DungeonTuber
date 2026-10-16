@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { longpress } from '../../lib/longpress';
   import { untrack } from 'svelte';
   import { api, coverUrl, pathToId } from '../../lib/api';
   import { toggleFavorite, trackMenu, uploadFiles } from '../../lib/actions';
@@ -245,6 +246,20 @@
     } catch (e) {
       errorToast(e);
     }
+  }
+
+  // a finger has no double click: a tap on a row plays it (the favorite star and the cover keep their own taps)
+  let touching = false;
+  function onRowTap(event: MouseEvent, track: Track) {
+    if (!touching) return;
+    const target = event.target as HTMLElement;
+    const column = target.closest<HTMLElement>('[data-col]')?.dataset.col;
+    if (column === 'favorite') return void toggleFavorite(track);
+    if (column === 'name' && target.closest('.thumb')) {
+      if (track.has_cover) openDialog(ImagePopup, { src: coverUrl(track.id, 0), title: track.title || track.name });
+      return;
+    }
+    void playTrack(track);
   }
 
   function onCellDblClick(event: MouseEvent, track: Track, column: Column) {
@@ -542,14 +557,14 @@
         {@const index = first + i}
         <div class="tr" class:selected={selected.has(track.id)} class:playing={player.track?.id === track.id} class:drop-above={dropIndex === index}
              style:transform="translateY({index * rowHeight}px)" style:height="{rowHeight}px" style:grid-template-columns={template}
-             role="row" tabindex="-1" aria-selected={selected.has(track.id)} draggable="true"
-             onclick={(e) => { select(index, e); table?.focus({ preventScroll: true }); }} onkeydown={() => {}}
+             role="row" tabindex="-1" aria-selected={selected.has(track.id)} draggable="true" use:longpress
+             onpointerdown={(e) => (touching = e.pointerType !== 'mouse')} onclick={(e) => { select(index, e); table?.focus({ preventScroll: true }); onRowTap(e, track); }} onkeydown={() => {}}
              oncontextmenu={(e) => { if (!selected.has(track.id)) select(index, e); openMenu(e, trackMenu(selectedTracks())); }}
              ondragstart={(e) => onDragStart(e, track)} ondragover={(e) => onRowDragOver(e, index)} ondragleave={() => (dropIndex = null)}
              ondrop={(e) => onRowDrop(e, track, index)}>
           {#each columns as column (column.id)}
             <div class="td {cellClass(track, column, row.score)}" class:right={column.align === 'right'} class:center={column.align === 'center'}
-                 role="gridcell" tabindex="-1" ondblclick={(e) => onCellDblClick(e, track, column)}>
+                 role="gridcell" tabindex="-1" data-col={column.id} ondblclick={(e) => onCellDblClick(e, track, column)}>
               {#if editing && editing.id === track.id && editing.column === column.id}
                 <input class="edit" type="text" bind:value={editing.value} use:focusInput onblur={commitEdit}
                        onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') editing = null; }} />
@@ -684,7 +699,7 @@
   .more-tags { font-size: var(--fs-xs); color: var(--faint); flex: none; white-space: nowrap; }
   .bulb { display: flex; filter: drop-shadow(0 0 4px currentColor); }
   .bar-cell { display: flex; align-items: center; gap: 8px; width: 100%; }
-  .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
   .bar .fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
   .bar-cell .num { width: 22px; text-align: right; color: var(--muted); }
   .edit { width: 100%; padding: 4px 7px; }
@@ -694,4 +709,5 @@
   .search-pill.none { border-color: var(--red); }
   .footer { padding: 7px 16px; font-size: var(--fs-xs); border-top: 1px solid var(--border); }
   .global-note { display: flex; align-items: center; gap: 6px; }
+  @media (pointer: coarse) { .tr { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
 </style>

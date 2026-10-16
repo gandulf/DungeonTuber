@@ -74,6 +74,13 @@
   const categoryName = (key: string) => data.categories.find((category) => category.key === key)?.name ?? key;
   const lastTurn = $derived(chat.turns.at(-1));
 
+  // the mode tabs scroll when they do not fit (phones): keep the chosen one in view
+  let modesEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    void assistant.mode;
+    modesEl?.querySelector<HTMLElement>('button.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  });
+
   $effect(() => {
     void chat.turns.length;
     void chat.busy;
@@ -159,7 +166,7 @@
     {/if}
     <button class="icon-btn" title={t('Close')} aria-label={t('Close')} onclick={() => (assistant.open = false)}><Icon name="close" size={16} /></button>
   </header>
-  <div class="modes" role="tablist" aria-label={t('Mode')}>
+  <div class="modes" role="tablist" aria-label={t('Mode')} bind:this={modesEl}>
     {#each MODES as [mode, label, icon, hint] (mode)}
       <button role="tab" class:active={assistant.mode === mode} aria-selected={assistant.mode === mode} onclick={() => setMode(mode)} title={t(hint)}>
         <Icon name={icon} size={14} /><span>{t(label)}</span>
@@ -388,7 +395,9 @@
   header { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--border); color: var(--accent); }
   h2 { margin: 0; font-size: var(--fs-lg); font-family: var(--font-display); color: var(--text); white-space: nowrap; }
   .modes { display: flex; margin: 8px 12px 0; padding: 2px; gap: 2px; border-radius: 9px; background: var(--hover); border: 1px solid var(--border); }
-  .modes button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 28px; padding: 0 8px; border-radius: 7px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; position: relative; white-space: nowrap; }
+  .modes { overflow-x: auto; scrollbar-width: none; }
+  .modes::-webkit-scrollbar { display: none; }
+  .modes button { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; gap: 5px; height: 28px; padding: 0 8px; border-radius: 7px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; position: relative; white-space: nowrap; }
   .modes button:hover { color: var(--text); }
   .modes button.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
   .pending { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: blink 1.2s infinite ease-in-out; }

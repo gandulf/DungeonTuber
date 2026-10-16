@@ -24,7 +24,7 @@
 </div>
 
 <style>
-  .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; padding: 32px; margin-right: 2px; border-radius: var(--radius-lg); border: 1px dashed var(--border-strong); background: radial-gradient(600px 300px at 50% 30%, rgba(var(--ambient), 0.12), transparent 70%); }
+  .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: safe center; min-height: 0; overflow-y: auto; text-align: center; gap: 12px; padding: 32px; margin-right: 2px; border-radius: var(--radius-lg); border: 1px dashed var(--border-strong); background: radial-gradient(600px 300px at 50% 30%, rgba(var(--ambient), 0.12), transparent 70%); }
   .welcome img { border-radius: 18px; box-shadow: 0 0 40px rgba(var(--ambient), 0.5); }
   h1 { margin: 6px 0 0; font-size: 28px; font-family: var(--font-display); letter-spacing: -0.02em; }
   p { max-width: 520px; line-height: 1.5; }

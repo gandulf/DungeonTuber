@@ -47,7 +47,7 @@
     if (!button) return;
     openMenu({ clientX: button.right - 240, clientY: button.bottom + 6 }, appMenu());
     const item = await waitFor('menu-view');
-    item?.parentElement?.dispatchEvent(new MouseEvent('mouseenter'));
+    item?.click();
   }
 
   const hasFolder = () => !!document.querySelector('[data-tour="tree"] button.row') && !!uploadTarget();
@@ -190,31 +190,56 @@
 
   const info = $derived(tourInfo(steps[index]?.id));
   const pad = 6;
+  let viewW = $state(window.innerWidth);
+  let viewH = $state(window.innerHeight);
+  let bubbleHeight = $state(190); // measured, the text and the optional checkbox make it vary
+  const bubbleWidth = $derived(Math.min(320, viewW - 20));
   const bubble = $derived.by(() => {
-    if (!rect) return { left: 40, top: 40 };
-    const width = 320;
-    const height = 190;
-    const below = rect.bottom + 14 + height < window.innerHeight;
+    const width = bubbleWidth;
+    const height = bubbleHeight;
+    // always keep the whole bubble (and with it its buttons) on screen
+    const fit = (left: number, top: number) => ({
+      left: Math.min(Math.max(10, left), Math.max(10, viewW - width - 10)),
+      top: Math.min(Math.max(10, top), Math.max(10, viewH - height - 10)),
+    });
+    if (!rect) return fit(40, 40);
+    const below = rect.bottom + 14 + height < viewH;
     const above = rect.top - 14 - height > 0;
-    const right = rect.right + 14 + width < window.innerWidth;
+    const right = rect.right + 14 + width < viewW;
     const left = rect.left - 14 - width > 0;
-    const sideTop = Math.min(Math.max(10, rect.top), Math.max(10, window.innerHeight - height - 50));
-    const column = Math.min(Math.max(10, rect.left), window.innerWidth - width - 10);
-    const wide = rect.width >= window.innerWidth * 0.5;
-    if (!wide && right) return { left: rect.right + 14, top: sideTop };
-    if (!wide && left) return { left: rect.left - 14 - width, top: sideTop }; // e.g. the assistant popup at the right edge
-    if (below) return { left: column, top: rect.bottom + 14 };
-    if (above) return { left: column, top: rect.top - 14 - height };
-    return { left: column, top: Math.max(10, window.innerHeight - height - 10) }; // nothing fits around the target: the bottom edge, as little over it as possible
+    const wide = rect.width >= viewW * 0.5;
+    if (!wide && right) return fit(rect.right + 14, rect.top);
+    if (!wide && left) return fit(rect.left - 14 - width, rect.top); // e.g. the assistant popup at the right edge
+    if (below) return fit(rect.left, rect.bottom + 14);
+    if (above) return fit(rect.left, rect.top - 14 - height);
+    return fit(rect.left, viewH - height - 10); // nothing fits around the target: the bottom edge, as little over it as possible
   });
+
+  // swipe left for the next step, right for the previous one
+  let swipe: { x: number; y: number } | null = null;
+  function swipeStart(event: TouchEvent) {
+    const touch = event.touches[0];
+    swipe = event.touches.length === 1 && touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }
+  function swipeEnd(event: TouchEvent) {
+    const touch = event.changedTouches[0];
+    const start = swipe;
+    swipe = null;
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0) go(1);
+    else if (index > 0) go(-1);
+  }
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} bind:innerWidth={viewW} bind:innerHeight={viewH} />
 
-<dialog class="tour" bind:this={dialog} oncancel={(e) => { e.preventDefault(); finish(); }} aria-label={t('Show Tour')}>
+<dialog class="tour" bind:this={dialog} oncancel={(e) => { e.preventDefault(); finish(); }} aria-label={t('Show Tour')} ontouchstart={swipeStart} ontouchend={swipeEnd}>
   {#if steps.length && rect}
     <div class="hole" style:left="{rect.left - pad}px" style:top="{rect.top - pad}px" style:width="{rect.width + pad * 2}px" style:height="{rect.height + pad * 2}px"></div>
-    <div class="bubble panel" style:left="{bubble.left}px" style:top="{bubble.top}px">
+    <div class="bubble panel" bind:offsetHeight={bubbleHeight} style:left="{bubble.left}px" style:top="{bubble.top}px" style:width="{bubbleWidth}px">
       {#if news}<span class="kicker muted">{t("What's new")}</span>{/if}
       <h3>{t(info?.title ?? '')}</h3>
       <p>{@html t(info?.text ?? '')}</p>
@@ -237,10 +262,10 @@
 </dialog>
 
 <style>
-  .tour { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; overflow: hidden; }
+  .tour { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; touch-action: pan-y; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; overflow: hidden; }
   .tour::backdrop { background: transparent; }
   .hole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(10, 12, 20, 0.6); transition: all 0.35s ease; pointer-events: none; outline: 2px solid var(--accent); }
-  .bubble { position: fixed; width: 320px; padding: 14px 16px; box-shadow: var(--shadow); transition: all 0.35s ease; }
+  .bubble { position: fixed; max-height: calc(100% - 20px); overflow-y: auto; padding: 14px 16px; box-shadow: var(--shadow); transition: all 0.35s ease; }
   h3 { margin: 0 0 4px; font-size: var(--fs-md, 1em); }
   .kicker { display: block; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: 0.04em; }
   .check { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: var(--fs-sm); }

@@ -32,6 +32,21 @@
   const tab = $derived(activeTab());
   const showRight = $derived(prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false));
 
+  // a flyout closes with a swipe towards its own edge
+  let swipeStart: { x: number; y: number } | null = null;
+  function drawerDown(event: PointerEvent) {
+    swipeStart = event.pointerType === 'mouse' ? null : { x: event.clientX, y: event.clientY };
+  }
+  function drawerUp(event: PointerEvent) {
+    const start = swipeStart;
+    swipeStart = null;
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if ((ui.mobilePanel === 'side') === (dx > 0)) ui.mobilePanel = null;
+  }
+
   let newsChecked = false; // the "What's new" popup is offered once per page load
 
   $effect(() => {
@@ -120,9 +135,9 @@
   <div class="aura" aria-hidden="true"></div>
   <div class="body">
     {#if ui.narrow}
-      {#if ui.mobilePanel}
+      {#if ui.mobilePanel && (ui.mobilePanel === 'tree' || showRight)}
         <div class="scrim" role="presentation" onclick={() => (ui.mobilePanel = null)}></div>
-        <aside class="drawer" class:right-drawer={ui.mobilePanel === 'side'}>
+        <aside class="drawer" class:right-drawer={ui.mobilePanel === 'side'} onpointerdown={drawerDown} onpointerup={drawerUp} onpointercancel={() => (swipeStart = null)}>
           {#if ui.mobilePanel === 'tree'}<Sidebar />{:else}<RightPanel />{/if}
         </aside>
       {/if}
@@ -200,7 +215,7 @@
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 0 12px; }
   .table-wrap { flex: 1; min-height: 0; display: flex; }
   .scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 50; }
-  .drawer { position: fixed; top: 0; bottom: 0; left: 0; width: min(340px, 88vw); z-index: 51; background: var(--bg-2); display: flex; flex-direction: column; box-shadow: var(--shadow); overflow: auto; }
+  .drawer { position: fixed; top: 0; bottom: 0; left: 0; width: min(340px, 88vw); z-index: 51; touch-action: pan-y; background: var(--bg-2); display: flex; flex-direction: column; box-shadow: var(--shadow); overflow: auto; }
   .drawer.right-drawer { left: auto; right: 0; padding: 12px; }
   .status { display: flex; align-items: center; gap: 8px; padding: 4px 16px; font-size: var(--fs-sm); color: var(--muted); background: var(--bg-2); border-top: 1px solid var(--border); }
   .offline { color: var(--red); }

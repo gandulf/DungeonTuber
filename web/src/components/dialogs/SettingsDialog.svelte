@@ -487,15 +487,40 @@
     ['player', 'Player', 'play'],
     ['security', 'Security', 'power'],
   ];
+
+  // on a phone the sections are a single scrolling row: keep the chosen one in view
+  let nav = $state<HTMLElement | null>(null);
+  let tabMenu = $state(false); // the list of the instruction modes (phones)
+  let navMore = $state({ left: false, right: false }); // there are sections out of view on that side
+  function measureNav() {
+    if (!nav) return;
+    navMore = { left: nav.scrollLeft > 4, right: nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4 };
+  }
+  $effect(() => {
+    if (!nav) return;
+    const observer = new ResizeObserver(measureNav);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  });
+  $effect(() => {
+    void section;
+    nav?.querySelector<HTMLElement>('button.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  });
 </script>
+
+<svelte:window onpointerdowncapture={(e) => { if (tabMenu && !(e.target as Element).closest?.('.tab-select')) tabMenu = false; }} />
 
 <Modal resizable title={t('Settings')} onclose={closeDialog} width="820px">
   <div class="layout">
-    <nav>
-      {#each sections.filter(([key]) => admin || ['general', 'youtube', 'agents', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
-        <button class:active={section === key} onclick={() => (section = key)}><Icon name={icon} size={16} /> {t(label)}</button>
-      {/each}
-    </nav>
+    <div class="navwrap" class:more-left={navMore.left} class:more-right={navMore.right}>
+      <nav bind:this={nav} onscroll={measureNav}>
+        {#each sections.filter(([key]) => admin || ['general', 'youtube', 'agents', 'player', 'security'].includes(key)) as [key, label, icon] (key)}
+          <button class:active={section === key} onclick={() => (section = key)}><Icon name={icon} size={16} /> {t(label)}</button>
+        {/each}
+      </nav>
+      <button class="more left" tabindex="-1" aria-hidden="true" onclick={() => nav?.scrollBy({ left: -160, behavior: 'smooth' })}><Icon name="chevron-left" size={14} /></button>
+      <button class="more right" tabindex="-1" aria-hidden="true" onclick={() => nav?.scrollBy({ left: 160, behavior: 'smooth' })}><Icon name="chevron-right" size={14} /></button>
+    </div>
     <div class="body">
       {#if section === 'general'}
         <h4>{t('Accent color')}</h4>
@@ -581,6 +606,25 @@
         <section class="group">
           <h4><Icon name="edit" size={16} /> {t('Instructions')}</h4>
           <span class="muted small">{t('Your game, the setting and your taste in music, separately for each mode of the assistant. They are added to every request of the mode.')}</span>
+          <div class="tab-select">
+            <button class="current" aria-haspopup="listbox" aria-expanded={tabMenu} aria-label={t('Instructions')} onclick={() => (tabMenu = !tabMenu)}>
+              {#each INSTRUCTION_TABS.filter((tab) => tab.mode === instructionTab) as tab (tab.mode)}
+                <Icon name={tab.icon} size={14} /><span class="grow">{t(tab.label)}</span>
+                {#if instructions[tab.mode].trim()}<span class="filled" title={t('Instructions')}></span>{/if}
+              {/each}
+              <Icon name={tabMenu ? 'chevron-up' : 'chevron-down'} size={16} />
+            </button>
+            {#if tabMenu}
+              <div class="options" role="listbox" aria-label={t('Instructions')}>
+                {#each INSTRUCTION_TABS as tab (tab.mode)}
+                  <button role="option" aria-selected={instructionTab === tab.mode} class:active={instructionTab === tab.mode} onclick={() => { instructionTab = tab.mode; tabMenu = false; }}>
+                    <Icon name={tab.icon} size={14} /><span class="grow">{t(tab.label)}</span>
+                    {#if instructions[tab.mode].trim()}<span class="filled" title={t('Instructions')}></span>{/if}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
           <div class="tabs" role="tablist" aria-label={t('Instructions')}>
             {#each INSTRUCTION_TABS as tab (tab.mode)}
               <button role="tab" class:active={instructionTab === tab.mode} aria-selected={instructionTab === tab.mode} onclick={() => (instructionTab = tab.mode)}>
@@ -821,7 +865,7 @@
               <strong>{data.auth?.user ?? 'admin'}{#if admin} <span class="pill violet">{t('SuperAdmin')}</span>{/if}</strong>
               <span class="meta">{!admin || data.auth?.password_set ? t('A password is set.') : t('No password is set – only this computer can connect.')}</span>
             </div>
-            <button class="btn sm" onclick={changeOwnPassword}><Icon name="lock" size={14} /> {admin && !data.auth?.password_set ? t('Set password') : t('Change password')}</button>
+            <button class="icon-btn" title={admin && !data.auth?.password_set ? t('Set password') : t('Change password')} aria-label={admin && !data.auth?.password_set ? t('Set password') : t('Change password')} onclick={changeOwnPassword}><Icon name="edit" size={14} /></button>
             {#if admin && data.auth?.password_set}
               <button class="icon-btn" title={t('Remove password')} aria-label={t('Remove password')} onclick={removePassword}><Icon name="trash" size={14} /></button>
             {/if}
@@ -879,6 +923,17 @@
 </Modal>
 
 <style>
+  .more { display: none; }
+  .tab-select { display: none; position: relative; }
+  /* the dropdown of the mode tabs: the selected segment of the tab row, with a list in the style of the menus */
+  .tab-select .current { display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 12px 0 14px; border-radius: 9px; border: 1px solid var(--border);
+                         background: var(--hover); color: var(--accent); font-weight: 650; text-align: left; }
+  .tab-select .current[aria-expanded='true'] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .options { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 12px;
+             background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .options button { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; color: var(--muted); text-align: left; }
+  .options button:hover { background: var(--hover); color: var(--text); }
+  .options button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .layout { display: grid; grid-template-columns: 170px 1fr; gap: 18px; min-height: 380px; }
   nav { display: flex; flex-direction: column; gap: 2px; }
   nav button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius-sm); text-align: left; color: var(--muted); }
@@ -935,5 +990,26 @@
   .cat-table .desc { max-width: 220px; color: var(--muted); }
   .cat-table .desc .ellipsis { display: block; }
   .cat-table .acts { white-space: nowrap; text-align: right; width: 72px; }
-  @media (max-width: 640px) { .layout { grid-template-columns: 1fr; } nav { flex-direction: row; flex-wrap: wrap; } }
+  @media (max-width: 640px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 10px; min-height: 0; }
+    /* one scrolling row of compact tabs instead of a wrapped block that takes half of the screen */
+    .navwrap { position: relative; min-width: 0; }
+    .more { display: grid; position: absolute; top: 0; bottom: 6px; width: 34px; place-items: center; color: var(--accent); pointer-events: none; opacity: 0; transition: opacity 0.15s; }
+    .more.left { left: 0; justify-content: start; padding-left: 2px; background: linear-gradient(to right, var(--surface) 55%, transparent); }
+    .more.right { right: 0; justify-content: end; padding-right: 2px; background: linear-gradient(to left, var(--surface) 55%, transparent); }
+    .more-left .more.left, .more-right .more.right { opacity: 1; pointer-events: auto; }
+    nav { flex-direction: row; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    nav::-webkit-scrollbar { display: none; }
+    nav button { flex: none; white-space: nowrap; padding: 6px 10px; font-size: var(--fs-sm); }
+    .row, .cat-head { flex-wrap: wrap; }
+    .body .btn { max-width: 100%; white-space: normal; text-align: center; }
+    /* the mode tabs become a combobox */
+    .tabs { display: none; }
+    .tab-select { display: block; }
+    /* the category table keeps its name, group and buttons; the long description is in the edit dialog */
+    .cat-table thead th:nth-child(3), .cat-table td.desc { display: none; }
+    .cat-table .acts { width: auto; }
+    .cats { max-height: 50vh; }
+    .storage { grid-template-columns: 1fr; }
+  }
 </style>

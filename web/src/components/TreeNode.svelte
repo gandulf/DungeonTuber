@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { longpress } from '../lib/longpress';
   import { untrack } from 'svelte';
   import TreeNode from './TreeNode.svelte';
   import { api } from '../lib/api';
@@ -30,6 +31,21 @@
   const isRoot = $derived(item.storage !== undefined);
 
   let request = 0;
+
+  // Touch browsers do not reliably send dblclick, so a second tap within DOUBLE_TAP ms opens the item (the same as a double click)
+  const DOUBLE_TAP = 350;
+  let touching = false;
+  let lastTap = 0;
+
+  function onClick() {
+    selected = item.path;
+    if (!touching) return;
+    const now = performance.now();
+    if (now - lastTap < DOUBLE_TAP) {
+      lastTap = 0;
+      onOpen(item);
+    } else lastTap = now;
+  }
 
   /** Loads the items (the cached ones at once); the old ones stay visible until the new ones arrive, and only the latest request counts. */
   async function load() {
@@ -140,13 +156,13 @@
 
 <div role="treeitem" aria-expanded={item.type === 'dir' ? expanded : undefined} aria-selected={selected === item.path}>
   <button class="row" class:selected={selected === item.path} class:over={dragOver} class:lib-root={isRoot} style:padding-left="{depth * 14 - 8}px"
-          title={item.file ?? item.name} draggable={!isRoot}
-          onclick={() => (selected = item.path)} onfocus={() => (selected = item.path)} ondblclick={() => onOpen(item)}
+          title={item.file ?? item.name} draggable={!isRoot} use:longpress
+          onpointerdown={(e) => (touching = e.pointerType !== 'mouse')} onclick={onClick} onfocus={() => (selected = item.path)} ondblclick={() => { if (!touching) onOpen(item); }}
           onkeydown={onKey} oncontextmenu={(e) => { selected = item.path; onMenu(e, item); }} ondragstart={dragStart}
           ondragover={(e) => { if (accepts(e)) { e.preventDefault(); dragOver = true; } }}
           ondragleave={() => (dragOver = false)} ondrop={drop}>
     {#if item.type === 'dir'}
-      <span class="twisty" role="presentation" onclick={toggle} ondblclick={(e) => e.stopPropagation()}>
+      <span class="twisty" role="presentation" onclick={(e) => { lastTap = 0; toggle(e); }} ondblclick={(e) => e.stopPropagation()}>
         <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={13} />
       </span>
       <span class="folder"><Icon name={isRoot && item.storage !== 'local' ? 'cloud' : 'folder'} size={16} /></span>
@@ -165,7 +181,7 @@
 </div>
 
 <style>
-  .row { display: flex; align-items: center; gap: 5px; width: 100%; padding: 4px 6px; border-radius: 8px; text-align: left; color: var(--muted); }
+  .row { display: flex; align-items: center; gap: 5px; width: 100%; padding: 4px 6px; border-radius: 8px; text-align: left; color: var(--muted); touch-action: manipulation; -webkit-touch-callout: none; }
   .row:hover { background: var(--hover); color: var(--text); }
   .row.selected { background: var(--accent-soft); color: var(--accent); }
   .row.over { outline: 2px dashed var(--accent); outline-offset: -2px; }

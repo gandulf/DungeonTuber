@@ -28,6 +28,6 @@
   input { width: 130px; }
   .compact input { width: auto; flex: 1; }
   .compact { flex: 1; }
-  input.boost { background: linear-gradient(to right, var(--accent) 0, var(--accent-2) 66.6%, var(--gold) 66.6%, var(--gold) var(--pct), var(--surface-3) var(--pct)); }
+  input.boost { background: linear-gradient(to right, var(--accent) 0, var(--accent-2) 66.6%, var(--gold) 66.6%, var(--gold) var(--pct), var(--track) var(--pct)); }
   .pct { font-size: var(--fs-xs); color: var(--muted); width: 36px; font-variant-numeric: tabular-nums; text-align: right; }
 </style>

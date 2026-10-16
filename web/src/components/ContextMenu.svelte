@@ -6,6 +6,9 @@
   let position = $state<{ x: number; y: number } | null>(null);
   let openSub = $state<number | null>(null);
   const MARGIN = 8;
+  const SWITCH_DELAY = 250;
+  let touched = false; // the last pointer was a finger: no hover, a tap on an entry with a submenu opens it
+  let switchTimer: ReturnType<typeof setTimeout> | undefined;
 
   // keeps the menu completely inside the window (it is shown once it has been measured)
   $effect(() => {
@@ -15,6 +18,7 @@
       return;
     }
     if (!menuEl) return;
+    clearTimeout(switchTimer);
     openSub = null;
     const rect = menuEl.getBoundingClientRect();
     position = {
@@ -41,8 +45,23 @@
     }
   }
 
-  function run(item: MenuItem) {
-    if (item.disabled || item.children) return;
+  /** Hover moves to another entry at once, unless a submenu is open: then the switch waits a moment, so a diagonal move towards the submenu (which may be on the far side of the menu) does not cross other entries and close it. */
+  function hover(item: MenuItem, i: number) {
+    if (touched) return;
+    clearTimeout(switchTimer);
+    const target = item.children ? i : null;
+    if (openSub === null || openSub === target) openSub = target;
+    else switchTimer = setTimeout(() => (openSub = target), SWITCH_DELAY);
+  }
+
+  function run(item: MenuItem, i: number) {
+    if (item.disabled) return;
+    if (item.children) {
+      // a tap emulates a mouse move before the click, which would show the submenu under the finger and let the click hit its first entry; so touch opens it on the click only
+      clearTimeout(switchTimer);
+      openSub = i;
+      return;
+    }
     closeMenu();
     item.action?.();
   }
@@ -59,8 +78,8 @@
     {#if item.separator}
       <div class="sep"></div>
     {:else}
-      <div class="item-wrap" role="none" onmouseenter={() => level === 0 && (openSub = item.children ? i : null)}>
-        <button class="item" data-tour={item.tour} disabled={item.disabled} onclick={(e) => { e.stopPropagation(); run(item); }}>
+      <div class="item-wrap" role="none" onmouseenter={() => level === 0 && hover(item, i)}>
+        <button class="item" data-tour={item.tour} disabled={item.disabled} onclick={(e) => { e.stopPropagation(); run(item, i); }}>
           <span class="ic">
             {#if item.checked}<Icon name="check" size={15} />{:else if item.icon}<Icon name={item.icon} size={15} />{/if}
           </span>
@@ -69,7 +88,7 @@
           {#if item.children}<Icon name="chevron-right" size={14} />{/if}
         </button>
         {#if item.children && openSub === i && level === 0}
-          <div class="menu sub" data-tour={item.tour ? `${item.tour}-sub` : undefined} use:fit>{@render items(item.children, 1)}</div>
+          <div class="menu sub" data-tour={item.tour ? `${item.tour}-sub` : undefined} role="menu" tabindex="-1" use:fit onmouseenter={() => clearTimeout(switchTimer)}>{@render items(item.children, 1)}</div>
         {/if}
       </div>
     {/if}
@@ -79,7 +98,7 @@
 {#if ui.menu}
   <div class="menu" bind:this={menuEl} style:left="{position?.x ?? ui.menu.x}px" style:top="{position?.y ?? ui.menu.y}px" style:visibility={position ? 'visible' : 'hidden'}
        role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()} oncontextmenu={(e) => e.preventDefault()}
-       onkeydown={() => {}}>
+       onkeydown={() => {}} onpointerdowncapture={(e) => (touched = e.pointerType !== 'mouse')}>
     {@render items(ui.menu.items, 0)}
   </div>
 {/if}
@@ -97,10 +116,13 @@
     padding: 6px;
     backdrop-filter: blur(12px);
   }
-  .sub { position: absolute; left: 100%; top: -5px; margin-left: 2px; }
+  .sub { position: absolute; z-index: 1; /* above the entries that follow its own, which are positioned too */  left: 100%; top: -5px; margin-left: 2px; }
   .item-wrap { position: relative; }
-  .item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px 7px 7px; border-radius: 8px; text-align: left; }
-  .item:hover:not(:disabled) { background: var(--accent-soft); }
+  .item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px 7px 7px; border-radius: 8px; text-align: left; -webkit-tap-highlight-color: transparent; }
+  /* a finger leaves :hover stuck on the tapped entry, which would then show through where the submenu opens over it */
+  @media (hover: hover) { .item:hover:not(:disabled) { background: var(--accent-soft); } }
+  .item:active:not(:disabled) { background: var(--accent-soft); }
+  .sub { isolation: isolate; }
   .ic { width: 18px; display: flex; justify-content: center; color: var(--muted); }
   .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .shortcut { color: var(--muted); font-size: var(--fs-xs); }

@@ -39,4 +39,7 @@
   .field { display: flex; flex-direction: column; gap: 5px; }
   .key { font-family: monospace; }
   .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .cat-form > * { min-width: 0; }
+  .field input, .field textarea { min-width: 0; width: 100%; }
+  @media (max-width: 640px) { .cat-form, .levels { grid-template-columns: minmax(0, 1fr); } }
 </style>

@@ -3,6 +3,7 @@
   import { t } from '../lib/i18n.svelte';
   import { assistant, toggleAssistant } from '../lib/stores/assistant.svelte';
   import { data } from '../lib/stores/data.svelte';
+  import { prefs } from '../lib/prefs.svelte';
   import { library, setGlobal } from '../lib/stores/library.svelte';
   import { openMenu, ui } from '../lib/stores/ui.svelte';
   import Icon from './Icon.svelte';
@@ -11,6 +12,8 @@
   // the assistant button shows its label while the open tabs leave enough room, otherwise only its icon
   const TAB_ROOM = 160; // width a tab should keep before the label gives way
   const ICON_ONLY = 36;
+  // the side panel holds the lights and the effects; without either there is nothing to open
+  const hasSidePanel = $derived(prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false));
   let areaWidth = $state(0);
   let buttonWidth = $state(0);
   let labelRoom = $state(110); // width the label adds to the button, measured while it is shown
@@ -57,7 +60,7 @@
     </button>
   {/if}
   <button class="icon-btn" title={t('Menu')} data-tour="menubar" onclick={showMenu}><Icon name="menu" size={18} /></button>
-  {#if ui.narrow}
+  {#if ui.narrow && hasSidePanel}
     <button class="icon-btn" title={t('Lights')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'side' ? null : 'side'; }}><Icon name="bulb" size={18} /></button>
   {/if}
 </header>
@@ -86,4 +89,15 @@
   .assistant.labelled { padding: 0 12px 0 10px; }
   .assistant:hover { color: var(--text); border-color: var(--border-strong); }
   .assistant.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+  /* phones: the fixed size controls no longer fit next to the tabs, so the tabs get their own row */
+  @media (max-width: 480px) {
+    .topbar { flex-wrap: wrap; gap: 6px; }
+    .tabs-area { order: 10; flex: 1 0 100%; }
+    .tabs-area:has(.hint) { display: none; } /* only the welcome hint, no tabs */
+    .opt { padding: 0 8px; }
+    .search { margin-left: auto; }
+    /* an open search takes the free space of the row: the mode switch and the assistant step aside */
+    .search:focus-within, .search.active { flex: 1; width: auto; min-width: 0; margin-left: 0; }
+    .topbar:has(.search:focus-within) :is(.mode, .assistant), .topbar:has(.search.active) :is(.mode, .assistant) { display: none; }
+  }
 </style>

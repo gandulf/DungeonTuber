@@ -18,6 +18,7 @@
   --surface: #ffffff;
   --surface-2: #f6f4fc;
   --surface-3: #ebe7f7;
+  --track: color-mix(in srgb, var(--accent) 16%, var(--surface-3)); /* the unfilled part of sliders and progress bars: a hint of the accent over the surface */
   --border: #e4e0f0;
   --border-strong: #cdc6e3;
   --text: #1d1a2b;
@@ -55,6 +56,7 @@
   --surface: #181527;
   --surface-2: #1e1a31;
   --surface-3: #27223e;
+  --track: color-mix(in srgb, var(--accent) 22%, var(--surface-3));
   --border: rgba(255, 255, 255, 0.07);
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #ece9f7;
@@ -88,7 +90,7 @@
 
 * { box-sizing: border-box; }
 
-html, body, #app { height: 100%; margin: 0; }
+html, body, #app { height: 100%; width: 100%; max-width: 100%; margin: 0; }
 
 body {
   font-family: var(--font);
@@ -127,7 +129,7 @@ input[type='range'].range {
   -webkit-appearance: none;
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(to right, var(--accent) 0, var(--accent-2) var(--pct, 50%), var(--surface-3) var(--pct, 50%));
+  background: linear-gradient(to right, var(--accent) 0, var(--accent-2) var(--pct, 50%), var(--track) var(--pct, 50%));
   cursor: pointer;
   margin: 0;
 }

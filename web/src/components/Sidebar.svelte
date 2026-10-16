@@ -1,18 +1,34 @@
 <script lang="ts">
+  import { longpress } from '../lib/longpress';
   import { api } from '../lib/api';
   import { cached } from '../lib/cache';
-  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, editPlaylist, newPlaylist, openImportDialog, openItem, openUploadDialog, trackMenu, uploadFiles } from '../lib/actions';
+  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, editPlaylist, newPlaylist, openImportDialog, openItem as openBrowseItem, openUploadDialog, trackMenu, uploadFiles } from '../lib/actions';
   import { itemsFromDrop } from '../lib/upload';
   import { t } from '../lib/i18n.svelte';
   import { openSettings, setTheme } from '../lib/menus';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
   import { addFavorite, data, isPlaylistPath, moveFavorites, removeFavorite } from '../lib/stores/data.svelte';
-  import { closeTab, library, openTab, reloadDirTabs } from '../lib/stores/library.svelte';
+  import { closeTab, library, openTab as openLibraryTab, reloadDirTabs } from '../lib/stores/library.svelte';
   import { askText, errorToast, openMenu, ui, type MenuItem } from '../lib/stores/ui.svelte';
   import { onEvent } from '../lib/ws';
   import type { BrowseItem } from '../lib/types';
   import Icon from './Icon.svelte';
   import TreeNode from './TreeNode.svelte';
+
+  /** On a narrow screen the sidebar is a flyout: it closes once something has been opened. */
+  function closeFlyout() {
+    if (ui.mobilePanel === 'tree') ui.mobilePanel = null;
+  }
+
+  const openItem = (item: BrowseItem) => {
+    closeFlyout();
+    return openBrowseItem(item);
+  };
+
+  const openTab = (type: 'dir' | 'playlist', path: string) => {
+    closeFlyout();
+    return openLibraryTab(type, path);
+  };
 
   let roots = $state<BrowseItem[]>([]);
   let refreshKey = $state(0);
@@ -175,7 +191,7 @@
     <div class="nav-section">
       <span class="label-xs">{t('Favorites')}</span>
       {#each favoriteFolders as path (path)}
-        <button class="nav-item" title={path} onclick={() => openTab('dir', path)}
+        <button class="nav-item" use:longpress title={path} onclick={() => openTab('dir', path)}
                 oncontextmenu={(e) => openMenu(e, [
                   { label: t('Open'), icon: 'folder', action: () => openTab('dir', path) },
                   { label: t('Upload songs…'), icon: 'upload', action: () => openUploadDialog(path) },
@@ -195,7 +211,7 @@
         <button class="icon-btn mini" title={t('New Playlist…')} onclick={() => newPlaylist()}><Icon name="plus" size={14} /></button>
       </div>
       {#each favoritePlaylists as playlist (playlist.path)}
-        <button class="nav-item" class:active={!!playlist.tab && library.active === playlist.tab.key} class:over={overPlaylist === playlist.path} title={playlist.path}
+        <button class="nav-item" class:active={!!playlist.tab && library.active === playlist.tab.key} class:over={overPlaylist === playlist.path} title={playlist.path} use:longpress
                 onclick={() => openTab('playlist', playlist.path)}
                 ondragover={(e) => { if (canDropOnPlaylist(e.dataTransfer)) { e.preventDefault(); overPlaylist = playlist.path; } }}
                 ondragleave={() => (overPlaylist = null)}
@@ -261,4 +277,5 @@
   .tree { flex: 1; overflow: auto; min-height: 80px; border-radius: 10px; padding: 4px; }
   .tree.drop { box-shadow: inset 0 0 0 2px var(--accent); }
   .foot { display: flex; gap: 4px; padding: 10px 12px 14px; border-top: 1px solid var(--border); }
+  @media (pointer: coarse) { .nav-item { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
 </style>
