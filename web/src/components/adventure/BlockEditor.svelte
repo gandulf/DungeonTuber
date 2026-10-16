@@ -4,12 +4,14 @@
   import { t } from '../../lib/i18n.svelte';
   import { applyBlockLink, applyFormat, applyImage, applySongLink, applySuggestion, blockLinkTarget, blockSuggestions, renderNotes, songLinkTarget, type BlockRef, type Edit, type Format } from '../../lib/notes';
   import { adventures, change, deleteBlock, enterBlock, flushSave, playBlockMusic, playSongLink, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
+  import { data } from '../../lib/stores/data.svelte';
   import { effects, loadEffects } from '../../lib/stores/effects.svelte';
   import { cueLight } from '../../lib/stores/player.svelte';
-  import { askConfirm, errorToast, openDialog, toast } from '../../lib/stores/ui.svelte';
+  import { askConfirm, errorToast, openDialog, openMenu, toast } from '../../lib/stores/ui.svelte';
   import type { LightSetting, MusicRef } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import LightEditor from '../dialogs/LightEditor.svelte';
+  import AiDialog from './AiDialog.svelte';
   import PickMusicDialog from './PickMusicDialog.svelte';
 
   const block = $derived(selectedBlock());
@@ -183,6 +185,21 @@
     linkTarget = '';
   }
 
+  /** The AI helpers of the block (see AiDialog.svelte); each needs the service it talks to. */
+  function aiMenu(event: MouseEvent) {
+    if (!block) return;
+    const id = block.id;
+    const text = !!(data.settings?.groqConfigured || data.settings?.assistantConfigured);
+    const sounds = !!data.settings?.soundGenConfigured;
+    const open = (task: 'draft' | 'songs' | 'light' | 'sound') => openDialog(AiDialog, { task, blockId: id });
+    openMenu(event, [
+      { label: t('Draft the notes…'), icon: 'edit', disabled: !text, action: () => open('draft') },
+      { label: t('Suggest songs…'), icon: 'music', disabled: !text, action: () => open('songs') },
+      { label: t('Suggest a light…'), icon: 'bulb', disabled: !text, action: () => open('light') },
+      { label: t('Create a sound…'), icon: 'waves', disabled: !sounds, action: () => open('sound') },
+    ]);
+  }
+
   async function remove() {
     if (block && (await askConfirm(t('Delete the block "{0}"?', block.title || t('Untitled'))))) deleteBlock(block.id);
   }
@@ -199,6 +216,7 @@
       <input class="title" type="text" placeholder={t('Block title')} value={block.title} readonly={!editable}
              oninput={(e) => change(() => (block.title = e.currentTarget.value))} />
       <button class="btn sm" title={t('Play this block')} onclick={() => void enterBlock(block.id)}><Icon name="play" size={14} />{t('Play')}</button>
+      {#if editable}<button class="btn sm" title={t('AI helpers for this block')} onclick={aiMenu}><Icon name="sparkles" size={14} />{t('AI')}</button>{/if}
       {#if editable}<button class="icon-btn" title={t('Delete block')} onclick={() => void remove()}><Icon name="trash" size={16} /></button>{/if}
     </div>
 
