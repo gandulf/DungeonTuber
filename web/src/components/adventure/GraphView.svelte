@@ -189,7 +189,6 @@
             {#if block.played}<Icon name="check" size={11} />{/if}
             {#if block.music.length}<Icon name="music" size={11} />{block.music.length}{/if}
             {#if block.effects.length}<Icon name="waves" size={11} />{/if}
-            {#if block.light}<Icon name="bulb" size={11} />{/if}
           </span>
           {#if editable}
             <!-- svelte-ignore a11y_no_static_element_interactions -->

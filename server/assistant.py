@@ -3,7 +3,7 @@ role playing session, "general" answers questions of the game master (rules like
 scene into the filter of the app so that the songs of the library are ranked by it (see server/smartsearch.py), "compose" writes the
 description of a new piece that the music generation composes (see server/musicgen.py), "effects" the description of a sound
 effect, an ambience or background music for the sound generation (see server/soundgen.py), "story" helps with the blocks of an adventure:
-it drafts their notes and chooses a light for them.
+it drafts their notes.
 
 The smart search, the compose and the effects mode run on Groq when a Groq key is stored (an open model like gpt-oss-120b is as good at choosing
 values as Gemini and has a quota of its own); the song suggestions and the general chat need the knowledge of Gemini.
@@ -179,17 +179,6 @@ players see, hear and smell), followed by short bullet points for the game maste
 players can find out or try, and what happens next. Keep every name, place and fact the user gave and do not invent a different plot.
 Use plain Markdown only (**bold**, lists, > quotes, no heading above ##), no tables and no HTML.
 Write in the language of the user's notes. When the user asks for changes, change the previous text accordingly."""
-STORY_LIGHT_PROMPT = """You choose the colored light for a scene of a tabletop role playing session; smart bulbs light the table with it.
-Answer with a JSON object only:
-{"message": "<one short sentence for the user>", "scene": "<a scene of the list or null>", "color": "<#RRGGBB or null>",
- "temperature": <kelvin or null>, "brightness": <10 to 255>}
-Set exactly one of scene, color and temperature, the others are null. Take a scene of the list below when one fits the mood (a fire, an
-ocean, a forest); otherwise a color that carries the mood (deep red for danger, cold blue for a crypt, warm amber for a tavern), or a
-temperature from 2200 (candle light) to 6500 (cold daylight) for neutral places. Dark scenes are dim (30 to 90), bright ones full
-(180 to 255). Write the message in the language of the user.
-
-## SCENES OF THE BULBS
-{scenes}"""
 EFFECT_KINDS = {
     "sfx": "The user wants a sound effect.",
     "ambience": "The user wants an ambience: a steady background of the place that can be looped.",
@@ -222,7 +211,6 @@ def lyrics_budget(duration: object) -> str:
     return f"The piece is {round(duration)} seconds long: write {max(low, 20)} to {max(high, 30)} words of lyrics in total, not more."
 MAX_CAPTION_LENGTH = 512
 MAX_STORY_TEXT = 6000
-STORY_TASKS = ("draft", "light")
 
 STORY_DRAFT_SCHEMA = {
     "type": "OBJECT",
@@ -230,52 +218,6 @@ STORY_DRAFT_SCHEMA = {
     "required": ["message", "text"],
 }
 
-STORY_LIGHT_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "message": {"type": "STRING"},
-        "scene": {"type": "STRING", "nullable": True},
-        "color": {"type": "STRING", "nullable": True},
-        "temperature": {"type": "INTEGER", "nullable": True},
-        "brightness": {"type": "INTEGER"},
-    },
-    "required": ["message", "brightness"],
-}
-
-
-def story_task(context: dict | None) -> str:
-    task = (context or {}).get("task")
-    return task if task in STORY_TASKS else "draft"
-
-
-def _story_scenes(context: dict | None) -> list[str]:
-    return [str(scene).strip() for scene in (context or {}).get("scenes") or [] if str(scene).strip()][:200]
-
-
-def to_story_light(raw: dict, scenes: list[str]) -> dict | None:
-    """The light of a story answer, checked: a scene of the bulbs, a #RRGGBB color or a temperature (kelvin), with a brightness of 10 to 255;
-    None when the model chose nothing usable."""
-    try:
-        brightness = max(10, min(255, round(float(raw.get("brightness") if raw.get("brightness") is not None else 255))))
-    except (TypeError, ValueError):
-        brightness = 255
-    known = {scene.lower(): scene for scene in scenes}
-    scene = known.get(str(raw.get("scene") or "").strip().lower())
-    color = str(raw.get("color") or "").strip()
-    try:
-        temperature = round(float(raw.get("temperature"))) if raw.get("temperature") is not None else None
-    except (TypeError, ValueError):
-        temperature = None
-    light = {"scene": None, "brightness": brightness, "temperature": None, "color": None}
-    if scene:
-        light["scene"] = scene
-    elif re.fullmatch(r"#[0-9a-fA-F]{6}", color):
-        light["color"] = color.lower()
-    elif temperature is not None and 2200 <= temperature <= 6500:
-        light["temperature"] = temperature
-    else:
-        return None
-    return light
 MAX_LYRICS_LENGTH = 4096
 
 COMPOSE_SCHEMA = {
@@ -362,7 +304,6 @@ PROMPTS = {
     "effects.system": EFFECTS_PROMPT,
     "general.system": GENERAL_PROMPT,
     "story.draft": STORY_DRAFT_PROMPT,
-    "story.light": STORY_LIGHT_PROMPT,
 }
 MAX_PROMPT_LENGTH = 12000
 
@@ -423,10 +364,7 @@ def system_prompt(mode: str = "music", context: dict | None = None) -> str:
     elif mode == "effects":
         base = prompt_text("effects.system") + "\n" + EFFECT_KINDS[effect_kind((context or {}).get("kind"))]
     elif mode == "story":
-        task = story_task(context)
-        base = prompt_text(f"story.{task}")
-        if task == "light":
-            base = base.replace("{scenes}", ", ".join(_story_scenes(context)) or "(none)")
+        base = prompt_text("story.draft")
     else:
         base = prompt_text("general.system" if mode == "general" else "music.system")
     return f"{base}\n\n{intro}\n{extra}" if extra else base
@@ -706,7 +644,7 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
     history = [{"role": m["role"], "content": m["content"][:MAX_MESSAGE_LENGTH]} for m in messages[-MAX_MESSAGES:]]
     tags, genres = (context or {}).get("tags") or [], (context or {}).get("genres") or []
     schema = {"smart": smartsearch.schema(tags, genres), "compose": COMPOSE_SCHEMA, "effects": EFFECTS_SCHEMA,
-              "story": STORY_LIGHT_SCHEMA if story_task(context) == "light" else STORY_DRAFT_SCHEMA,
+              "story": STORY_DRAFT_SCHEMA,
               "general": None}.get(mode, RESPONSE_SCHEMA)
     service = provider(mode)
     if service is None:
@@ -732,12 +670,8 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
             piece["language"] = chosen  # the language the user chose, also when the model named another one
         return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content, "piece": piece}
     if mode == "story":
-        reply = {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content}
-        if story_task(context) == "light":
-            reply["light"] = to_story_light(parsed, _story_scenes(context))
-        else:
-            reply["text"] = str(parsed.get("text") or "").strip()[:MAX_STORY_TEXT]
-        return reply
+        return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content,
+                "text": str(parsed.get("text") or "").strip()[:MAX_STORY_TEXT]}
     if mode == "effects":
         kind = (context or {}).get("kind")
         sound = to_sound(parsed, kind) or to_sound({"caption": messages[-1]["content"]}, kind)

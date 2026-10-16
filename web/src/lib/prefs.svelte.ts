@@ -25,6 +25,9 @@ export interface Prefs {
   showLights: boolean;
   leftWidth: number;
   rightWidth: number;
+  /** The sidebars can be hidden with the buttons of the top bar (the right one only has content while the effects or lights are shown). */
+  leftOpen: boolean;
+  rightOpen: boolean;
   filter: { presets: boolean; circumplex: boolean; sliders: boolean; bpm: boolean; tags: boolean; genres: boolean };
   columns: Record<string, boolean>;
   /** Widths in px of the song table columns the user has resized (by column id). */
@@ -70,6 +73,8 @@ const defaults: Prefs = {
   showLights: true,
   leftWidth: 260,
   rightWidth: 300,
+  leftOpen: true,
+  rightOpen: true,
   filter: { presets: true, circumplex: true, sliders: true, bpm: true, tags: true, genres: true },
   columns: { index: true, favorite: true, cover: true, title: false, summary: false, artist: false, album: false, track: false, genre: true, bpm: true, score: true, tags: true, duration: true },
   hiddenCategories: [],

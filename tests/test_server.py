@@ -904,14 +904,14 @@ def test_adventures_are_private_until_published(client, library):
     second = {"id": "b2", "title": "Crypt", "markdown": "# Dark", "music": [{"type": "song", "ufid": ufid, "path": "x", "title": "Fight"},
                                                                          {"type": "playlist", "id": listed["Secret"], "title": "Secret"},
                                                                          {"type": "bogus"}],
-              "effects": [{"path": "Rain", "loop": True}], "light": {"scene": "Fire", "brightness": 80, "unknown": 1}}
+              "effects": [{"path": "Rain", "loop": True}]}
     body = {"title": "Crypt", "owner": "mallory", "blocks": [{**block, "title": "Start"}, second, {"title": "no id"}],
             "links": [{"from": block["id"], "to": "b2", "label": "enter"}, {"from": "b2", "to": "missing"}, {"from": "b2", "to": "b2"}]}
     saved = client.put(f"/api/adventures/{created['id']}", json=body).json()
     assert saved["owner"] == "anna" and saved["title"] == "Crypt" and [b["title"] for b in saved["blocks"]] == ["Start", "Crypt", "no id"]
     assert saved["links"] == [{"from": block["id"], "to": "b2", "label": "enter"}]
     assert saved["blocks"][1]["music"][0]["ufid"] == ufid and len(saved["blocks"][1]["music"]) == 2
-    assert saved["blocks"][1]["light"] == {"scene": "Fire", "brightness": 80} and saved["blocks"][1]["effects"][0]["loop"]
+    assert saved["blocks"][1]["effects"][0]["loop"]
 
     # private: only the owner (and the SuperAdmin) see it
     client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})

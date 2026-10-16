@@ -6,11 +6,9 @@
   import { adventures, change, deleteBlock, enterBlock, flushSave, playBlockMusic, playSongLink, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
   import { data } from '../../lib/stores/data.svelte';
   import { effects, loadEffects } from '../../lib/stores/effects.svelte';
-  import { cueLight } from '../../lib/stores/player.svelte';
   import { askConfirm, errorToast, openDialog, openMenu, toast } from '../../lib/stores/ui.svelte';
-  import type { LightSetting, MusicRef } from '../../lib/types';
+  import type { MusicRef } from '../../lib/types';
   import Icon from '../Icon.svelte';
-  import LightEditor from '../dialogs/LightEditor.svelte';
   import AiDialog from './AiDialog.svelte';
   import PickMusicDialog from './PickMusicDialog.svelte';
 
@@ -19,23 +17,7 @@
 
   let preview = $state(false);
   let notes = $state<HTMLTextAreaElement | null>(null);
-  let light = $state<LightSetting | null>(null);
   let linkTarget = $state('');
-
-  // the light of the selected block is edited in a local copy (the editor binds to it) and written back when it differs
-  let lightOf = '';
-  $effect(() => {
-    const saved = block?.light ? $state.snapshot(block.light) : null;
-    // the server leaves out what is not set
-    light = saved ? { scene: saved.scene ?? null, brightness: saved.brightness ?? null, temperature: saved.temperature ?? null, color: saved.color ?? null } : null;
-    lightOf = JSON.stringify(light);
-  });
-  $effect(() => {
-    const value = $state.snapshot(light);
-    if (!block || JSON.stringify(value) === lightOf) return;
-    lightOf = JSON.stringify(value);
-    change(() => (block.light = value));
-  });
 
   $effect(() => {
     if (!effects.list.length && !effects.loading) void loadEffects();
@@ -191,11 +173,10 @@
     const id = block.id;
     const text = !!(data.settings?.groqConfigured || data.settings?.assistantConfigured);
     const sounds = !!data.settings?.soundGenConfigured;
-    const open = (task: 'draft' | 'songs' | 'light' | 'sound') => openDialog(AiDialog, { task, blockId: id });
+    const open = (task: 'draft' | 'songs' | 'sound') => openDialog(AiDialog, { task, blockId: id });
     openMenu(event, [
       { label: t('Draft the notes…'), icon: 'edit', disabled: !text, action: () => open('draft') },
       { label: t('Suggest songs…'), icon: 'music', disabled: !text, action: () => open('songs') },
-      { label: t('Suggest a light…'), icon: 'bulb', disabled: !text, action: () => open('light') },
       { label: t('Create a sound…'), icon: 'waves', disabled: !sounds, action: () => open('sound') },
     ]);
   }
@@ -313,15 +294,6 @@
       {:else}
         <span class="muted small">{t('Ambient loops or one-shot effects of the effects folder.')}</span>
       {/each}
-    </section>
-
-    <section>
-      <div class="bar">
-        <span class="label-xs">{t('Light')}</span>
-        <span class="grow"></span>
-        {#if block.light}<button class="btn sm ghost" onclick={() => cueLight(block.light as LightSetting)}>{t('Preview')}</button>{/if}
-      </div>
-      {#if editable}<LightEditor bind:value={light} />{:else if !block.light}<span class="muted small">{t('None')}</span>{/if}
     </section>
 
     <section>

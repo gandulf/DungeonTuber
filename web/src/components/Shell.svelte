@@ -42,7 +42,7 @@
       void flushSave();
     }
   });
-  const showRight = $derived(prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false));
+  const showRight = $derived(prefs.rightOpen && (prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false)));
 
   // a flyout closes with a swipe towards its own edge
   let swipeStart: { x: number; y: number } | null = null;
@@ -154,8 +154,10 @@
         </aside>
       {/if}
     {:else}
-      <aside class="sidebar" style:width="{prefs.leftWidth}px" data-tour="tree"><Sidebar /></aside>
-      <Splitter bind:size={prefs.leftWidth} min={200} max={480} onchange={savePrefs} />
+      {#if prefs.leftOpen}
+        <aside class="sidebar" style:width="{prefs.leftWidth}px" data-tour="tree"><Sidebar /></aside>
+        <Splitter bind:size={prefs.leftWidth} min={200} max={480} onchange={savePrefs} />
+      {/if}
     {/if}
 
     <main class="main">

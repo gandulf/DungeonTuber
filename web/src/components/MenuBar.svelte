@@ -3,7 +3,7 @@
   import { t } from '../lib/i18n.svelte';
   import { assistant, toggleAssistant } from '../lib/stores/assistant.svelte';
   import { data } from '../lib/stores/data.svelte';
-  import { prefs } from '../lib/prefs.svelte';
+  import { prefs, savePrefs } from '../lib/prefs.svelte';
   import { library, setGlobal } from '../lib/stores/library.svelte';
   import { openMenu, ui } from '../lib/stores/ui.svelte';
   import Icon from './Icon.svelte';
@@ -27,6 +27,11 @@
     if (showLabel && buttonWidth > ICON_ONLY) labelRoom = buttonWidth - ICON_ONLY;
   });
 
+  function togglePanel(side: 'leftOpen' | 'rightOpen') {
+    prefs[side] = !prefs[side];
+    savePrefs();
+  }
+
   function showMenu(event: MouseEvent) {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     event.stopPropagation();
@@ -35,6 +40,10 @@
 </script>
 
 <header class="topbar">
+  {#if !ui.narrow}
+    <button class="icon-btn" class:active={prefs.leftOpen} title={prefs.leftOpen ? t('Hide the library') : t('Show the library')} aria-label={t('Library')} aria-pressed={prefs.leftOpen}
+            onclick={() => togglePanel('leftOpen')}><Icon name="panel-left" size={18} /></button>
+  {/if}
   {#if ui.narrow}
     <button class="icon-btn" title={t('Library')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'tree' ? null : 'tree'; }}><Icon name="library" size={18} /></button>
   {/if}
@@ -60,6 +69,10 @@
     </button>
   {/if}
   <button class="icon-btn" title={t('Menu')} data-tour="menubar" onclick={showMenu}><Icon name="menu" size={18} /></button>
+  {#if !ui.narrow && hasSidePanel}
+    <button class="icon-btn" class:active={prefs.rightOpen} title={prefs.rightOpen ? t('Hide effects and lights') : t('Show effects and lights')} aria-label={t('Effects and lights')}
+            aria-pressed={prefs.rightOpen} onclick={() => togglePanel('rightOpen')}><Icon name="panel-right" size={18} /></button>
+  {/if}
   {#if ui.narrow && hasSidePanel}
     <button class="icon-btn" title={t('Lights')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'side' ? null : 'side'; }}><Icon name="bulb" size={18} /></button>
   {/if}

@@ -40,7 +40,7 @@
       </span>
     </button>
   {:else}
-    <span class="empty muted">{t('Plan a story with notes, music and lights for every scene.')}</span>
+    <span class="empty muted">{t('Plan a story with notes and music for every scene.')}</span>
   {/each}
 </div>
 

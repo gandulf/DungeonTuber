@@ -1,4 +1,4 @@
-"""Adventures: blocks of notes with music, effects and lights, linked into a path. Private ones belong to their owner, public ones are
+"""Adventures: blocks of notes with music and effects, linked into a path. Private ones belong to their owner, public ones are
 visible to everybody; only the owner (and the SuperAdmin) changes them."""
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel

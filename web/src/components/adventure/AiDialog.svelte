@@ -9,16 +9,15 @@
   import { data } from '../../lib/stores/data.svelte';
   import { effects, loadEffects } from '../../lib/stores/effects.svelte';
   import { globalTab, loadGlobal } from '../../lib/stores/library.svelte';
-  import { lights } from '../../lib/stores/lights.svelte';
-  import { cueLight, playQueue } from '../../lib/stores/player.svelte';
+  import { playQueue } from '../../lib/stores/player.svelte';
   import { closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
-  import type { AssistantReply, LightSetting, SoundDescription, SoundKind, Track } from '../../lib/types';
+  import type { AssistantReply, SoundDescription, SoundKind, Track } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Modal from '../dialogs/Modal.svelte';
 
-  /** The AI helpers of a block: `draft` writes its notes, `songs` ranks the songs of the library for it, `light` chooses a light, `sound` creates an
+  /** The AI helpers of a block: `draft` writes its notes, `songs` ranks the songs of the library for it, `sound` creates an
    *  ambience, an effect or background music with the sound generation. */
-  let { task, blockId }: { task: 'draft' | 'songs' | 'light' | 'sound'; blockId: string } = $props();
+  let { task, blockId }: { task: 'draft' | 'songs' | 'sound'; blockId: string } = $props();
 
   const adventure = $derived(adventures.current!);
   const block = $derived(adventure.blocks.find((item) => item.id === blockId) ?? null);
@@ -32,13 +31,12 @@
 
   let draft = $state('');
   let ranked = $state<Ranked[]>([]);
-  let light = $state<LightSetting | null>(null);
   let kind = $state<SoundKind>('ambience');
   let sound = $state<SoundDescription | null>(null);
   let made = $state<Track | null>(null);
 
   const titles = {
-    draft: 'Draft the notes', songs: 'Suggest songs', light: 'Suggest a light', sound: 'Create a sound',
+    draft: 'Draft the notes', songs: 'Suggest songs', sound: 'Create a sound',
   };
 
   /** Asks the assistant; a follow-up (refine) continues the conversation, so "darker" changes the last answer. */
@@ -68,14 +66,8 @@
     if (!followUp) history = [];
     if (task === 'draft') {
       const context = followUp ? text : `Adventure: ${adventure.title}\nScene: ${block.title}\nNotes so far:\n${plainText(block.markdown) || '(none)'}\n\n${text}`;
-      const reply = await ask(context, 'story', { task: 'draft' });
+      const reply = await ask(context, 'story', undefined);
       if (reply?.text) draft = reply.text;
-    } else if (task === 'light') {
-      const reply = await ask(text, 'story', { task: 'light', scenes: lights.scenes.filter((scene) => !/^Custom Mode/i.test(scene)) });
-      if (reply) {
-        light = reply.light ?? null;
-        if (!light) message = t('No usable light was suggested. Try describing the mood.');
-      }
     } else if (task === 'songs') {
       await loadGlobal();
       const reply = await ask(text, 'smart', tagsAndGenres(globalTab.tracks));
@@ -95,13 +87,6 @@
   function useDraft(append: boolean) {
     if (!block || !draft.trim()) return;
     change(() => (block.markdown = append && block.markdown.trim() ? `${block.markdown.trimEnd()}\n\n${draft.trim()}` : draft.trim()));
-    closeDialog();
-  }
-
-  function useLight() {
-    if (!block || !light) return;
-    const chosen = { ...light };
-    change(() => (block.light = chosen));
     closeDialog();
   }
 
@@ -145,7 +130,6 @@
   }
 
   const aiReady = $derived(!!(data.settings?.groqConfigured || data.settings?.assistantConfigured));
-  const lightLabel = (value: LightSetting) => value.scene ? value.scene : value.color ? value.color : value.temperature ? `${value.temperature} K` : '';
 </script>
 
 <Modal title={t(titles[task])} onclose={closeDialog} width="640px">
@@ -175,13 +159,6 @@
 
       {#if task === 'draft' && draft}
         <textarea class="result" rows="10" bind:value={draft}></textarea>
-      {:else if task === 'light' && light}
-        <div class="light">
-          <span class="swatch" style:background={light.color ?? (light.temperature ? `hsl(35 90% ${Math.max(40, 100 - (light.temperature - 2200) / 60)}%)` : 'var(--accent)')}></span>
-          <span>{lightLabel(light)} · {Math.round(((light.brightness ?? 255) / 255) * 100)}%</span>
-          <span class="grow"></span>
-          <button class="btn sm" onclick={() => cueLight(light)}>{t('Preview')}</button>
-        </div>
       {:else if task === 'songs' && ranked.length}
         <div class="songs">
           {#each ranked as item (item.track.id)}
@@ -206,7 +183,7 @@
         </div>
       {/if}
 
-      {#if (task === 'draft' && draft) || (task === 'light' && light) || (task === 'songs' && ranked.length)}
+      {#if (task === 'draft' && draft) || (task === 'songs' && ranked.length)}
         <div class="row">
           <input type="text" bind:value={refine} placeholder={t('Change it: darker, shorter, more tense…')} onkeydown={(e) => e.key === 'Enter' && void run(true)} />
           <button class="btn" disabled={busy || !refine.trim()} onclick={() => void run(true)}>{t('Change')}</button>
@@ -218,8 +195,6 @@
     {#if task === 'draft' && draft}
       <button class="btn" onclick={() => useDraft(true)}>{t('Append to notes')}</button>
       <button class="btn primary" onclick={() => useDraft(false)}>{t('Replace notes')}</button>
-    {:else if task === 'light' && light}
-      <button class="btn primary" onclick={useLight}>{t('Use for this block')}</button>
     {:else}
       <button class="btn" onclick={closeDialog}>{t('Close')}</button>
     {/if}
@@ -235,10 +210,7 @@
   .btn { display: inline-flex; align-items: center; gap: 6px; }
   .message { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
   .small { font-size: var(--fs-xs); }
-  .grow { flex: 1; }
   .result { min-height: 180px; line-height: 1.5; }
-  .light { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
-  .swatch { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border-strong, var(--border)); flex: none; }
   .songs { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
   .song { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; }
   .song:hover { background: var(--hover); }

@@ -1,4 +1,4 @@
-"""Adventures: blocks of formatted notes with music, effects and lights, linked into a path (see docs/ADVENTURES_PLAN.md).
+"""Adventures: blocks of formatted notes with music and effects, linked into a path (see docs/ADVENTURES_PLAN.md).
 
 An adventure is a plain dict (JSON in a `.dtadv` file). `normalize` turns whatever a client sends into a valid one, so the stored
 files never hold unknown fields, dangling links or oversized text.
@@ -16,8 +16,6 @@ MAX_TITLE = 200
 MAX_REFS = 100
 MAX_IMAGES = 50
 MAX_FIELD = 1000
-
-LIGHT_FIELDS = {"scene": str, "brightness": int, "temperature": int, "color": str}
 
 
 def new_id() -> str:
@@ -56,19 +54,6 @@ def normalize_effects(raw: object) -> list[dict]:
     return result
 
 
-def normalize_light(raw: object) -> dict | None:
-    if not isinstance(raw, dict):
-        return None
-    light = {}
-    for key, kind in LIGHT_FIELDS.items():
-        value = raw.get(key)
-        if kind is int and isinstance(value, (int, float)) and not isinstance(value, bool):
-            light[key] = int(value)
-        elif kind is str and isinstance(value, str) and value:
-            light[key] = value[:MAX_FIELD]
-    return light or None
-
-
 def normalize_block(raw: dict) -> dict:
     pos = raw.get("pos")
     return {
@@ -80,7 +65,6 @@ def normalize_block(raw: dict) -> dict:
         "autoplay": bool(raw.get("autoplay", True)),
         "music": normalize_music(raw.get("music")),
         "effects": normalize_effects(raw.get("effects")),
-        "light": normalize_light(raw.get("light")),
         "images": [_text(image) for image in (raw.get("images") or [])[:MAX_IMAGES] if _text(image)] if isinstance(raw.get("images"), list) else [],
     }
 

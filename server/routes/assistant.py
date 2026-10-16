@@ -26,8 +26,6 @@ class SearchContext(BaseModel):
     duration: int | None = Field(default=None, ge=10, le=600)  # compose mode: the length of the piece in seconds (for the lyrics)
     language: str | None = Field(default=None, pattern=r"^[a-z]{2,3}$")  # compose mode: the language of the lyrics
     kind: Literal["sfx", "ambience", "music"] | None = None  # effects mode: the kind of sound
-    task: Literal["draft", "light"] | None = None  # story mode: write the notes of a block or choose its light
-    scenes: list[str] = Field(default=[], max_length=200)  # story mode: the scenes of the bulbs a light may use
 
 
 class ChatRequest(BaseModel):

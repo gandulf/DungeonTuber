@@ -8,7 +8,7 @@ export function newId(): string {
 }
 
 export function newBlock(title = '', index = 0): AdventureBlock {
-  return { id: newId(), title, markdown: '', played: false, pos: [index * 40, index * 40], autoplay: true, music: [], effects: [], light: null, images: [] };
+  return { id: newId(), title, markdown: '', played: false, pos: [index * 40, index * 40], autoplay: true, music: [], effects: [], images: [] };
 }
 
 /** Size of a block in the graph and the space between blocks (world units). */

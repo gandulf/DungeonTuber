@@ -152,7 +152,7 @@ export const api = {
 
   // AI assistant (song suggestions)
   assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' | 'compose' | 'effects' | 'story' = 'music',
-    context?: { tags?: string[]; genres?: string[]; instrumental?: boolean; duration?: number; language?: string; kind?: string; task?: 'draft' | 'light'; scenes?: string[] }) =>
+    context?: { tags?: string[]; genres?: string[]; instrumental?: boolean; duration?: number; language?: string; kind?: string }) =>
     request<AssistantReply>('POST', '/api/assistant/chat', { messages, mode, context }),
   assistantVerify: (songs: { title: string; artist: string }[]) => request<{ results: SongCheck[] }>('POST', '/api/assistant/verify', { songs }),
   assistantConfig: () => get<AssistantStatus>('/api/assistant/config'),

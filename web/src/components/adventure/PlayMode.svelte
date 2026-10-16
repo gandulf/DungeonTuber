@@ -2,8 +2,8 @@
   import { blockById, defaultNext, linksFrom, refKey, startBlock } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
   import { blockLinkTarget, renderNotes, songLinkTarget } from '../../lib/notes';
-  import { adventures, enterBlock, playBlockMusic, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
-  import { cueLight, playQueue } from '../../lib/stores/player.svelte';
+  import { adventures, enterBlock, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
+  import { player, playQueue } from '../../lib/stores/player.svelte';
   import type { MusicRef } from '../../lib/types';
   import Icon from '../Icon.svelte';
 
@@ -12,6 +12,24 @@
   const start = $derived(startBlock(adventure));
   const choices = $derived(block ? linksFrom(adventure, block.id) : []);
   const preferred = $derived(block ? defaultNext(adventure, block.id) : null);
+
+  // the songs of every playlist of the block, to show which button is playing
+  let members = $state<Record<string, Set<string>>>({});
+  $effect(() => {
+    const refs = block?.music.filter((ref) => ref.type === 'playlist') ?? [];
+    let stale = false;
+    void (async () => {
+      const next: Record<string, Set<string>> = {};
+      for (const ref of refs) next[refKey(ref)] = new Set(((await refTracks(ref)) ?? []).map((track) => track.id));
+      if (!stale) members = next;
+    })();
+    return () => (stale = true);
+  });
+
+  /** The song or playlist of the button is what the player plays right now. */
+  const playingRef = (ref: MusicRef) =>
+    player.playing && !!player.track && (ref.type === 'song' ? player.track.ufid === ref.ufid : !!members[refKey(ref)]?.has(player.track.id));
+  const effectPlaying = (path: string) => player.effectPlaying && player.effect?.path === path;
 
   async function playRef(ref: MusicRef) {
     const tracks = await refTracks(ref);
@@ -67,20 +85,16 @@
 
     <div class="tools">
       {#each block.music as ref (refKey(ref))}
-        <button class="chip" disabled={ref.type === 'playlist' && ref.unavailable} onclick={() => void playRef(ref)}
+        <button class="chip" class:on={playingRef(ref)} disabled={ref.type === 'playlist' && ref.unavailable} onclick={() => void playRef(ref)}
                 title={ref.type === 'playlist' && ref.unavailable ? t('unavailable') : ''}>
-          <Icon name={ref.type === 'song' ? 'music' : 'playlist'} size={14} />{ref.title || ref.path}
+          <Icon name={playingRef(ref) ? 'volume' : ref.type === 'song' ? 'music' : 'playlist'} size={14} />{ref.title || ref.path}
         </button>
       {/each}
-      {#if block.music.length > 1}
-        <button class="chip" onclick={() => void playBlockMusic(block)}><Icon name="play" size={14} />{t('All')}</button>
-      {/if}
       {#each block.effects as effect (effect.path)}
-        <button class="chip" onclick={() => void startEffect(effect)}><Icon name="waves" size={14} />{effect.name || effect.path}</button>
+        <button class="chip" class:on={effectPlaying(effect.path)} onclick={() => void startEffect(effect)}>
+          <Icon name={effectPlaying(effect.path) ? 'volume' : 'waves'} size={14} />{effect.name || effect.path}
+        </button>
       {/each}
-      {#if block.light}
-        <button class="chip" onclick={() => cueLight(block.light)}><Icon name="bulb" size={14} />{t('Light')}</button>
-      {/if}
     </div>
 
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->

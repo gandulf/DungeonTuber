@@ -1,6 +1,6 @@
 # Adventures (story blocks) – plan
 
-An *adventure* organizes a campaign: blocks of formatted notes, each with linked music, effects and lights, connected into a
+An *adventure* organizes a campaign: blocks of formatted notes, each with linked music and effects, connected into a
 path. Songs and playlists stay the building blocks; adventures only reference them.
 
 ## Decisions
@@ -17,8 +17,8 @@ path. Songs and playlists stay the building blocks; adventures only reference th
 | Player | The persistent player dock plays block music through the existing queue; block music uses the main player's options (loop, shuffle, ...). Autoplay on entering a block is a per-block flag (default on). |
 | Text | Markdown rendered with `marked` (approved), sanitized. `[[Block title]]` links are stored as block ids. |
 | Effects | Ambient (looped) or one-shot sound effects per block, optionally started on entry. |
-| Lights | Per block, reusing `core.lights.LightSetting`. |
-| AI | New `story` mode of the assistant: song suggestions, light suggestions, text drafting, ambient/effect generation. |
+| Lights | Not part of blocks: songs already carry the light (see `core/mp3.py`). |
+| AI | New `story` mode of the assistant: song suggestions, text drafting, ambient/effect generation. |
 
 ## Data model (`.dtadv`)
 
@@ -36,7 +36,6 @@ path. Songs and playlists stay the building blocks; adventures only reference th
       "music": [{"type": "song", "ufid": "uuid", "path": "last/known/path.mp3", "title": "Tavern"},
                 {"type": "playlist", "id": "uuid", "path": "lists/tavern.m3u"}],
       "effects": [{"ufid": "uuid", "path": "...", "loop": true, "autostart": true}],
-      "light": {},
       "images": ["Arrival.assets/map.png"]
     }
   ],
@@ -65,9 +64,8 @@ first available one plays. A missing target shows a "missing, relink" chip and u
 - Visibility: public adventures are readable by everyone; only the owner edits. **Publishing** warns about referenced
   private playlists; they then show as unavailable to other users.
 - Web: new main tab and sidebar list of adventures; block list editor (title, markdown editor with formatting toolbar and
-  preview, music/effects/light pickers, "link to ..." picker for next/branches, played toggle); autosave.
-- Play mode: current block large, next/branch buttons, entering a block starts music (if autoplay), applies the light
-  setting, starts auto effects; player dock stays; manual played marker.
+  preview, music/effects pickers, "link to ..." picker for next/branches, played toggle); autosave.
+- Play mode: current block large, next/branch buttons, entering a block starts music (if autoplay), starts auto effects; player dock stays; manual played marker.
 - i18n strings in every `core/locales/*.json`, frontend tests for reference resolution and navigation, server tests for
   permissions and the publish warning.
 
@@ -79,7 +77,6 @@ first available one plays. A missing target shows a "missing, relink" chip and u
 
 ### V3 – AI assistance (assistant `story` mode)
 - (a) Song suggestions from a block's text using tags, moods and scoring (`core/scoring.py`, kept in sync with `web/src/lib/scoring.ts`).
-- (b) Light suggestion from the text (reuses the light agent).
 - (c) Draft or expand block text from bullet points (read-aloud text, descriptions).
 - (f) Generate ambient music or sound effects from a block's text via `musicgen`/`soundgen`; result attaches to the block.
 - Always a suggestion the user accepts; nothing is changed silently.

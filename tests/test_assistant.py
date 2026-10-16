@@ -425,27 +425,14 @@ def test_the_acoustid_key_can_come_from_the_environment(client, monkeypatch):
     assert (status["configured"], status["keySource"], status["keyHint"]) == (True, "environment", "4444")
 
 
-def test_the_story_mode_drafts_notes_and_chooses_a_light(client, gemini):
+def test_the_story_mode_drafts_notes(client, gemini):
     calls, answers = gemini
     client.put("/api/assistant/config", json={"key": "gsk_secret_1234", "generalInstructions": "We play DSA."})
     answers.append(json.dumps({"message": "Hier ist ein Entwurf", "text": "Ihr betretet die **Gruft**.\n\n- Ein Wächter"}))
-    draft = client.post("/api/assistant/chat", json={"mode": "story", "context": {"task": "draft"},
+    draft = client.post("/api/assistant/chat", json={"mode": "story", "context": None,
                                                      "messages": [{"role": "user", "content": "Gruft, Wächter"}]}).json()
     assert draft["text"] == "Ihr betretet die **Gruft**.\n\n- Ein Wächter" and draft["message"] == "Hier ist ein Entwurf" and "light" not in draft
     system = calls[0]["body"]["systemInstruction"]["parts"][0]["text"]
     assert system.startswith(assistant.STORY_DRAFT_PROMPT) and system.endswith("We play DSA.")
     assert set(calls[0]["body"]["generationConfig"]["responseSchema"]["properties"]) == {"message", "text"}
 
-    answers.append(json.dumps({"message": "Flackernd", "scene": "fireplace", "color": "#112233", "temperature": 3000, "brightness": 20}))
-    result = client.post("/api/assistant/chat", json={"mode": "story", "context": {"task": "light", "scenes": ["Ocean", "Fireplace"]},
-                                                      "messages": [{"role": "user", "content": "Taverne am Feuer"}]}).json()
-    assert result["light"] == {"scene": "Fireplace", "brightness": 20, "temperature": None, "color": None}  # a scene of the bulbs wins
-    assert "Ocean, Fireplace" in calls[1]["body"]["systemInstruction"]["parts"][0]["text"]
-
-
-def test_a_story_light_is_checked():
-    scenes = ["Ocean"]
-    assert assistant.to_story_light({"scene": "Unknown", "color": "#FF0000", "brightness": 999}, scenes) == {"scene": None, "brightness": 255, "temperature": None, "color": "#ff0000"}
-    assert assistant.to_story_light({"color": "red", "temperature": 3000, "brightness": 1}, scenes) == {"scene": None, "brightness": 10, "temperature": 3000, "color": None}
-    assert assistant.to_story_light({"temperature": 100}, scenes) is None
-    assert assistant.to_story_light({}, scenes) is None

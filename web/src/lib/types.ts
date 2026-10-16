@@ -187,8 +187,6 @@ export interface AssistantReply {
   sound?: SoundDescription;
   /** The notes drafted in the story mode. */
   text?: string;
-  /** The light chosen in the story mode (null when the model chose nothing usable). */
-  light?: LightSetting | null;
 }
 
 /** What the sound generation creates: a sound effect, an ambience (a steady background of a place) or instrumental music. */
@@ -442,7 +440,6 @@ export interface AdventureBlock {
   autoplay: boolean;
   music: MusicRef[];
   effects: EffectRef[];
-  light: LightSetting | null;
   images: string[];
 }
 

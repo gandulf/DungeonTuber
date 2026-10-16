@@ -1,4 +1,4 @@
-// The open adventure: editing (autosaved), the path through its blocks in play mode and what a block starts (music, effects, lights).
+// The open adventure: editing (autosaved), the path through its blocks in play mode and what a block starts (music, effects).
 // Adventures are tabs next to folders and playlists (see stores/library.svelte.ts); the one of the active tab is `adventures.current`.
 import { api, pathToId } from '../api';
 import { appendBlock, removeBlock } from '../adventures';
@@ -7,7 +7,7 @@ import { prefs } from '../prefs.svelte';
 import type { Adventure, AdventureBlock, AdventureSummary, EffectRef, MusicRef, PlaylistRef, SongRef, Track } from '../types';
 import { effects, loadEffects } from './effects.svelte';
 import { closeTab, library, openTab } from './library.svelte';
-import { cueLight, playEffect, playQueue } from './player.svelte';
+import { playEffect, playQueue } from './player.svelte';
 import { askConfirm, askText, errorToast, toast } from './ui.svelte';
 
 export const adventures = $state({
@@ -257,7 +257,7 @@ export async function startEffect(ref: EffectRef) {
   playEffect(effect);
 }
 
-/** Shows a block in play mode and starts what it holds: music (unless the block does not autoplay), effects that start by themselves, and the light. */
+/** Shows a block in play mode and starts what it holds: music (unless the block does not autoplay), and effects that start by themselves. */
 export async function enterBlock(id: string, remember = true) {
   const adventure = adventures.current;
   const block = adventure?.blocks.find((item) => item.id === id);
@@ -265,7 +265,6 @@ export async function enterBlock(id: string, remember = true) {
   if (remember && adventures.playing && adventures.playing !== id) adventures.history.push(adventures.playing);
   adventures.playing = id;
   adventures.mode = 'play';
-  if (block.light) cueLight(block.light);
   for (const effect of block.effects) if (effect.autostart) void startEffect(effect);
   if (block.autoplay && block.music.length) await playBlockMusic(block);
 }
