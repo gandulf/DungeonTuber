@@ -11,10 +11,18 @@ export function newBlock(title = '', index = 0): AdventureBlock {
   return { id: newId(), title, markdown: '', played: false, pos: [index * 40, index * 40], autoplay: true, music: [], effects: [], light: null, images: [] };
 }
 
-/** Adds a block at the end of the list and links the block that was last to it (without a label, so it is the default next block). */
+/** Size of a block in the graph and the space between blocks (world units). */
+export const NODE_W = 170;
+export const NODE_H = 56;
+const GAP_X = 80;
+const GAP_Y = 30;
+
+/** Adds a block at the end of the list, to the right of the one that was last, and links that block to it (without a label, so it is the
+ *  default next block). */
 export function appendBlock(graph: Graph, title = ''): AdventureBlock {
   const last = graph.blocks[graph.blocks.length - 1];
   const block = newBlock(title, graph.blocks.length);
+  if (last) block.pos = [last.pos[0] + NODE_W + GAP_X, last.pos[1]];
   graph.blocks.push(block);
   if (last) addLink(graph, last.id, block.id);
   return block;
@@ -91,4 +99,30 @@ export function addMusic(block: AdventureBlock, ref: MusicRef): boolean {
   if (block.music.some((item) => refKey(item) === refKey(ref))) return false;
   block.music.push(ref);
   return true;
+}
+
+/** Arranges the blocks in columns by their distance from the first block (blocks nothing leads to start their own tree below). */
+export function autoLayout(graph: Graph) {
+  const depth = new Map<string, number>();
+  for (const root of graph.blocks) {
+    if (depth.has(root.id)) continue;
+    depth.set(root.id, 0);
+    const queue = [root.id];
+    while (queue.length) {
+      const id = queue.shift()!;
+      for (const link of linksFrom(graph, id)) {
+        if (!depth.has(link.to)) {
+          depth.set(link.to, depth.get(id)! + 1);
+          queue.push(link.to);
+        }
+      }
+    }
+  }
+  const rows = new Map<number, number>();
+  for (const block of graph.blocks) {
+    const column = depth.get(block.id) ?? 0;
+    const row = rows.get(column) ?? 0;
+    rows.set(column, row + 1);
+    block.pos = [column * (NODE_W + GAP_X), row * (NODE_H + GAP_Y)];
+  }
 }

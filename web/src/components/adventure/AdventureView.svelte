@@ -4,8 +4,10 @@
   import { addBlock, adventures, change, toggleVisibility } from '../../lib/stores/adventure.svelte';
   import Icon from '../Icon.svelte';
   import BlockEditor from './BlockEditor.svelte';
+  import GraphView from './GraphView.svelte';
   import PlayMode from './PlayMode.svelte';
 
+  let layout = $state<'list' | 'graph'>('list');
   const adventure = $derived(adventures.current);
   const stranded = $derived(adventure ? new Set(unreachable(adventure).map((block) => block.id)) : new Set<string>());
 </script>
@@ -19,6 +21,12 @@
               title={adventure.visibility === 'public' ? t('Everyone can see this adventure. Click to make it private.') : t('Only you can see this adventure. Click to publish it.')}>
         <Icon name={adventure.visibility === 'public' ? 'users' : 'lock'} size={14} />{adventure.visibility === 'public' ? t('Public') : t('Private')}
       </button>
+      {#if adventures.mode === 'edit'}
+        <div class="seg">
+          <button class:on={layout === 'list'} onclick={() => (layout = 'list')}><Icon name="list" size={13} /> {t('List')}</button>
+          <button class:on={layout === 'graph'} onclick={() => (layout = 'graph')}><Icon name="tree" size={13} /> {t('Graph')}</button>
+        </div>
+      {/if}
       <div class="seg">
         {#if adventure.editable}<button class:on={adventures.mode === 'edit'} onclick={() => (adventures.mode = 'edit')}><Icon name="edit" size={13} /> {t('Edit')}</button>{/if}
         <button class:on={adventures.mode === 'play'} onclick={() => (adventures.mode = 'play')}><Icon name="play" size={13} /> {t('Play')}</button>
@@ -28,7 +36,10 @@
     {#if adventures.mode === 'play'}
       <div class="scroll"><PlayMode /></div>
     {:else}
-      <div class="edit">
+      <div class="edit" class:graph={layout === 'graph'}>
+        {#if layout === 'graph'}
+          <GraphView />
+        {:else}
         <nav class="blocks" aria-label={t('Blocks')}>
           {#each adventure.blocks as block, index (block.id)}
             <div class="block" class:active={adventures.selected === block.id}>
@@ -45,6 +56,7 @@
           {/each}
           {#if adventure.editable}<button class="btn sm add" onclick={() => addBlock()}><Icon name="plus" size={13} />{t('Add block')}</button>{/if}
         </nav>
+        {/if}
         <div class="scroll"><BlockEditor /></div>
       </div>
     {/if}
@@ -59,6 +71,7 @@
   .btn { display: inline-flex; align-items: center; gap: 6px; }
   .seg button { display: inline-flex; align-items: center; gap: 5px; }
   .edit { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
+  .edit.graph { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
   .scroll { min-height: 0; overflow-y: auto; padding-bottom: 24px; }
   .blocks { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
   .block { display: flex; align-items: center; border-radius: 9px; }

@@ -847,5 +847,19 @@
   "This song was not found in the library.": "This song was not found in the library.",
   "Link a song": "Link a song",
   "Song link": "Song link",
-  "Link the selected text to a song": "Link the selected text to a song"
+  "Link the selected text to a song": "Link the selected text to a song",
+  "{0} unused image(s) removed.": "{0} unused image(s) removed.",
+  "Insert an image": "Insert an image",
+  "Clean up images": "Clean up images",
+  "Deletes the images no block uses any more": "Deletes the images no block uses any more",
+  "Arrange": "Arrange",
+  "Arrange the blocks by their path": "Arrange the blocks by their path",
+  "Zoom out": "Zoom out",
+  "Zoom in": "Zoom in",
+  "Fit": "Fit",
+  "Show all blocks": "Show all blocks",
+  "Drag to another block to link it": "Drag to another block to link it",
+  "Label (a choice)": "Label (a choice)",
+  "Remove link": "Remove link",
+  "Graph": "Graph"
 }

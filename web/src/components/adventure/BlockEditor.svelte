@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { api } from '../../lib/api';
   import { addLink, addMusic, linksFrom, linksTo, refKey, removeLink } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
-  import { applyBlockLink, applyFormat, applySongLink, blockLinkTarget, renderNotes, songLinkTarget, type Format } from '../../lib/notes';
-  import { adventures, change, deleteBlock, enterBlock, playBlockMusic, playSongLink, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
+  import { applyBlockLink, applyFormat, applyImage, applySongLink, applySuggestion, blockLinkTarget, blockSuggestions, renderNotes, songLinkTarget, type BlockRef, type Edit, type Format } from '../../lib/notes';
+  import { adventures, change, deleteBlock, enterBlock, flushSave, playBlockMusic, playSongLink, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
   import { effects, loadEffects } from '../../lib/stores/effects.svelte';
   import { cueLight } from '../../lib/stores/player.svelte';
-  import { askConfirm, openDialog } from '../../lib/stores/ui.svelte';
+  import { askConfirm, errorToast, openDialog, toast } from '../../lib/stores/ui.svelte';
   import type { LightSetting, MusicRef } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import LightEditor from '../dialogs/LightEditor.svelte';
@@ -43,23 +44,92 @@
   const incoming = $derived(block ? linksTo(adventure, block.id) : []);
   const titleOf = (id: string) => adventure.blocks.find((item) => item.id === id)?.title || t('Untitled');
 
-  function format(kind: Format) {
+  let suggest = $state<{ start: number; matches: BlockRef[]; index: number } | null>(null);
+  let fileInput = $state<HTMLInputElement | null>(null);
+
+  /** Puts an edit of the notes into the textarea and the block. */
+  function apply(edit: Edit) {
     if (!notes || !block) return;
-    const edit = applyFormat(notes.value, notes.selectionStart, notes.selectionEnd, kind);
     change(() => (block.markdown = edit.text));
     notes.value = edit.text;
     notes.focus();
     notes.setSelectionRange(edit.start, edit.end);
   }
 
+  function format(kind: Format) {
+    if (notes) apply(applyFormat(notes.value, notes.selectionStart, notes.selectionEnd, kind));
+  }
+
   function linkToBlock(id: string) {
     const target = adventure.blocks.find((item) => item.id === id);
-    if (!notes || !block || !target) return;
-    const edit = applyBlockLink(notes.value, notes.selectionStart, notes.selectionEnd, target);
-    change(() => (block.markdown = edit.text));
-    notes.value = edit.text;
-    notes.focus();
-    notes.setSelectionRange(edit.start, edit.end);
+    if (notes && target) apply(applyBlockLink(notes.value, notes.selectionStart, notes.selectionEnd, target));
+  }
+
+  /** While `[[` is typed, the blocks that fit are offered; a choice becomes a link that survives renaming the block. */
+  function refreshSuggest() {
+    if (!notes) return;
+    const found = blockSuggestions(notes.value, notes.selectionStart, others);
+    suggest = found ? { ...found, index: Math.min(suggest?.index ?? 0, found.matches.length - 1) } : null;
+  }
+
+  function chooseSuggestion(target: BlockRef) {
+    if (!notes || !suggest) return;
+    const edit = applySuggestion(notes.value, suggest.start, notes.selectionStart, target);
+    suggest = null;
+    apply(edit);
+  }
+
+  function notesKey(event: KeyboardEvent) {
+    if (!suggest) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      suggest.index = (suggest.index + (event.key === 'ArrowDown' ? 1 : suggest.matches.length - 1)) % suggest.matches.length;
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      chooseSuggestion(suggest.matches[suggest.index]);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      suggest = null;
+    }
+  }
+
+  async function uploadImage(file: File) {
+    if (!notes || !block) return;
+    const [start, end] = [notes.selectionStart, notes.selectionEnd];
+    try {
+      const { name } = await api.uploadAdventureImage(adventure.id, file);
+      if (notes) apply(applyImage(notes.value, start, end, name, file.name.replace(/\.[^.]+$/, '')));
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
+  function imageOf(files: FileList | null | undefined): File | undefined {
+    return [...(files ?? [])].find((file) => file.type.startsWith('image/'));
+  }
+
+  function pasted(event: ClipboardEvent) {
+    const file = imageOf(event.clipboardData?.files);
+    if (!file) return;
+    event.preventDefault();
+    void uploadImage(file);
+  }
+
+  function dropped(event: DragEvent) {
+    const file = imageOf(event.dataTransfer?.files);
+    if (!file) return;
+    event.preventDefault();
+    void uploadImage(file);
+  }
+
+  async function cleanUpImages() {
+    try {
+      await flushSave(); // the server looks at the saved notes
+      const { removed } = await api.cleanupAdventureImages(adventure.id);
+      toast(t('{0} unused image(s) removed.', removed));
+    } catch (e) {
+      errorToast(e);
+    }
   }
 
   function linkToSong() {
@@ -147,6 +217,9 @@
             <button class="fmt" title={t(name)} aria-label={t(name)} onclick={() => format(kind)}>{label}</button>
           {/each}
           <button class="fmt" title={t('Link the selected text to a song')} aria-label={t('Song link')} onclick={linkToSong}>♪</button>
+          <button class="fmt" title={t('Insert an image')} aria-label={t('Insert an image')} onclick={() => fileInput?.click()}>🖼</button>
+          <input bind:this={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden
+                 onchange={(e) => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ''; if (file) void uploadImage(file); }} />
           {#if others.length}
             <select class="block-pick" aria-label={t('Link to a block')} title={t('Link the selected text to a block')} value=""
                     onchange={(e) => { linkToBlock(e.currentTarget.value); e.currentTarget.value = ''; }}>
@@ -155,14 +228,28 @@
             </select>
           {/if}
         {/if}
+        {#if editable}<button class="btn sm ghost" title={t('Deletes the images no block uses any more')} onclick={() => void cleanUpImages()}>{t('Clean up images')}</button>{/if}
         <button class="btn sm ghost" onclick={() => (preview = !preview)}>{preview ? t('Edit') : t('Preview')}</button>
       </div>
       {#if preview || !editable}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <div class="notes" onclick={previewClick}>{@html renderNotes(block.markdown, adventure.blocks) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
+        <div class="notes" onclick={previewClick}>{@html renderNotes(block.markdown, adventure.blocks, adventure.id) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
       {:else}
-        <textarea bind:this={notes} rows="12" placeholder={t('Describe the scene in Markdown…')} value={block.markdown}
-                  oninput={(e) => change(() => (block.markdown = e.currentTarget.value))}></textarea>
+        <div class="area">
+          <textarea bind:this={notes} rows="12" placeholder={t('Describe the scene in Markdown…')} value={block.markdown}
+                    oninput={(e) => { change(() => (block.markdown = e.currentTarget.value)); refreshSuggest(); }}
+                    onkeydown={notesKey} onclick={refreshSuggest} onblur={() => setTimeout(() => (suggest = null), 150)}
+                    onpaste={pasted} ondrop={dropped}></textarea>
+          {#if suggest}
+            <ul class="suggest" role="listbox" aria-label={t('Blocks')}>
+              {#each suggest.matches as match, index (match.id)}
+                <li role="option" aria-selected={index === suggest.index} class:on={index === suggest.index}>
+                  <button type="button" onmousedown={(e) => { e.preventDefault(); chooseSuggestion(match); }}>{match.title || t('Untitled')}</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
       {/if}
     </section>
 
@@ -258,6 +345,10 @@
   section { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
   .bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .grow { flex: 1; }
+  .area { position: relative; }
+  .suggest { position: absolute; left: 12px; top: 36px; z-index: 5; margin: 0; padding: 4px; list-style: none; min-width: 200px; max-width: 80%; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); }
+  .suggest button { display: block; width: 100%; padding: 6px 10px; border-radius: 7px; text-align: left; color: var(--text); }
+  .suggest li.on button, .suggest button:hover { background: var(--accent-soft); color: var(--accent); }
   .block-pick { max-width: 150px; font-size: var(--fs-sm); }
   .fmt { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 7px; color: var(--muted); font-weight: 600; }
   .fmt:hover { background: var(--hover); color: var(--text); }

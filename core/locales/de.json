@@ -847,5 +847,19 @@
   "This song was not found in the library.": "Dieser Song wurde in der Bibliothek nicht gefunden.",
   "Link a song": "Song verknüpfen",
   "Song link": "Song-Link",
-  "Link the selected text to a song": "Den markierten Text mit einem Song verknüpfen (Klick spielt ihn ab)"
+  "Link the selected text to a song": "Den markierten Text mit einem Song verknüpfen (Klick spielt ihn ab)",
+  "{0} unused image(s) removed.": "{0} ungenutzte(s) Bild(er) entfernt.",
+  "Insert an image": "Bild einfügen",
+  "Clean up images": "Bilder aufräumen",
+  "Deletes the images no block uses any more": "Löscht die Bilder, die kein Block mehr verwendet",
+  "Arrange": "Anordnen",
+  "Arrange the blocks by their path": "Die Blöcke nach ihrem Weg anordnen",
+  "Zoom out": "Verkleinern",
+  "Zoom in": "Vergrößern",
+  "Fit": "Einpassen",
+  "Show all blocks": "Alle Blöcke zeigen",
+  "Drag to another block to link it": "Auf einen anderen Block ziehen, um zu verknüpfen",
+  "Label (a choice)": "Beschriftung (eine Wahl)",
+  "Remove link": "Link entfernen",
+  "Graph": "Graph"
 }

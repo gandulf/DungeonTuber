@@ -84,6 +84,12 @@ export const api = {
   setAdventureVisibility: (id: string, visibility: 'private' | 'public', confirm = false) =>
     request<{ changed: boolean; visibility: 'private' | 'public'; private_playlists: string[] }>('POST', `/api/adventures/${id}/visibility`, { visibility, confirm }),
   deleteAdventure: (id: string) => request('DELETE', `/api/adventures/${id}`),
+  uploadAdventureImage: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<{ name: string }>('POST', `/api/adventures/${id}/images`, form);
+  },
+  cleanupAdventureImages: (id: string) => request<{ removed: number }>('POST', `/api/adventures/${id}/images/cleanup`),
 
   // playlists & files
   createPlaylist: (path: string, ids: string[] = [], isPrivate = false) =>

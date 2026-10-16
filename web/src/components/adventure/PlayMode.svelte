@@ -84,7 +84,7 @@
     </div>
 
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-    <div class="notes" onclick={notesClick}>{@html renderNotes(block.markdown, adventure.blocks) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
+    <div class="notes" onclick={notesClick}>{@html renderNotes(block.markdown, adventure.blocks, adventure.id) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
 
     <footer>
       {#each choices as link (link)}

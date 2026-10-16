@@ -947,3 +947,51 @@ def test_adventure_tabs_are_remembered_per_user(client):
     assert client.put("/api/user/state", json={"tabs": tabs}).status_code == 200
     assert client.get("/api/user/state").json()["tabs"] == tabs
     assert client.put("/api/user/state", json={"tabs": {"open": [{"type": "bogus", "path": "x"}]}}).status_code == 422
+
+
+def _png() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (4, 4), "red").save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+def test_adventure_images(client, library):
+    set_password("secret")
+    root = library["root"]
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    client.post("/api/users", json={"name": "bob", "password": "pw1234"})
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    adventure = client.post("/api/adventures", json={"title": "Maps"}).json()
+    base = f"/api/adventures/{adventure['id']}"
+
+    assert client.post(f"{base}/images", files={"file": ("x.txt", b"nope", "text/plain")}).status_code == 400
+    assert client.post(f"{base}/images", files={"file": ("x.bmp", b"", "image/png")}).status_code == 400
+    name = client.post(f"{base}/images", files={"file": ("map.png", _png(), "image/png")}).json()["name"]
+    unused = client.post(f"{base}/images", files={"file": ("map2.png", _png(), "image/png")}).json()["name"]
+    assets = root / ".adventures" / f"{adventure['id']}.assets"
+    assert sorted(p.name for p in assets.iterdir()) == sorted([name, unused])
+
+    shown = client.get(f"{base}/images/{name}")
+    assert shown.status_code == 200 and shown.headers["content-type"] == "image/png" and shown.content == _png()
+    assert client.get(f"{base}/images/..%2Fsecret.png").status_code == 404
+    assert client.get(f"{base}/images/000000000000.png").status_code == 404
+
+    # only the owner uploads; others see the images once the adventure is public
+    client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})
+    assert client.get(f"{base}/images/{name}").status_code == 404
+    assert client.post(f"{base}/images", files={"file": ("m.png", _png(), "image/png")}).status_code == 404
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    block = adventure["blocks"][0]
+    client.put(base, json={"blocks": [{**block, "markdown": f"![map](image:{name})"}], "links": []})
+    client.post(f"{base}/visibility", json={"visibility": "public"})
+    client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})
+    assert client.get(f"{base}/images/{name}").status_code == 200
+    assert client.post(f"{base}/images/cleanup").status_code == 403
+
+    # cleanup keeps the images the notes use; deleting the adventure removes them all
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert client.post(f"{base}/images/cleanup").json() == {"removed": 1}
+    assert [p.name for p in assets.iterdir()] == [name]
+    client.delete(base)
+    assert not assets.exists()

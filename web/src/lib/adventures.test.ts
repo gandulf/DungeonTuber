@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addLink, addMusic, appendBlock, defaultNext, moveBlock, newBlock, removeBlock, removeLink, startBlock, unreachable } from './adventures';
+import { addLink, addMusic, appendBlock, autoLayout, NODE_H, NODE_W, defaultNext, moveBlock, newBlock, removeBlock, removeLink, startBlock, unreachable } from './adventures';
 import type { Adventure } from './types';
 
 function graph(...titles: string[]): Pick<Adventure, 'blocks' | 'links'> {
@@ -62,6 +62,25 @@ describe('adventure graph', () => {
     const first = graph();
     appendBlock(first, 'start');
     expect(first.links).toEqual([]);
+  });
+
+  it('places a new block to the right of the last one', () => {
+    const g = graph('a');
+    g.blocks[0].pos = [40, 100];
+    expect(appendBlock(g, 'b').pos).toEqual([40 + NODE_W + 80, 100]);
+  });
+
+  it('arranges blocks in columns by distance from the first block', () => {
+    const g = graph('a', 'b', 'c', 'd');
+    addLink(g, 'a', 'b');
+    addLink(g, 'a', 'c');
+    autoLayout(g);
+    const at = (id: string) => g.blocks.find((block) => block.id === id)!.pos;
+    expect(at('a')).toEqual([0, 0]);
+    expect(at('b')[0]).toBe(NODE_W + 80);
+    expect(at('c')[0]).toBe(at('b')[0]);
+    expect(at('c')[1]).toBe(NODE_H + 30);
+    expect(at('d')).toEqual([0, NODE_H + 30]); // nothing leads to it: its own tree below the first one
   });
 
   it('adds a song or playlist to a block once', () => {

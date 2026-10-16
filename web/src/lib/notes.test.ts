@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyBlockLink, applyFormat, applySongLink, blockLinkTarget, renderNotes, songLinkTarget } from './notes';
+import { applyBlockLink, applyFormat, applyImage, applySongLink, applySuggestion, blockLinkTarget, blockSuggestions, renderNotes, songLinkTarget } from './notes';
 
 describe('renderNotes', () => {
   it('renders headings, emphasis and lists', () => {
@@ -50,6 +50,33 @@ describe('links to blocks', () => {
   it('turns the selection into a link', () => {
     expect(applyBlockLink('see here now', 4, 8, blocks[0]).text).toBe('see [here](block:b1) now');
     expect(applyBlockLink('', 0, 0, blocks[1]).text).toBe('[Tavern](block:b2)');
+  });
+});
+
+describe('images and suggestions', () => {
+  const blocks = [{ id: 'b1', title: 'The Crypt' }, { id: 'b2', title: 'Tavern' }, { id: 'b3', title: 'Crypt door' }];
+
+  it('serves images of the adventure and refuses other sources', () => {
+    expect(renderNotes('![map](image:0123456789ab.png)', [], 'adv-1')).toContain('src="/api/adventures/adv-1/images/0123456789ab.png"');
+    expect(renderNotes('![map](image:../x.png)', [], 'adv-1')).not.toContain('<img');
+    expect(renderNotes('![map](image:0123456789ab.png)')).not.toContain('<img');
+  });
+
+  it('suggests blocks while [[ is typed', () => {
+    const text = 'Go to [[cry';
+    const found = blockSuggestions(text, text.length, blocks)!;
+    expect(found.start).toBe(6);
+    expect(found.matches.map((block) => block.id)).toEqual(['b1', 'b3']);
+    expect(blockSuggestions('Go to [[Tavern]] now', 18, blocks)).toBeNull();
+    expect(blockSuggestions('no brackets', 5, blocks)).toBeNull();
+    expect(blockSuggestions('[[zzz', 5, blocks)).toBeNull();
+    expect(blockSuggestions('[[', 2, blocks)!.matches).toHaveLength(3);
+  });
+
+  it('replaces the typed part with a block link and inserts images', () => {
+    expect(applySuggestion('Go to [[cry now', 6, 11, blocks[0]).text).toBe('Go to [The Crypt](block:b1) now');
+    expect(applyImage('a b', 1, 2, '0123456789ab.png').text).toBe('a![ ](image:0123456789ab.png)b');
+    expect(applyImage('', 0, 0, '0123456789ab.png', 'map').text).toBe('![map](image:0123456789ab.png)');
   });
 });
 

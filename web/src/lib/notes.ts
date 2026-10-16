@@ -1,7 +1,7 @@
 // Markdown of the notes of an adventure block. Raw HTML is shown as text and only safe link targets survive, so notes
 // (which other users can read once an adventure is public) can never inject markup or scripts.
 // Links can point to a block of the adventure: `[text](block:<id>)` (the id survives renames), or `[[Block title]]` for short,
-// and to a song: `[text](song:<ufid>)` (a click plays it).
+// and to a song: `[text](song:<ufid>)` (a click plays it). Images of the adventure are `![alt](image:<name>)`.
 import { Marked } from 'marked';
 
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -12,6 +12,9 @@ export interface BlockRef { id: string; title: string }
 
 const BLOCK_PREFIX = 'block:';
 const SONG_PREFIX = 'song:';
+const IMAGE_PREFIX = 'image:';
+const IMAGE_NAME = /^[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
+let adventureId = ''; // the adventure being rendered: where its images are served from
 let known: BlockRef[] = []; // the blocks of the adventure being rendered (the renderer below is synchronous)
 
 const marked = new Marked({ gfm: true, breaks: true });
@@ -31,6 +34,10 @@ marked.use({
       return `<a href="${escape(href)}"${title ? ` title="${escape(title)}"` : ''} target="_blank" rel="noopener noreferrer">${text}</a>`;
     },
     image({ href, title, text }) {
+      if (href.startsWith(IMAGE_PREFIX)) {
+        const name = href.slice(IMAGE_PREFIX.length);
+        return IMAGE_NAME.test(name) && adventureId ? `<img src="/api/adventures/${escape(adventureId)}/images/${name}" alt="${escape(text)}" loading="lazy">` : escape(text);
+      }
       if (!safeUrl(href)) return escape(text);
       return `<img src="${escape(href)}" alt="${escape(text)}"${title ? ` title="${escape(title)}"` : ''} loading="lazy">`;
     },
@@ -38,8 +45,9 @@ marked.use({
 });
 
 /** The notes as HTML; `blocks` are the blocks of the adventure that links can point to. */
-export function renderNotes(source: string, blocks: BlockRef[] = []): string {
+export function renderNotes(source: string, blocks: BlockRef[] = [], adventure = ''): string {
   known = blocks;
+  adventureId = adventure;
   const resolved = source.replace(/\[\[([^[\]\n]+)\]\]/g, (match, title: string) => {
     const hit = blocks.find((block) => block.title.trim().toLowerCase() === title.trim().toLowerCase());
     return hit ? `[${title.trim()}](${BLOCK_PREFIX}${hit.id})` : match;
@@ -51,6 +59,28 @@ export function renderNotes(source: string, blocks: BlockRef[] = []): string {
 export function blockLinkTarget(target: EventTarget | null): string | null {
   const link = (target as Element | null)?.closest?.<HTMLElement>('a[data-block]');
   return link && !link.classList.contains('broken') ? link.dataset.block ?? null : null;
+}
+
+/** While `[[` is being typed before the caret: where it starts and the blocks whose title fits what follows. */
+export function blockSuggestions(text: string, caret: number, blocks: BlockRef[], limit = 8): { start: number; matches: BlockRef[] } | null {
+  const start = text.lastIndexOf('[[', caret - 1);
+  if (start < 0) return null;
+  const query = text.slice(start + 2, caret);
+  if (/[\]\n]/.test(query)) return null;
+  const needle = query.trim().toLowerCase();
+  const matches = blocks.filter((block) => block.title.toLowerCase().includes(needle)).slice(0, limit);
+  return matches.length ? { start, matches } : null;
+}
+
+/** Replaces the `[[query` before the caret with a link to the chosen block. */
+export function applySuggestion(text: string, start: number, caret: number, block: BlockRef): Edit {
+  return insertLink(text, start, caret, block.title || 'block', BLOCK_PREFIX + block.id);
+}
+
+/** Inserts an uploaded image of the adventure at the caret (replacing the selection). */
+export function applyImage(text: string, start: number, end: number, name: string, alt = ''): Edit {
+  const image = `![${alt || text.slice(start, end)}](${IMAGE_PREFIX}${name})`;
+  return { text: text.slice(0, start) + image + text.slice(end), start: start + image.length, end: start + image.length };
 }
 
 /** The song (its UFID) a click on rendered notes points to, or null. */

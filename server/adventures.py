@@ -1,7 +1,9 @@
 """Adventure files (`.dtadv`, JSON) in the hidden `.adventures` folder of the library roots, local or remote (see core/adventures.py)."""
+import io
 import json
 import logging
 import re
+import uuid
 
 from core import adventures as model
 from core.storage import AlreadyExists, StorageError
@@ -79,8 +81,15 @@ def create(title: str, owner: str) -> tuple[Location, dict]:
     return location, adventure
 
 
-def delete(location: Location):
+def delete(location: Location, adventure_id: str | None = None):
+    """Deletes an adventure with its images."""
     location.storage.delete(location.rel)
+    if adventure_id:
+        folder = assets_folder(location, adventure_id)
+        try:
+            folder.storage.delete(folder.rel)
+        except StorageError:
+            pass  # it had no images
 
 
 def mark_unavailable(adventure: dict, user: str, hidden) -> dict:
@@ -105,3 +114,69 @@ def private_playlists(adventure: dict) -> list[str]:
                 if index.is_private(location) and name not in names:
                     names.append(name)
     return names
+
+
+# --- images ----------------------------------------------------------------
+
+IMAGE_TYPES = {"PNG": ("png", "image/png"), "JPEG": ("jpg", "image/jpeg"), "GIF": ("gif", "image/gif"), "WEBP": ("webp", "image/webp")}
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+IMAGE_NAME = re.compile(r"^[0-9a-f]{12}\.(png|jpg|gif|webp)$")
+IMAGE_LINK = re.compile(r"image:([0-9a-f]{12}\.(?:png|jpg|gif|webp))")
+
+
+class InvalidImage(Exception):
+    pass
+
+
+def assets_folder(location: Location, adventure_id: str) -> Location:
+    """The folder next to the adventure file that holds its images."""
+    return location.parent.child(f"{adventure_id}.assets")
+
+
+def save_image(location: Location, adventure_id: str, data: bytes) -> str:
+    """Stores an uploaded image (PNG, JPEG, GIF or WEBP) and returns its name, which the notes refer to as `image:<name>`."""
+    if not data or len(data) > MAX_IMAGE_BYTES:
+        raise InvalidImage("Empty or too large image")
+    try:
+        from PIL import Image
+        with Image.open(io.BytesIO(data)) as image:
+            kind = IMAGE_TYPES.get(image.format or "")
+    except Exception:
+        raise InvalidImage("Unsupported image")
+    if kind is None:
+        raise InvalidImage("Unsupported image")
+    name = f"{uuid.uuid4().hex[:12]}.{kind[0]}"
+    target = assets_folder(location, adventure_id).child(name)
+    target.storage.write(target.rel, data)
+    return name
+
+
+def read_image(location: Location, adventure_id: str, name: str) -> tuple[bytes, str] | None:
+    if not IMAGE_NAME.match(name):
+        return None
+    image = assets_folder(location, adventure_id).child(name)
+    try:
+        data = image.storage.read_bytes(image.rel)
+    except StorageError:
+        return None
+    return data, next(mime for extension, mime in IMAGE_TYPES.values() if extension == name.rsplit(".", 1)[1])
+
+
+def referenced_images(adventure: dict) -> set[str]:
+    return {name for block in adventure["blocks"] for name in IMAGE_LINK.findall(block["markdown"])}
+
+
+def remove_unused_images(location: Location, adventure: dict) -> int:
+    """Deletes the images no block refers to any more; returns how many."""
+    folder = assets_folder(location, adventure["id"])
+    try:
+        entries = folder.storage.list(folder.rel)
+    except StorageError:
+        return 0
+    used = referenced_images(adventure)
+    removed = 0
+    for entry in entries:
+        if not entry.is_dir and IMAGE_NAME.match(entry.name) and entry.name not in used:
+            folder.storage.delete(entry.path)
+            removed += 1
+    return removed

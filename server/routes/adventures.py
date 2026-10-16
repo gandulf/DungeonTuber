@@ -1,6 +1,6 @@
 """Adventures: blocks of notes with music, effects and lights, linked into a path. Private ones belong to their owner, public ones are
 visible to everybody; only the owner (and the SuperAdmin) changes them."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 
 from core import adventures as model
@@ -110,8 +110,40 @@ def set_visibility(adventure_id: str, body: AdventureVisibility, user: str = Dep
 def delete_adventure(adventure_id: str, user: str = Depends(current_user)):
     location, _ = _load(adventure_id, user, edit=True)
     try:
-        adventures.delete(location)
+        adventures.delete(location, adventure_id)
     except StorageError as e:
         raise HTTPException(status_code=502, detail=str(e))
     hub.publish("adventures.changed", {})
     return {"deleted": True}
+
+
+@router.post("/api/adventures/{adventure_id}/images")
+async def upload_image(adventure_id: str, file: UploadFile = File(...), user: str = Depends(current_user)):
+    """Stores an image of the notes; they refer to it as `image:<name>`."""
+    location, _ = _load(adventure_id, user, edit=True)
+    try:
+        name = adventures.save_image(location, adventure_id, await file.read())
+    except adventures.InvalidImage as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except StorageError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"name": name}
+
+
+@router.get("/api/adventures/{adventure_id}/images/{name}")
+def get_image(adventure_id: str, name: str, user: str = Depends(current_user)):
+    location, _ = _load(adventure_id, user)
+    image = adventures.read_image(location, adventure_id, name)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return Response(content=image[0], media_type=image[1], headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.post("/api/adventures/{adventure_id}/images/cleanup")
+def cleanup_images(adventure_id: str, user: str = Depends(current_user)):
+    """Deletes the images that no block refers to any more."""
+    location, adventure = _load(adventure_id, user, edit=True)
+    try:
+        return {"removed": adventures.remove_unused_images(location, adventure)}
+    except StorageError as e:
+        raise HTTPException(status_code=502, detail=str(e))

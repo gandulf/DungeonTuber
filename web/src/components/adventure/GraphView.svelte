@@ -1,0 +1,242 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { addLink, autoLayout, NODE_H, NODE_W, removeLink } from '../../lib/adventures';
+  import { t } from '../../lib/i18n.svelte';
+  import { addBlock, adventures, change } from '../../lib/stores/adventure.svelte';
+  import type { AdventureLink } from '../../lib/types';
+  import Icon from '../Icon.svelte';
+
+  const adventure = $derived(adventures.current!);
+  const editable = $derived(adventure.editable);
+
+  const MIN_ZOOM = 0.3;
+  const MAX_ZOOM = 2;
+
+  // the view onto the graph (pan and zoom are not saved), the block being dragged and the link being drawn
+  let view = $state({ x: 24, y: 24, k: 1 });
+  let frame = $state<HTMLDivElement | null>(null);
+  let drag = $state<{ id: string; moved: boolean; startX: number; startY: number; origin: [number, number] } | null>(null);
+  let pan = $state<{ startX: number; startY: number; x: number; y: number } | null>(null);
+  let drawing = $state<{ from: string; x: number; y: number } | null>(null);
+  let selectedLink = $state<AdventureLink | null>(null);
+
+  const center = (id: string): [number, number] | null => {
+    const block = adventure.blocks.find((item) => item.id === id);
+    return block ? [block.pos[0] + NODE_W / 2, block.pos[1] + NODE_H / 2] : null;
+  };
+
+  /** A link leaves a block on its right side and enters the next one on its left side. */
+  function edge(link: AdventureLink) {
+    const from = adventure.blocks.find((item) => item.id === link.from);
+    const to = adventure.blocks.find((item) => item.id === link.to);
+    if (!from || !to) return null;
+    const [x1, y1] = [from.pos[0] + NODE_W, from.pos[1] + NODE_H / 2];
+    const [x2, y2] = [to.pos[0], to.pos[1] + NODE_H / 2];
+    const bend = Math.max(40, Math.abs(x2 - x1) / 2);
+    return { d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
+  }
+
+  const world = (event: PointerEvent): [number, number] => {
+    const rect = frame!.getBoundingClientRect();
+    return [(event.clientX - rect.left - view.x) / view.k, (event.clientY - rect.top - view.y) / view.k];
+  };
+
+  function wheel(event: WheelEvent) {
+    event.preventDefault();
+    const rect = frame!.getBoundingClientRect();
+    const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.k * (event.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    const [px, py] = [event.clientX - rect.left, event.clientY - rect.top];
+    view = { x: px - ((px - view.x) / view.k) * k, y: py - ((py - view.y) / view.k) * k, k }; // the point under the pointer stays put
+  }
+
+  $effect(() => {
+    const element = frame;
+    element?.addEventListener('wheel', wheel, { passive: false });
+    return () => element?.removeEventListener('wheel', wheel);
+  });
+
+  function zoomBy(factor: number) {
+    const rect = frame!.getBoundingClientRect();
+    const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.k * factor));
+    const [px, py] = [rect.width / 2, rect.height / 2];
+    view = { x: px - ((px - view.x) / view.k) * k, y: py - ((py - view.y) / view.k) * k, k };
+  }
+
+  /** Shows all blocks. */
+  function fit() {
+    if (!frame || !adventure.blocks.length) return;
+    const xs = adventure.blocks.map((block) => block.pos[0]);
+    const ys = adventure.blocks.map((block) => block.pos[1]);
+    const [left, top] = [Math.min(...xs), Math.min(...ys)];
+    const [width, height] = [Math.max(...xs) + NODE_W - left, Math.max(...ys) + NODE_H - top];
+    const rect = frame.getBoundingClientRect();
+    const k = Math.min(1, Math.max(MIN_ZOOM, Math.min((rect.width - 48) / width, (rect.height - 48) / height)));
+    view = { x: 24 - left * k, y: 24 - top * k, k };
+  }
+
+  function arrange() {
+    change((a) => autoLayout(a));
+    fit();
+  }
+
+  function backgroundDown(event: PointerEvent) {
+    if (event.target !== frame && !(event.target as Element).classList.contains('world')) return;
+    selectedLink = null;
+    pan = { startX: event.clientX, startY: event.clientY, x: view.x, y: view.y };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  function nodeDown(event: PointerEvent, id: string) {
+    event.stopPropagation();
+    adventures.selected = id;
+    selectedLink = null;
+    if (!editable) return;
+    const block = adventure.blocks.find((item) => item.id === id)!;
+    drag = { id, moved: false, startX: event.clientX, startY: event.clientY, origin: [block.pos[0], block.pos[1]] };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  function handleDown(event: PointerEvent, id: string) {
+    event.stopPropagation();
+    if (!editable) return;
+    const [x, y] = world(event);
+    drawing = { from: id, x, y };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  function move(event: PointerEvent) {
+    if (drawing) {
+      [drawing.x, drawing.y] = world(event);
+    } else if (drag) {
+      const dx = (event.clientX - drag.startX) / view.k;
+      const dy = (event.clientY - drag.startY) / view.k;
+      if (!drag.moved && Math.hypot(dx, dy) * view.k < 3) return;
+      drag.moved = true;
+      const block = adventure.blocks.find((item) => item.id === drag!.id);
+      if (block) block.pos = [Math.round(drag.origin[0] + dx), Math.round(drag.origin[1] + dy)];
+    } else if (pan) {
+      view = { ...view, x: pan.x + event.clientX - pan.startX, y: pan.y + event.clientY - pan.startY };
+    }
+  }
+
+  function up(event: PointerEvent) {
+    if (drawing) {
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-node]')?.dataset.node;
+      const from = drawing.from;
+      drawing = null;
+      if (target && target !== from) change((a) => addLink(a, from, target));
+    } else if (drag) {
+      if (drag.moved) change(() => undefined); // the new position is already in the block: this saves it
+      drag = null;
+    }
+    pan = null;
+  }
+
+  function removeSelectedLink() {
+    if (!selectedLink) return;
+    const link = selectedLink;
+    selectedLink = null;
+    change((a) => removeLink(a, link));
+  }
+
+  const start = $derived(drawing ? center(drawing.from) : null);
+
+  onMount(() => {
+    // blocks that were never placed (all at the same spot) are arranged once
+    const [first, ...rest] = adventure.blocks;
+    if (editable && rest.length && rest.every((block) => block.pos[0] === first.pos[0] && block.pos[1] === first.pos[1])) change((a) => autoLayout(a));
+    fit();
+  });
+</script>
+
+<div class="graph">
+  <div class="tools">
+    {#if editable}<button class="btn sm" onclick={() => addBlock()}><Icon name="plus" size={13} />{t('Add block')}</button>{/if}
+    {#if editable}<button class="btn sm ghost" title={t('Arrange the blocks by their path')} onclick={arrange}><Icon name="tree" size={13} />{t('Arrange')}</button>{/if}
+    <span class="grow"></span>
+    <button class="icon-btn mini" title={t('Zoom out')} aria-label={t('Zoom out')} onclick={() => zoomBy(1 / 1.25)}>−</button>
+    <button class="icon-btn mini" title={t('Zoom in')} aria-label={t('Zoom in')} onclick={() => zoomBy(1.25)}>+</button>
+    <button class="btn sm ghost" title={t('Show all blocks')} onclick={fit}>{t('Fit')}</button>
+  </div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="frame" bind:this={frame} onpointerdown={backgroundDown} onpointermove={move} onpointerup={up} onpointercancel={up}>
+    <div class="world" style:transform="translate({view.x}px, {view.y}px) scale({view.k})">
+      <svg class="edges" width="1" height="1" overflow="visible" aria-hidden="true">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" /></marker>
+        </defs>
+        {#each adventure.links as link (link)}
+          {@const shape = edge(link)}
+          {#if shape}
+            <g class="edge" class:on={selectedLink === link} class:choice={!!link.label}>
+              <path class="hit" d={shape.d} onpointerdown={(e) => { e.stopPropagation(); selectedLink = link; }} role="presentation" />
+              <path class="line" d={shape.d} marker-end="url(#arrow)" />
+              {#if link.label}<text x={shape.mx} y={shape.my - 6} text-anchor="middle">{link.label}</text>{/if}
+            </g>
+          {/if}
+        {/each}
+        {#if drawing && start}
+          <path class="line draft" d={`M ${start[0] + NODE_W / 2} ${start[1]} L ${drawing.x} ${drawing.y}`} />
+        {/if}
+      </svg>
+      {#each adventure.blocks as block, index (block.id)}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="node" class:selected={adventures.selected === block.id} class:played={block.played} class:first={index === 0} data-node={block.id}
+             style:left="{block.pos[0]}px" style:top="{block.pos[1]}px" style:width="{NODE_W}px" style:height="{NODE_H}px"
+             onpointerdown={(e) => nodeDown(e, block.id)}>
+          <span class="title ellipsis">{block.title || t('Untitled')}</span>
+          <span class="meta muted">
+            {#if block.played}<Icon name="check" size={11} />{/if}
+            {#if block.music.length}<Icon name="music" size={11} />{block.music.length}{/if}
+            {#if block.effects.length}<Icon name="waves" size={11} />{/if}
+            {#if block.light}<Icon name="bulb" size={11} />{/if}
+          </span>
+          {#if editable}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <span class="handle" title={t('Drag to another block to link it')} onpointerdown={(e) => handleDown(e, block.id)}></span>
+          {/if}
+        </div>
+      {/each}
+      {#if selectedLink && editable}
+        {@const shape = edge(selectedLink)}
+        {#if shape}
+          <div class="link-edit" style:left="{shape.mx}px" style:top="{shape.my}px" onpointerdown={(e) => e.stopPropagation()} role="presentation">
+            <input type="text" placeholder={t('Label (a choice)')} value={selectedLink.label ?? ''}
+                   oninput={(e) => { const link = selectedLink!; change(() => (link.label = e.currentTarget.value.trim() || null)); }} />
+            <button class="icon-btn mini" title={t('Remove link')} aria-label={t('Remove link')} onclick={removeSelectedLink}><Icon name="trash" size={13} /></button>
+          </div>
+        {/if}
+      {/if}
+    </div>
+  </div>
+</div>
+
+<style>
+  .graph { display: flex; flex-direction: column; gap: 6px; }
+  .tools { display: flex; align-items: center; gap: 6px; }
+  .grow { flex: 1; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; }
+  .mini { width: 26px; height: 26px; font-size: 1.1rem; line-height: 1; }
+  .frame { position: relative; height: clamp(220px, 38vh, 420px); overflow: hidden; resize: vertical; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); cursor: grab; touch-action: none;
+           background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 22px 22px; }
+  .frame:active { cursor: grabbing; }
+  .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .edges { position: absolute; left: 0; top: 0; color: var(--muted); pointer-events: none; }
+  .edge .line { fill: none; stroke: currentColor; stroke-width: 1.8; }
+  .edge .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+  .edge.choice { color: var(--accent); }
+  .edge.on { color: var(--accent); }
+  .edge.on .line { stroke-width: 2.8; }
+  .edge text { fill: var(--text); font-size: 12px; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; pointer-events: none; }
+  .line.draft { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; }
+  .node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 22px 6px 10px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); cursor: pointer; user-select: none; }
+  .node:hover { border-color: var(--accent); }
+  .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .node.played { opacity: 0.65; }
+  .node.first { border-left: 4px solid var(--accent); }
+  .title { font-weight: 600; font-size: var(--fs-sm); }
+  .meta { display: flex; align-items: center; gap: 5px; font-size: var(--fs-xs); min-height: 14px; }
+  .handle { position: absolute; right: -7px; top: calc(50% - 7px); width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-2); cursor: crosshair; }
+  .link-edit { position: absolute; transform: translate(-50%, 8px); display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 9px; background: var(--bg-2); border: 1px solid var(--accent); box-shadow: var(--shadow); }
+  .link-edit input { width: 150px; }
+</style>
