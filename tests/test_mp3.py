@@ -201,3 +201,16 @@ def test_summary_can_be_removed_when_the_file_has_comments_of_other_languages(mp
     update_mp3_summary(mp3_file, "")
     assert parse_mp3(mp3_file).summary == ""
     assert not ID3(mp3_file).getall("COMM")
+
+
+def test_ufid_round_trip_is_separate_from_musicbrainz(mp3_file):
+    from core.mp3 import UFID_OWNER, new_ufid, update_mp3_normalized, update_mp3_ufid
+    assert parse_mp3(mp3_file).ufid is None
+    ufid = new_ufid()
+    update_mp3_ufid(mp3_file, ufid)
+    update_mp3_normalized(mp3_file, {"source": "musicbrainz", "recording_id": "abc"})
+    update_mp3_normalized(mp3_file, None)  # removing the MusicBrainz id leaves ours alone
+    entry = parse_mp3(mp3_file)
+    assert entry.ufid == ufid and entry.to_dict()["ufid"] == ufid
+    update_mp3_ufid(mp3_file, None)
+    assert parse_mp3(mp3_file).ufid is None and UFID_OWNER == "dungeontuber"

@@ -6,6 +6,7 @@ The title of an `#EXTINF` line is the scene name of the entry when it differs fr
 import logging
 import os
 import posixpath
+import uuid
 from pathlib import Path
 
 from core.storage import InvalidPath, StorageError, normalize
@@ -14,6 +15,8 @@ from server.paths import Location, locate
 from server.roots import REMOTE_PREFIX, get_roots
 
 logger = logging.getLogger(__file__)
+
+ID_PREFIX = "#DT-ID:"  # comment line with the stable id of a playlist; other players ignore it
 
 
 def read_entries(playlist: Location, base: Location | None = None) -> list[tuple[Location, str | None]] | None:
@@ -35,6 +38,70 @@ def read_entries(playlist: Location, base: Location | None = None) -> list[tuple
                 result.append((location, title if title and title != location.stem else None))
             title = None
     return result
+
+
+def _read_text(playlist: Location) -> str:
+    return playlist.storage.read_bytes(playlist.rel).decode("utf-8-sig", errors="replace")
+
+
+def read_id(playlist: Location) -> str | None:
+    """The stable id of an extended M3U playlist, or None if it has none (yet)."""
+    for line in _read_text(playlist).splitlines()[1:]:
+        if line.startswith(ID_PREFIX):
+            return line[len(ID_PREFIX):].strip() or None
+    return None
+
+
+def ensure_id(playlist: Location) -> str | None:
+    """Gives an extended M3U playlist a stable id (kept when it is moved, renamed or rewritten) and records it in the index.
+    Returns "assigned" or "present", or None if the file is not an extended M3U."""
+    text = _read_text(playlist)
+    lines = text.splitlines()
+    if not lines or not lines[0].lstrip("﻿").startswith("#EXTM3U"):
+        return None
+    index = get_index()
+    for line in lines[1:]:
+        if line.startswith(ID_PREFIX) and line[len(ID_PREFIX):].strip():
+            index.set_playlist_id(playlist.client_path, line[len(ID_PREFIX):].strip())
+            return "present"
+    playlist_id = str(uuid.uuid4())
+    lines.insert(1, ID_PREFIX + playlist_id)
+    playlist.storage.write(playlist.rel, ("\n".join(lines) + "\n").encode("utf-8"), overwrite=True)
+    index.set_playlist_id(playlist.client_path, playlist_id)
+    return "assigned"
+
+
+def find(playlist_id: str) -> list[Location]:
+    """The playlists with this id. The index knows where they were; if none is there any more (moved outside of Dungeon Tuber), the
+    libraries are searched."""
+    index = get_index()
+    found = []
+    for path in index.find_playlist(playlist_id):
+        try:
+            location = locate(path)
+            if location and location.storage.exists(location.rel) and read_id(location) == playlist_id:
+                found.append(location)
+        except (StorageError, InvalidPath, OSError):
+            continue
+    if found:
+        return found
+    for root in get_roots():
+        base = Location(root)
+        try:
+            entries = [e for e in base.storage.walk(base.rel) if e.path.lower().endswith(".m3u")]
+        except StorageError:
+            continue
+        for entry in entries:
+            location = Location(root, entry.path)
+            try:
+                current = read_id(location)
+            except (StorageError, OSError):
+                continue
+            if current:
+                index.set_playlist_id(location.client_path, current)
+                if current == playlist_id:
+                    found.append(location)
+    return found
 
 
 def read(playlist: Location) -> list[Location] | None:
@@ -80,8 +147,11 @@ def write(playlist: Location, tracks: list[Location], names: dict[Location, str]
     """Writes the playlist; the scene names of the entries are kept unless `names` replaces them."""
     if names is None:
         names = scenes(playlist) if playlist.storage.exists(playlist.rel) else {}
-    lines = ["#EXTM3U"]
+    existing = read_id(playlist) if playlist.storage.exists(playlist.rel) else None
+    playlist_id = existing or str(uuid.uuid4())
+    lines = ["#EXTM3U", ID_PREFIX + playlist_id]
     index = get_index()
+    index.set_playlist_id(playlist.client_path, playlist_id)
     for track in tracks:
         relative = _relative(playlist, track)
         data = index.known(track) or {}

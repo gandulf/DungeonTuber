@@ -827,3 +827,56 @@ def test_the_whole_library_for_the_global_search(client, library, tmp_path):
     tracks = client.get("/api/library/tracks").json()["tracks"]
     assert sorted(t["name"] for t in tracks) == ["drums", "fight", "inn"]  # neither the effects nor files outside the library
     assert next(t for t in tracks if t["name"] == "fight")["favorite"] is True
+
+
+def _ufid(client, path):
+    return client.get(f"/api/tracks/{_id(path)}").json()["ufid"]
+
+
+def test_refresh_gives_songs_and_playlists_stable_ids(client, library):
+    root = library["root"]
+    fight, inn = root / "Battle" / "fight.mp3", root / "Tavern" / "inn.mp3"
+    mix = client.post("/api/playlists", json={"path": (root / "Mix").as_posix(), "ids": [_id(fight)]}).json()["path"]
+    (root / "Plain.m3u").write_text("#EXTM3U\nBattle/drums.mp3\n")  # an older playlist without an id
+
+    assert client.get(f"/api/tracks/{_id(fight)}").json()["ufid"] is None
+    done = client.post("/api/library/rescan").json()
+    assert done["ids_assigned"] == 4 and done["ids_failed"] == 0  # three songs and the playlist without id
+    assert client.post("/api/library/rescan").json()["ids_assigned"] == 0
+
+    ufid = _ufid(client, fight)
+    assert ufid and ufid != _ufid(client, inn)
+    assert (root / "Plain.m3u").read_text().splitlines()[:2] == ["#EXTM3U", f"#DT-ID:{client.get('/api/tracks', params={'playlist': (root / 'Plain.m3u').as_posix()}).json()['playlist_id']}"]
+
+    # the ids survive tag edits, renames and moves
+    client.patch(f"/api/tracks/{_id(fight)}", json={"title": "Duel"})
+    assert _ufid(client, fight) == ufid
+    client.post("/api/files/rename", json={"path": fight.as_posix(), "name": "duel.mp3"})
+    client.post("/api/files/rename", json={"path": (root / "Battle").as_posix(), "name": "Fights"})
+    moved = client.get("/api/library/resolve", params={"song": ufid}).json()
+    assert moved["path"] == (root / "Fights" / "duel.mp3").as_posix() and moved["count"] == 1
+
+    playlist_id = client.get("/api/tracks", params={"playlist": mix}).json()["playlist_id"]
+    client.post("/api/files/rename", json={"path": mix, "name": "Renamed.m3u"})
+    client.post("/api/playlists/remove", json={"playlist": (root / "Renamed.m3u").as_posix(), "ids": []})  # rewriting keeps the id
+    found = client.get("/api/library/resolve", params={"playlist": playlist_id}).json()
+    assert found["path"] == (root / "Renamed.m3u").as_posix()
+    assert client.get("/api/library/resolve", params={"song": "unknown"}).status_code == 404
+    assert client.get("/api/library/resolve").status_code == 400
+
+
+def test_copies_share_an_id_and_show_up_as_duplicates(client, library):
+    root = library["root"]
+    fight = root / "Battle" / "fight.mp3"
+    client.post("/api/library/rescan")
+    copy = root / "Tavern" / "fight copy.mp3"
+    copy.write_bytes(fight.read_bytes())
+    client.post("/api/library/rescan")
+
+    assert _ufid(client, copy) == _ufid(client, fight)
+    ufid = _ufid(client, fight)
+    assert client.get("/api/library/resolve", params={"song": ufid}).json()["count"] == 2
+    groups = client.get("/api/library/duplicates").json()
+    assert sorted(groups["ufid_groups"][0]) == sorted([_id(fight.as_posix()), _id(copy.as_posix())])
+    fight.unlink()
+    assert client.get("/api/library/resolve", params={"song": ufid}).json()["path"] == copy.as_posix()

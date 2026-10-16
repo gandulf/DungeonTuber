@@ -35,6 +35,8 @@ export interface Track {
   /** Set when the metadata was normalized with AcoustID / MusicBrainz. */
   normalized?: Normalized | null;
   chapters: Chapter[];
+  /** Stable id of the song (UFID frame), unchanged by moves, renames and tag edits. */
+  ufid?: string | null;
   has_cover: boolean;
   index: number | null;
   previous_id?: string;

@@ -190,6 +190,9 @@
         </span>
       {/if}
       <span class="wide path muted" title={track.path}>{track.path}</span>
+      {#if track.ufid}
+        <span class="wide path muted" title={t('Stable song id, kept when the file is moved or renamed')}>{t('ID')} {track.ufid}</span>
+      {/if}
     </div>
     <button type="submit" hidden aria-label={t('Save')}></button>
   </form>

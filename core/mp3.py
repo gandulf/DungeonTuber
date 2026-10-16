@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import traceback
+import uuid
 from os import PathLike
 from pathlib import Path
 from typing import TypedDict, Iterator, Iterable
@@ -38,7 +39,7 @@ def _read_cover_frame(tags) -> APIC | None:
 
 class Mp3Entry(object):
     __slots__ = ["index", "name", "path", "title", "artist", "album", "track", "summary", "genres", "length", "favorite", "categories", "_tags",
-                 "_has_cover", "bpm", "light", "chapters", "normalized", "__weakref__"]
+                 "_has_cover", "bpm", "light", "chapters", "normalized", "ufid", "__weakref__"]
 
     index: int | None
     name: str | None
@@ -56,6 +57,8 @@ class Mp3Entry(object):
     light: LightSetting | None
     # set when the metadata came from AcoustID / MusicBrainz: {"source", "recording_id", "at"} (see update_mp3_normalized)
     normalized: dict | None
+    # stable id of the song (UFID frame of Dungeon Tuber, see update_mp3_ufid); None until one was assigned
+    ufid: str | None
 
     categories: dict[str, int]
     _tags: list[str]
@@ -91,6 +94,7 @@ class Mp3Entry(object):
         self.light = None
         self.chapters = []
         self.normalized = None
+        self.ufid = None
 
     @property
     def length_in_ms(self):
@@ -171,6 +175,7 @@ class Mp3Entry(object):
             "bpm": self.bpm,
             "light": self.light.to_dict() if self.light else None,
             "normalized": dict(self.normalized) if self.normalized else None,
+            "ufid": self.ufid,
             "chapters": [{"title": c["title"], "time": c["time"], "light": c["light"].to_dict() if c.get("light") else None}
                          for c in self.chapters],
         }
@@ -333,6 +338,7 @@ def parse_mp3(file_path: PathLike[str]) -> Mp3Entry | None:
                 entry.light = LightSetting.json_load(light.text[0])
 
             entry.normalized = _parse_normalized(audio.tags.get("TXXX:dt_normalized"))
+            entry.ufid = _parse_ufid(audio.tags.get(f"UFID:{UFID_OWNER}"))
 
             chapter_list: list[Chapter] = []
             for key in audio.tags.keys():
@@ -568,6 +574,31 @@ def update_mp3_source(path: str | PathLike[str] | MP3, url: str | None, save: bo
 
 
 MUSICBRAINZ_UFID_OWNER = "http://musicbrainz.org"
+UFID_OWNER = "dungeontuber"
+
+
+def new_ufid() -> str:
+    return str(uuid.uuid4())
+
+
+def _parse_ufid(frame) -> str | None:
+    if not frame or not frame.data:
+        return None
+    return frame.data.decode("ascii", errors="ignore").strip() or None
+
+
+def update_mp3_ufid(path: str | PathLike[str] | MP3, ufid: str | None, save: bool = True):
+    """Stores the stable id of the song in the UFID frame of Dungeon Tuber (kept apart from the MusicBrainz one); it survives moves,
+    renames and tag edits, so adventures can refer to songs by it."""
+    audio = _audio(path)
+
+    if ufid:
+        audio.tags.add(UFID(owner=UFID_OWNER, data=ufid.encode("ascii", errors="ignore")))
+    else:
+        audio.tags.delall(f"UFID:{UFID_OWNER}")
+
+    if save:
+        audio.save()
 
 
 def update_mp3_normalized(path: str | PathLike[str] | MP3, normalized: dict | None, save: bool = True):

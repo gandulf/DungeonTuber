@@ -226,6 +226,8 @@
   "Delete user {0}?": "Delete user {0}?",
   "Set the SuperAdmin password first to add users.": "Set the SuperAdmin password first to add users.",
   "Signed in as {0}": "Signed in as {0}",
+  "Stable song id, kept when the file is moved or renamed": "Stable song id, kept when the file is moved or renamed",
+  "ID": "ID",
   "Uploaded by {0}": "Uploaded by {0}",
   "Remove from list": "Remove from list",
   "Already in the playlist": "Already in the playlist",

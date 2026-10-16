@@ -217,14 +217,19 @@ def test_rescan_picks_up_bucket_changes(client, s3, tmp_path):
     client.patch(f"/api/tracks/{_id(f'{BASE}/Battle/drums.mp3')}", json={"title": "Kept"})
 
     # nothing changed in the bucket: edits survive and nothing is queued
-    assert client.post("/api/library/rescan", json={"path": BASE}).json() == {"added": 0, "changed": 0, "removed": 0, "total": 3}
+    assert client.post("/api/library/rescan", json={"path": BASE}).json() == {"added": 0, "changed": 0, "removed": 0, "total": 3,
+                                                                                       "ids_assigned": 0, "ids_failed": 0}
+    # remote songs keep their stable id in the database only (never written into the object)
+    ufid = client.get(f"/api/tracks/{_id(f'{BASE}/Battle/drums.mp3')}").json()["ufid"]
+    assert ufid and client.get("/api/library/resolve", params={"song": ufid}).json()["path"] == f"{BASE}/Battle/drums.mp3"
 
     sample = s3.objects["rpg/Battle/fight.mp3"]
     s3.objects["rpg/Tavern/new.mp3"] = sample                      # new
     s3.objects["rpg/Battle/fight.mp3"] = sample + b"\0" * 417      # replaced
     del s3.objects["rpg/Tavern/inn.mp3"]                           # deleted
 
-    assert client.post("/api/library/rescan").json() == {"added": 1, "changed": 1, "removed": 1, "total": 3}
+    assert client.post("/api/library/rescan").json() == {"added": 1, "changed": 1, "removed": 1, "total": 3,
+                                                                    "ids_assigned": 0, "ids_failed": 0}
     tracks = {t["file"]: t for t in _wait_for_import(client, "Tavern")}
     assert sorted(tracks) == ["new.mp3"]
     battle = {t["file"]: t for t in _wait_for_import(client, "Battle")}

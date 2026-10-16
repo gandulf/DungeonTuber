@@ -121,7 +121,7 @@ def rescan_library(body: RescanRequest | None = None):
     """Syncs the metadata database with the storage; without a path every library root is rescanned."""
     path = body.path if body else None
     targets = [safe_path(path)] if path else [Location(root) for root in get_roots()]
-    total = {"added": 0, "changed": 0, "removed": 0, "total": 0}
+    total = {"added": 0, "changed": 0, "removed": 0, "total": 0, "ids_assigned": 0, "ids_failed": 0}
     with storage_errors():
         for target in targets:
             for key, value in rescan(target).items():
@@ -154,6 +154,7 @@ def tracks(dir: str | None = None, playlist: str | None = None, recursive: bool 
         for item in data:  # unreadable songs are left out, the index still points to their entry
             item["scene"] = entries[item["index"]][1]
         return {"type": "playlist", "path": playlist_loc.client_path, "name": playlist_loc.stem, "tracks": data,
+                "playlist_id": playlists.read_id(playlist_loc),
                 "private": get_index().is_private(playlist_loc), "uploaded_by": get_index().uploads_under(playlist_loc).get(playlist_loc.client_path)}
     if dir:
         directory = safe_path(dir, kind="dir")
@@ -188,9 +189,33 @@ def library_tracks():
 
 @router.get("/api/library/duplicates")
 def library_duplicates():
-    """Groups of songs whose files are identical (same SHA-256), as lists of track ids. The hashes are stored, so only new or changed files
-    of the same size as another file are read."""
-    return {"groups": get_index().duplicate_groups(_library_locations())}
+    """Groups of songs whose files are identical (same SHA-256) or that share a UFID (copies of a file), as lists of track ids. The hashes
+    are stored, so only new or changed files of the same size as another file are read. `ufid_groups` are the groups found by id alone."""
+    locations = _library_locations()
+    index = get_index()
+    ufid_groups = index.duplicate_ufids(locations)
+    return {"groups": index.duplicate_groups(locations) + ufid_groups, "ufid_groups": ufid_groups}
+
+
+@router.get("/api/library/resolve")
+def resolve(song: str | None = None, playlist: str | None = None, user: str = Depends(current_user)):
+    """Finds a song by its UFID or a playlist by its id, wherever it was moved to. Copies of a song share its UFID: the first one that
+    still exists is returned (`count` says how many there are). 404 if there is none."""
+    if bool(song) == bool(playlist):
+        raise HTTPException(status_code=400, detail="song or playlist required")
+    found: list[Location] = []
+    with storage_errors():
+        if song:
+            for path in get_index().find_ufid(song):
+                with contextlib.suppress(InvalidPath, NotFound):
+                    location = locate(path)
+                    if location and location.storage.exists(location.rel):
+                        found.append(location)
+        else:
+            found = [location for location in playlists.find(playlist) if not hidden(location, user)]
+    if not found:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"id": found[0].id, "path": found[0].client_path, "count": len(found)}
 
 
 @router.get("/api/tracks/{track_id}")

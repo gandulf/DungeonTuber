@@ -15,7 +15,7 @@ from pathlib import Path
 from core.lights import LightSetting
 from core.mp3 import (Mp3Entry, _audio, parse_mp3, update_mp3_album, update_mp3_artist, update_mp3_bpm, update_mp3_categories,
                       update_mp3_chapters, update_mp3_cover_data, update_mp3_favorite, update_mp3_genre, update_mp3_light, update_mp3_normalized, update_mp3_summary,
-                      update_mp3_tags, update_mp3_title, update_mp3_track)
+                      update_mp3_tags, update_mp3_title, update_mp3_track, update_mp3_ufid, new_ufid)
 from core.storage import NotFound, StorageError
 from core.utils import get_user_data_dir
 from server.context import current_user_var
@@ -115,6 +115,10 @@ class TrackIndex:
         self._conn.execute("CREATE TABLE IF NOT EXISTS favorites (user TEXT, path TEXT, value INTEGER, PRIMARY KEY (user, path))")
         self._conn.execute("CREATE TABLE IF NOT EXISTS user_state (user TEXT, key TEXT, value TEXT, PRIMARY KEY (user, key))")
         self._conn.execute("CREATE TABLE IF NOT EXISTS private (path TEXT PRIMARY KEY)")
+        self._conn.execute("CREATE TABLE IF NOT EXISTS ufids (path TEXT PRIMARY KEY, ufid TEXT)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS ufids_ufid ON ufids (ufid)")
+        self._conn.execute("CREATE TABLE IF NOT EXISTS playlist_ids (path TEXT PRIMARY KEY, id TEXT)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS playlist_ids_id ON playlist_ids (id)")
         self._conn.execute("DROP TABLE IF EXISTS hashes")  # the first version hashed the whole file
         self._conn.execute("CREATE TABLE IF NOT EXISTS audio_hashes (path TEXT PRIMARY KEY, mtime REAL, size INTEGER, audio_size INTEGER, hash TEXT)")
         self._conn.commit()
@@ -221,6 +225,10 @@ class TrackIndex:
                                (key, mtime, size, json.dumps(data, ensure_ascii=False)))
             if cover is not None:
                 self._conn.execute("INSERT OR REPLACE INTO covers (path, mime, data) VALUES (?, ?, ?)", (key, cover[1], cover[0]))
+            if data.get("ufid"):
+                self._conn.execute("INSERT OR REPLACE INTO ufids (path, ufid) VALUES (?, ?)", (key, data["ufid"]))
+            else:
+                self._conn.execute("DELETE FROM ufids WHERE path = ?", (key,))
             self._conn.commit()
 
     def get(self, location: Location) -> dict | None:
@@ -268,13 +276,25 @@ class TrackIndex:
                 data = track_dict(entry, location)
         except NotFound:
             return None
+        data["ufid"] = data.get("ufid") or self._stored_ufid(key) or new_ufid()  # remote files keep their id in the database only
         self._store(key, data, stat.mtime, stat.size, cover)
         return data
+
+    def _stored_ufid(self, key: str) -> str | None:
+        with self._lock:
+            row = self._conn.execute("SELECT ufid FROM ufids WHERE path = ?", (key,)).fetchone()
+        return row[0] if row else None
 
     def import_entry(self, location: Location, entry: Mp3Entry, cover: tuple[bytes, str] | None = None) -> dict:
         """Stores an already parsed entry (e.g. right after an upload)."""
         stat = location.storage.stat(location.rel)
         entry._has_cover = cover is not None if not location.root.is_local else entry.has_cover
+        if not entry.ufid:
+            if location.root.is_local:
+                self._write_ufid(location, entry)
+                stat = location.storage.stat(location.rel)
+            else:
+                entry.ufid = new_ufid()
         data = track_dict(entry, location)
         self._store(location.client_path, data, stat.mtime, stat.size, cover if not location.root.is_local else None)
         return data
@@ -396,6 +416,79 @@ class TrackIndex:
             self._conn.execute("DELETE FROM tracks WHERE path = ?", (location.client_path,))
             self._conn.commit()
 
+    # --- stable ids ------------------------------------------------------
+
+    @staticmethod
+    def _write_ufid(location: Location, entry: Mp3Entry) -> bool:
+        """Gives a local file a new UFID (written into the mp3); False if the file cannot be written."""
+        ufid = new_ufid()
+        try:
+            update_mp3_ufid(location.local_path, ufid)
+        except Exception as e:  # read-only or broken file: it keeps working without a stable id
+            logger.warning("Could not write the id of {0}: {1}", location.client_path, e)
+            return False
+        entry.ufid = ufid
+        return True
+
+    def ensure_ufid(self, location: Location) -> str | None:
+        """Makes sure a song has a stable id. Local files get it in their mp3, remote files only in the database. Returns "assigned",
+        "present", "failed", or None for files that are unknown (remote ones get their id when they are imported)."""
+        key = location.client_path
+        if not location.root.is_local:
+            row = self._row(key)
+            if row is None:
+                return None
+            data = json.loads(row[2])
+            if data.get("ufid"):
+                return "present"
+            data["ufid"] = self._stored_ufid(key) or new_ufid()
+            self._store(key, data, row[0], row[1])
+            return "assigned"
+        data = self.get(location)
+        if data is None:
+            return "failed"
+        if data.get("ufid"):
+            return "present"
+        self.invalidate(location)  # the stored data may predate the ids: read the file again before writing one
+        data = self.get(location)
+        if data is None:
+            return "failed"
+        if data.get("ufid"):
+            return "present"
+        entry = parse_mp3(location.local_path)
+        if entry is None or not self._write_ufid(location, entry):
+            return "failed"
+        self.invalidate(location)
+        return "assigned" if self.get(location) else "failed"
+
+    def find_ufid(self, ufid: str) -> list[str]:
+        """Client paths of the files with this id (copies share it), in path order."""
+        with self._lock:
+            rows = self._conn.execute("SELECT path FROM ufids WHERE ufid = ? ORDER BY path", (ufid,)).fetchall()
+        return [row[0] for row in rows]
+
+    def duplicate_ufids(self, locations: list[Location]) -> list[list[str]]:
+        """Ids of the songs that share a UFID (copies of a file), one list per group."""
+        with self._lock:
+            stored = dict(self._conn.execute("SELECT path, ufid FROM ufids").fetchall())
+        groups: dict[str, list[str]] = {}
+        for location in locations:
+            ufid = stored.get(location.client_path)
+            if ufid:
+                groups.setdefault(ufid, []).append(location.id)
+        return [ids for ids in groups.values() if len(ids) > 1]
+
+    def set_playlist_id(self, path: str, playlist_id: str):
+        with self._lock:
+            self._conn.execute("INSERT OR REPLACE INTO playlist_ids (path, id) VALUES (?, ?)", (path, playlist_id))
+            self._conn.commit()
+
+    def find_playlist(self, playlist_id: str) -> list[str]:
+        """Client paths of the playlists with this id."""
+        with self._lock:
+            rows = self._conn.execute("SELECT path FROM playlist_ids WHERE id = ? ORDER BY path", (playlist_id,)).fetchall()
+        return [row[0] for row in rows]
+
     # --- writing ---------------------------------------------------------
 
     def update(self, location: Location, changes: dict) -> dict | None:
@@ -511,7 +604,7 @@ class TrackIndex:
 
     def _move_uploads(self, old_key: str, new_key: str):
         with self._lock:
-            for table in ("uploads", "favorites", "private"):
+            for table in ("uploads", "favorites", "private", "ufids", "playlist_ids"):
                 self._conn.execute(f"UPDATE {table} SET path = ? || substr(path, ?) WHERE path = ? OR path LIKE ? ESCAPE '\\'",
                                    (new_key, len(old_key) + 1, old_key, _like_prefix(old_key)))
             self._conn.commit()
@@ -526,7 +619,7 @@ class TrackIndex:
 
     def forget_paths(self, paths: list[str]):
         with self._lock:
-            for table in ("tracks", "covers", "uploads", "favorites", "private", "audio_hashes"):
+            for table in ("tracks", "covers", "uploads", "favorites", "private", "audio_hashes", "ufids", "playlist_ids"):
                 self._conn.executemany(f"DELETE FROM {table} WHERE path = ?", [(path,) for path in paths])
             self._conn.commit()
 
@@ -534,7 +627,7 @@ class TrackIndex:
         """Drops a deleted file or directory."""
         key = location.client_path
         with self._lock:
-            for table in ("tracks", "covers", "uploads", "favorites", "private", "audio_hashes"):
+            for table in ("tracks", "covers", "uploads", "favorites", "private", "audio_hashes", "ufids", "playlist_ids"):
                 self._conn.execute(f"DELETE FROM {table} WHERE path = ? OR path LIKE ? ESCAPE '\\'", (key, _like_prefix(key)))
             self._conn.commit()
 
