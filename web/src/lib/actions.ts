@@ -137,7 +137,7 @@ export async function toggleFavorite(track: Track) {
 /** Asks for a name and the folder of a new playlist; the folder of the open tab (or the given one) is preselected. */
 export function newPlaylist(ids: string[] = [], directory?: string) {
   const tab = activeTab();
-  const current = tab?.type === 'dir' ? tab.path : tab ? dirname(tab.path) : null;
+  const current = tab?.type === 'dir' ? tab.path : tab?.type === 'playlist' ? dirname(tab.path) : null;
   const dir = directory ?? current ?? prefs.treeRoot ?? data.settings?.libraryRoots[0];
   if (dir) openDialog(PlaylistDialog, { directory: dir, ids });
 }

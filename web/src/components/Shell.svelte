@@ -6,6 +6,7 @@
   import { t } from '../lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import { data } from '../lib/stores/data.svelte';
+  import { adventures, flushSave, openAdventure } from '../lib/stores/adventure.svelte';
   import { assistant } from '../lib/stores/assistant.svelte';
   import { analysis, downloads, type JobKind } from '../lib/stores/downloads.svelte';
   import { effects } from '../lib/stores/effects.svelte';
@@ -13,6 +14,7 @@
   import { cycleRepeat, next, player, previous, setVolume, toggleEffect, toggleMute, togglePlay } from '../lib/stores/player.svelte';
   import { closeMenu, ui } from '../lib/stores/ui.svelte';
   import { unseenTourSteps } from '../lib/tourSteps';
+  import AdventureView from './adventure/AdventureView.svelte';
   import AssistantChat from './AssistantChat.svelte';
   import ConfirmDialog from './dialogs/ConfirmDialog.svelte';
   import PromptDialog from './dialogs/PromptDialog.svelte';
@@ -30,6 +32,16 @@
   import Welcome from './Welcome.svelte';
 
   const tab = $derived(activeTab());
+  const adventureTab = $derived(tab?.type === 'adventure' ? tab : null);
+
+  // the adventure of the active tab is loaded when its tab is shown, and saved when another tab takes over
+  $effect(() => {
+    if (adventureTab) {
+      if (adventures.current?.id !== adventureTab.path) void openAdventure(adventureTab.path);
+    } else {
+      void flushSave();
+    }
+  });
   const showRight = $derived(prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false));
 
   // a flyout closes with a swipe towards its own edge
@@ -148,12 +160,16 @@
 
     <main class="main">
       <MenuBar />
-      <FilterPanel />
-      <TagBar />
-      {#if tab}
-        <div class="table-wrap" data-tour="table"><SongTable {tab} /></div>
+      {#if adventureTab}
+        {#if adventures.current?.id === adventureTab.path}<AdventureView />{:else}<span class="loading muted">{t('Loading…')}</span>{/if}
       {:else}
-        <Welcome />
+        <FilterPanel />
+        <TagBar />
+        {#if tab}
+          <div class="table-wrap" data-tour="table"><SongTable {tab} /></div>
+        {:else}
+          <Welcome />
+        {/if}
       {/if}
     </main>
 
@@ -213,6 +229,7 @@
   .sidebar { flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--bg-2); border-right: 1px solid var(--border); }
   .right { flex: none; display: flex; flex-direction: column; min-height: 0; padding: 14px 14px 14px 0; overflow-y: auto; }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 0 12px; }
+  .loading { padding: 24px 16px; }
   .table-wrap { flex: 1; min-height: 0; display: flex; }
   .scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 50; }
   .drawer { position: fixed; top: 0; bottom: 0; left: 0; width: min(340px, 88vw); z-index: 51; touch-action: pan-y; background: var(--bg-2); display: flex; flex-direction: column; box-shadow: var(--shadow); overflow: auto; }

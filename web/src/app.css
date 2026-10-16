@@ -236,3 +236,11 @@ input[type='range'].range::-moz-range-thumb {
 .switch span::before { content: ''; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; border-radius: 50%; background: var(--muted); transition: 0.2s; }
 .switch input:checked + span { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
 .switch input:checked + span::before { transform: translateX(18px); background: #fff; }
+
+/* links to blocks of an adventure inside rendered notes */
+.notes a.block-link { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); cursor: pointer; }
+.notes a.block-link:hover { background: var(--accent-soft); }
+.notes a.block-link.broken { color: var(--red); border-bottom-color: var(--red); cursor: not-allowed; }
+.notes a.song-link { color: var(--green, var(--accent)); text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
+.notes a.song-link::before { content: '▶ '; font-size: 0.8em; }
+.notes a.song-link:hover { background: var(--accent-soft); }

@@ -26,7 +26,7 @@ class PasswordRequest(BaseModel):
 
 
 class OpenTab(BaseModel):
-    type: Literal["dir", "playlist"]
+    type: Literal["dir", "playlist", "adventure"]
     path: str
 
 

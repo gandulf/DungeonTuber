@@ -19,7 +19,7 @@ from server.config import ServerConfig, configure, get_config
 from server.events import hub
 from server.downloads import download_queue
 from server.jobs import analysis_queue, import_queue
-from server.routes import agents, analysis, assistant, auth, effects, imports, library, lights, metadata, settings, storages
+from server.routes import adventures, agents, analysis, assistant, auth, effects, imports, library, lights, metadata, settings, storages
 
 logger = logging.getLogger(__file__)
 
@@ -62,7 +62,7 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
     app = FastAPI(title="DungeonTuber", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=2048)
 
-    for module in (auth, library, settings, effects, analysis, lights, storages, agents, imports, assistant, metadata):
+    for module in (auth, library, adventures, settings, effects, analysis, lights, storages, agents, imports, assistant, metadata):
         app.include_router(module.router)
 
     @app.get("/api/health", include_in_schema=False)

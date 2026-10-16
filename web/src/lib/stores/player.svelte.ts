@@ -112,7 +112,18 @@ function updateMediaSession(track: Track) {
   });
 }
 
+/** Songs that play instead of the open tab (the music of an adventure block); anything else that is played ends it. */
+let queue: Track[] | null = null;
+
+/** Plays a list of songs one after the other (the repeat and shuffle options of the player apply). */
+export async function playQueue(tracks: Track[], crossfade = prefs.crossfade) {
+  if (!tracks.length) return;
+  queue = tracks;
+  await playTrack(tracks[prefs.shuffle ? Math.floor(Math.random() * tracks.length) : 0], crossfade);
+}
+
 export async function playTrack(track: Track, crossfade = prefs.crossfade) {
+  if (queue && !queue.some((item) => item.id === track.id)) queue = null;
   player.track = track;
   player.error = null;
   player.position = 0;
@@ -138,20 +149,20 @@ export function stop() {
 }
 
 function neighbour(offset: number): Track | null {
-  const rows = visibleRows();
-  if (!rows.length) return null;
-  if (prefs.shuffle && offset > 0 && rows.length > 1) {
-    const candidates = rows.filter((row) => row.track.id !== player.track?.id);
-    return candidates[Math.floor(Math.random() * candidates.length)].track;
+  const tracks = queue ?? visibleRows().map((row) => row.track);
+  if (!tracks.length) return null;
+  if (prefs.shuffle && offset > 0 && tracks.length > 1) {
+    const candidates = tracks.filter((track) => track.id !== player.track?.id);
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
-  const index = player.track ? rows.findIndex((row) => row.track.id === player.track!.id) : -1;
+  const index = player.track ? tracks.findIndex((track) => track.id === player.track!.id) : -1;
   let target = index + offset;
-  if (target >= rows.length) {
+  if (target >= tracks.length) {
     if (prefs.repeat !== 'all') return null;
     target = 0;
   }
-  if (target < 0) target = prefs.repeat === 'all' ? rows.length - 1 : 0;
-  return rows[target]?.track ?? null;
+  if (target < 0) target = prefs.repeat === 'all' ? tracks.length - 1 : 0;
+  return tracks[target] ?? null;
 }
 
 export function next(auto = false) {

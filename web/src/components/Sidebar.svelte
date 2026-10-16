@@ -12,6 +12,7 @@
   import { askText, errorToast, openMenu, ui, type MenuItem } from '../lib/stores/ui.svelte';
   import { onEvent } from '../lib/ws';
   import type { BrowseItem } from '../lib/types';
+  import AdventureList from './adventure/AdventureList.svelte';
   import Icon from './Icon.svelte';
   import TreeNode from './TreeNode.svelte';
 
@@ -228,6 +229,8 @@
         <span class="empty muted">{t('Right-click a playlist to add it to the favorites.')}</span>
       {/each}
     </div>
+
+    <AdventureList />
 
     <div class="nav-section files">
       <div class="row">

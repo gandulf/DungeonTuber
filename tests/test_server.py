@@ -880,3 +880,70 @@ def test_copies_share_an_id_and_show_up_as_duplicates(client, library):
     assert sorted(groups["ufid_groups"][0]) == sorted([_id(fight.as_posix()), _id(copy.as_posix())])
     fight.unlink()
     assert client.get("/api/library/resolve", params={"song": ufid}).json()["path"] == copy.as_posix()
+
+
+def test_adventures_are_private_until_published(client, library):
+    set_password("secret")
+    root = library["root"]
+    fight = _id((root / "Battle" / "fight.mp3").as_posix())
+    client.post("/api/auth/login", json={"password": "secret"})
+    client.post("/api/users", json={"name": "anna", "password": "pw1234"})
+    client.post("/api/users", json={"name": "bob", "password": "pw1234"})
+
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    client.post("/api/playlists", json={"path": (root / "Secret").as_posix(), "ids": [fight], "private": True})
+    client.post("/api/library/rescan")
+    listed = {p["name"]: p["playlist_id"] for p in client.get("/api/library/playlists").json()["playlists"]}
+    ufid = _ufid(client, root / "Battle" / "fight.mp3")
+
+    created = client.post("/api/adventures", json={"title": "The Sunken Crypt"}).json()
+    assert created["owner"] == "anna" and created["visibility"] == "private" and len(created["blocks"]) == 1 and created["editable"]
+    assert (root / ".adventures").is_dir()
+
+    block = created["blocks"][0]
+    second = {"id": "b2", "title": "Crypt", "markdown": "# Dark", "music": [{"type": "song", "ufid": ufid, "path": "x", "title": "Fight"},
+                                                                         {"type": "playlist", "id": listed["Secret"], "title": "Secret"},
+                                                                         {"type": "bogus"}],
+              "effects": [{"path": "Rain", "loop": True}], "light": {"scene": "Fire", "brightness": 80, "unknown": 1}}
+    body = {"title": "Crypt", "owner": "mallory", "blocks": [{**block, "title": "Start"}, second, {"title": "no id"}],
+            "links": [{"from": block["id"], "to": "b2", "label": "enter"}, {"from": "b2", "to": "missing"}, {"from": "b2", "to": "b2"}]}
+    saved = client.put(f"/api/adventures/{created['id']}", json=body).json()
+    assert saved["owner"] == "anna" and saved["title"] == "Crypt" and [b["title"] for b in saved["blocks"]] == ["Start", "Crypt", "no id"]
+    assert saved["links"] == [{"from": block["id"], "to": "b2", "label": "enter"}]
+    assert saved["blocks"][1]["music"][0]["ufid"] == ufid and len(saved["blocks"][1]["music"]) == 2
+    assert saved["blocks"][1]["light"] == {"scene": "Fire", "brightness": 80} and saved["blocks"][1]["effects"][0]["loop"]
+
+    # private: only the owner (and the SuperAdmin) see it
+    client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})
+    assert client.get("/api/adventures").json()["adventures"] == []
+    assert client.get(f"/api/adventures/{created['id']}").status_code == 404
+
+    # publishing warns about the private playlist first
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    warned = client.post(f"/api/adventures/{created['id']}/visibility", json={"visibility": "public"}).json()
+    assert warned == {"changed": False, "visibility": "private", "private_playlists": ["Secret"]}
+    published = client.post(f"/api/adventures/{created['id']}/visibility", json={"visibility": "public", "confirm": True}).json()
+    assert published["changed"] and published["visibility"] == "public"
+
+    # others read it, the private playlist is unavailable to them and they cannot change it
+    client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})
+    assert [a["title"] for a in client.get("/api/adventures").json()["adventures"]] == ["Crypt"]
+    view = client.get(f"/api/adventures/{created['id']}").json()
+    assert not view["editable"]
+    assert [ref.get("unavailable") for ref in view["blocks"][1]["music"]] == [None, True]
+    assert client.put(f"/api/adventures/{created['id']}", json=body).status_code == 403
+    assert client.post(f"/api/adventures/{created['id']}/visibility", json={"visibility": "private"}).status_code == 403
+    assert client.delete(f"/api/adventures/{created['id']}").status_code == 403
+
+    client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})
+    assert client.get(f"/api/adventures/{created['id']}").json()["blocks"][1]["music"][1].get("unavailable") is None
+    assert client.post(f"/api/adventures/{created['id']}/visibility", json={"visibility": "nonsense"}).status_code == 400
+    assert client.delete(f"/api/adventures/{created['id']}").json() == {"deleted": True}
+    assert client.get("/api/adventures").json()["adventures"] == []
+
+
+def test_adventure_tabs_are_remembered_per_user(client):
+    tabs = {"open": [{"type": "adventure", "path": "abc"}, {"type": "dir", "path": "x"}], "active": "adventure:abc"}
+    assert client.put("/api/user/state", json={"tabs": tabs}).status_code == 200
+    assert client.get("/api/user/state").json()["tabs"] == tabs
+    assert client.put("/api/user/state", json={"tabs": {"open": [{"type": "bogus", "path": "x"}]}}).status_code == 422

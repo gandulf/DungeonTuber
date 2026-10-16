@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from core.lights import LightSetting
 from core.mp3 import parse_mp3
 from core.settings import AppSettings, SettingKeys
-from core.storage import AlreadyExists, InvalidPath, NotFound
+from core.storage import AlreadyExists, InvalidPath, NotFound, StorageError
 from server import playlists
 from server.auth import current_user, require_auth
 from server.users import ADMIN
@@ -195,6 +195,27 @@ def library_duplicates():
     index = get_index()
     ufid_groups = index.duplicate_ufids(locations)
     return {"groups": index.duplicate_groups(locations) + ufid_groups, "ufid_groups": ufid_groups}
+
+
+@router.get("/api/library/playlists")
+def library_playlists(user: str = Depends(current_user)):
+    """Every playlist the user may see, with its stable id (older playlists get one now), e.g. to link them to the blocks of an adventure."""
+    result = []
+    with storage_errors():
+        for root in get_roots():
+            base = Location(root)
+            for entry in base.storage.walk(base.rel):
+                location = Location(root, entry.path)
+                if not entry.path.lower().endswith(".m3u") or any(not _visible(part) for part in location.rel.split("/")) or hidden(location, user):
+                    continue
+                try:
+                    playlists.ensure_id(location)
+                    playlist_id = playlists.read_id(location)
+                except (StorageError, OSError):
+                    continue
+                if playlist_id:
+                    result.append({"id": location.id, "path": location.client_path, "name": location.stem, "playlist_id": playlist_id})
+    return {"playlists": sorted(result, key=lambda item: item["name"].lower())}
 
 
 @router.get("/api/library/resolve")

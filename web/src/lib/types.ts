@@ -279,7 +279,7 @@ export interface AuthState {
 /** What every user keeps for themselves: favorite folders and the open tabs. */
 export interface UserState {
   favorites: string[];
-  tabs: { open: { type: 'dir' | 'playlist'; path: string }[]; active: string | null } | null;
+  tabs: { open: { type: 'dir' | 'playlist' | 'adventure'; path: string }[]; active: string | null } | null;
   accent: string;
   tour_done: boolean;
   /** Ids of the tour steps the user has seen (Tour.svelte), so steps added later can be shown as news. */
@@ -420,3 +420,51 @@ export interface CloudStatus {
   host: string | null;
   source: KeySource;
 }
+
+// --- adventures --------------------------------------------------------------
+
+export interface SongRef { type: 'song'; ufid: string; path: string; title: string }
+export interface PlaylistRef { type: 'playlist'; id: string; path: string; title: string; unavailable?: boolean }
+export type MusicRef = SongRef | PlaylistRef;
+
+export interface EffectRef { path: string; name: string; loop: boolean; autostart: boolean }
+
+export interface AdventureBlock {
+  id: string;
+  title: string;
+  markdown: string;
+  played: boolean;
+  pos: [number, number];
+  autoplay: boolean;
+  music: MusicRef[];
+  effects: EffectRef[];
+  light: LightSetting | null;
+  images: string[];
+}
+
+export interface AdventureLink { from: string; to: string; label: string | null }
+
+export interface AdventureSummary {
+  id: string;
+  title: string;
+  owner: string;
+  visibility: 'private' | 'public';
+  blocks: number;
+  played: number;
+  updated: number;
+  editable: boolean;
+}
+
+export interface Adventure {
+  id: string;
+  title: string;
+  owner: string;
+  visibility: 'private' | 'public';
+  created: number;
+  updated: number;
+  blocks: AdventureBlock[];
+  links: AdventureLink[];
+  editable: boolean;
+}
+
+export interface PlaylistInfo { id: string; path: string; name: string; playlist_id: string }

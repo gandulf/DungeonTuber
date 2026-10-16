@@ -1,7 +1,9 @@
 <script lang="ts">
   import { t } from '../lib/i18n.svelte';
   import { closeAllTabs, closeDuplicates, closeOtherTabs, closeTab, library, loadTab, moveTab, selectTab } from '../lib/stores/library.svelte';
+  import { adventures, deleteAdventure, openAdventure, renameAdventure } from '../lib/stores/adventure.svelte';
   import { openMenu } from '../lib/stores/ui.svelte';
+  import type { Tab } from '../lib/stores/library.svelte';
   import Icon from './Icon.svelte';
 
   const MIN_TAB = 120; // narrowest a tab may get before it moves into the dropdown
@@ -24,19 +26,29 @@
   });
   const hidden = $derived(library.tabs.filter((tab) => !shown.some((entry) => entry.tab.key === tab.key)));
 
+  const icon = (tab: Tab) => (tab.type === 'playlist' ? 'playlist' : tab.type === 'adventure' ? 'mask' : 'folder');
+
   function showHidden(event: MouseEvent) {
     event.stopPropagation();
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     openMenu({ clientX: rect.right - 240, clientY: rect.bottom + 6 }, [
-      ...hidden.map((tab) => ({ label: tab.name, icon: tab.type === 'playlist' ? 'playlist' : 'folder', action: () => selectTab(tab.key) })),
+      ...hidden.map((tab) => ({ label: tab.name, icon: icon(tab), action: () => selectTab(tab.key) })),
       { separator: true },
       { label: t('Close All'), action: closeAllTabs },
     ]);
   }
 
   function menu(event: MouseEvent, key: string) {
+    const tab = library.tabs.find((item) => item.key === key);
+    const adventure = tab?.type === 'adventure' ? adventures.list.find((item) => item.id === tab.path) : null;
     openMenu(event, [
-      { label: t('Refresh'), icon: 'refresh', action: () => loadTab(key, true) },
+      tab?.type === 'adventure'
+        ? { label: t('Refresh'), icon: 'refresh', action: () => void openAdventure(tab.path) }
+        : { label: t('Refresh'), icon: 'refresh', action: () => loadTab(key, true) },
+      ...(adventure?.editable ? [
+        { label: t('Rename'), icon: 'edit', action: () => void renameAdventure(adventure.id) },
+        { label: t('Delete'), icon: 'trash', action: () => void deleteAdventure(adventure.id, adventure.title) },
+      ] : []),
       { separator: true },
       { label: t('Close'), icon: 'close', action: () => closeTab(key) },
       { label: t('Close Other'), action: () => closeOtherTabs(key) },
@@ -54,7 +66,7 @@
          onauxclick={(e) => e.button === 1 && closeTab(tab.key)} oncontextmenu={(e) => menu(e, tab.key)}
          ondragstart={() => (dragIndex = index)} ondragover={(e) => dragIndex !== null && e.preventDefault()}
          ondrop={() => { if (dragIndex !== null && dragIndex !== index) moveTab(dragIndex, index); dragIndex = null; }}>
-      <Icon name={tab.type === 'playlist' ? 'playlist' : 'folder'} size={15} />
+      <Icon name={icon(tab)} size={15} />
       <span class="name">{tab.name}</span>
       {#if tab.loading}<span class="dot"></span>{/if}
       <button class="close" aria-label={t('Close')} onclick={(e) => { e.stopPropagation(); closeTab(tab.key); }}>

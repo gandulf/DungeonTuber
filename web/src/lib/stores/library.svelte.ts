@@ -13,7 +13,8 @@ import { errorToast, toast } from './ui.svelte';
 
 export interface Tab {
   key: string;
-  type: 'dir' | 'playlist';
+  type: 'dir' | 'playlist' | 'adventure';
+  /** The folder or playlist path; the id of an adventure. */
   path: string;
   name: string;
   tracks: Track[];
@@ -179,14 +180,14 @@ function persistTabs() {
   persistTimer = setTimeout(() => void api.putUserState({ tabs }).catch(() => undefined), 400);
 }
 
-export async function openTab(type: 'dir' | 'playlist', path: string, activate = true, lazy = false) {
+export async function openTab(type: Tab['type'], path: string, activate = true, lazy = false, label?: string) {
   const key = tabKey(type, path);
   const existing = library.tabs.find((tab) => tab.key === key);
   if (existing) {
     if (activate) selectTab(key);
     return existing;
   }
-  const name = path.split('/').filter(Boolean).pop()?.replace(/\.m3u$/i, '') ?? path;
+  const name = label ?? (type === 'adventure' ? t('Adventure') : path.split('/').filter(Boolean).pop()?.replace(/\.m3u$/i, '') ?? path);
   if (type === 'dir') {
     prefs.treeRoot = path; // the default target for new playlists and uploads
     savePrefs();
@@ -201,6 +202,10 @@ export async function openTab(type: 'dir' | 'playlist', path: string, activate =
 export async function loadTab(key: string, force = false) {
   const tab = library.tabs.find((t) => t.key === key);
   if (!tab || tab.loading || (tab.loaded && !force)) return;
+  if (tab.type === 'adventure') {
+    tab.loaded = true; // the adventure itself is loaded by the adventure view (see stores/adventure.svelte.ts)
+    return;
+  }
   tab.loading = true;
   tab.error = null;
   try {

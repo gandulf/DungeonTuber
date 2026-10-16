@@ -1,5 +1,5 @@
 import type {
-  AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, SoundDescription, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, Preset, ServerSettings, Track, TrackList,
+  Adventure, AdventureSummary, AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, SoundDescription, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, PlaylistInfo, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -71,6 +71,19 @@ export const api = {
     form.append('file', file);
     return request<Track>('PUT', `/api/tracks/${id}/cover`, form);
   },
+
+  /** Finds a song by its UFID or a playlist by its id, wherever it was moved to. */
+  resolve: (kind: 'song' | 'playlist', id: string) => get<{ id: string; path: string; count: number }>(`/api/library/resolve?${qs({ [kind]: id })}`),
+  libraryPlaylists: () => get<{ playlists: PlaylistInfo[] }>('/api/library/playlists'),
+
+  // adventures
+  adventures: () => get<{ adventures: AdventureSummary[] }>('/api/adventures'),
+  adventure: (id: string) => get<Adventure>(`/api/adventures/${id}`),
+  createAdventure: (title: string) => request<Adventure>('POST', '/api/adventures', { title }),
+  saveAdventure: (adventure: Pick<Adventure, 'id' | 'title' | 'blocks' | 'links'>) => request<Adventure>('PUT', `/api/adventures/${adventure.id}`, adventure),
+  setAdventureVisibility: (id: string, visibility: 'private' | 'public', confirm = false) =>
+    request<{ changed: boolean; visibility: 'private' | 'public'; private_playlists: string[] }>('POST', `/api/adventures/${id}/visibility`, { visibility, confirm }),
+  deleteAdventure: (id: string) => request('DELETE', `/api/adventures/${id}`),
 
   // playlists & files
   createPlaylist: (path: string, ids: string[] = [], isPrivate = false) =>
@@ -159,7 +172,7 @@ export const api = {
   // effects & analysis
   effects: () => get<{ directory: string | null; effects: Effect[] }>('/api/effects'),
   analyze: (paths: string[]) => request<{ queued: number; pending: number }>('POST', '/api/analysis', { paths }),
-  rescan: (path?: string) => request<{ added: number; changed: number; removed: number; total: number }>('POST', '/api/library/rescan', { path: path ?? null }),
+  rescan: (path?: string) => request<{ added: number; changed: number; removed: number; total: number; ids_assigned: number; ids_failed: number }>('POST', '/api/library/rescan', { path: path ?? null }),
 
   // lights
   lights: () => get<{ enabled: boolean; lights: Light[]; scenes: string[]; agent: boolean }>('/api/lights'),
