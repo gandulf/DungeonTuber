@@ -3,6 +3,7 @@
   const paths: Record<string, string> = {
     play: 'M7 4.5v15l12-7.5z',
     pause: 'M7 4.5h3.5v15H7zM13.5 4.5H17v15h-3.5z',
+    stop: 'M6.5 6.5h11v11h-11z',
     next: 'M6 5l9 7-9 7zM17 5v14',
     prev: 'M18 5l-9 7 9 7zM7 5v14',
     repeat: 'M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4',
@@ -78,7 +79,7 @@
 
 <script lang="ts">
   let { name, size = 18, filled = false, stroke = 1.8, class: cls = '' }: { name: IconName; size?: number; filled?: boolean; stroke?: number; class?: string } = $props();
-  const fillIcons = new Set(['play', 'pause']);
+  const fillIcons = new Set(['play', 'pause', 'stop']);
 </script>
 
 <svg class="icon {cls}" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"

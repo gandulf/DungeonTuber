@@ -70,6 +70,8 @@ class SettingKeys(StrEnum):
     ASSISTANT_SMART_INSTRUCTIONS = "assistantSmartInstructions"
     # the same for the effects mode (the description of a sound effect, an ambience or background music for the sound generation)
     ASSISTANT_EFFECTS_INSTRUCTIONS = "assistantEffectsInstructions"
+    # the same for the image mode (the picture style of the block covers for the image generation)
+    ASSISTANT_IMAGE_INSTRUCTIONS = "assistantImageInstructions"
     # the built-in prompts of the assistant that the SuperAdmin changed ({"compose.vocals": "..."}, see server/assistant.py PROMPTS)
     ASSISTANT_PROMPTS = "assistantPrompts"
     # application key of AcoustID for the metadata lookup (see core/musiclookup.py); never sent back to the browser

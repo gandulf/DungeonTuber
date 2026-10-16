@@ -3,6 +3,7 @@
 An adventure is a plain dict (JSON in a `.dtadv` file). `normalize` turns whatever a client sends into a valid one, so the stored
 files never hold unknown fields, dangling links or oversized text.
 """
+import re
 import time
 import uuid
 
@@ -14,8 +15,11 @@ MAX_LINKS = 2000
 MAX_TEXT = 100_000
 MAX_TITLE = 200
 MAX_REFS = 100
+MAX_ADVENTURE_MUSIC = 1000
 MAX_IMAGES = 50
 MAX_FIELD = 1000
+# the name of an image of the adventure (see server/adventures.py), as the notes and the covers refer to it
+IMAGE_NAME = re.compile(r"^[0-9a-f]{12}\.(png|jpg|gif|webp)$")
 
 
 def new_id() -> str:
@@ -30,10 +34,10 @@ def _number(value: object, default: float = 0.0) -> float:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else default
 
 
-def normalize_music(raw: object) -> list[dict]:
-    """Songs (by UFID, with the last known path) and playlists (by playlist id) a block plays."""
+def normalize_music(raw: object, limit: int = MAX_REFS) -> list[dict]:
+    """Songs (by UFID, with the last known path) and playlists (by playlist id) a block plays or an adventure holds."""
     result = []
-    for item in raw[:MAX_REFS] if isinstance(raw, list) else []:
+    for item in raw[:limit] if isinstance(raw, list) else []:
         if not isinstance(item, dict):
             continue
         kind = item.get("type")
@@ -54,6 +58,23 @@ def normalize_effects(raw: object) -> list[dict]:
     return result
 
 
+def music_key(ref: dict) -> str:
+    return f"song:{ref['ufid']}" if ref["type"] == "song" else f"playlist:{ref['id']}"
+
+
+def adventure_music(raw: object, blocks: list[dict]) -> list[dict]:
+    """The music of the adventure (its own playlist the blocks choose from), each song or playlist once. Adventures from before the
+    playlist existed have none and get theirs from what their blocks play; after that a block may also play a song of one of the
+    adventure's playlists, which is not listed on its own."""
+    refs = normalize_music(raw, MAX_ADVENTURE_MUSIC) if isinstance(raw, list) else [ref for block in blocks for ref in block["music"]]
+    result, seen = [], set()
+    for ref in refs:
+        if music_key(ref) not in seen and len(result) < MAX_ADVENTURE_MUSIC:
+            seen.add(music_key(ref))
+            result.append(ref)
+    return result
+
+
 def normalize_block(raw: dict) -> dict:
     pos = raw.get("pos")
     return {
@@ -66,6 +87,8 @@ def normalize_block(raw: dict) -> dict:
         "music": normalize_music(raw.get("music")),
         "effects": normalize_effects(raw.get("effects")),
         "images": [_text(image) for image in (raw.get("images") or [])[:MAX_IMAGES] if _text(image)] if isinstance(raw.get("images"), list) else [],
+        # the picture shown above the block: an image of the adventure
+        "cover": raw["cover"] if isinstance(raw.get("cover"), str) and IMAGE_NAME.match(raw["cover"]) else None,
     }
 
 
@@ -101,6 +124,7 @@ def normalize(data: dict, owner: str | None = None, previous: dict | None = None
         "updated": now,
         "blocks": blocks,
         "links": links,
+        "music": adventure_music(data.get("music"), blocks),
     }
 
 

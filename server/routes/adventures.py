@@ -1,11 +1,14 @@
 """Adventures: blocks of notes with music and effects, linked into a path. Private ones belong to their owner, public ones are
 visible to everybody; only the owner (and the SuperAdmin) changes them."""
+from typing import Literal
+
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core import adventures as model
+from core.i18n import _
 from core.storage import StorageError
-from server import adventures
+from server import adventures, imagegen
 from server.auth import current_user, require_auth
 from server.events import hub
 from server.routes.library import hidden
@@ -128,6 +131,29 @@ async def upload_image(adventure_id: str, file: UploadFile = File(...), user: st
     except StorageError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return {"name": name}
+
+
+class ImageRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=imagegen.MAX_PROMPT)
+    size: Literal["landscape", "square", "portrait"] = "landscape"
+    seed: int | None = Field(default=None, ge=0, le=2 ** 31 - 1)
+
+
+@router.post("/api/adventures/{adventure_id}/images/generate")
+def generate_image(adventure_id: str, body: ImageRequest, user: str = Depends(current_user)):
+    """Paints an image with the image generation (Stable Diffusion on Modal) and stores it like an upload; a block uses it as its
+    cover. Takes from a few seconds to some minutes (cold start)."""
+    if not imagegen.configured():
+        raise HTTPException(status_code=409, detail=_("The image generation is not configured"))
+    location, _adventure = _load(adventure_id, user, edit=True)
+    try:
+        data, seed = imagegen.generate(body.prompt, body.size, body.seed)
+        name = adventures.save_image(location, adventure_id, data)
+    except (imagegen.ImageGenError, adventures.InvalidImage) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except StorageError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"name": name, "seed": seed}
 
 
 @router.get("/api/adventures/{adventure_id}/images/{name}")

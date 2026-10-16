@@ -5,8 +5,9 @@ import type { AdventureBlock, FilterConfig, SmartFilter, Track } from './types';
 
 const MAX_NOTES = 1500;
 
-/** The notes as plain text for a prompt: without the links, images and Markdown marks, cut to a length a prompt can carry. */
-export function plainText(markdown: string): string {
+/** The notes as plain text for a prompt: without the links, images and Markdown marks, cut to a length a prompt can carry
+ *  (`limit`; the search of the blocks takes all of it). */
+export function plainText(markdown: string, limit = MAX_NOTES): string {
   return markdown
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // images
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links keep their text
@@ -15,7 +16,7 @@ export function plainText(markdown: string): string {
     .replace(/[*_`~]/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
-    .slice(0, MAX_NOTES);
+    .slice(0, limit);
 }
 
 /** What the AI gets to know of a block: its title and its notes. */

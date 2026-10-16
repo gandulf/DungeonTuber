@@ -5,12 +5,17 @@
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { visibleRows } from '../../lib/stores/library.svelte';
   import { cycleRepeat, next, player, previous, setNormalize, togglePlay, toggleShuffle } from '../../lib/stores/player.svelte';
-  import { openMenu } from '../../lib/stores/ui.svelte';
+  import { openMenu, ui } from '../../lib/stores/ui.svelte';
   import Icon from '../Icon.svelte';
+  import EffectMini from './EffectMini.svelte';
   import SeekBar from './SeekBar.svelte';
   import VolumeControl from './VolumeControl.svelte';
 
   const canPlay = $derived(!!player.track || visibleRows().length > 0);
+
+  // a playing effect gets its controls here while the effects panel (right side bar, on narrow screens its drawer) is hidden
+  const effectsShown = $derived(prefs.showEffects && (ui.narrow ? ui.mobilePanel === 'side' : prefs.rightOpen));
+  const effectHere = $derived(player.effectPlaying && !!player.effect && !effectsShown);
 
   function optionsMenu(event: MouseEvent) {
     openMenu(event, [
@@ -66,6 +71,7 @@
   <div class="right">
     <VolumeControl />
     <button class="icon-btn" title={t('Settings')} onclick={optionsMenu}><Icon name="queue" size={19} /></button>
+    {#if effectHere}<EffectMini />{/if}
   </div>
 </footer>
 
@@ -107,6 +113,10 @@
   }
   .play:hover:not(:disabled) { transform: scale(1.05); filter: brightness(1.08); }
   .right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  /* with the effect player the right column takes the room it needs and the main volume gets shorter */
+  .player:has(:global(.effect)) { grid-template-columns: minmax(200px, 1fr) minmax(300px, 1.6fr) auto; }
+  .right:has(:global(.effect)) :global(.volume input) { width: 80px; }
+  .right:has(:global(.effect)) :global(.volume .pct) { display: none; }
   @media (max-width: 900px) {
     .player { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 14px; }
     .now { display: none; }

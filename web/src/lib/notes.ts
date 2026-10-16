@@ -1,7 +1,9 @@
 // Markdown of the notes of an adventure block. Raw HTML is shown as text and only safe link targets survive, so notes
 // (which other users can read once an adventure is public) can never inject markup or scripts.
 // Links can point to a block of the adventure: `[text](block:<id>)` (the id survives renames), or `[[Block title]]` for short,
-// and to a song: `[text](song:<ufid>)` (a click plays it). Images of the adventure are `![alt](image:<name>)`.
+// and to a song: `[text](song:<ufid>)` (a click plays it). Images of the adventure are `![alt](image:<name>)`; a size after a bar in
+// the alt text keeps the aspect ratio: `![map|300](…)` is 300 px wide, `![map|x200](…)` 200 px high, `![map|300x200](…)` fits into
+// that box.
 import { Marked } from 'marked';
 
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -14,6 +16,29 @@ const BLOCK_PREFIX = 'block:';
 const SONG_PREFIX = 'song:';
 const IMAGE_PREFIX = 'image:';
 const IMAGE_NAME = /^[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
+
+/** Where an image of an adventure (a picture of the notes or the cover of a block) is served from. */
+export const imageUrl = (adventure: string, name: string) => `/api/adventures/${encodeURIComponent(adventure)}/images/${encodeURIComponent(name)}`;
+
+const IMAGE_SIZE = /^(.*?)\s*\|\s*(\d{1,5})?(?:\s*[x×]\s*(\d{1,5}))?\s*$/;
+const MAX_SIZE = 4000;
+
+/** The alt text of an image without its size (`map|300x200`) and the size in pixels; null where it is not given. */
+export function imageSize(text: string): { alt: string; width: number | null; height: number | null } {
+  const match = IMAGE_SIZE.exec(text);
+  const [width, height] = [match?.[2], match?.[3]].map((value) => (value && +value > 0 ? Math.min(+value, MAX_SIZE) : null));
+  if (!match || (width === null && height === null)) return { alt: text, width: null, height: null };
+  return { alt: match[1], width, height };
+}
+
+/** The <img> of the notes: with a size it scales to it and keeps its aspect ratio (both: it fits into the box). */
+function imageTag(src: string, text: string, title?: string | null): string {
+  const { alt, width, height } = imageSize(text);
+  const style = width && height ? ` style="width:${width}px;height:${height}px;object-fit:contain"`
+    : width ? ` style="width:${width}px;height:auto"` : height ? ` style="height:${height}px;width:auto;object-fit:contain"` : '';
+  return `<img src="${src}" alt="${escape(alt)}"${title ? ` title="${escape(title)}"` : ''}${style} loading="lazy">`;
+}
+
 let adventureId = ''; // the adventure being rendered: where its images are served from
 let known: BlockRef[] = []; // the blocks of the adventure being rendered (the renderer below is synchronous)
 
@@ -36,10 +61,10 @@ marked.use({
     image({ href, title, text }) {
       if (href.startsWith(IMAGE_PREFIX)) {
         const name = href.slice(IMAGE_PREFIX.length);
-        return IMAGE_NAME.test(name) && adventureId ? `<img src="/api/adventures/${escape(adventureId)}/images/${name}" alt="${escape(text)}" loading="lazy">` : escape(text);
+        return IMAGE_NAME.test(name) && adventureId ? imageTag(`/api/adventures/${escape(adventureId)}/images/${name}`, text) : escape(imageSize(text).alt);
       }
-      if (!safeUrl(href)) return escape(text);
-      return `<img src="${escape(href)}" alt="${escape(text)}"${title ? ` title="${escape(title)}"` : ''} loading="lazy">`;
+      if (!safeUrl(href)) return escape(imageSize(text).alt);
+      return imageTag(escape(href), text, title);
     },
   },
 });
@@ -48,11 +73,15 @@ marked.use({
 export function renderNotes(source: string, blocks: BlockRef[] = [], adventure = ''): string {
   known = blocks;
   adventureId = adventure;
-  const resolved = source.replace(/\[\[([^[\]\n]+)\]\]/g, (match, title: string) => {
+  return marked.parse(resolveBlockTitles(source, blocks), { async: false });
+}
+
+/** `[[Block title]]` as a link to that block (by its id, which survives renaming); titles without a block stay as they are. */
+export function resolveBlockTitles(source: string, blocks: BlockRef[]): string {
+  return source.replace(/\[\[([^[\]\n]+)\]\]/g, (match, title: string) => {
     const hit = blocks.find((block) => block.title.trim().toLowerCase() === title.trim().toLowerCase());
     return hit ? `[${title.trim()}](${BLOCK_PREFIX}${hit.id})` : match;
   });
-  return marked.parse(resolved, { async: false });
 }
 
 /** The block a click on rendered notes points to (a link to a block), or null. */
@@ -61,75 +90,8 @@ export function blockLinkTarget(target: EventTarget | null): string | null {
   return link && !link.classList.contains('broken') ? link.dataset.block ?? null : null;
 }
 
-/** While `[[` is being typed before the caret: where it starts and the blocks whose title fits what follows. */
-export function blockSuggestions(text: string, caret: number, blocks: BlockRef[], limit = 8): { start: number; matches: BlockRef[] } | null {
-  const start = text.lastIndexOf('[[', caret - 1);
-  if (start < 0) return null;
-  const query = text.slice(start + 2, caret);
-  if (/[\]\n]/.test(query)) return null;
-  const needle = query.trim().toLowerCase();
-  const matches = blocks.filter((block) => block.title.toLowerCase().includes(needle)).slice(0, limit);
-  return matches.length ? { start, matches } : null;
-}
-
-/** Replaces the `[[query` before the caret with a link to the chosen block. */
-export function applySuggestion(text: string, start: number, caret: number, block: BlockRef): Edit {
-  return insertLink(text, start, caret, block.title || 'block', BLOCK_PREFIX + block.id);
-}
-
-/** Inserts an uploaded image of the adventure at the caret (replacing the selection). */
-export function applyImage(text: string, start: number, end: number, name: string, alt = ''): Edit {
-  const image = `![${alt || text.slice(start, end)}](${IMAGE_PREFIX}${name})`;
-  return { text: text.slice(0, start) + image + text.slice(end), start: start + image.length, end: start + image.length };
-}
-
 /** The song (its UFID) a click on rendered notes points to, or null. */
 export function songLinkTarget(target: EventTarget | null): string | null {
   const link = (target as Element | null)?.closest?.<HTMLElement>('a[data-song]');
   return link?.dataset.song ?? null;
-}
-
-function insertLink(text: string, start: number, end: number, label: string, target: string): Edit {
-  const link = `[${label}](${target})`;
-  return { text: text.slice(0, start) + link + text.slice(end), start: start + link.length, end: start + link.length };
-}
-
-/** Turns the selection into a link to a block (the title of the block when nothing is selected). */
-export function applyBlockLink(text: string, start: number, end: number, block: BlockRef): Edit {
-  return insertLink(text, start, end, text.slice(start, end) || block.title || 'block', BLOCK_PREFIX + block.id);
-}
-
-/** Turns the selection into a link that plays a song (the title of the song when nothing is selected). */
-export function applySongLink(text: string, start: number, end: number, song: { ufid: string; title: string }): Edit {
-  return insertLink(text, start, end, text.slice(start, end) || song.title || 'song', SONG_PREFIX + song.ufid);
-}
-
-/** What the formatting toolbar of the editor does to the selected text: [before, after] around it, or a prefix for every line. */
-export type Format = 'bold' | 'italic' | 'heading' | 'list' | 'quote' | 'link' | 'rule';
-
-export interface Edit { text: string; start: number; end: number }
-
-/** Applies a format to the selection of `text` and returns the new text with the new selection. */
-export function applyFormat(text: string, start: number, end: number, format: Format): Edit {
-  const selected = text.slice(start, end);
-  const wrap = (before: string, after: string, placeholder: string): Edit => {
-    const inner = selected || placeholder;
-    return { text: text.slice(0, start) + before + inner + after + text.slice(end), start: start + before.length, end: start + before.length + inner.length };
-  };
-  if (format === 'bold') return wrap('**', '**', 'bold');
-  if (format === 'italic') return wrap('*', '*', 'italic');
-  if (format === 'link') return wrap('[', '](https://)', 'text');
-  if (format === 'rule') {
-    const insert = (start > 0 && text[start - 1] !== '\n' ? '\n' : '') + '\n---\n';
-    return { text: text.slice(0, start) + insert + text.slice(end), start: start + insert.length, end: start + insert.length };
-  }
-  // line formats: every line touched by the selection gets the prefix (or loses it when all of them have it)
-  const prefix = format === 'heading' ? '## ' : format === 'quote' ? '> ' : '- ';
-  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-  const newline = text.indexOf('\n', end);
-  const lineEnd = newline < 0 ? text.length : newline;
-  const lines = text.slice(lineStart, lineEnd).split('\n');
-  const all = lines.every((line) => line.startsWith(prefix));
-  const changed = lines.map((line) => (all ? line.slice(prefix.length) : prefix + line)).join('\n');
-  return { text: text.slice(0, lineStart) + changed + text.slice(lineEnd), start: lineStart, end: lineStart + changed.length };
 }

@@ -116,10 +116,12 @@ function updateMediaSession(track: Track) {
 let queue: Track[] | null = null;
 
 /** Plays a list of songs one after the other (the repeat and shuffle options of the player apply). */
-export async function playQueue(tracks: Track[], crossfade = prefs.crossfade) {
+/** Plays the songs as the queue: from `start`, or without it from the first song (a random one with shuffle). */
+export async function playQueue(tracks: Track[], crossfade = prefs.crossfade, start?: number) {
   if (!tracks.length) return;
   queue = tracks;
-  await playTrack(tracks[prefs.shuffle ? Math.floor(Math.random() * tracks.length) : 0], crossfade);
+  const index = start ?? (prefs.shuffle ? Math.floor(Math.random() * tracks.length) : 0);
+  await playTrack(tracks[Math.min(Math.max(index, 0), tracks.length - 1)], crossfade);
 }
 
 export async function playTrack(track: Track, crossfade = prefs.crossfade) {

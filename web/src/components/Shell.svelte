@@ -6,7 +6,7 @@
   import { t } from '../lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import { data } from '../lib/stores/data.svelte';
-  import { adventures, flushSave, openAdventure } from '../lib/stores/adventure.svelte';
+  import { adventures, endSongSearch, flushSave, openAdventure, pickBlock } from '../lib/stores/adventure.svelte';
   import { assistant } from '../lib/stores/assistant.svelte';
   import { analysis, downloads, type JobKind } from '../lib/stores/downloads.svelte';
   import { effects } from '../lib/stores/effects.svelte';
@@ -33,6 +33,12 @@
 
   const tab = $derived(activeTab());
   const adventureTab = $derived(tab?.type === 'adventure' ? tab : null);
+
+  // the music of a block is searched in the whole library; leaving that mode in any other way ends the search
+  const searchingFor = $derived(library.global ? pickBlock() : null);
+  $effect(() => {
+    if (!library.global && adventures.pickFor) adventures.pickFor = null;
+  });
 
   // the adventure of the active tab is loaded when its tab is shown, and saved when another tab takes over
   $effect(() => {
@@ -165,6 +171,14 @@
       {#if adventureTab}
         {#if adventures.current?.id === adventureTab.path}<AdventureView />{:else}<span class="loading muted">{t('Loading…')}</span>{/if}
       {:else}
+        {#if searchingFor}
+          <div class="pick-bar">
+            <Icon name="mask" size={16} />
+            <span class="ellipsis">{t('Find music for the block "{0}": + adds a song to it.', searchingFor.title || t('Untitled'))}</span>
+            <span class="muted count">{t('{0} song(s) in the block', searchingFor.music.length)}</span>
+            <button class="btn sm primary" onclick={() => void endSongSearch()}><Icon name="back" size={13} />{t('Back to the adventure')}</button>
+          </div>
+        {/if}
         <FilterPanel />
         <TagBar />
         {#if tab}
@@ -231,6 +245,10 @@
   .sidebar { flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--bg-2); border-right: 1px solid var(--border); }
   .right { flex: none; display: flex; flex-direction: column; min-height: 0; padding: 14px 14px 14px 0; overflow-y: auto; }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 0 12px; }
+  .pick-bar { display: flex; align-items: center; gap: 10px; margin: 0 16px; padding: 8px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .pick-bar .ellipsis { flex: 1; min-width: 0; }
+  .pick-bar .count { font-size: var(--fs-xs); font-weight: 400; flex: none; }
+  .pick-bar .btn { display: inline-flex; align-items: center; gap: 6px; flex: none; }
   .loading { padding: 24px 16px; }
   .table-wrap { flex: 1; min-height: 0; display: flex; }
   .scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 50; }

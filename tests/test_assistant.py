@@ -62,8 +62,8 @@ def test_the_key_is_never_sent_back(client):
                       "keySource": "settings", "groqKeySource": None,
                       "instructions": assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip(),
                       "defaultInstructions": {"music": assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip(), "smart": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(),
-                                              "compose": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip()},
-                      "generalInstructions": "", "composeInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "smartInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "effectsInstructions": "", "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
+                                              "compose": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "image": assistant.DEFAULT_IMAGE_INSTRUCTIONS},
+                      "generalInstructions": "", "composeInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "smartInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "effectsInstructions": "", "imageInstructions": assistant.DEFAULT_IMAGE_INSTRUCTIONS, "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
                       "groqDefaultModel": assistant.GROQ_DEFAULT_MODEL, "groqKeyHint": "", "groqModels": assistant.GROQ_MODELS,
                       "prompts": assistant.prompts()}
     assert "gsk_secret" not in client.get("/api/assistant/config").text
@@ -436,3 +436,16 @@ def test_the_story_mode_drafts_notes(client, gemini):
     assert system.startswith(assistant.STORY_DRAFT_PROMPT) and system.endswith("We play DSA.")
     assert set(calls[0]["body"]["generationConfig"]["responseSchema"]["properties"]) == {"message", "text"}
 
+
+
+def test_the_image_mode_has_its_own_instructions_with_a_style_default(client):
+    style = assistant.DEFAULT_IMAGE_INSTRUCTIONS
+    assert client.get("/api/assistant/config").json()["imageInstructions"] == style and "DSA RPG style" in style
+    assert assistant.system_prompt("image").endswith(style)
+    client.put("/api/assistant/config", json={"generalInstructions": "Wir spielen DSA 4.1."})
+    assert "DSA 4.1" not in assistant.system_prompt("image")  # the general chat instructions no longer reach the pictures
+
+    status = client.put("/api/assistant/config", json={"imageInstructions": "watercolor, soft light"}).json()
+    assert status["imageInstructions"] == "watercolor, soft light"
+    assert assistant.system_prompt("image").endswith("watercolor, soft light")
+    assert client.put("/api/assistant/config", json={"imageInstructions": ""}).json()["imageInstructions"] == style

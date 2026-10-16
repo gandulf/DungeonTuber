@@ -11,6 +11,7 @@
   import { displayTags, hasTag } from '../../lib/tags';
   import { duplicateInfo, extraCategoryKeys, filter, GLOBAL_LIMIT, library, loadTab, removeFromPlaylist, reorderPlaylist, setSort, tabTagNames, updateTrack, visibleRows, type Tab } from '../../lib/stores/library.svelte';
   import { player, playTrack, refreshCurrentTrack } from '../../lib/stores/player.svelte';
+  import { addTrackToPickBlock, pickBlock, pickBlockHas } from '../../lib/stores/adventure.svelte';
   import { errorToast, openDialog, openMenu, ui, type MenuItem } from '../../lib/stores/ui.svelte';
   import type { Track } from '../../lib/types';
   import ImagePopup from '../dialogs/ImagePopup.svelte';
@@ -32,6 +33,8 @@
   const rowHeight = $derived(ROW_HEIGHT[prefs.rowStyle]);
 
   const rows = $derived(visibleRows());
+  // the whole library is searched for music of an adventure block: each song gets a + that adds it to the block
+  const picking = $derived(!!tab.global && !!pickBlock());
   const folderOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')));
   const filterActive = $derived(!emptyFilter(filter));
 
@@ -592,6 +595,13 @@
                       {/if}
                     {/if}
                   </div>
+                  {#if picking}
+                    {@const has = pickBlockHas(track)}
+                    <button type="button" class="pick-add" class:has disabled={has} title={has ? t('The block already has this song.') : t('Add to the block')}
+                            aria-label={t('Add to the block')} onclick={(e) => { e.stopPropagation(); addTrackToPickBlock(track); }} ondblclick={(e) => e.stopPropagation()}>
+                      <Icon name={has ? 'check' : 'plus'} size={15} />
+                    </button>
+                  {/if}
                   {#if track.light?.color}<span class="bulb" style:color={track.light.color} title={t('Lights')}><Icon name="bulb" size={15} filled /></span>{/if}
                   {#if track.chapters.length}<span class="muted" title={t('Chapters')}><Icon name="marker" size={14} /></span>{/if}
                 </div>
@@ -698,6 +708,9 @@
   .tags { display: flex; flex: 1; gap: 5px; min-width: 0; overflow: hidden; align-items: center; }
   .more-tags { font-size: var(--fs-xs); color: var(--faint); flex: none; white-space: nowrap; }
   .bulb { display: flex; filter: drop-shadow(0 0 4px currentColor); }
+  .pick-add { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: white; background: var(--accent); box-shadow: var(--shadow); }
+  .pick-add:hover:not(:disabled) { transform: scale(1.08); }
+  .pick-add.has { background: var(--surface); color: var(--green); box-shadow: none; cursor: default; }
   .bar-cell { display: flex; align-items: center; gap: 8px; width: 100%; }
   .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
   .bar .fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }

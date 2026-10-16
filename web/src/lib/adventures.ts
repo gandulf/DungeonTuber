@@ -1,4 +1,6 @@
 // Pure helpers for adventures: blocks, the links between them and the path through them.
+import { plainText } from './adventureAi';
+import { matcher } from './search';
 import type { Adventure, AdventureBlock, AdventureLink, MusicRef } from './types';
 
 type Graph = Pick<Adventure, 'blocks' | 'links'>;
@@ -8,14 +10,24 @@ export function newId(): string {
 }
 
 export function newBlock(title = '', index = 0): AdventureBlock {
-  return { id: newId(), title, markdown: '', played: false, pos: [index * 40, index * 40], autoplay: true, music: [], effects: [], images: [] };
+  return { id: newId(), title, markdown: '', played: false, pos: [index * 40, index * 40], autoplay: true, music: [], effects: [], images: [], cover: null };
 }
 
-/** Size of a block in the graph and the space between blocks (world units). */
+/** The grid of the stored block positions: a block took this much room and these gaps when the graph showed small nodes. The cards of
+ *  the graph and the map are larger, so they are drawn at the positions stretched by CARD_SCALE; the stored files keep their units. */
 export const NODE_W = 170;
 export const NODE_H = 56;
 const GAP_X = 80;
 const GAP_Y = 30;
+
+/** Size of a block card and the space between cards (screen pixels at zoom 1). */
+export const CARD = { w: 200, h: 196 };
+export const CARD_GAP = { x: 64, y: 36 };
+export const CARD_SCALE = { x: (CARD.w + CARD_GAP.x) / (NODE_W + GAP_X), y: (CARD.h + CARD_GAP.y) / (NODE_H + GAP_Y) };
+
+/** Where a card is drawn for a stored position, and back. */
+export const toCard = (pos: [number, number]): [number, number] => [Math.round(pos[0] * CARD_SCALE.x), Math.round(pos[1] * CARD_SCALE.y)];
+export const fromCard = (x: number, y: number): [number, number] => [Math.round(x / CARD_SCALE.x), Math.round(y / CARD_SCALE.y)];
 
 /** Adds a block at the end of the list, to the right of the one that was last, and links that block to it (without a label, so it is the
  *  default next block). */
@@ -94,6 +106,72 @@ export function unreachable(graph: Graph): AdventureBlock[] {
 
 export const refKey = (ref: MusicRef) => (ref.type === 'song' ? `song:${ref.ufid}` : `playlist:${ref.id}`);
 
+export interface BlockHit {
+  block: AdventureBlock;
+  /** A piece of the notes around the first word of the query that was found literally (`match`), or their start. */
+  before: string;
+  match: string;
+  after: string;
+}
+
+const SNIPPET = 48;
+
+/** The blocks whose title or notes fit the query (tolerant like the song search: any order, small typos), those with a fitting
+ *  title first, each with a snippet of its notes for the list. */
+export function searchBlocks(blocks: AdventureBlock[], query: string, limit = 20): BlockHit[] {
+  if (!query.trim()) return [];
+  const fits = matcher(query);
+  const terms = query.trim().split(/\s+/).filter((word) => word.length > 1).sort((a, b) => b.length - a.length);
+  const hits: (BlockHit & { inTitle: boolean })[] = [];
+  for (const block of blocks) {
+    const text = plainText(block.markdown, Infinity).replace(/\s+/g, ' '); // all of the notes, not the start a prompt gets
+    if (!fits(`${block.title} ${text}`)) continue;
+    const lower = text.toLowerCase();
+    const found = terms.map((term) => ({ term, at: lower.indexOf(term.toLowerCase()) })).find((item) => item.at >= 0);
+    const hit = found
+      ? { before: (found.at > SNIPPET ? '…' : '') + text.slice(Math.max(0, found.at - SNIPPET), found.at), match: text.slice(found.at, found.at + found.term.length),
+          after: text.slice(found.at + found.term.length, found.at + found.term.length + SNIPPET * 2) }
+      : { before: text.slice(0, SNIPPET * 2), match: '', after: '' };
+    hits.push({ block, ...hit, inTitle: fits(block.title) });
+  }
+  return hits.sort((a, b) => Number(b.inTitle) - Number(a.inTitle)).slice(0, limit).map(({ inTitle: _, ...hit }) => hit);
+}
+
+/** Moves the entry at `from` so that it lands where the entry at `to` was dropped on: `to` counts the positions before the move
+ *  (0 = first, `list.length` = after the last). Returns whether the order changed. */
+export function moveEntry<T>(list: T[], from: number, to: number): boolean {
+  if (from < 0 || from >= list.length || to < 0 || to > list.length) return false;
+  const target = to > from ? to - 1 : to;
+  if (target === from) return false;
+  const [entry] = list.splice(from, 1);
+  list.splice(target, 0, entry);
+  return true;
+}
+
+/** Assigns a song or playlist to the adventure (its own playlist) unless it holds it already. */
+export function addAdventureMusic(adventure: Pick<Adventure, 'music'>, ref: MusicRef): boolean {
+  if (adventure.music.some((item) => refKey(item) === refKey(ref))) return false;
+  adventure.music.push(ref);
+  return true;
+}
+
+/** Adds a song or playlist to a block and, so the block keeps choosing from it, to the adventure; returns whether the block changed. */
+export function assignMusic(adventure: Pick<Adventure, 'music'>, block: AdventureBlock, ref: MusicRef): boolean {
+  addAdventureMusic(adventure, ref);
+  return addMusic(block, ref);
+}
+
+/** The blocks that play a song or playlist of the adventure. */
+export const blocksUsing = (adventure: Pick<Adventure, 'blocks'>, ref: MusicRef): AdventureBlock[] =>
+  adventure.blocks.filter((block) => block.music.some((item) => refKey(item) === refKey(ref)));
+
+/** Takes a song or playlist out of the adventure and out of every block that plays it (the blocks choose from the adventure's music). */
+export function removeAdventureMusic(adventure: Pick<Adventure, 'blocks' | 'music'>, ref: MusicRef) {
+  const key = refKey(ref);
+  adventure.music = adventure.music.filter((item) => refKey(item) !== key);
+  for (const block of adventure.blocks) block.music = block.music.filter((item) => refKey(item) !== key);
+}
+
 /** Adds a song or playlist to a block unless it is there already. */
 export function addMusic(block: AdventureBlock, ref: MusicRef): boolean {
   if (block.music.some((item) => refKey(item) === refKey(ref))) return false;
@@ -103,6 +181,15 @@ export function addMusic(block: AdventureBlock, ref: MusicRef): boolean {
 
 /** Arranges the blocks in columns by their distance from the first block (blocks nothing leads to start their own tree below). */
 export function autoLayout(graph: Graph) {
+  const cells = layers(graph);
+  for (const block of graph.blocks) {
+    const [column, row] = cells.get(block.id)!;
+    block.pos = [column * (NODE_W + GAP_X), row * (NODE_H + GAP_Y)];
+  }
+}
+
+/** The column (distance from the first block) and the row of every block, as autoLayout places them. */
+function layers(graph: Graph): Map<string, [number, number]> {
   const depth = new Map<string, number>();
   for (const root of graph.blocks) {
     if (depth.has(root.id)) continue;
@@ -119,10 +206,37 @@ export function autoLayout(graph: Graph) {
     }
   }
   const rows = new Map<number, number>();
+  const cells = new Map<string, [number, number]>();
   for (const block of graph.blocks) {
     const column = depth.get(block.id) ?? 0;
     const row = rows.get(column) ?? 0;
     rows.set(column, row + 1);
-    block.pos = [column * (NODE_W + GAP_X), row * (NODE_H + GAP_Y)];
+    cells.set(block.id, [column, row]);
   }
+  return cells;
+}
+
+export interface CardLayout {
+  /** The top left corner of every card. */
+  pos: Map<string, [number, number]>;
+  width: number;
+  height: number;
+}
+
+/** Where the cards of the adventure map (the welcome screen of play mode) go: the arrangement of the graph editor, stretched to the
+ *  size of a card so that cards do not overlap where the blocks did not; blocks that were never arranged (all in one spot) get the
+ *  columns of autoLayout. */
+export function cardLayout(graph: Graph, card: { w: number; h: number } = CARD, gap: { x: number; y: number } = CARD_GAP): CardLayout {
+  const pos = new Map<string, [number, number]>();
+  const [first, ...rest] = graph.blocks;
+  if (!first) return { pos, width: 0, height: 0 };
+  if (rest.every((block) => block.pos[0] === first.pos[0] && block.pos[1] === first.pos[1])) {
+    for (const [id, [column, row]] of layers(graph)) pos.set(id, [column * (card.w + gap.x), row * (card.h + gap.y)]);
+  } else {
+    const [sx, sy] = [(card.w + gap.x) / (NODE_W + GAP_X), (card.h + gap.y) / (NODE_H + GAP_Y)];
+    const [left, top] = [Math.min(...graph.blocks.map((block) => block.pos[0])), Math.min(...graph.blocks.map((block) => block.pos[1]))];
+    for (const block of graph.blocks) pos.set(block.id, [Math.round((block.pos[0] - left) * sx), Math.round((block.pos[1] - top) * sy)]);
+  }
+  const corners = [...pos.values()];
+  return { pos, width: Math.max(...corners.map(([x]) => x)) + card.w, height: Math.max(...corners.map(([, y]) => y)) + card.h };
 }

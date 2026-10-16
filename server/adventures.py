@@ -92,12 +92,18 @@ def delete(location: Location, adventure_id: str | None = None):
             pass  # it had no images
 
 
+def all_music(adventure: dict):
+    """The music of the adventure and of its blocks (a block holds copies of the adventure's references)."""
+    yield from adventure.get("music", [])
+    for block in adventure["blocks"]:
+        yield from block["music"]
+
+
 def mark_unavailable(adventure: dict, user: str, hidden) -> dict:
     """Playlists the viewer may not see (private ones of somebody else) are marked, so the adventure shows them as unavailable."""
-    for block in adventure["blocks"]:
-        for ref in block["music"]:
-            if ref["type"] == "playlist" and any(hidden(location, user) for location in playlists.find(ref["id"])):
-                ref["unavailable"] = True
+    for ref in all_music(adventure):
+        if ref["type"] == "playlist" and any(hidden(location, user) for location in playlists.find(ref["id"])):
+            ref["unavailable"] = True
     return adventure
 
 
@@ -105,14 +111,13 @@ def private_playlists(adventure: dict) -> list[str]:
     """Names of the private playlists an adventure refers to (they would be unavailable to others once it is public)."""
     index = get_index()
     names: list[str] = []
-    for block in adventure["blocks"]:
-        for ref in block["music"]:
-            if ref["type"] != "playlist":
-                continue
-            for location in playlists.find(ref["id"]):
-                name = ref["title"] or location.stem
-                if index.is_private(location) and name not in names:
-                    names.append(name)
+    for ref in all_music(adventure):
+        if ref["type"] != "playlist":
+            continue
+        for location in playlists.find(ref["id"]):
+            name = ref["title"] or location.stem
+            if index.is_private(location) and name not in names:
+                names.append(name)
     return names
 
 
@@ -120,7 +125,7 @@ def private_playlists(adventure: dict) -> list[str]:
 
 IMAGE_TYPES = {"PNG": ("png", "image/png"), "JPEG": ("jpg", "image/jpeg"), "GIF": ("gif", "image/gif"), "WEBP": ("webp", "image/webp")}
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
-IMAGE_NAME = re.compile(r"^[0-9a-f]{12}\.(png|jpg|gif|webp)$")
+IMAGE_NAME = model.IMAGE_NAME
 IMAGE_LINK = re.compile(r"image:([0-9a-f]{12}\.(?:png|jpg|gif|webp))")
 
 
@@ -163,11 +168,13 @@ def read_image(location: Location, adventure_id: str, name: str) -> tuple[bytes,
 
 
 def referenced_images(adventure: dict) -> set[str]:
-    return {name for block in adventure["blocks"] for name in IMAGE_LINK.findall(block["markdown"])}
+    """The images the notes and the covers of the blocks use."""
+    used = {name for block in adventure["blocks"] for name in IMAGE_LINK.findall(block["markdown"])}
+    return used | {block["cover"] for block in adventure["blocks"] if block.get("cover")}
 
 
 def remove_unused_images(location: Location, adventure: dict) -> int:
-    """Deletes the images no block refers to any more; returns how many."""
+    """Deletes the images no block refers to any more (in its notes or as its cover); returns how many."""
     folder = assets_folder(location, adventure["id"])
     try:
         entries = folder.storage.list(folder.rel)

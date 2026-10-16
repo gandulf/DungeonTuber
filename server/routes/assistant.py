@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core.i18n import _
-from server import assistant, musicgen, songcheck, soundgen
+from server import assistant, imagegen, musicgen, songcheck, soundgen
 from server.auth import current_user, require_admin, require_auth
 from server.paths import safe_path
 
@@ -30,7 +30,7 @@ class SearchContext(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=200)
-    mode: Literal["music", "general", "smart", "compose", "effects", "story"] = "music"
+    mode: Literal["music", "general", "smart", "compose", "effects", "story", "image"] = "music"
     context: SearchContext | None = None
 
 
@@ -79,6 +79,7 @@ class AssistantConfig(BaseModel):
     composeInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     smartInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     effectsInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
+    imageInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     # the built-in prompts by name (see assistant.PROMPTS); empty or the default restores the built-in one
     prompts: dict[str, Annotated[str, Field(max_length=assistant.MAX_PROMPT_LENGTH)]] | None = Field(default=None, max_length=20)
     groqKey: str | None = None  # None keeps the stored key
@@ -117,7 +118,8 @@ def get_models():
 @router.put("/api/assistant/config", dependencies=[Depends(require_admin)])
 def put_config(body: AssistantConfig):
     assistant.configure(body.key, body.model, body.instructions, body.generalInstructions, body.groqKey, body.groqModel,
-                         body.composeInstructions, body.smartInstructions, body.prompts, body.effectsInstructions)
+                         body.composeInstructions, body.smartInstructions, body.prompts, body.effectsInstructions,
+                         body.imageInstructions)
     return assistant.status()
 
 
@@ -191,3 +193,24 @@ def put_soundgen(body: CloudRequest):
 def delete_soundgen():
     soundgen.delete_config()
     return soundgen.status()
+
+
+@router.get("/api/assistant/imagegen", dependencies=[Depends(require_admin)])
+def imagegen_status():
+    """Whether the image generation is configured (the key and the secret are never sent back)."""
+    return imagegen.status()
+
+
+@router.put("/api/assistant/imagegen", dependencies=[Depends(require_admin)])
+def put_imagegen(body: CloudRequest):
+    try:
+        imagegen.save_config(body.url, body.key, body.secret)
+    except imagegen.CloudError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return imagegen.status()
+
+
+@router.delete("/api/assistant/imagegen", dependencies=[Depends(require_admin)])
+def delete_imagegen():
+    imagegen.delete_config()
+    return imagegen.status()

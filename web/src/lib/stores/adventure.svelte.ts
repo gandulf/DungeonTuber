@@ -1,12 +1,12 @@
 // The open adventure: editing (autosaved), the path through its blocks in play mode and what a block starts (music, effects).
 // Adventures are tabs next to folders and playlists (see stores/library.svelte.ts); the one of the active tab is `adventures.current`.
 import { api, pathToId } from '../api';
-import { appendBlock, removeBlock } from '../adventures';
+import { addAdventureMusic, addMusic, appendBlock, assignMusic, removeBlock } from '../adventures';
 import { t } from '../i18n.svelte';
 import { prefs } from '../prefs.svelte';
 import type { Adventure, AdventureBlock, AdventureSummary, EffectRef, MusicRef, PlaylistRef, SongRef, Track } from '../types';
 import { effects, loadEffects } from './effects.svelte';
-import { closeTab, library, openTab } from './library.svelte';
+import { closeTab, library, openTab, setGlobal } from './library.svelte';
 import { playEffect, playQueue } from './player.svelte';
 import { askConfirm, askText, errorToast, toast } from './ui.svelte';
 
@@ -21,7 +21,46 @@ export const adventures = $state({
   playing: null as string | null,
   history: [] as string[],
   saving: false,
+  /** "Search…" of a block's music: the whole library is shown, and the + of the song table adds a song to this block. */
+  pickFor: null as { blockId: string } | null,
+  /** Blocks (`adventureId/blockId`) whose cover is still being painted in the background (see applyCoverWhenReady). */
+  pendingCovers: [] as string[],
+  /** The words of the header search to mark in the notes of the block it went to (see goToBlock). */
+  highlight: null as { blockId: string; terms: string[] } | null,
 });
+
+/** The block the song table adds songs to while its music is searched in the whole library. */
+export function pickBlock(): AdventureBlock | null {
+  const id = adventures.pickFor?.blockId;
+  return (id && adventures.current?.editable && adventures.current.blocks.find((block) => block.id === id)) || null;
+}
+
+/** Searches the whole library for music of a block (with the filters, tags and search of the song table). */
+export async function searchSongsForBlock(blockId: string) {
+  adventures.pickFor = { blockId };
+  await setGlobal(true);
+}
+
+/** Back from the search to the adventure; the search text was for the library and would filter the folders otherwise. */
+export async function endSongSearch() {
+  adventures.pickFor = null;
+  library.search = '';
+  await setGlobal(false);
+}
+
+/** The + of the song table: adds the song to the block it searches for, and to the adventure's music. */
+export function addTrackToPickBlock(track: Track) {
+  const block = pickBlock();
+  if (!block) return;
+  if (!track.ufid) {
+    toast(t('This song has no stable id yet. Refresh the library first.'), 'error');
+    return;
+  }
+  const ref: SongRef = { type: 'song', ufid: track.ufid, path: track.path, title: track.title || track.name };
+  change((adventure) => assignMusic(adventure, block, ref));
+}
+
+export const pickBlockHas = (track: Track) => !!track.ufid && !!pickBlock()?.music.some((ref) => ref.type === 'song' && ref.ufid === track.ufid);
 
 const SAVE_DELAY = 700;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -97,7 +136,7 @@ export async function renameAdventure(id: string) {
       await flushSave();
     } else {
       const adventure = await api.adventure(id);
-      await api.saveAdventure({ id, title: title.trim(), blocks: adventure.blocks, links: adventure.links });
+      await api.saveAdventure({ ...adventure, title: title.trim() });
     }
     await loadAdventures();
   } catch (e) {
@@ -150,6 +189,29 @@ export function change(apply: (adventure: Adventure) => void) {
   saveTimer = setTimeout(() => void flushSave(), SAVE_DELAY);
 }
 
+/** Assigns songs to an adventure (its own playlist) and, with `blockId`, to that block as well; returns how many were new to the
+ *  adventure, or to the block. The open adventure is changed in place and autosaved, any other one is loaded, changed and saved. */
+export async function addSongsToAdventure(adventureId: string, refs: MusicRef[], blockId?: string): Promise<number> {
+  let added = 0;
+  const addTo = (adventure: Adventure) => {
+    const block = blockId ? adventure.blocks.find((item) => item.id === blockId) : null;
+    if (blockId && !block) throw new Error(t('This block does not exist any more.'));
+    for (const ref of refs) {
+      const isNew = addAdventureMusic(adventure, ref);
+      if (block ? addMusic(block, ref) : isNew) added++;
+    }
+  };
+  if (adventures.current?.id === adventureId) {
+    change(addTo);
+  } else {
+    const adventure = await api.adventure(adventureId);
+    addTo(adventure);
+    if (added) await api.saveAdventure(adventure);
+  }
+  void loadAdventures(); // the list is sorted by the last change
+  return added;
+}
+
 export async function flushSave() {
   clearTimeout(saveTimer);
   saveTimer = undefined;
@@ -159,10 +221,10 @@ export async function flushSave() {
     saveTimer = setTimeout(() => void flushSave(), SAVE_DELAY); // a save is running: this one follows
     return;
   }
-  const { id, title, blocks, links } = $state.snapshot(adventure);
+  const { id, title, blocks, links, music } = $state.snapshot(adventure);
   adventures.saving = true;
   try {
-    const saved = await api.saveAdventure({ id, title, blocks, links });
+    const saved = await api.saveAdventure({ id, title, blocks, links, music });
     adventure.updated = saved.updated;
     const entry = adventures.list.find((item) => item.id === id);
     if (entry) Object.assign(entry, { title: saved.title, blocks: saved.blocks.length, played: saved.blocks.filter((block) => block.played).length, updated: saved.updated });
@@ -243,7 +305,8 @@ export async function playBlockMusic(block: AdventureBlock) {
     else missing++;
   }
   if (missing) toast(t('{0} song(s) or playlist(s) of this block are not available.', missing), 'error');
-  if (tracks.length) await playQueue(tracks);
+  // the first song of the block starts (it is marked in the editor); shuffle only decides what follows
+  if (tracks.length) await playQueue(tracks, undefined, 0);
 }
 
 export async function startEffect(ref: EffectRef) {
@@ -267,6 +330,46 @@ export async function enterBlock(id: string, remember = true) {
   adventures.mode = 'play';
   for (const effect of block.effects) if (effect.autostart) void startEffect(effect);
   if (block.autoplay && block.music.length) await playBlockMusic(block);
+}
+
+/** "Apply" of the cover dialog: the picture being painted (`painting`) becomes the cover of the block as soon as it is done, while
+ *  the game master works on. The open adventure is changed in place, another one is loaded, changed and saved; a toast tells when
+ *  it is done. `pendingCovers` marks the blocks that wait for their picture. */
+export async function applyCoverWhenReady(adventureId: string, blockId: string, painting: Promise<{ name: string }>) {
+  const key = `${adventureId}/${blockId}`;
+  adventures.pendingCovers = [...adventures.pendingCovers, key];
+  try {
+    const { name } = await painting;
+    const setCover = (adventure: Adventure) => {
+      const block = adventure.blocks.find((item) => item.id === blockId);
+      if (!block) throw new Error(t('This block does not exist any more.'));
+      block.cover = name;
+      return block.title;
+    };
+    let title = '';
+    if (adventures.current?.id === adventureId) {
+      change((adventure) => (title = setCover(adventure)));
+    } else {
+      const adventure = await api.adventure(adventureId);
+      title = setCover(adventure);
+      await api.saveAdventure(adventure);
+    }
+    toast(t('The cover image of "{0}" is ready.', title || t('Untitled')), 'success');
+  } catch (e) {
+    errorToast(e);
+  } finally {
+    adventures.pendingCovers = adventures.pendingCovers.filter((item) => item !== key);
+  }
+}
+
+export const coverPending = (adventureId: string, blockId: string) => adventures.pendingCovers.includes(`${adventureId}/${blockId}`);
+
+/** Goes to a block found with the search of the header: the editor shows it, play mode enters it (with its music). The words of
+ *  the search are marked in its notes (the view that shows them takes `adventures.highlight` and clears it). */
+export function goToBlock(id: string, terms: string[] = []) {
+  adventures.highlight = terms.length ? { blockId: id, terms } : null;
+  if (adventures.mode === 'play') void enterBlock(id);
+  else adventures.selected = id;
 }
 
 export function previousBlock() {

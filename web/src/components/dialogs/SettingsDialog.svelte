@@ -190,6 +190,25 @@
     toast(t('Sound generation saved'), 'success');
   }
 
+  let imageGen = $state<CloudStatus>({ configured: false, host: null, source: null });
+  if (admin) void api.imageGenConfig().then((result) => (imageGen = result)).catch(() => {});
+
+  async function saveImageGen(url: string, key: string, secret: string) {
+    imageGen = await api.putImageGenConfig(url, key, secret);
+    if (data.settings) data.settings.imageGenConfigured = imageGen.configured;
+    toast(t('Image generation saved'), 'success');
+  }
+
+  async function removeImageGen() {
+    if (!(await askConfirm(t('Remove the image generation settings?')))) return;
+    try {
+      imageGen = await api.deleteImageGenConfig();
+      if (data.settings) data.settings.imageGenConfigured = imageGen.configured;
+    } catch (e) {
+      errorToast(e);
+    }
+  }
+
   async function removeSoundGen() {
     if (!(await askConfirm(t('Remove the sound generation settings?')))) return;
     try {
@@ -213,7 +232,7 @@
   let assistantStatus = $state<AssistantStatus | null>(null);
   let assistantKey = $state('');
   let assistantModel = $state('');
-  type InstructionMode = 'music' | 'smart' | 'compose' | 'effects' | 'general';
+  type InstructionMode = 'music' | 'smart' | 'compose' | 'effects' | 'image' | 'general';
   /** The additional instructions, one tab per mode of the assistant. */
   const INSTRUCTION_TABS: { mode: InstructionMode; label: string; icon: string; placeholder: string; hint: string; promptHint: string }[] = [
     { mode: 'music', label: 'New music', icon: 'music',
@@ -232,6 +251,10 @@
       placeholder: 'e.g. We play DSA in Aventuria. Dungeons are damp and echoing, magic sounds crystalline and bright rather than electronic.',
       hint: 'Added to every sound the assistant describes for the sound generation: setting, places, how magic and creatures sound.',
       promptHint: 'The built-in prompt tells the AI how to describe sound effects, ambiences and background music for Stable Audio. The kind of sound chosen in the assistant is added to it.' },
+    { mode: 'image', label: 'Images', icon: 'image',
+      placeholder: 'e.g. watercolor illustration, soft light, muted colors',
+      hint: 'The picture style, added to every block cover the assistant describes for the image generation. Keep it short: the generator reads only about the first 60 words of a description. "Reset to default" inserts the default style again; saved empty, the default is used.',
+      promptHint: 'The built-in prompt tells the AI how to describe a block cover for Stable Diffusion.' },
     { mode: 'general', label: 'General', icon: 'mask', placeholder: 'e.g. We play DSA 4.1 with the core rules and the Aventurian Compendium.',
       hint: 'Added to every question of the general chat: the rules edition, the setting, house rules or the heroes.',
       promptHint: 'The built-in prompt sets the role of the assistant; your instructions above are added to it.' },
@@ -247,11 +270,11 @@
   const promptsChanged = (status: AssistantStatus) => status.prompts.some((entry) => (prompts[entry.name] ?? '').trim() !== entry.value.trim());
   let instructionTab = $state<InstructionMode>('music');
   /** The default text of the instructions that are open (undefined for the modes that have none). */
-  const instructionDefault = $derived(assistantStatus?.defaultInstructions[instructionTab as 'music' | 'smart' | 'compose']);
-  let instructions = $state<Record<InstructionMode, string>>({ music: '', smart: '', compose: '', effects: '', general: '' });
+  const instructionDefault = $derived(assistantStatus?.defaultInstructions[instructionTab as 'music' | 'smart' | 'compose' | 'image']);
+  let instructions = $state<Record<InstructionMode, string>>({ music: '', smart: '', compose: '', effects: '', image: '', general: '' });
   const storedInstructions = (status: AssistantStatus): Record<InstructionMode, string> =>
     ({ music: status.instructions, smart: status.smartInstructions, compose: status.composeInstructions, effects: status.effectsInstructions,
-       general: status.generalInstructions });
+       image: status.imageInstructions, general: status.generalInstructions });
   let assistantModels = $state<{ id: string; name: string }[]>([]);
   let groqKey = $state('');
   let groqModel = $state('');
@@ -307,7 +330,7 @@
 
   const assistantPayload = () => ({ ...(assistantKey.trim() ? { key: assistantKey.trim() } : {}), model: assistantModel.trim(),
     instructions: instructions.music.trim(), smartInstructions: instructions.smart.trim(), composeInstructions: instructions.compose.trim(),
-    effectsInstructions: instructions.effects.trim(), generalInstructions: instructions.general.trim(), prompts: { ...prompts } });
+    effectsInstructions: instructions.effects.trim(), imageInstructions: instructions.image.trim(), generalInstructions: instructions.general.trim(), prompts: { ...prompts } });
 
   async function saveAssistant() {
     try {
@@ -510,7 +533,7 @@
 
 <svelte:window onpointerdowncapture={(e) => { if (tabMenu && !(e.target as Element).closest?.('.tab-select')) tabMenu = false; }} />
 
-<Modal resizable title={t('Settings')} onclose={closeDialog} width="820px">
+<Modal resizable title={t('Settings')} onclose={closeDialog} width="960px">
   <div class="layout">
     <div class="navwrap" class:more-left={navMore.left} class:more-right={navMore.right}>
       <nav bind:this={nav} onscroll={measureNav}>
@@ -723,6 +746,16 @@
             <span class="grow"></span>
             <button class="btn" onclick={() => editConnection(t('Sound generation'), saveSoundGen)}>{soundGen.source === 'settings' ? t('Change…') : t('Set up…')}</button>
             {#if soundGen.source === 'settings'}<button class="btn danger" onclick={removeSoundGen}>{t('Remove')}</button>{/if}
+          </div>
+        </section>
+        <section class="group">
+          <h4>{t('Image generation')}</h4>
+          <span class="muted small">{t('Paints the cover images of adventure blocks with Stable Diffusion 3.5 Medium in a cloud function on Modal, see agents/imagegen/modal_app.py. Create a proxy auth token in the Modal dashboard for the key and the secret; they are never sent back to the browser. With a Groq or Gemini key the assistant turns the notes of a block into the English description.')}</span>
+          <span class="small">{imageGen.configured ? t('Configured ({0})', imageGen.host ?? '') + fromEnv(imageGen.source, 'DT_IMAGEGEN_URL') : t('Not configured')}</span>
+          <div class="row">
+            <span class="grow"></span>
+            <button class="btn" onclick={() => editConnection(t('Image generation'), saveImageGen)}>{imageGen.source === 'settings' ? t('Change…') : t('Set up…')}</button>
+            {#if imageGen.source === 'settings'}<button class="btn danger" onclick={removeImageGen}>{t('Remove')}</button>{/if}
           </div>
         </section>
       {:else if section === 'categories'}
@@ -960,8 +993,10 @@
   .empty { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
   .create { padding-top: 6px; border-top: 1px dashed var(--border-strong); }
   .grow { flex: 1; }
-  .tabs { display: flex; padding: 2px; gap: 2px; border-radius: 9px; background: var(--hover); border: 1px solid var(--border); }
-  .tabs button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 7px;
+  /* the mode tabs scroll sideways when the dialog is narrower than they are (the Modal caps its width at the window) */
+  .tabs { display: flex; padding: 2px; gap: 2px; border-radius: 9px; background: var(--hover); border: 1px solid var(--border); overflow-x: auto;
+          scrollbar-width: thin; }
+  .tabs button { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 7px;
                  color: var(--muted); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
   .tabs button:hover { color: var(--text); }
   .tabs button.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }

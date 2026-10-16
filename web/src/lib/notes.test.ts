@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyBlockLink, applyFormat, applyImage, applySongLink, applySuggestion, blockLinkTarget, blockSuggestions, renderNotes, songLinkTarget } from './notes';
+import { blockLinkTarget, imageSize, renderNotes, resolveBlockTitles, songLinkTarget } from './notes';
 
 describe('renderNotes', () => {
   it('renders headings, emphasis and lists', () => {
@@ -39,6 +39,10 @@ describe('links to blocks', () => {
     expect(renderNotes('[x](javascript:alert(1))', blocks)).not.toContain('href');
   });
 
+  it('turns [[Block title]] into a link by id before the editor reads the notes', () => {
+    expect(resolveBlockTitles('See [[tavern]] and [[Nowhere]]', blocks)).toBe('See [tavern](block:b2) and [[Nowhere]]');
+  });
+
   it('finds the clicked block and ignores broken links', () => {
     const link = (block: string, broken = false) => ({ closest: () => ({ classList: { contains: () => broken }, dataset: { block } }) }) as unknown as EventTarget;
     expect(blockLinkTarget(link('b1'))).toBe('b1');
@@ -47,13 +51,9 @@ describe('links to blocks', () => {
     expect(blockLinkTarget(null)).toBeNull();
   });
 
-  it('turns the selection into a link', () => {
-    expect(applyBlockLink('see here now', 4, 8, blocks[0]).text).toBe('see [here](block:b1) now');
-    expect(applyBlockLink('', 0, 0, blocks[1]).text).toBe('[Tavern](block:b2)');
-  });
 });
 
-describe('images and suggestions', () => {
+describe('images', () => {
   const blocks = [{ id: 'b1', title: 'The Crypt' }, { id: 'b2', title: 'Tavern' }, { id: 'b3', title: 'Crypt door' }];
 
   it('serves images of the adventure and refuses other sources', () => {
@@ -62,22 +62,19 @@ describe('images and suggestions', () => {
     expect(renderNotes('![map](image:0123456789ab.png)')).not.toContain('<img');
   });
 
-  it('suggests blocks while [[ is typed', () => {
-    const text = 'Go to [[cry';
-    const found = blockSuggestions(text, text.length, blocks)!;
-    expect(found.start).toBe(6);
-    expect(found.matches.map((block) => block.id)).toEqual(['b1', 'b3']);
-    expect(blockSuggestions('Go to [[Tavern]] now', 18, blocks)).toBeNull();
-    expect(blockSuggestions('no brackets', 5, blocks)).toBeNull();
-    expect(blockSuggestions('[[zzz', 5, blocks)).toBeNull();
-    expect(blockSuggestions('[[', 2, blocks)!.matches).toHaveLength(3);
+  it('sizes images after a bar in the alt text and keeps their aspect ratio', () => {
+    const image = (alt: string) => renderNotes(`![${alt}](image:0123456789ab.png)`, [], 'adv-1');
+    expect(image('map|300')).toContain('alt="map" style="width:300px;height:auto"');
+    expect(image('map | x200')).toContain('alt="map" style="height:200px;width:auto;object-fit:contain"');
+    expect(image('map|300x200')).toContain('style="width:300px;height:200px;object-fit:contain"');
+    expect(image('|99999')).toContain('alt="" style="width:4000px;height:auto"');
+    expect(image('a|b')).toContain('alt="a|b" loading');
+    expect(image('map|0')).toContain('alt="map|0" loading');
+    expect(renderNotes('![logo|120](https://example.com/a.png)')).toContain('alt="logo" style="width:120px;height:auto"');
+    expect(imageSize('map|x')).toEqual({ alt: 'map|x', width: null, height: null });
   });
 
-  it('replaces the typed part with a block link and inserts images', () => {
-    expect(applySuggestion('Go to [[cry now', 6, 11, blocks[0]).text).toBe('Go to [The Crypt](block:b1) now');
-    expect(applyImage('a b', 1, 2, '0123456789ab.png').text).toBe('a![ ](image:0123456789ab.png)b');
-    expect(applyImage('', 0, 0, '0123456789ab.png', 'map').text).toBe('![map](image:0123456789ab.png)');
-  });
+
 });
 
 describe('links to songs', () => {
@@ -85,31 +82,9 @@ describe('links to songs', () => {
     expect(renderNotes('Hear [the bard](song:u-1) sing.')).toContain('<a href="#" class="song-link" data-song="u-1">the bard</a>');
   });
 
-  it('finds the clicked song and builds links', () => {
+  it('finds the clicked song', () => {
     const link = { closest: () => ({ dataset: { song: 'u-1' } }) } as unknown as EventTarget;
     expect(songLinkTarget(link)).toBe('u-1');
     expect(songLinkTarget({ closest: () => null } as unknown as EventTarget)).toBeNull();
-    expect(applySongLink('listen now', 7, 10, { ufid: 'u-1', title: 'Bard' }).text).toBe('listen [now](song:u-1)');
-    expect(applySongLink('', 0, 0, { ufid: 'u-1', title: 'Bard' }).text).toBe('[Bard](song:u-1)');
-  });
-});
-
-describe('applyFormat', () => {
-  it('wraps the selection or a placeholder', () => {
-    expect(applyFormat('a door b', 2, 6, 'bold')).toEqual({ text: 'a **door** b', start: 4, end: 8 });
-    expect(applyFormat('', 0, 0, 'italic')).toEqual({ text: '*italic*', start: 1, end: 7 });
-    expect(applyFormat('see here', 4, 8, 'link').text).toBe('see [here](https://)');
-  });
-
-  it('prefixes every selected line and removes the prefix again', () => {
-    const list = applyFormat('one\ntwo\nthree', 2, 6, 'list');
-    expect(list.text).toBe('- one\n- two\nthree');
-    expect(applyFormat(list.text, list.start, list.end, 'list').text).toBe('one\ntwo\nthree');
-    expect(applyFormat('title', 0, 0, 'heading').text).toBe('## title');
-    expect(applyFormat('a\nb', 3, 3, 'quote').text).toBe('a\n> b');
-  });
-
-  it('inserts a rule on its own line', () => {
-    expect(applyFormat('text', 4, 4, 'rule').text).toBe('text\n\n---\n');
   });
 });

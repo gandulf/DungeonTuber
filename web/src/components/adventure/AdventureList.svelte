@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { canDropOnAdventure, dropOnAdventure } from '../../lib/actions';
   import { t } from '../../lib/i18n.svelte';
   import { library } from '../../lib/stores/library.svelte';
   import { adventures, createAdventure, deleteAdventure, loadAdventures, openAdventureTab, renameAdventure } from '../../lib/stores/adventure.svelte';
@@ -13,6 +14,8 @@
     return onEvent('adventures.changed', () => void loadAdventures());
   });
 
+  let over = $state<string | null>(null); // the adventure songs are dragged over
+
   function open(id: string) {
     if (ui.mobilePanel === 'tree') ui.mobilePanel = null;
     void openAdventureTab(id);
@@ -25,8 +28,11 @@
     <button class="icon-btn mini" title={t('New adventure')} onclick={() => void createAdventure()}><Icon name="plus" size={14} /></button>
   </div>
   {#each adventures.list as item (item.id)}
-    <button class="nav-item" class:active={activeId === item.id} title={item.title}
+    <button class="nav-item" class:active={activeId === item.id} class:over={over === item.id} title={item.title}
             onclick={() => open(item.id)}
+            ondragover={(e) => { if (item.editable && canDropOnAdventure(e.dataTransfer)) { e.preventDefault(); over = item.id; } }}
+            ondragleave={() => (over = null)}
+            ondrop={(e) => { e.preventDefault(); over = null; void dropOnAdventure(item.id, item.title, e.dataTransfer); }}
             oncontextmenu={(e) => openMenu(e, [
               { label: t('Open'), icon: 'mask', action: () => open(item.id) },
               ...(item.editable ? [
@@ -52,6 +58,7 @@
   .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; color: var(--muted); text-align: left; transition: background 0.15s, color 0.15s; }
   .nav-item:hover { background: var(--hover); color: var(--text); }
   .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav-item.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
   .meta { display: flex; flex: none; margin-left: auto; color: var(--faint); }
   .empty { font-size: var(--fs-xs); padding: 2px 10px 4px; line-height: 1.4; }
 </style>

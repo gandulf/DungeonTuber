@@ -8,9 +8,11 @@ import { activeTab, addToPlaylist, closeTab, library, loadTab, openTab, reloadAl
 import { playTrack, refreshCurrentTrack } from './stores/player.svelte';
 import { askConfirm, askText, errorToast, openDialog, toast, ui, type MenuItem } from './stores/ui.svelte';
 import type { JobKind } from './stores/downloads.svelte';
-import type { BrowseItem, Track } from './types';
+import type { BrowseItem, SongRef, Track } from './types';
+import { addSongsToAdventure } from './stores/adventure.svelte';
 import { metadataPatch, sureMatch } from './normalize';
 import { isMp3, itemsFromDrop, type UploadItem } from './upload';
+import AddToAdventureDialog from '../components/adventure/AddToAdventureDialog.svelte';
 import EditSongDialog from '../components/dialogs/EditSongDialog.svelte';
 import DownloadsDialog from '../components/dialogs/DownloadsDialog.svelte';
 import ImportDialog from '../components/dialogs/ImportDialog.svelte';
@@ -212,6 +214,44 @@ export async function dropOnPlaylist(playlist: string, transfer: DataTransfer | 
   if (ids.length) await addToPlaylist(playlist, [...new Set(ids)]);
 }
 
+/** Songs of the library (from the song table or the folder tree) can be dropped on an adventure. */
+export function canDropOnAdventure(transfer: DataTransfer | null): boolean {
+  const types = transfer?.types ?? [];
+  return types.includes(TRACKS_TYPE) || types.includes(PATH_TYPE);
+}
+
+/** The songs dragged from the song table or the folder tree, as references by their stable id (UFID); songs without one are left
+ *  out with a message, and anything but songs gives an empty list. */
+export async function songsFromTransfer(transfer: DataTransfer | null): Promise<SongRef[]> {
+  if (!transfer) return [];
+  const ids: string[] = [];
+  try {
+    ids.push(...(JSON.parse(transfer.getData(TRACKS_TYPE) || '[]') as string[]));
+  } catch { /* not ours */ }
+  const path = transfer.getData(PATH_TYPE);
+  if (path.toLowerCase().endsWith('.mp3')) ids.push(pathToId(path));
+  if (!ids.length) {
+    toast(t('Only songs can be added to an adventure.'), 'error');
+    return [];
+  }
+  const tracks = await Promise.all([...new Set(ids)].map((id) => api.track(id)));
+  const refs = tracks.filter((track) => track.ufid).map((track): SongRef => ({ type: 'song', ufid: track.ufid!, path: track.path, title: track.title || track.name }));
+  if (refs.length < tracks.length) toast(t('{0} song(s) have no stable id yet and are left out. Refresh the library first.', tracks.length - refs.length), 'error');
+  return refs;
+}
+
+/** Assigns the dropped songs to the adventure's own playlist. */
+export async function dropOnAdventure(adventureId: string, title: string, transfer: DataTransfer | null) {
+  try {
+    const refs = await songsFromTransfer(transfer);
+    if (!refs.length) return;
+    const added = await addSongsToAdventure(adventureId, refs);
+    toast(added ? t('{0} song(s) added to "{1}".', added, title) : t('The adventure already has these songs.'), added ? 'success' : 'info');
+  } catch (e) {
+    errorToast(e);
+  }
+}
+
 /** The SuperAdmin may delete everything, other users what they uploaded or created themselves. */
 export function canDelete(owner?: string | null): boolean {
   return !!data.auth?.is_admin || (!!owner && owner === data.auth?.user);
@@ -282,6 +322,7 @@ export function trackMenu(tracks: Track[], inTree = false): MenuItem[] {
     items.push({ label: t('Analyze'), icon: 'sparkles', tour: 'menu-analyze', action: () => analyze(tracks.map((track) => track.path)) });
   }
   items.push({ separator: true }, { label: t('Add to playlist'), icon: 'playlist', children: playlistMenu(ids) });
+  if (tracks.length) items.push({ label: t('Add to adventure…'), icon: 'mask', action: () => openDialog(AddToAdventureDialog, { tracks }) });
   if (tab?.type === 'playlist') {
     if (single) items.push({ label: t('Scene name…'), icon: 'marker', action: () => editScene(tab.path, single) });
     if (single?.scene) items.push({ label: t('Remove scene name'), icon: 'close', action: () => setScene(tab.path, single, '') });

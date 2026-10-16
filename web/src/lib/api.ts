@@ -80,7 +80,7 @@ export const api = {
   adventures: () => get<{ adventures: AdventureSummary[] }>('/api/adventures'),
   adventure: (id: string) => get<Adventure>(`/api/adventures/${id}`),
   createAdventure: (title: string) => request<Adventure>('POST', '/api/adventures', { title }),
-  saveAdventure: (adventure: Pick<Adventure, 'id' | 'title' | 'blocks' | 'links'>) => request<Adventure>('PUT', `/api/adventures/${adventure.id}`, adventure),
+  saveAdventure: (adventure: Pick<Adventure, 'id' | 'title' | 'blocks' | 'links' | 'music'>) => request<Adventure>('PUT', `/api/adventures/${adventure.id}`, adventure),
   setAdventureVisibility: (id: string, visibility: 'private' | 'public', confirm = false) =>
     request<{ changed: boolean; visibility: 'private' | 'public'; private_playlists: string[] }>('POST', `/api/adventures/${id}/visibility`, { visibility, confirm }),
   deleteAdventure: (id: string) => request('DELETE', `/api/adventures/${id}`),
@@ -90,6 +90,8 @@ export const api = {
     return request<{ name: string }>('POST', `/api/adventures/${id}/images`, form);
   },
   cleanupAdventureImages: (id: string) => request<{ removed: number }>('POST', `/api/adventures/${id}/images/cleanup`),
+  generateAdventureImage: (id: string, prompt: string, size: 'landscape' | 'square' | 'portrait' = 'landscape') =>
+    request<{ name: string; seed: number | null }>('POST', `/api/adventures/${id}/images/generate`, { prompt, size }),
 
   // playlists & files
   createPlaylist: (path: string, ids: string[] = [], isPrivate = false) =>
@@ -151,12 +153,12 @@ export const api = {
   locales: () => get<string[]>('/api/locales'),
 
   // AI assistant (song suggestions)
-  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' | 'compose' | 'effects' | 'story' = 'music',
+  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' | 'compose' | 'effects' | 'story' | 'image' = 'music',
     context?: { tags?: string[]; genres?: string[]; instrumental?: boolean; duration?: number; language?: string; kind?: string }) =>
     request<AssistantReply>('POST', '/api/assistant/chat', { messages, mode, context }),
   assistantVerify: (songs: { title: string; artist: string }[]) => request<{ results: SongCheck[] }>('POST', '/api/assistant/verify', { songs }),
   assistantConfig: () => get<AssistantStatus>('/api/assistant/config'),
-  putAssistantConfig: (config: { key?: string; model?: string; instructions?: string; generalInstructions?: string; composeInstructions?: string; smartInstructions?: string; effectsInstructions?: string; prompts?: Record<string, string>; groqKey?: string; groqModel?: string }) => request<AssistantStatus>('PUT', '/api/assistant/config', config),
+  putAssistantConfig: (config: { key?: string; model?: string; instructions?: string; generalInstructions?: string; composeInstructions?: string; smartInstructions?: string; effectsInstructions?: string; imageInstructions?: string; prompts?: Record<string, string>; groqKey?: string; groqModel?: string }) => request<AssistantStatus>('PUT', '/api/assistant/config', config),
   assistantModels: () => get<{ models: { id: string; name: string }[]; live: boolean }>('/api/assistant/models'),
   // music generation (ACE-Step on Modal)
   compose: (piece: ComposePiece & { dir: string; duration: number; seed?: number | null }) => request<ComposeResult>('POST', '/api/assistant/compose', piece),
@@ -168,6 +170,9 @@ export const api = {
   soundGenConfig: () => get<CloudStatus>('/api/assistant/soundgen'),
   putSoundGenConfig: (url: string, key: string, secret: string) => request<CloudStatus>('PUT', '/api/assistant/soundgen', { url, key, secret }),
   deleteSoundGenConfig: () => request<CloudStatus>('DELETE', '/api/assistant/soundgen'),
+  imageGenConfig: () => get<CloudStatus>('/api/assistant/imagegen'),
+  putImageGenConfig: (url: string, key: string, secret: string) => request<CloudStatus>('PUT', '/api/assistant/imagegen', { url, key, secret }),
+  deleteImageGenConfig: () => request<CloudStatus>('DELETE', '/api/assistant/imagegen'),
   deleteAssistantConfig: (service: 'gemini' | 'groq' = 'gemini') => request<AssistantStatus>('DELETE', `/api/assistant/config?service=${service}`),
 
   // remote storages (S3)

@@ -1,10 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { addLink, autoLayout, NODE_H, NODE_W, removeLink } from '../../lib/adventures';
+  import { addLink, autoLayout, CARD, fromCard, removeLink, toCard } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
+  import { imageUrl } from '../../lib/notes';
   import { addBlock, adventures, change } from '../../lib/stores/adventure.svelte';
-  import type { AdventureLink } from '../../lib/types';
+  import type { AdventureBlock, AdventureLink } from '../../lib/types';
+  import { openDialog } from '../../lib/stores/ui.svelte';
   import Icon from '../Icon.svelte';
+  import ImagePopup from '../dialogs/ImagePopup.svelte';
+  import BlockCard from './BlockCard.svelte';
 
   const adventure = $derived(adventures.current!);
   const editable = $derived(adventure.editable);
@@ -20,9 +24,12 @@
   let drawing = $state<{ from: string; x: number; y: number } | null>(null);
   let selectedLink = $state<AdventureLink | null>(null);
 
+  // the blocks are drawn as cards at their stored positions stretched to the card size (see CARD_SCALE); the world is in card pixels
   const center = (id: string): [number, number] | null => {
     const block = adventure.blocks.find((item) => item.id === id);
-    return block ? [block.pos[0] + NODE_W / 2, block.pos[1] + NODE_H / 2] : null;
+    if (!block) return null;
+    const [x, y] = toCard(block.pos);
+    return [x + CARD.w / 2, y + CARD.h / 2];
   };
 
   /** A link leaves a block on its right side and enters the next one on its left side. */
@@ -30,9 +37,10 @@
     const from = adventure.blocks.find((item) => item.id === link.from);
     const to = adventure.blocks.find((item) => item.id === link.to);
     if (!from || !to) return null;
-    const [x1, y1] = [from.pos[0] + NODE_W, from.pos[1] + NODE_H / 2];
-    const [x2, y2] = [to.pos[0], to.pos[1] + NODE_H / 2];
-    const bend = Math.max(40, Math.abs(x2 - x1) / 2);
+    const [[fx, fy], [tx, ty]] = [toCard(from.pos), toCard(to.pos)];
+    const [x1, y1] = [fx + CARD.w, fy + CARD.h / 2];
+    const [x2, y2] = [tx, ty + CARD.h / 2];
+    const bend = Math.max(48, Math.abs(x2 - x1) / 2);
     return { d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
   }
 
@@ -65,10 +73,11 @@
   /** Shows all blocks. */
   function fit() {
     if (!frame || !adventure.blocks.length) return;
-    const xs = adventure.blocks.map((block) => block.pos[0]);
-    const ys = adventure.blocks.map((block) => block.pos[1]);
+    const spots = adventure.blocks.map((block) => toCard(block.pos));
+    const xs = spots.map(([x]) => x);
+    const ys = spots.map(([, y]) => y);
     const [left, top] = [Math.min(...xs), Math.min(...ys)];
-    const [width, height] = [Math.max(...xs) + NODE_W - left, Math.max(...ys) + NODE_H - top];
+    const [width, height] = [Math.max(...xs) + CARD.w - left, Math.max(...ys) + CARD.h - top];
     const rect = frame.getBoundingClientRect();
     const k = Math.min(1, Math.max(MIN_ZOOM, Math.min((rect.width - 48) / width, (rect.height - 48) / height)));
     view = { x: 24 - left * k, y: 24 - top * k, k };
@@ -96,6 +105,13 @@
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
 
+  /** A double click on the picture of a block shows its cover large. The node captures the pointer while it is dragged, so the
+   *  event arrives at the node: the position tells whether it was on the picture. */
+  function showCover(event: MouseEvent, block: AdventureBlock) {
+    if (!block.cover || !document.elementsFromPoint(event.clientX, event.clientY).some((element) => element.classList.contains('art'))) return;
+    openDialog(ImagePopup, { src: imageUrl(adventure.id, block.cover), title: block.title || t('Cover image') });
+  }
+
   function handleDown(event: PointerEvent, id: string) {
     event.stopPropagation();
     if (!editable) return;
@@ -113,7 +129,10 @@
       if (!drag.moved && Math.hypot(dx, dy) * view.k < 3) return;
       drag.moved = true;
       const block = adventure.blocks.find((item) => item.id === drag!.id);
-      if (block) block.pos = [Math.round(drag.origin[0] + dx), Math.round(drag.origin[1] + dy)];
+      if (block) {
+        const [x, y] = toCard(drag.origin);
+        block.pos = fromCard(x + dx, y + dy);
+      }
     } else if (pan) {
       view = { ...view, x: pan.x + event.clientX - pan.startX, y: pan.y + event.clientY - pan.startY };
     }
@@ -176,20 +195,17 @@
           {/if}
         {/each}
         {#if drawing && start}
-          <path class="line draft" d={`M ${start[0] + NODE_W / 2} ${start[1]} L ${drawing.x} ${drawing.y}`} />
+          <path class="line draft" d={`M ${start[0] + CARD.w / 2} ${start[1]} L ${drawing.x} ${drawing.y}`} />
         {/if}
       </svg>
       {#each adventure.blocks as block, index (block.id)}
+        {@const [x, y] = toCard(block.pos)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="node" class:selected={adventures.selected === block.id} class:played={block.played} class:first={index === 0} data-node={block.id}
-             style:left="{block.pos[0]}px" style:top="{block.pos[1]}px" style:width="{NODE_W}px" style:height="{NODE_H}px"
-             onpointerdown={(e) => nodeDown(e, block.id)}>
-          <span class="title ellipsis">{block.title || t('Untitled')}</span>
-          <span class="meta muted">
-            {#if block.played}<Icon name="check" size={11} />{/if}
-            {#if block.music.length}<Icon name="music" size={11} />{block.music.length}{/if}
-            {#if block.effects.length}<Icon name="waves" size={11} />{/if}
-          </span>
+             style:left="{x}px" style:top="{y}px" style:width="{CARD.w}px" style:height="{CARD.h}px"
+             title={block.cover ? t('Double-click the picture to enlarge it') : undefined}
+             onpointerdown={(e) => nodeDown(e, block.id)} ondblclick={(e) => showCover(e, block)}>
+          <BlockCard {block} adventureId={adventure.id} badge={index === 0 ? t('Start') : null} />
           {#if editable}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <span class="handle" title={t('Drag to another block to link it')} onpointerdown={(e) => handleDown(e, block.id)}></span>
@@ -216,7 +232,7 @@
   .grow { flex: 1; }
   .btn { display: inline-flex; align-items: center; gap: 6px; }
   .mini { width: 26px; height: 26px; font-size: 1.1rem; line-height: 1; }
-  .frame { position: relative; height: clamp(220px, 38vh, 420px); overflow: hidden; resize: vertical; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); cursor: grab; touch-action: none;
+  .frame { position: relative; height: clamp(300px, 52vh, 600px); overflow: hidden; resize: vertical; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); cursor: grab; touch-action: none;
            background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 22px 22px; }
   .frame:active { cursor: grabbing; }
   .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
@@ -228,13 +244,12 @@
   .edge.on .line { stroke-width: 2.8; }
   .edge text { fill: var(--text); font-size: 12px; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; pointer-events: none; }
   .line.draft { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; }
-  .node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 22px 6px 10px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); cursor: pointer; user-select: none; }
-  .node:hover { border-color: var(--accent); }
-  .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-  .node.played { opacity: 0.65; }
-  .node.first { border-left: 4px solid var(--accent); }
-  .title { font-weight: 600; font-size: var(--fs-sm); }
-  .meta { display: flex; align-items: center; gap: 5px; font-size: var(--fs-xs); min-height: 14px; }
+  .node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; padding: 0 0 10px; border-radius: 12px; background: var(--bg-2);
+          border: 1px solid var(--border-strong, var(--border)); color: var(--text); cursor: pointer; user-select: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  .node :global(.art) { border-radius: 11px 11px 0 0; overflow: hidden; }
+  .node:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+  .node.selected { border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow); }
+  .node.played:not(.selected) { opacity: 0.65; }
   .handle { position: absolute; right: -7px; top: calc(50% - 7px); width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-2); cursor: crosshair; }
   .link-edit { position: absolute; transform: translate(-50%, 8px); display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 9px; background: var(--bg-2); border: 1px solid var(--accent); box-shadow: var(--shadow); }
   .link-edit input { width: 150px; }

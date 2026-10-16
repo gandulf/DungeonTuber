@@ -155,6 +155,8 @@ export interface ServerSettings {
   musicGenConfigured: boolean;
   /** The sound generation (Stable Audio 3 on Modal) is set up. */
   soundGenConfigured: boolean;
+  /** The image generation (Stable Diffusion 3.5 on Modal) is set up. */
+  imageGenConfigured: boolean;
 }
 
 /** A song the AI assistant suggests. */
@@ -187,6 +189,8 @@ export interface AssistantReply {
   sound?: SoundDescription;
   /** The notes drafted in the story mode. */
   text?: string;
+  /** The picture described in the image mode (English, for Stable Diffusion). */
+  caption?: string;
 }
 
 /** What the sound generation creates: a sound effect, an ambience (a steady background of a place) or instrumental music. */
@@ -237,7 +241,7 @@ export interface AssistantStatus {
   /** Additional instructions of the SuperAdmin for the song suggestions. */
   instructions: string;
   /** The instructions the modes have until they are changed (the other modes have none). */
-  defaultInstructions: Partial<Record<'music' | 'smart' | 'compose', string>>;
+  defaultInstructions: Partial<Record<'music' | 'smart' | 'compose' | 'image', string>>;
   /** Additional instructions of the SuperAdmin for the general chat. */
   generalInstructions: string;
   /** Additional instructions of the SuperAdmin for the compose mode. */
@@ -246,6 +250,8 @@ export interface AssistantStatus {
   smartInstructions: string;
   /** Additional instructions of the SuperAdmin for the effects mode. */
   effectsInstructions: string;
+  /** Additional instructions of the SuperAdmin for the image mode: the picture style of the block covers. */
+  imageInstructions: string;
   groqConfigured: boolean;
   groqModel: string;
   groqDefaultModel: string;
@@ -441,6 +447,8 @@ export interface AdventureBlock {
   music: MusicRef[];
   effects: EffectRef[];
   images: string[];
+  /** The picture shown above the block: the name of an image of the adventure (served from /api/adventures/<id>/images/<name>). */
+  cover: string | null;
 }
 
 export interface AdventureLink { from: string; to: string; label: string | null }
@@ -465,6 +473,9 @@ export interface Adventure {
   updated: number;
   blocks: AdventureBlock[];
   links: AdventureLink[];
+  /** The adventure's own playlist: the songs (and playlists) assigned to it, which its blocks choose from. It always holds what the
+   *  blocks play (the server adds it). */
+  music: MusicRef[];
   editable: boolean;
 }
 

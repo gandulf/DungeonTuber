@@ -10,7 +10,8 @@ Agents are small programs that connect *out* to a DungeonTuber server (see **Set
 
 Cloud functions on Modal are called instead (no agent connects): the [cloud analysis](voxalyzer/README.md), the
 [music generation](musicgen/README.md) of the AI assistant (ACE-Step 1.5) and the [sound generation](soundgen/README.md)
-(Stable Audio 3: background music, ambiences and sound effects).
+(Stable Audio 3: background music, ambiences and sound effects) and the [image generation](imagegen/README.md)
+(Stable Diffusion 3.5 Medium).
 
 ## One configuration for all agents on a machine
 

@@ -912,6 +912,13 @@ def test_adventures_are_private_until_published(client, library):
     assert saved["links"] == [{"from": block["id"], "to": "b2", "label": "enter"}]
     assert saved["blocks"][1]["music"][0]["ufid"] == ufid and len(saved["blocks"][1]["music"]) == 2
     assert saved["blocks"][1]["effects"][0]["loop"]
+    # without music of its own (an adventure from before) it gets what its blocks play; once it has a list, that list is kept
+    assert [ref.get("ufid") or ref.get("id") for ref in saved["music"]] == [ufid, listed["Secret"]]
+    extra = {"type": "song", "ufid": "other-ufid", "path": "y", "title": "Other"}
+    resaved = client.put(f"/api/adventures/{created['id']}", json={**body, "music": [extra, extra, {"type": "bogus"}]}).json()
+    assert [ref["ufid"] for ref in resaved["music"]] == ["other-ufid"]
+    assert client.put(f"/api/adventures/{created['id']}", json={**body, "music": []}).json()["music"] == []
+    client.put(f"/api/adventures/{created['id']}", json=body)
 
     # private: only the owner (and the SuperAdmin) see it
     client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { api } from '../../lib/api';
-  import { addMusic } from '../../lib/adventures';
+  import { assignMusic } from '../../lib/adventures';
   import { blockPrompt, plainText, rankTracks, tagsAndGenres, type Ranked } from '../../lib/adventureAi';
   import { t } from '../../lib/i18n.svelte';
+  import { imageUrl } from '../../lib/notes';
   import { prefs } from '../../lib/prefs.svelte';
   import { scorePercent } from '../../lib/scoring';
-  import { adventures, change } from '../../lib/stores/adventure.svelte';
+  import { adventures, applyCoverWhenReady, change } from '../../lib/stores/adventure.svelte';
   import { data } from '../../lib/stores/data.svelte';
   import { effects, loadEffects } from '../../lib/stores/effects.svelte';
   import { globalTab, loadGlobal } from '../../lib/stores/library.svelte';
@@ -16,8 +17,8 @@
   import Modal from '../dialogs/Modal.svelte';
 
   /** The AI helpers of a block: `draft` writes its notes, `songs` ranks the songs of the library for it, `sound` creates an
-   *  ambience, an effect or background music with the sound generation. */
-  let { task, blockId }: { task: 'draft' | 'songs' | 'sound'; blockId: string } = $props();
+   *  ambience, an effect or background music with the sound generation, `cover` paints its cover with the image generation. */
+  let { task, blockId }: { task: 'draft' | 'songs' | 'sound' | 'cover'; blockId: string } = $props();
 
   const adventure = $derived(adventures.current!);
   const block = $derived(adventure.blocks.find((item) => item.id === blockId) ?? null);
@@ -34,13 +35,19 @@
   let kind = $state<SoundKind>('ambience');
   let sound = $state<SoundDescription | null>(null);
   let made = $state<Track | null>(null);
+  // cover: the English description Stable Diffusion paints from, the format and the painted image (its name in the adventure)
+  let caption = $state('');
+  let size = $state<'landscape' | 'square' | 'portrait'>('landscape');
+  let painted = $state<string | null>(null);
+  let painting = $state(false);
+  const sizes = [['landscape', 'Landscape'], ['square', 'Square'], ['portrait', 'Portrait']] as const;
 
   const titles = {
-    draft: 'Draft the notes', songs: 'Suggest songs', sound: 'Create a sound',
+    draft: 'Draft the notes', songs: 'Suggest songs', sound: 'Create a sound', cover: 'Create a cover image',
   };
 
   /** Asks the assistant; a follow-up (refine) continues the conversation, so "darker" changes the last answer. */
-  async function ask(text: string, mode: 'story' | 'smart' | 'effects', context: Parameters<typeof api.assistantChat>[2]): Promise<AssistantReply | null> {
+  async function ask(text: string, mode: 'story' | 'smart' | 'effects' | 'image', context: Parameters<typeof api.assistantChat>[2]): Promise<AssistantReply | null> {
     history.push({ role: 'user', content: text });
     busy = true;
     try {
@@ -75,6 +82,9 @@
         ranked = rankTracks(globalTab.tracks, reply.filter);
         if (!ranked.length) message = t('No songs of the library fit. Try another description.');
       }
+    } else if (task === 'cover') {
+      const reply = await ask(followUp ? text : `Adventure: ${adventure.title}\n\n${text}`, 'image', undefined);
+      if (reply?.caption) caption = reply.caption;
     } else {
       const reply = await ask(text, 'effects', { kind });
       if (reply?.sound) sound = reply.sound;
@@ -93,7 +103,7 @@
   function addSong(track: Track) {
     if (!block || !track.ufid) return;
     const ufid = track.ufid;
-    change(() => addMusic(block, { type: 'song', ufid, path: track.path, title: track.title || track.name }));
+    change((a) => assignMusic(a, block, { type: 'song', ufid, path: track.path, title: track.title || track.name }));
     toast(t('Added: {0}', track.title || track.name));
   }
 
@@ -115,7 +125,7 @@
       if (kind === 'music') {
         if (track.ufid) {
           const ufid = track.ufid;
-          change(() => addMusic(block, { type: 'song', ufid, path: track.path, title: sound!.title || track.name }));
+          change((a) => assignMusic(a, block, { type: 'song', ufid, path: track.path, title: sound!.title || track.name }));
         }
       } else {
         await loadEffects();
@@ -129,11 +139,55 @@
     }
   }
 
+  /** Paints the picture to look at; it is stored in the adventure right away and becomes the cover with "Apply". */
+  let running: Promise<{ name: string }> | null = null;
+
+  async function paint() {
+    const prompt = (aiReady ? caption : input).trim();
+    if (!block || !prompt) return;
+    busy = painting = true;
+    const job = (running = api.generateAdventureImage(adventure.id, prompt, size));
+    try {
+      painted = (await job).name;
+    } catch (e) {
+      errorToast(e);
+    } finally {
+      if (running === job) running = null;
+      busy = painting = false;
+    }
+  }
+
+  /** "Apply": a finished picture becomes the cover at once; otherwise the dialog closes and the picture (the one being painted, or a
+   *  new one, after the assistant described it if that is still to do) becomes the cover in the background once it is done. */
+  function apply() {
+    if (!block) return;
+    if (painted && !painting) {
+      const name = painted;
+      change(() => (block.cover = name));
+      closeDialog();
+      return;
+    }
+    const [adventureId, scene, chosenSize] = [adventure.id, input.trim(), size];
+    const describe = async () => {
+      const reply = await api.assistantChat([{ role: 'user', content: `Adventure: ${adventure.title}\n\n${scene}` }], 'image');
+      return reply.caption?.trim() || scene;
+    };
+    const prompt = (aiReady ? caption : input).trim();
+    const job = running ?? (prompt ? api.generateAdventureImage(adventureId, prompt, chosenSize)
+      : aiReady && scene ? describe().then((text) => api.generateAdventureImage(adventureId, text, chosenSize)) : null);
+    if (!job) return;
+    void applyCoverWhenReady(adventureId, block.id, job);
+    toast(t('The cover image is painted in the background.'), 'info');
+    closeDialog();
+  }
+
+
   const aiReady = $derived(!!(data.settings?.groqConfigured || data.settings?.assistantConfigured));
+  const canApply = $derived(!!painted || painting || !!(aiReady ? caption.trim() || input.trim() : input.trim()));
 </script>
 
 <Modal title={t(titles[task])} onclose={closeDialog} width="640px">
-  {#if !aiReady && task !== 'sound'}
+  {#if !aiReady && task !== 'sound' && task !== 'cover'}
     <p class="muted">{t('The AI assistant is not configured')}</p>
   {:else if !block}
     <p class="muted">{t('This block does not exist any more.')}</p>
@@ -146,14 +200,25 @@
           {/each}
         </div>
       {/if}
+      {#if task === 'cover'}
+        <div class="seg">
+          {#each sizes as [key, label] (key)}
+            <button type="button" class:on={size === key} onclick={() => (size = key)}>{t(label)}</button>
+          {/each}
+        </div>
+      {/if}
 
       <label class="field">
-        <span class="label-xs">{task === 'draft' ? t('What should the notes say? (bullet points are fine)') : t('Describe the scene')}</span>
+        <span class="label-xs">{task === 'draft' ? t('What should the notes say? (bullet points are fine)') : task === 'cover' && !aiReady ? t('Describe the picture (in English)') : t('Describe the scene')}</span>
         <textarea rows={task === 'draft' ? 4 : 5} bind:value={input} placeholder={task === 'draft' ? t('A smoky tavern, the innkeeper hides a secret…') : ''}></textarea>
       </label>
       <div class="row">
-        <button class="btn primary" disabled={busy || !input.trim()} onclick={() => void run()}><Icon name="sparkles" size={14} />{task === 'sound' ? t('Describe the sound') : t('Ask')}</button>
-        {#if busy}<span class="muted small">{task === 'sound' && sound ? t('Generating… this can take a few minutes.') : t('Thinking…')}</span>{/if}
+        {#if task === 'cover' && !aiReady}
+          <button class="btn primary" disabled={busy || !input.trim()} onclick={() => void paint()}><Icon name="sparkles" size={14} />{t('Generate')}</button>
+        {:else}
+          <button class="btn primary" disabled={busy || !input.trim()} onclick={() => void run()}><Icon name="sparkles" size={14} />{task === 'sound' ? t('Describe the sound') : task === 'cover' ? t('Describe the picture') : t('Ask')}</button>
+        {/if}
+        {#if busy}<span class="muted small">{(task === 'sound' && sound) || painting ? t('Generating… this can take a few minutes.') : t('Thinking…')}</span>{/if}
       </div>
       {#if message}<p class="message">{message}</p>{/if}
 
@@ -182,8 +247,19 @@
           </div>
         </div>
       {/if}
+      {#if task === 'cover' && aiReady && caption}
+        <div class="sound">
+          <textarea rows="4" bind:value={caption} aria-label={t('Description')}></textarea>
+          <div class="row">
+            <button class="btn primary" disabled={busy || !caption.trim()} onclick={() => void paint()}><Icon name="sparkles" size={14} />{painted ? t('Generate again') : t('Generate')}</button>
+          </div>
+        </div>
+      {/if}
+      {#if task === 'cover' && painted}
+        <img class="painted" src={imageUrl(adventure.id, painted)} alt={t('Cover image')} />
+      {/if}
 
-      {#if (task === 'draft' && draft) || (task === 'songs' && ranked.length)}
+      {#if (task === 'draft' && draft) || (task === 'songs' && ranked.length) || (task === 'cover' && caption)}
         <div class="row">
           <input type="text" bind:value={refine} placeholder={t('Change it: darker, shorter, more tense…')} onkeydown={(e) => e.key === 'Enter' && void run(true)} />
           <button class="btn" disabled={busy || !refine.trim()} onclick={() => void run(true)}>{t('Change')}</button>
@@ -195,6 +271,11 @@
     {#if task === 'draft' && draft}
       <button class="btn" onclick={() => useDraft(true)}>{t('Append to notes')}</button>
       <button class="btn primary" onclick={() => useDraft(false)}>{t('Replace notes')}</button>
+    {:else if task === 'cover'}
+      <button class="btn" onclick={closeDialog}>{t('Close')}</button>
+      <button class="btn primary" disabled={!canApply || (busy && !painting)}
+              title={painted && !painting ? t('Use this picture as the cover') : t('Closes the dialog: the picture becomes the cover as soon as it is painted')}
+              onclick={apply}>{t('Apply')}</button>
     {:else}
       <button class="btn" onclick={closeDialog}>{t('Close')}</button>
     {/if}
@@ -219,4 +300,5 @@
   .mini { width: 24px; height: 24px; }
   .sound { display: flex; flex-direction: column; gap: 8px; }
   .seg button { padding: 5px 13px; }
+  .painted { display: block; max-width: 100%; max-height: 340px; margin: 0 auto; border-radius: 10px; object-fit: contain; }
 </style>

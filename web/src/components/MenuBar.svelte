@@ -4,7 +4,10 @@
   import { assistant, toggleAssistant } from '../lib/stores/assistant.svelte';
   import { data } from '../lib/stores/data.svelte';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
-  import { library, setGlobal } from '../lib/stores/library.svelte';
+  import { searchBlocks } from '../lib/adventures';
+  import { searchTerms } from '../lib/highlight';
+  import { adventures, goToBlock } from '../lib/stores/adventure.svelte';
+  import { activeTab, library, setGlobal } from '../lib/stores/library.svelte';
   import { openMenu, ui } from '../lib/stores/ui.svelte';
   import Icon from './Icon.svelte';
   import Tabs from './Tabs.svelte';
@@ -32,6 +35,42 @@
     savePrefs();
   }
 
+  // --- the search of an open adventure: its blocks instead of songs
+  const openAdventure = $derived(!library.global && !library.duplicates && activeTab()?.type === 'adventure' ? adventures.current : null);
+  let blockQuery = $state('');
+  let hitsOpen = $state(false);
+  let hitIndex = $state(0);
+  const hits = $derived(openAdventure ? searchBlocks(openAdventure.blocks, blockQuery, 12) : []);
+  const showHits = $derived(hitsOpen && !!blockQuery.trim());
+
+  // another adventure starts with an empty search
+  $effect(() => {
+    void openAdventure?.id;
+    blockQuery = '';
+  });
+
+  function go(id: string) {
+    goToBlock(id, searchTerms(blockQuery));
+    blockQuery = '';
+    hitsOpen = false;
+    (document.activeElement as HTMLElement | null)?.blur();
+  }
+
+  function hitKey(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      blockQuery = '';
+      hitsOpen = false;
+    } else if (!showHits || !hits.length) {
+      return;
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      hitIndex = (hitIndex + (event.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length;
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      go(hits[Math.min(hitIndex, hits.length - 1)].block.id);
+    }
+  }
+
   function showMenu(event: MouseEvent) {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     event.stopPropagation();
@@ -50,10 +89,37 @@
   <div class="tabs-area" data-tour="tabs" bind:clientWidth={areaWidth}>
     {#if library.tabs.length}<Tabs />{:else}<span class="hint muted">{t('Welcome to Dungeon Tuber')}</span>{/if}
   </div>
-  <label class="search" class:active={!!library.search} data-tour="search">
-    <Icon name="search" size={15} />
-    <input type="search" placeholder={library.global ? t('Search the whole library…') : t('Search tracks…')} bind:value={library.search} />
-  </label>
+  {#if openAdventure}
+    <!-- while an adventure is open the box searches its blocks: the hits open in a list below it -->
+    <div class="search-wrap">
+      <label class="search" class:active={!!blockQuery}>
+        <Icon name="search" size={15} />
+        <input type="search" placeholder={t('Search the blocks…')} bind:value={blockQuery} aria-label={t('Search the blocks…')}
+               role="combobox" aria-expanded={showHits} aria-controls="block-hits" aria-autocomplete="list"
+               onfocus={() => (hitsOpen = true)} onblur={() => setTimeout(() => (hitsOpen = false), 150)}
+               oninput={() => { hitsOpen = true; hitIndex = 0; }} onkeydown={hitKey} />
+      </label>
+      {#if showHits}
+        <ul class="hits" id="block-hits" role="listbox" aria-label={t('Blocks')}>
+          {#each hits as hit, index (hit.block.id)}
+            <li role="option" aria-selected={index === hitIndex} class:on={index === hitIndex}>
+              <button type="button" onmousedown={(e) => { e.preventDefault(); go(hit.block.id); }} onmouseenter={() => (hitIndex = index)}>
+                <span class="hit-title ellipsis">{hit.block.title || t('Untitled')}</span>
+                <span class="hit-text">{hit.before}{#if hit.match}<mark>{hit.match}</mark>{/if}{hit.after}</span>
+              </button>
+            </li>
+          {:else}
+            <li class="none muted">{t('No block fits "{0}".', blockQuery.trim())}</li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  {:else}
+    <label class="search" class:active={!!library.search} data-tour="search">
+      <Icon name="search" size={15} />
+      <input type="search" placeholder={library.global ? t('Search the whole library…') : t('Search tracks…')} bind:value={library.search} />
+    </label>
+  {/if}
   <button class="mode" class:explore={library.global} role="switch" aria-checked={library.global} aria-label={t('Browse or explore')} data-tour="global-search"
           title={library.global ? t('Explore: the best {0} songs of the whole library. Click to browse the open tab again.', 50)
                                 : t('Browse: search the open tab. Click to explore the whole library instead.')}
@@ -90,6 +156,15 @@
   .search input { border: none; background: none; padding: 0; width: 0; flex: 1; min-width: 0; margin-left: 0; opacity: 0; color: var(--text); transition: opacity 0.15s, margin-left 0.2s; }
   .search:focus-within input, .search.active input { margin-left: 8px; opacity: 1; }
   .search input:focus { box-shadow: none; }
+  .search-wrap { position: relative; flex: none; }
+  .hits { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; width: min(380px, 90vw); max-height: min(60vh, 460px); overflow-y: auto; margin: 0; padding: 4px; list-style: none;
+          border-radius: 12px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); }
+  .hits button { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 7px 10px; border-radius: 8px; text-align: left; color: var(--text); }
+  .hits li.on button { background: var(--accent-soft); }
+  .hit-title { font-weight: 600; }
+  .hit-text { font-size: var(--fs-xs); line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .hit-text mark { background: var(--accent-soft); color: var(--accent); border-radius: 3px; padding: 0 1px; }
+  .hits .none { padding: 8px 10px; font-size: var(--fs-sm); }
   /* iOS style switch: the thumb slides under the label of the active mode */
   .mode { position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center; flex: none; height: 36px; padding: 3px; box-sizing: border-box; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; transition: border-color 0.15s; }
   .mode:hover { border-color: var(--border-strong); }

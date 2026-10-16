@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { addLink, addMusic, appendBlock, autoLayout, NODE_H, NODE_W, defaultNext, moveBlock, newBlock, removeBlock, removeLink, startBlock, unreachable } from './adventures';
-import type { Adventure } from './types';
+import { addAdventureMusic, addLink, addMusic, appendBlock, blocksUsing, moveEntry, searchBlocks, removeAdventureMusic, autoLayout, CARD, CARD_GAP, cardLayout, fromCard, toCard, NODE_H, NODE_W, defaultNext, moveBlock, newBlock, removeBlock, removeLink, startBlock, unreachable } from './adventures';
+import type { Adventure, MusicRef } from './types';
 
 function graph(...titles: string[]): Pick<Adventure, 'blocks' | 'links'> {
   return { blocks: titles.map((title, index) => ({ ...newBlock(title, index), id: title })), links: [] };
@@ -81,6 +81,76 @@ describe('adventure graph', () => {
     expect(at('c')[0]).toBe(at('b')[0]);
     expect(at('c')[1]).toBe(NODE_H + 30);
     expect(at('d')).toEqual([0, NODE_H + 30]); // nothing leads to it: its own tree below the first one
+  });
+
+  it('lays out the cards of the map like the graph, stretched to the card size', () => {
+    const card = { w: 200, h: 190 }, gap = { x: 50, y: 30 };
+    const g = graph('a', 'b', 'c');
+    addLink(g, 'a', 'b');
+    g.blocks[0].pos = [100, 50];
+    g.blocks[1].pos = [100 + NODE_W + 80, 50];
+    g.blocks[2].pos = [100, 50 + NODE_H + 30];
+    const layout = cardLayout(g, card, gap);
+    expect(layout.pos.get('a')).toEqual([0, 0]);
+    expect(layout.pos.get('b')).toEqual([250, 0]);
+    expect(layout.pos.get('c')).toEqual([0, 220]);
+    expect([layout.width, layout.height]).toEqual([450, 410]);
+
+    // blocks that were never arranged (all in one spot) get columns by their distance from the first block
+    for (const block of g.blocks) block.pos = [0, 0];
+    const columns = cardLayout(g, card, gap);
+    expect(columns.pos.get('b')).toEqual([250, 0]);
+    expect(columns.pos.get('c')).toEqual([0, 220]);
+    expect(cardLayout(graph(), card, gap)).toEqual({ pos: new Map(), width: 0, height: 0 });
+  });
+
+  it('draws stored positions as cards and keeps drags in stored units', () => {
+    expect(toCard([0, 0])).toEqual([0, 0]);
+    expect(toCard([NODE_W + 80, NODE_H + 30])).toEqual([CARD.w + CARD_GAP.x, CARD.h + CARD_GAP.y]); // one grid step is one card step
+    expect(fromCard(...toCard([250, 172]))).toEqual([250, 172]);
+  });
+
+  it('keeps the music of the adventure and takes it out of the blocks with it', () => {
+    const g = { ...graph('a', 'b'), music: [] as MusicRef[] };
+    const song: MusicRef = { type: 'song', ufid: 'u1', path: 'x.mp3', title: 'X' };
+    expect(addAdventureMusic(g, song)).toBe(true);
+    expect(addAdventureMusic(g, { ...song, path: 'moved.mp3' })).toBe(false);
+    addMusic(g.blocks[1], song);
+    expect(blocksUsing(g, song).map((block) => block.id)).toEqual(['b']);
+    removeAdventureMusic(g, song);
+    expect(g.music).toEqual([]);
+    expect(g.blocks[1].music).toEqual([]);
+  });
+
+  it('searches the titles and notes of the blocks', () => {
+    const g = graph('Tavern', 'Crypt', 'Forest');
+    g.blocks[0].markdown = 'The **innkeeper** hides a secret about the crypt below the cellar.';
+    g.blocks[1].markdown = '> Cold air, flickering torches and a sealed sarcophagus.';
+    g.blocks[2].markdown = 'Wolves howl in the distance.';
+    expect(searchBlocks(g.blocks, '')).toEqual([]);
+    // a fitting title comes first; the notes are searched without their Markdown marks
+    expect(searchBlocks(g.blocks, 'crypt').map((hit) => hit.block.title)).toEqual(['Crypt', 'Tavern']);
+    const [hit] = searchBlocks(g.blocks, 'innkeeper');
+    expect([hit.before, hit.match, hit.after.slice(0, 6)]).toEqual(['The ', 'innkeeper', ' hides']);
+    expect(searchBlocks(g.blocks, 'sarcophagus torches').map((item) => item.block.title)).toEqual(['Crypt']); // any order
+    expect(searchBlocks(g.blocks, 'wolfes').map((item) => item.block.title)).toEqual(['Forest']); // a small typo
+    expect(searchBlocks(g.blocks, 'dragon')).toEqual([]);
+    // long notes are searched to their end (the AI prompts only get their start)
+    g.blocks[2].markdown = `${'Fog in the woods. '.repeat(150)}At last the dragon hoard.`;
+    expect(searchBlocks(g.blocks, 'hoard').map((item) => item.block.title)).toEqual(['Forest']);
+  });
+
+  it('moves an entry to where it was dropped', () => {
+    const list = ['a', 'b', 'c', 'd'];
+    expect(moveEntry(list, 0, 2)).toBe(true); // dropped before c
+    expect(list).toEqual(['b', 'a', 'c', 'd']);
+    expect(moveEntry(list, 3, 0)).toBe(true);
+    expect(list).toEqual(['d', 'b', 'a', 'c']);
+    expect(moveEntry(list, 1, 4)).toBe(true); // after the last
+    expect(list).toEqual(['d', 'a', 'c', 'b']);
+    expect(moveEntry(list, 1, 1)).toBe(false);
+    expect(moveEntry(list, 1, 2)).toBe(false); // right behind itself: same place
+    expect(moveEntry(list, 5, 0)).toBe(false);
   });
 
   it('adds a song or playlist to a block once', () => {

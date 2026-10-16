@@ -3,7 +3,7 @@ role playing session, "general" answers questions of the game master (rules like
 scene into the filter of the app so that the songs of the library are ranked by it (see server/smartsearch.py), "compose" writes the
 description of a new piece that the music generation composes (see server/musicgen.py), "effects" the description of a sound
 effect, an ambience or background music for the sound generation (see server/soundgen.py), "story" helps with the blocks of an adventure:
-it drafts their notes.
+it drafts their notes, "image" writes the description of a block's cover for the image generation (see server/imagegen.py).
 
 The smart search, the compose and the effects mode run on Groq when a Groq key is stored (an open model like gpt-oss-120b is as good at choosing
 values as Gemini and has a quota of its own); the song suggestions and the general chat need the knowledge of Gemini.
@@ -51,7 +51,7 @@ GROQ_MODELS = [
     {"id": "openai/gpt-oss-120b", "name": "GPT-OSS 120B"},
     {"id": "openai/gpt-oss-20b", "name": "GPT-OSS 20B"},
 ]
-GROQ_MODES = ("smart", "compose", "effects", "story")
+GROQ_MODES = ("smart", "compose", "effects", "story", "image")
 USER_AGENT = "DungeonTuber (+https://github.com/gandulf/DungeonTuber)"
 SONG_COUNT = 10
 TIMEOUT = 60
@@ -88,6 +88,8 @@ Die Nachricht zur Auswahl besteht aus ein bis zwei kurzen Sätzen und endet exak
 - **"Weitere 10" / "Mehr":** 10 neue Stücke zur selben Szene. Keine Wiederholungen. Stile/Quellen bewusst variieren."""
 
 DEFAULT_SETTING_INSTRUCTIONS = """Wir spielen DSA in Aventurien. Thorwal: nordisch, Tagelharpa, Trommeln, Kehlgesang. Tulamidenlande/Khôm: orientalisch, Oud, Duduk, Darbuka. Mittelreich: Mittelalter-Folk, Laute, Fidel, Flöte. Al’Anfa/Südmeer: düstere Renaissance, Barock, lateinamerikanische Percussion. Elfen: ätherisch, Harfe, Flöte, Chor. Bevorzugt filmische, instrumentale Fantasy-Musik."""  # the smart search and the composing
+DEFAULT_IMAGE_INSTRUCTIONS = ("classic German dark fantasy book cover, DSA RPG style, oil painting, dramatic lighting, detailed medieval "
+                              "fantasy illustration, muted earthy tones, highly detailed")
 
 GENERAL_PROMPT = """You are the assistant of the game master of a tabletop role playing session, for example Das Schwarze Auge (DSA).
 Answer questions about the rules, the world and its lore, and help with ideas for the session: names, descriptions, plot hooks.
@@ -179,6 +181,17 @@ players see, hear and smell), followed by short bullet points for the game maste
 players can find out or try, and what happens next. Keep every name, place and fact the user gave and do not invent a different plot.
 Use plain Markdown only (**bold**, lists, > quotes, no heading above ##), no tables and no HTML.
 Write in the language of the user's notes. When the user asks for changes, change the previous text accordingly."""
+IMAGE_PROMPT = """You write the description for an AI image generator (Stable Diffusion 3.5) that paints the cover picture of one scene
+(a block) of a tabletop role playing adventure. The game master shows it to the players.
+Answer with a JSON object only:
+{"message": "<one short sentence for the user>", "caption": "<the description>"}
+The caption is ALWAYS in English, also when the user and the notes are written in another language: the generator only understands
+English. Describe one picture in at most 50 words, the most important first: the generator reads only about the first 60 words
+(77 tokens) and drops the rest, and longer descriptions are cut. Start with the style and the main subject in one short sentence (e.g. "Detailed
+fantasy oil painting of a dim medieval tavern at midnight."), then what can be seen in the foreground and the background, the light,
+the weather and the mood. Only what can be seen: no secrets of the game master, no rules, no text or letters in the
+picture, no names the generator cannot know (describe what a person or a place looks like instead).
+When the user asks for changes, change the previous description accordingly."""
 EFFECT_KINDS = {
     "sfx": "The user wants a sound effect.",
     "ambience": "The user wants an ambience: a steady background of the place that can be looped.",
@@ -216,6 +229,29 @@ STORY_DRAFT_SCHEMA = {
     "type": "OBJECT",
     "properties": {"message": {"type": "STRING"}, "text": {"type": "STRING"}},
     "required": ["message", "text"],
+}
+
+# the image generation reads the prompt with the CLIP encoders only (77 tokens, about 60 words; T5 is off by default, see
+# agents/imagegen/modal_app.py): longer descriptions are cut, the prompt asks for 50 words to leave room for long words and commas
+MAX_IMAGE_WORDS = 60
+
+
+def limit_words(text: str, max_words: int = MAX_IMAGE_WORDS) -> str:
+    """At most `max_words` words: cut at the last end of a sentence within them when that keeps two thirds of them, else after the
+    last word (a trailing comma becomes a full stop)."""
+    words = text.split()
+    if len(words) <= max_words:
+        return " ".join(words)
+    cut = " ".join(words[:max_words])
+    ends = [match.end() for match in re.finditer(r"[.!?](?=\s|$)", cut)]
+    if ends and len(cut[:ends[-1]].split()) >= max_words * 2 // 3:
+        return cut[:ends[-1]]
+    return cut.rstrip(",;:- ") + "."
+
+IMAGE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {"message": {"type": "STRING"}, "caption": {"type": "STRING"}},
+    "required": ["message", "caption"],
 }
 
 MAX_LYRICS_LENGTH = 4096
@@ -292,7 +328,8 @@ def provider(mode: str) -> str | None:
     return "gemini" if api_key() else None
 
 
-_INSTRUCTION_KEYS = {"general": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, "story": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, "compose": SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS,
+_INSTRUCTION_KEYS = {"general": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, "story": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS,
+                     "image": SettingKeys.ASSISTANT_IMAGE_INSTRUCTIONS, "compose": SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS,
                      "smart": SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, "effects": SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS}
 
 PROMPTS = {
@@ -304,6 +341,7 @@ PROMPTS = {
     "effects.system": EFFECTS_PROMPT,
     "general.system": GENERAL_PROMPT,
     "story.draft": STORY_DRAFT_PROMPT,
+    "image.system": IMAGE_PROMPT,
 }
 MAX_PROMPT_LENGTH = 12000
 
@@ -342,8 +380,10 @@ def set_prompts(changes: dict[str, str]):
 
 
 def default_instructions(mode: str) -> str | None:
-    """The instructions a mode has until they are changed (the song suggestions, the smart search and the composing), None for the others."""
-    return {"music": DEFAULT_MUSIC_INSTRUCTIONS, "smart": DEFAULT_SETTING_INSTRUCTIONS, "compose": DEFAULT_SETTING_INSTRUCTIONS}.get(mode, "").strip() or None
+    """The instructions a mode has until they are changed (the song suggestions, the smart search, the composing and the pictures), None
+    for the others."""
+    return {"music": DEFAULT_MUSIC_INSTRUCTIONS, "smart": DEFAULT_SETTING_INSTRUCTIONS, "compose": DEFAULT_SETTING_INSTRUCTIONS,
+            "image": DEFAULT_IMAGE_INSTRUCTIONS}.get(mode, "").strip() or None
 
 
 def instructions(mode: str = "music") -> str:
@@ -365,6 +405,9 @@ def system_prompt(mode: str = "music", context: dict | None = None) -> str:
         base = prompt_text("effects.system") + "\n" + EFFECT_KINDS[effect_kind((context or {}).get("kind"))]
     elif mode == "story":
         base = prompt_text("story.draft")
+    elif mode == "image":
+        base = prompt_text("image.system")
+        intro = "The picture style the game master wants; work it into the start of the caption:"
     else:
         base = prompt_text("general.system" if mode == "general" else "music.system")
     return f"{base}\n\n{intro}\n{extra}" if extra else base
@@ -388,9 +431,10 @@ def status() -> dict:
     return {"configured": bool(key), "model": model(), "defaultModel": DEFAULT_MODEL, "keyHint": _hint(key),
             "keySource": setting_or_env(SettingKeys.ASSISTANT_API_KEY, GEMINI_KEY_ENV)[1],
             "groqKeySource": setting_or_env(SettingKeys.GROQ_API_KEY, GROQ_KEY_ENV)[1],
-            "instructions": instructions(), "defaultInstructions": {mode: default_instructions(mode) for mode in ("music", "smart", "compose")},
+            "instructions": instructions(), "defaultInstructions": {mode: default_instructions(mode) for mode in ("music", "smart", "compose", "image")},
             "generalInstructions": instructions("general"), "composeInstructions": instructions("compose"),
             "smartInstructions": instructions("smart"), "effectsInstructions": instructions("effects"),
+            "imageInstructions": instructions("image"),
             "groqConfigured": bool(groq), "groqModel": groq_model(), "groqDefaultModel": GROQ_DEFAULT_MODEL, "groqKeyHint": _hint(groq),
             "groqModels": GROQ_MODELS, "prompts": prompts()}
 
@@ -412,7 +456,7 @@ def _store(key_setting: str, model_setting: str, default_model: str, key: str | 
 def configure(key: str | None, model_name: str | None, extra_instructions: str | None = None, general_instructions: str | None = None,
               groq_api_key: str | None = None, groq_model_name: str | None = None, compose_instructions: str | None = None,
               smart_instructions: str | None = None, changed_prompts: dict[str, str] | None = None,
-              effects_instructions: str | None = None):
+              effects_instructions: str | None = None, image_instructions: str | None = None):
     """Stores the keys and models of Gemini and Groq and the additional instructions of the modes; None keeps the stored value."""
     for legacy in _LEGACY_KEYS:
         AppSettings.remove(legacy)
@@ -424,7 +468,8 @@ def configure(key: str | None, model_name: str | None, extra_instructions: str |
                                  ("general", SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, general_instructions),
                                  ("compose", SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS, compose_instructions),
                                  ("smart", SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, smart_instructions),
-                                 ("effects", SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS, effects_instructions)):
+                                 ("effects", SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS, effects_instructions),
+                                 ("image", SettingKeys.ASSISTANT_IMAGE_INSTRUCTIONS, image_instructions)):
         if value is None:
             continue
         default = default_instructions(mode)
@@ -644,7 +689,7 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
     history = [{"role": m["role"], "content": m["content"][:MAX_MESSAGE_LENGTH]} for m in messages[-MAX_MESSAGES:]]
     tags, genres = (context or {}).get("tags") or [], (context or {}).get("genres") or []
     schema = {"smart": smartsearch.schema(tags, genres), "compose": COMPOSE_SCHEMA, "effects": EFFECTS_SCHEMA,
-              "story": STORY_DRAFT_SCHEMA,
+              "story": STORY_DRAFT_SCHEMA, "image": IMAGE_SCHEMA,
               "general": None}.get(mode, RESPONSE_SCHEMA)
     service = provider(mode)
     if service is None:
@@ -672,6 +717,10 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
     if mode == "story":
         return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content,
                 "text": str(parsed.get("text") or "").strip()[:MAX_STORY_TEXT]}
+    if mode == "image":
+        caption = limit_words(str(parsed.get("caption") or ""))
+        return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content,
+                "caption": caption or limit_words(messages[-1]["content"])}
     if mode == "effects":
         kind = (context or {}).get("kind")
         sound = to_sound(parsed, kind) or to_sound({"caption": messages[-1]["content"]}, kind)

@@ -39,6 +39,21 @@
         "dev"
       ],
       "port": 5173
+    },
+    {
+      "name": "dungeontuber-web-dev-test",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "web",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5174"
+      ],
+      "env": { "DT_BACKEND": "http://127.0.0.1:8766" },
+      "port": 5174
     }
   ]
 }
