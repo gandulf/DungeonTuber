@@ -63,6 +63,24 @@ def test_the_image_generation_has_a_configuration_of_its_own(client, cloud):
     assert client.delete("/api/assistant/imagegen").json()["configured"] is False
 
 
+def test_the_image_generation_can_come_from_the_environment(client, cloud, monkeypatch):
+    monkeypatch.setenv("DT_IMAGEGEN_URL", cloud.url)
+    monkeypatch.setenv("DT_IMAGEGEN_KEY", KEY)
+    monkeypatch.setenv("DT_IMAGEGEN_SECRET", SECRET)
+    status = client.get("/api/assistant/imagegen").json()
+    assert status["configured"] is True and status["source"] == "environment"
+    assert client.get("/api/settings").json()["imageGenConfigured"] is True
+    adventure = client.post("/api/adventures", json={"title": "Crypt"}).json()
+    painted = client.post(f"/api/adventures/{adventure['id']}/images/generate", json={"prompt": "a crypt"})
+    assert painted.status_code == 200 and painted.json()["name"].endswith(".jpg")
+
+    monkeypatch.delenv("DT_IMAGEGEN_KEY")
+    monkeypatch.delenv("DT_IMAGEGEN_SECRET")
+    monkeypatch.setenv("DT_MODAL_KEY", KEY)  # the shared token of all Modal functions
+    monkeypatch.setenv("DT_MODAL_SECRET", SECRET)
+    assert client.get("/api/assistant/imagegen").json()["source"] == "environment"
+
+
 def test_a_generated_image_becomes_the_cover_of_a_block(client, library, cloud):
     client.put("/api/assistant/imagegen", json={"url": cloud.url, "key": KEY, "secret": SECRET})
     adventure = client.post("/api/adventures", json={"title": "Crypt"}).json()

@@ -173,8 +173,9 @@ Options can be passed as arguments (`dungeontuber-server --help`) or environment
 | `DT_GROQ_API_KEY` / `DT_GROQ_MODEL` | Groq key and model for the smart search and composing | – / `openai/gpt-oss-120b` |
 | `DT_MUSICGEN_URL`, `DT_MUSICGEN_KEY`, `DT_MUSICGEN_SECRET` | music generation on Modal (see `agents/musicgen`) | – |
 | `DT_SOUNDGEN_URL`, `DT_SOUNDGEN_KEY`, `DT_SOUNDGEN_SECRET` | sound generation on Modal (see `agents/soundgen`) | – |
+| `DT_IMAGEGEN_URL`, `DT_IMAGEGEN_KEY`, `DT_IMAGEGEN_SECRET` | image generation on Modal (see `agents/imagegen`) | – |
 | `DT_VOXALYZER_CLOUD_URL`, `DT_VOXALYZER_CLOUD_KEY`, `DT_VOXALYZER_CLOUD_SECRET` | cloud analysis on Modal (see `agents/voxalyzer`) | – |
-| `DT_MODAL_KEY` / `DT_MODAL_SECRET` | Modal proxy auth token for both cloud functions when they have none of their own | – |
+| `DT_MODAL_KEY` / `DT_MODAL_SECRET` | Modal proxy auth token for all cloud functions that have none of their own | – |
 | `DT_ACOUSTID_API_KEY` | AcoustID application key for the metadata lookup | – |
 
 The API keys and endpoints are used when nothing is saved in the settings (a saved value wins). They are never written to `settings.json`, so they suit Docker secrets, and the settings show where a key comes from.

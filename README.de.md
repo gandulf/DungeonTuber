@@ -173,8 +173,9 @@ Als Argumente (`dungeontuber-server --help`) oder Umgebungsvariablen:
 | `DT_GROQ_API_KEY` / `DT_GROQ_MODEL` | Groq-Schlüssel und -Modell für intelligente Suche und Komponieren | – / `openai/gpt-oss-120b` |
 | `DT_MUSICGEN_URL`, `DT_MUSICGEN_KEY`, `DT_MUSICGEN_SECRET` | Musikgenerierung auf Modal (siehe `agents/musicgen`) | – |
 | `DT_SOUNDGEN_URL`, `DT_SOUNDGEN_KEY`, `DT_SOUNDGEN_SECRET` | Klanggenerierung auf Modal (siehe `agents/soundgen`) | – |
+| `DT_IMAGEGEN_URL`, `DT_IMAGEGEN_KEY`, `DT_IMAGEGEN_SECRET` | Bildgenerierung auf Modal (siehe `agents/imagegen`) | – |
 | `DT_VOXALYZER_CLOUD_URL`, `DT_VOXALYZER_CLOUD_KEY`, `DT_VOXALYZER_CLOUD_SECRET` | Cloud-Analyse auf Modal (siehe `agents/voxalyzer`) | – |
-| `DT_MODAL_KEY` / `DT_MODAL_SECRET` | Modal-Proxy-Auth-Token für beide Cloud-Funktionen, wenn sie kein eigenes haben | – |
+| `DT_MODAL_KEY` / `DT_MODAL_SECRET` | Modal-Proxy-Auth-Token für alle Cloud-Funktionen, die kein eigenes haben | – |
 | `DT_ACOUSTID_API_KEY` | AcoustID-Anwendungsschlüssel für die Metadatensuche | – |
 
 Die API-Schlüssel und Endpunkte gelten, solange in den Einstellungen nichts gespeichert ist (ein gespeicherter Wert hat Vorrang). Sie landen nie in `settings.json`, eignen sich also für Docker-Secrets, und die Einstellungen zeigen, woher ein Schlüssel stammt.

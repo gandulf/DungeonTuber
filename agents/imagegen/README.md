@@ -22,6 +22,8 @@ cd agents/imagegen && modal deploy modal_app.py
 
 The endpoint uses Modal's proxy auth like the music and sound generation: Modal rejects requests without a valid key and secret
 before a container starts. Create a proxy auth token in the Modal dashboard (Settings → Proxy Auth Tokens), or reuse an existing one.
+Enter the URL with the key and secret in DungeonTuber under Settings → AI Assistant, or give them to the server as `DT_IMAGEGEN_URL`,
+`DT_IMAGEGEN_KEY` and `DT_IMAGEGEN_SECRET` (`DT_MODAL_KEY`/`DT_MODAL_SECRET` when all Modal functions share one token).
 
 ## Request
 
