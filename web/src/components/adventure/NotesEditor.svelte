@@ -16,7 +16,9 @@
   /** The notes of a block as a WYSIWYG editor (Tiptap). They are stored as Markdown (lib/notesMarkdown.ts): `onchange` gets the
    *  Markdown after each change, a new `value` from outside (the AI draft) replaces the text. Links to blocks (typed with `[[`)
    *  and songs open with Ctrl/Cmd + click; images are pasted, dropped or picked and stored in the adventure. */
-  let { value, adventureId, blocks, pool, highlight = null, onhighlighted = () => {}, onchange, onopenblock, onplaysong }: {
+  let { value, adventureId, blocks, pool, highlight = null, onhighlighted = () => {}, onchange, onopenblock, onplaysong, missingSongs = [] }: {
+    /** Songs (UFIDs) of song links that can no longer be found: their links are marked. */
+    missingSongs?: string[];
     /** Words of the header search to mark (once); `onhighlighted` says they were taken. */
     highlight?: string[] | null;
     onhighlighted?: () => void;
@@ -32,6 +34,20 @@
   } = $props();
 
   let element = $state<HTMLDivElement | null>(null);
+
+  // links to missing songs are marked by a style sheet of attribute selectors: ProseMirror redraws its links whenever it likes, so
+  // classes set on them would not last
+  const scope = `notes-${Math.random().toString(36).slice(2, 10)}`;
+  $effect(() => {
+    if (!missingSongs.length) return;
+    const quoted = (text: string) => `"${text.replace(/["\\]/g, '\\$&')}"`;
+    const links = missingSongs.map((ufid) => `[data-notes="${scope}"] .ProseMirror a[href=${quoted(`song:${ufid}`)}]`).join(',');
+    const sheet = document.createElement('style');
+    sheet.textContent = `${links} { color: var(--red) !important; background: var(--red-soft) !important; text-decoration: line-through !important; }`
+      + links.split(',').map((selector) => `${selector}::before`).join(',') + ` { content: '⚠ ' !important; }`;
+    document.head.append(sheet);
+    return () => sheet.remove();
+  });
   let fileInput = $state<HTMLInputElement | null>(null);
   let editor = $state<Editor | null>(null);
   let version = $state(0); // the toolbar follows every change of the editor
@@ -220,25 +236,26 @@
   };
   const run = (apply: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => editor && apply(editor.chain().focus()).run();
 
-  type Tool = { label: string; title: string; on?: () => boolean; click: () => void; disabled?: () => boolean };
+  // every button shows an icon of the app's own set (one stroke style), no letters or emoji
+  type Tool = { icon: string; title: string; on?: () => boolean; click: () => void; disabled?: () => boolean };
   const tools: (Tool | null)[] = [
-    { label: 'B', title: 'Bold', on: () => active('bold'), click: () => run((c) => c.toggleBold()) },
-    { label: 'I', title: 'Italic', on: () => active('italic'), click: () => run((c) => c.toggleItalic()) },
-    { label: 'S', title: 'Strikethrough', on: () => active('strike'), click: () => run((c) => c.toggleStrike()) },
+    { icon: 'bold', title: 'Bold', on: () => active('bold'), click: () => run((c) => c.toggleBold()) },
+    { icon: 'italic', title: 'Italic', on: () => active('italic'), click: () => run((c) => c.toggleItalic()) },
+    { icon: 'strike', title: 'Strikethrough', on: () => active('strike'), click: () => run((c) => c.toggleStrike()) },
     null,
-    { label: 'H1', title: 'Heading', on: () => active('heading', { level: 2 }), click: () => run((c) => c.toggleHeading({ level: 2 })) },
-    { label: 'H2', title: 'Subheading', on: () => active('heading', { level: 3 }), click: () => run((c) => c.toggleHeading({ level: 3 })) },
-    { label: '•', title: 'List', on: () => active('bulletList'), click: () => run((c) => c.toggleBulletList()) },
-    { label: '1.', title: 'Numbered list', on: () => active('orderedList'), click: () => run((c) => c.toggleOrderedList()) },
-    { label: '❝', title: 'Read-aloud text (quote)', on: () => active('blockquote'), click: () => run((c) => c.toggleBlockquote()) },
-    { label: '―', title: 'Divider', click: () => run((c) => c.setHorizontalRule()) },
+    { icon: 'heading-1', title: 'Heading', on: () => active('heading', { level: 2 }), click: () => run((c) => c.toggleHeading({ level: 2 })) },
+    { icon: 'heading-2', title: 'Subheading', on: () => active('heading', { level: 3 }), click: () => run((c) => c.toggleHeading({ level: 3 })) },
+    { icon: 'list', title: 'List', on: () => active('bulletList'), click: () => run((c) => c.toggleBulletList()) },
+    { icon: 'list-ordered', title: 'Numbered list', on: () => active('orderedList'), click: () => run((c) => c.toggleOrderedList()) },
+    { icon: 'quote', title: 'Read-aloud text (quote)', on: () => active('blockquote'), click: () => run((c) => c.toggleBlockquote()) },
+    { icon: 'divider', title: 'Divider', click: () => run((c) => c.setHorizontalRule()) },
     null,
-    { label: '🔗', title: 'Link to a web page', on: () => active('link') && !blockOrSongLink(), click: () => void webLink() },
-    { label: '♪', title: 'Link the selected text to a song', click: songLink },
-    { label: '🖼', title: 'Insert an image', click: () => fileInput?.click() },
+    { icon: 'link', title: 'Link to a web page', on: () => active('link') && !blockOrSongLink(), click: () => void webLink() },
+    { icon: 'music', title: 'Link the selected text to a song', click: songLink },
+    { icon: 'image', title: 'Insert an image', click: () => fileInput?.click() },
     null,
-    { label: '↶', title: 'Undo', click: () => run((c) => c.undo()), disabled: () => !can('undo') },
-    { label: '↷', title: 'Redo', click: () => run((c) => c.redo()), disabled: () => !can('redo') },
+    { icon: 'undo', title: 'Undo', click: () => run((c) => c.undo()), disabled: () => !can('undo') },
+    { icon: 'redo', title: 'Redo', click: () => run((c) => c.redo()), disabled: () => !can('redo') },
   ];
 
   function blockOrSongLink(): boolean {
@@ -252,7 +269,7 @@
     {#each tools as tool, index (index)}
       {#if tool}
         <button type="button" class="fmt" class:on={tool.on?.()} disabled={tool.disabled?.()} title={t(tool.title)} aria-label={t(tool.title)}
-                onmousedown={(e) => e.preventDefault()} onclick={tool.click}>{tool.label}</button>
+                onmousedown={(e) => e.preventDefault()} onclick={tool.click}><Icon name={tool.icon} size={16} /></button>
       {:else}
         <span class="sep" aria-hidden="true"></span>
       {/if}
@@ -267,7 +284,7 @@
     <input bind:this={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden
            onchange={(e) => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ''; if (file) void upload(file); }} />
   </div>
-  <div class="surface selectable" bind:this={element}></div>
+  <div class="surface selectable" data-notes={scope} bind:this={element}></div>
   <span class="hint muted">{t('Ctrl + click opens a block link or plays a song link.')}</span>
   {#if suggest}
     <ul class="suggest" role="listbox" aria-label={t('Blocks')} style:left="{suggest.left}px" style:top="{suggest.top}px">
@@ -283,7 +300,7 @@
 <style>
   .notes-editor { display: flex; flex-direction: column; gap: 6px; }
   .toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border); }
-  .fmt { min-width: 30px; height: 30px; padding: 0 6px; border-radius: 7px; color: var(--muted); font-weight: 600; }
+  .fmt { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-radius: 7px; color: var(--muted); }
   .fmt:hover:not(:disabled) { background: var(--hover); color: var(--text); }
   .fmt.on { background: var(--accent-soft); color: var(--accent); }
   .fmt:disabled { opacity: 0.35; }

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { moveBlock, unreachable } from '../../lib/adventures';
-  import { canDropOnAdventure, dropOnAdventure } from '../../lib/actions';
+  import { canDropOnAdventure, canDropOnBlock, dropOnAdventure, dropOnBlock } from '../../lib/actions';
   import { t } from '../../lib/i18n.svelte';
-  import { addBlock, adventures, change, toggleVisibility } from '../../lib/stores/adventure.svelte';
+  import { addBlock, adventures, change, switchToPlay, toggleVisibility } from '../../lib/stores/adventure.svelte';
   import Icon from '../Icon.svelte';
   import AdventureMusic from './AdventureMusic.svelte';
   import BlockEditor from './BlockEditor.svelte';
@@ -16,6 +16,7 @@
   // below the blocks: the adventure's own music instead of the editor of a block
   let showMusic = $state(false);
   let musicOver = $state(false);
+  let blockOver = $state<string | null>(null);
 
   // a block chosen elsewhere (the search of the header) is shown instead of the music
   $effect(() => {
@@ -46,7 +47,7 @@
       {/if}
       <div class="seg">
         {#if adventure.editable}<button class:on={adventures.mode === 'edit'} onclick={() => (adventures.mode = 'edit')}><Icon name="edit" size={13} /> {t('Edit')}</button>{/if}
-        <button class:on={adventures.mode === 'play'} onclick={() => (adventures.mode = 'play')}><Icon name="play" size={13} /> {t('Play')}</button>
+        <button class:on={adventures.mode === 'play'} onclick={switchToPlay}><Icon name="play" size={13} /> {t('Play')}</button>
       </div>
     </header>
 
@@ -59,7 +60,11 @@
         {:else}
         <nav class="blocks" aria-label={t('Blocks')}>
           {#each adventure.blocks as block, index (block.id)}
-            <div class="block" class:active={!showMusic && adventures.selected === block.id}>
+            <!-- songs of the adventure music or the library dropped here are added to the block -->
+            <div class="block" class:active={!showMusic && adventures.selected === block.id} class:over={blockOver === block.id} role="listitem"
+                 ondragover={(e) => { if (adventure.editable && canDropOnBlock(e.dataTransfer)) { e.preventDefault(); blockOver = block.id; } }}
+                 ondragleave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) blockOver = null; }}
+                 ondrop={(e) => { if (!canDropOnBlock(e.dataTransfer)) return; e.preventDefault(); blockOver = null; void dropOnBlock(block.id, e.dataTransfer); }}>
               <button class="pick" onclick={() => selectBlock(block.id)}>
                 {#if block.played}<Icon name="check" size={13} />{/if}
                 <span class="ellipsis">{block.title || t('Untitled')}</span>
@@ -112,7 +117,7 @@
   .mini { width: 22px; height: 22px; }
   .add { align-self: flex-start; margin-top: 6px; }
   .music-entry { margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--border); border-radius: 0 0 9px 9px; }
-  .music-entry.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  .block.over, .music-entry.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
   .count { margin-left: auto; font-size: var(--fs-xs); font-weight: 400; }
   @media (max-width: 760px) {
     .edit { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }

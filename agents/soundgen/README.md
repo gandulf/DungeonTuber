@@ -64,6 +64,7 @@ curl -X POST "$URL" -H "Modal-Key: $KEY" -H "Modal-Secret: $SECRET" -H "Content-
 | `DT_SOUND_STEPS` | `8` | Diffusion steps. The released models are distilled to 8. |
 | `DT_SOUND_MAX_CONTAINERS` | `1` | Caps the number of parallel generations, and with it the cost. |
 | `DT_SOUND_IDLE_SECONDS` | `120` | How long a container stays warm after its last sound. |
+| `DT_SOUND_GPU_SNAPSHOT` | `1` | Cold starts restore a memory snapshot with the model already loaded: Modal's experimental GPU snapshot on a GPU, a plain memory snapshot with `DT_SOUND_GPU=none`. The first starts after each `modal deploy` are slower while Modal takes the snapshot. `0` loads the model on every start. |
 | `DT_SOUND_HF_SECRET` | `huggingface` | Name of the Modal secret with `HF_TOKEN`. |
 
 The first start downloads the model into the Modal volume `dungeontuber-soundgen-models`. To do that beforehand on a CPU container

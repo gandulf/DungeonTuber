@@ -3,9 +3,9 @@
   import { blockById, defaultNext, linksFrom, refKey, startBlock } from '../../lib/adventures';
   import { clearHighlight, highlightTerms } from '../../lib/highlight';
   import { t } from '../../lib/i18n.svelte';
-  import { blockLinkTarget, imageUrl, renderNotes, songLinkTarget } from '../../lib/notes';
-  import { adventures, enterBlock, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
-  import { player, playQueue } from '../../lib/stores/player.svelte';
+  import { blockLinkTarget, imageUrl, markMissingSongLinks, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
+  import { adventures, effectKey, enterBlock, missingEntries, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
+  import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import type { MusicRef } from '../../lib/types';
   import { openDialog } from '../../lib/stores/ui.svelte';
   import Icon from '../Icon.svelte';
@@ -31,12 +31,29 @@
     return () => (stale = true);
   });
 
+  // songs, playlists and effects of the block (and songs its notes link to) that can no longer be found are marked
+  let missing = $state(new Set<string>());
+  $effect(() => {
+    if (!block) return;
+    let stale = false;
+    const songs = songLinkIds(block.markdown);
+    void missingEntries(block, songs).then((found) => { if (!stale) missing = found; });
+    return () => (stale = true);
+  });
+  $effect(() => {
+    void block?.markdown;
+    if (notesElement) markMissingSongLinks(notesElement, missing, t('This song was not found in the library.'));
+  });
+  const missingTitle = $derived(t('No longer found: removed, moved or not visible to you.'));
+
   /** The song or playlist of the button is what the player plays right now. */
   const playingRef = (ref: MusicRef) =>
     player.playing && !!player.track && (ref.type === 'song' ? player.track.ufid === ref.ufid : !!members[refKey(ref)]?.has(player.track.id));
   const effectPlaying = (path: string) => player.effectPlaying && player.effect?.path === path;
 
+  /** Plays a song or playlist of the block; the one that is playing pauses (like the effects). */
   async function playRef(ref: MusicRef) {
+    if (playingRef(ref)) return togglePlay();
     const tracks = await refTracks(ref);
     if (tracks?.length) await playQueue(tracks);
   }
@@ -141,9 +158,9 @@
         {#if block.music.length}
           <div class="chips" aria-label={t('Music')}>
             {#each block.music as ref (refKey(ref))}
-              <button class="chip" class:on={playingRef(ref)} disabled={ref.type === 'playlist' && ref.unavailable} onclick={() => void playRef(ref)}
-                      title={ref.type === 'playlist' && ref.unavailable ? t('unavailable') : ''}>
-                <Icon name={playingRef(ref) ? 'volume' : ref.type === 'song' ? 'music' : 'playlist'} size={14} />{ref.title || ref.path}
+              {@const gone = missing.has(refKey(ref))}
+              <button class="chip" class:on={playingRef(ref)} class:missing={gone} disabled={gone} onclick={() => void playRef(ref)} title={gone ? missingTitle : ''}>
+                <Icon name={gone ? 'info' : playingRef(ref) ? 'volume' : ref.type === 'song' ? 'music' : 'playlist'} size={14} />{ref.title || ref.path}
               </button>
             {/each}
           </div>
@@ -151,8 +168,9 @@
         {#if block.effects.length}
           <div class="chips" aria-label={t('Effects')}>
             {#each block.effects as effect (effect.path)}
-              <button class="chip" class:on={effectPlaying(effect.path)} onclick={() => void startEffect(effect)}>
-                <Icon name={effectPlaying(effect.path) ? 'volume' : 'waves'} size={14} />{effect.name || effect.path}
+              {@const gone = missing.has(effectKey(effect))}
+              <button class="chip" class:on={effectPlaying(effect.path)} class:missing={gone} disabled={gone} onclick={() => void startEffect(effect)} title={gone ? missingTitle : ''}>
+                <Icon name={gone ? 'info' : effectPlaying(effect.path) ? 'volume' : 'waves'} size={14} />{effect.name || effect.path}
               </button>
             {/each}
           </div>
@@ -197,6 +215,7 @@
   .tools { display: flex; flex-direction: column; gap: 12px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .chip.missing { color: var(--red); background: var(--red-soft); border-color: var(--red); border-style: dashed; text-decoration: line-through; cursor: not-allowed; }
   .notes { font-size: 1.1rem; line-height: 1.7; overflow-wrap: anywhere; }
   .notes :global(img) { max-width: 100%; border-radius: 8px; }
   .notes :global(blockquote) { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); }

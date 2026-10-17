@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockLinkTarget, imageSize, renderNotes, resolveBlockTitles, songLinkTarget } from './notes';
+import { blockLinkTarget, imageSize, renderNotes, resolveBlockTitles, songLinkIds, songLinkTarget } from './notes';
 
 describe('renderNotes', () => {
   it('renders headings, emphasis and lists', () => {
@@ -86,5 +86,12 @@ describe('links to songs', () => {
     const link = { closest: () => ({ dataset: { song: 'u-1' } }) } as unknown as EventTarget;
     expect(songLinkTarget(link)).toBe('u-1');
     expect(songLinkTarget({ closest: () => null } as unknown as EventTarget)).toBeNull();
+  });
+});
+
+describe('songLinkIds', () => {
+  it('lists the songs the notes link to', () => {
+    expect(songLinkIds('Hear [the bard](song:u-1) and [the drums](song:u-2), not [a block](block:b-1).')).toEqual(['u-1', 'u-2']);
+    expect(songLinkIds('No links.')).toEqual([]);
   });
 });

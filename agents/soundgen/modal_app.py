@@ -14,6 +14,9 @@ The models are downloaded into a Modal volume on the first start, so later start
 a CPU container (also after changing DT_SOUND_MODEL):
 
     modal run modal_app.py::download
+
+Cold starts restore a memory snapshot taken after each deploy, with the model already loaded: a GPU snapshot (Modal, experimental)
+on a GPU, a plain memory snapshot with DT_SOUND_GPU=none. DT_SOUND_GPU_SNAPSHOT=0 loads the model on every start instead.
 """
 import asyncio
 import os
@@ -34,6 +37,8 @@ GPU = os.environ.get("DT_SOUND_GPU", "L4")
 STEPS = int(os.environ.get("DT_SOUND_STEPS", "8"))  # the released models are distilled to 8 steps without guidance
 MAX_CONTAINERS = int(os.environ.get("DT_SOUND_MAX_CONTAINERS", "1"))  # caps the parallel generations and with it the cost
 IDLE_SECONDS = int(os.environ.get("DT_SOUND_IDLE_SECONDS", "120"))  # how long a container stays warm after its last sound
+# memory snapshot with the model loaded (on a GPU Modal's experimental GPU snapshot: the model loads straight onto the GPU)
+GPU_SNAPSHOT = os.environ.get("DT_SOUND_GPU_SNAPSHOT", "1") == "1"
 HF_SECRET = os.environ.get("DT_SOUND_HF_SECRET", "huggingface")  # the Modal secret with HF_TOKEN
 
 # the Stable Audio 3 release this app is tested with; a newer commit may change the Python API
@@ -55,6 +60,9 @@ PREFIX = {
 HAS_TAGS = re.compile(r"\bTrackType\s*:", re.IGNORECASE)
 HAS_BPM = re.compile(r"\b\d{2,3}\s*BPM\b", re.IGNORECASE)
 
+# random seeds from the OS: the state of `random` is frozen in the memory snapshot, every restore would draw the same seeds
+SEEDS = random.SystemRandom()
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("git", "ffmpeg", "libsndfile1")
@@ -62,7 +70,8 @@ image = (
     .pip_install(FLASH_ATTN_WHEEL)  # the medium model produces static noise without it
     .pip_install(f"stable-audio-3 @ git+https://github.com/Stability-AI/stable-audio-3.git@{SA3_COMMIT}", "fastapi[standard]")
     # the options of `modal deploy` are read again when the container imports this file: the image carries them
-    .env({"HF_HOME": HF_HOME, "TOKENIZERS_PARALLELISM": "false", "DT_SOUND_MODEL": MODEL, "DT_SOUND_STEPS": str(STEPS)})
+    .env({"HF_HOME": HF_HOME, "TOKENIZERS_PARALLELISM": "false", "DT_SOUND_MODEL": MODEL, "DT_SOUND_STEPS": str(STEPS),
+          "DT_SOUND_GPU_SNAPSHOT": "1" if GPU_SNAPSHOT else "0"})
 )
 
 models = modal.Volume.from_name("dungeontuber-soundgen-models", create_if_missing=True)
@@ -125,10 +134,12 @@ def to_mp3(audio, sample_rate: int) -> bytes:
 
 
 @app.cls(gpu=None if GPU.lower() == "none" else GPU, max_containers=MAX_CONTAINERS, scaledown_window=IDLE_SECONDS, timeout=900,
-         volumes={HF_HOME: models}, secrets=secrets)
+         volumes={HF_HOME: models}, secrets=secrets, enable_memory_snapshot=GPU_SNAPSHOT,
+         experimental_options={"enable_gpu_snapshot": True} if GPU_SNAPSHOT and GPU.lower() != "none" else None)
 class SoundGen:
-    @modal.enter()
+    @modal.enter(snap=True)
     def start(self):
+        """Loads the model; with the snapshot this runs once per snapshot, restores skip it."""
         import torch
 
         started = time.monotonic()
@@ -137,7 +148,7 @@ class SoundGen:
 
     def generate(self, request: dict) -> tuple[bytes, dict]:
         seed = request.get("seed")
-        seed = int(seed) if isinstance(seed, int) and 0 <= seed < 2 ** 31 else random.randint(0, 2 ** 31 - 1)
+        seed = int(seed) if isinstance(seed, int) and 0 <= seed < 2 ** 31 else SEEDS.randint(0, 2 ** 31 - 1)
         prompt, kind = describe(request)
         default = {"music": 120, "ambience": 60, "sfx": 5}[kind]
         duration = float(min(max(float(request.get("duration") or default), MIN_SECONDS), MAX_SECONDS))

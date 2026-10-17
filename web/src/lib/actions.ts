@@ -8,8 +8,9 @@ import { activeTab, addToPlaylist, closeTab, library, loadTab, openTab, reloadAl
 import { playTrack, refreshCurrentTrack } from './stores/player.svelte';
 import { askConfirm, askText, errorToast, openDialog, toast, ui, type MenuItem } from './stores/ui.svelte';
 import type { JobKind } from './stores/downloads.svelte';
-import type { BrowseItem, SongRef, Track } from './types';
-import { addSongsToAdventure } from './stores/adventure.svelte';
+import type { BrowseItem, MusicRef, SongRef, Track } from './types';
+import { addSongsToAdventure, adventures, change, refTracks } from './stores/adventure.svelte';
+import { assignMusic } from './adventures';
 import { metadataPatch, sureMatch } from './normalize';
 import { isMp3, itemsFromDrop, type UploadItem } from './upload';
 import AddToAdventureDialog from '../components/adventure/AddToAdventureDialog.svelte';
@@ -238,6 +239,53 @@ export async function songsFromTransfer(transfer: DataTransfer | null): Promise<
   const refs = tracks.filter((track) => track.ufid).map((track): SongRef => ({ type: 'song', ufid: track.ufid!, path: track.path, title: track.title || track.name }));
   if (refs.length < tracks.length) toast(t('{0} song(s) have no stable id yet and are left out. Refresh the library first.', tracks.length - refs.length), 'error');
   return refs;
+}
+
+// songs and playlists of the adventure music (see AdventureMusic.svelte), dragged onto a block
+const MUSIC_TYPE = 'application/x-dungeontuber-music';
+
+export function setMusicDrag(transfer: DataTransfer | null, refs: MusicRef[]) {
+  transfer?.setData(MUSIC_TYPE, JSON.stringify(refs));
+  if (transfer) transfer.effectAllowed = 'copy';
+}
+
+/** The adventure music and songs of the library (song table, folder tree) can be dropped on a block. */
+export function canDropOnBlock(transfer: DataTransfer | null): boolean {
+  return !!transfer?.types.includes(MUSIC_TYPE) || canDropOnAdventure(transfer);
+}
+
+/** The songs dropped on a block: entries of the adventure music (a playlist gives its songs: blocks hold songs only) or songs of
+ *  the library. */
+export async function blockSongsFromTransfer(transfer: DataTransfer | null): Promise<SongRef[]> {
+  if (!transfer?.types.includes(MUSIC_TYPE)) return songsFromTransfer(transfer);
+  let refs: MusicRef[] = [];
+  try {
+    refs = JSON.parse(transfer.getData(MUSIC_TYPE) || '[]') as MusicRef[];
+  } catch { /* not ours */ }
+  const songs: SongRef[] = [];
+  for (const ref of refs) {
+    if (ref.type === 'song') songs.push(ref);
+    else for (const track of (await refTracks(ref)) ?? []) {
+      if (track.ufid) songs.push({ type: 'song', ufid: track.ufid, path: track.path, title: track.title || track.name });
+    }
+  }
+  return songs;
+}
+
+/** Adds the dropped songs to a block of the open adventure (and to the adventure music, where they are not yet). */
+export async function dropOnBlock(blockId: string, transfer: DataTransfer | null) {
+  try {
+    const refs = await blockSongsFromTransfer(transfer);
+    const adventure = adventures.current;
+    const block = adventure?.blocks.find((item) => item.id === blockId);
+    if (!refs.length || !block) return;
+    let added = 0;
+    change((a) => { for (const ref of refs) if (assignMusic(a, block, ref)) added++; });
+    const title = block.title || t('Untitled');
+    toast(added ? t('{0} song(s) added to "{1}".', added, title) : t('The block already has these songs.'), added ? 'success' : 'info');
+  } catch (e) {
+    errorToast(e);
+  }
 }
 
 /** Assigns the dropped songs to the adventure's own playlist. */

@@ -920,10 +920,23 @@ def test_adventures_are_private_until_published(client, library):
     assert client.put(f"/api/adventures/{created['id']}", json={**body, "music": []}).json()["music"] == []
     client.put(f"/api/adventures/{created['id']}", json=body)
 
-    # private: only the owner (and the SuperAdmin) see it
+    # private: only the owner sees it; on a server not even the SuperAdmin, in the desktop app the SuperAdmin does
     client.post("/api/auth/login", json={"username": "bob", "password": "pw1234"})
     assert client.get("/api/adventures").json()["adventures"] == []
     assert client.get(f"/api/adventures/{created['id']}").status_code == 404
+    from server.config import get_config
+    config = get_config()
+    client.post("/api/auth/login", json={"password": "secret"})
+    previous, config.local_mode = config.local_mode, False
+    try:
+        assert client.get("/api/adventures").json()["adventures"] == []
+        assert client.get(f"/api/adventures/{created['id']}").status_code == 404
+        assert client.put(f"/api/adventures/{created['id']}", json=body).status_code == 404
+        assert client.delete(f"/api/adventures/{created['id']}").status_code == 404
+        config.local_mode = True
+        assert [a["title"] for a in client.get("/api/adventures").json()["adventures"]] == ["Crypt"]
+    finally:
+        config.local_mode = previous
 
     # publishing warns about the private playlist first
     client.post("/api/auth/login", json={"username": "anna", "password": "pw1234"})

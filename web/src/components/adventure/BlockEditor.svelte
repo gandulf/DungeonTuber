@@ -1,14 +1,16 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { api } from '../../lib/api';
-  import { canDropOnAdventure, songsFromTransfer } from '../../lib/actions';
+  import { blockSongsFromTransfer, canDropOnBlock } from '../../lib/actions';
   import { addAdventureMusic, addLink, addMusic, assignMusic, linksFrom, linksTo, moveEntry, refKey, removeLink } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
-  import { blockLinkTarget, imageUrl, renderNotes, songLinkTarget } from '../../lib/notes';
-  import { adventures, change, deleteBlock, enterBlock, coverPending, flushSave, playSongLink, refTracks, searchSongsForBlock, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
-  import { player, playQueue } from '../../lib/stores/player.svelte';
+  import { blockLinkTarget, imageUrl, markMissingSongLinks, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
+  import { adventures, change, deleteBlock, effectKey, coverPending, flushSave, missingEntries, playSongLink, refTracks, searchSongsForBlock, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
+  import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import { data } from '../../lib/stores/data.svelte';
-  import { askConfirm, errorToast, openDialog, openMenu, toast } from '../../lib/stores/ui.svelte';
+  import { askConfirm, errorToast, openDialog, toast } from '../../lib/stores/ui.svelte';
   import type { Effect, MusicRef } from '../../lib/types';
+  import type { CreateKind } from '../../lib/stores/assistant.svelte';
   import Icon from '../Icon.svelte';
   import ImagePopup from '../dialogs/ImagePopup.svelte';
   import AiDialog from './AiDialog.svelte';
@@ -79,20 +81,14 @@
     linkTarget = '';
   }
 
-  /** The AI helpers of the block (see AiDialog.svelte); each needs the service it talks to. */
-  function aiMenu(event: MouseEvent) {
-    if (!block) return;
-    const id = block.id;
-    const text = !!(data.settings?.groqConfigured || data.settings?.assistantConfigured);
-    const sounds = !!data.settings?.soundGenConfigured;
-    const images = !!data.settings?.imageGenConfigured;
-    const open = (task: 'draft' | 'songs' | 'sound' | 'cover') => openDialog(AiDialog, { task, blockId: id });
-    openMenu(event, [
-      { label: t('Draft the notes…'), icon: 'edit', disabled: !text, action: () => open('draft') },
-      { label: t('Suggest songs…'), icon: 'music', disabled: !text, action: () => open('songs') },
-      { label: t('Create a sound…'), icon: 'waves', disabled: !sounds, action: () => open('sound') },
-      { label: t('Create a cover image…'), icon: 'sparkles', disabled: !images, action: () => open('cover') },
-    ]);
+  /** The AI helpers sit next to what they change (see AiDialog.svelte): the notes, the music and the effects (the cover has its own
+   *  button); each needs the service it talks to. */
+  const aiText = $derived(!!(data.settings?.groqConfigured || data.settings?.assistantConfigured));
+  const aiSounds = $derived(!!data.settings?.soundGenConfigured);
+  // music: a piece of the music generation (ACE-Step) and background music of the sound generation, as far as they are set up
+  const musicKinds = $derived<CreateKind[]>([...(data.settings?.musicGenConfigured ? ['song' as const] : []), ...(aiSounds ? ['music' as const] : [])]);
+  function openAi(task: 'draft' | 'songs' | 'sound', kinds?: CreateKind[]) {
+    if (block) openDialog(AiDialog, { task, blockId: block.id, kinds });
   }
 
   // --- drag & drop: songs and effects are put in order by dragging them; songs of the song table or the folder tree can be dropped
@@ -109,7 +105,7 @@
   }
 
   function accepts(event: DragEvent, list: EntryList): boolean {
-    return dragging ? dragging.list === list : list === 'music' && canDropOnAdventure(event.dataTransfer);
+    return dragging ? dragging.list === list : list === 'music' && canDropOnBlock(event.dataTransfer);
   }
 
   /** Over an entry: the drop goes before it or, in its lower half, after it. */
@@ -144,7 +140,7 @@
     }
     const target = block;
     try {
-      const refs = await songsFromTransfer(event.dataTransfer);
+      const refs = await blockSongsFromTransfer(event.dataTransfer);
       if (!refs.length) return;
       change((a) => {
         let index = at;
@@ -166,11 +162,32 @@
   const canEdit = () => !!adventure.editable;
   const dropBefore = (list: EntryList, index: number) => dropAt?.list === list && dropAt.index === index;
 
-  /** A click on a song or playlist of the block plays it. */
+  /** A click on a song or playlist of the block plays it; on the song that is playing it pauses (like the effects). */
   async function playRef(ref: MusicRef) {
+    if (songPlaying(ref)) return togglePlay();
     const tracks = await refTracks(ref);
     if (tracks?.length) await playQueue(tracks);
   }
+
+  // songs, playlists and effects of the block that can no longer be found are marked (checked again when the lists change)
+  // (the song links of the notes too: checked again when the linked songs change, not on every key stroke)
+  let missing = $state(new Set<string>());
+  const linkedSongs = $derived([...new Set(songLinkIds(block?.markdown ?? ''))].sort().join('\n'));
+  $effect(() => {
+    if (!block) return;
+    void [block.music.map(refKey), block.effects.map((item) => item.path)];
+    const songs = linkedSongs ? linkedSongs.split('\n') : [];
+    let stale = false;
+    void missingEntries(untrack(() => block), songs).then((found) => { if (!stale) missing = found; });
+    return () => (stale = true);
+  });
+  const missingSongs = $derived([...missing].filter((key) => key.startsWith('song:')).map((key) => key.slice(5)));
+  let previewElement = $state<HTMLDivElement | null>(null);
+  $effect(() => {
+    void block?.markdown;
+    if (previewElement) markMissingSongLinks(previewElement, missing, t('This song was not found in the library.'));
+  });
+  const missingTitle = $derived(t('No longer found: removed, moved or not visible to you.'));
 
   const songPlaying = (ref: MusicRef) => ref.type === 'song' && player.playing && player.track?.ufid === ref.ufid;
 
@@ -206,8 +223,6 @@
     <div class="head">
       <input class="title" type="text" placeholder={t('Block title')} value={block.title} readonly={!editable}
              oninput={(e) => change(() => (block.title = e.currentTarget.value))} />
-      <button class="btn sm" title={t('Play this block')} onclick={() => void enterBlock(block.id)}><Icon name="play" size={14} />{t('Play')}</button>
-      {#if editable}<button class="btn sm" title={t('AI helpers for this block')} onclick={aiMenu}><Icon name="sparkles" size={14} />{t('AI')}</button>{/if}
       {#if editable}<button class="icon-btn" title={t('Delete block')} onclick={() => void remove()}><Icon name="trash" size={16} /></button>{/if}
     </div>
 
@@ -258,6 +273,8 @@
       <div class="bar">
         <span class="label-xs">{t('Notes')}</span>
         <span class="grow"></span>
+        {#if editable}<button class="btn sm ghost" disabled={!aiText} title={aiText ? t('Draft the notes') : t('The AI assistant is not configured')}
+                              onclick={() => openAi('draft')}><Icon name="sparkles" size={13} />{t('AI')}</button>{/if}
         {#if editable}<button class="btn sm ghost" title={t('Deletes the images no block uses any more')} onclick={() => void cleanUpImages()}>{t('Clean up images')}</button>{/if}
       </div>
       {#if editable}
@@ -270,12 +287,12 @@
                          highlight={adventures.highlight?.blockId === block.id ? adventures.highlight.terms : null}
                          onhighlighted={() => (adventures.highlight = null)}
                          onchange={(markdown: string) => change(() => (block.markdown = markdown))}
-                         onopenblock={(id: string) => (adventures.selected = id)} onplaysong={(ufid: string) => void playSongLink(ufid)} />
+                         onopenblock={(id: string) => (adventures.selected = id)} onplaysong={(ufid: string) => void playSongLink(ufid)} {missingSongs} />
           {/key}
         {/await}
       {:else}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <div class="notes selectable" onclick={previewClick}>{@html renderNotes(block.markdown, adventure.blocks, adventure.id) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
+        <div class="notes selectable" bind:this={previewElement} onclick={previewClick}>{@html renderNotes(block.markdown, adventure.blocks, adventure.id) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
       {/if}
     </section>
 
@@ -288,23 +305,28 @@
         <span class="label-xs">{t('Music')}</span>
         <span class="grow"></span>
         {#if editable}
+          <button class="btn sm ghost" disabled={!musicKinds.length} title={musicKinds.length ? t('Create music') : t('The music and the sound generation are not configured yet.')}
+                  aria-label={t('Create music')} onclick={() => openAi('sound', musicKinds)}><Icon name="wand" size={13} /></button>
+          <button class="btn sm ghost" disabled={!aiText} title={aiText ? t('The AI chooses filters for this block and opens the library to add songs') : t('The AI assistant is not configured')}
+                  onclick={() => openAi('songs')}><Icon name="sparkles" size={13} />{t('AI search')}</button>
           <button class="btn sm ghost" title={t('Search the whole library for songs for this block')} onclick={() => void searchSongsForBlock(block.id)}><Icon name="search" size={13} />{t('Search…')}</button>
           <button class="btn sm" title={t('Add songs of the adventure music')} onclick={addMusicDialog}><Icon name="plus" size={13} />{t('Add')}</button>
         {/if}
       </div>
       {#each block.music as ref, index (refKey(ref))}
         {@const on = songPlaying(ref)}
-        <div class="item" class:drop-before={dropBefore('music', index)} class:dragged={dragging?.list === 'music' && dragging.from === index}
+        {@const gone = missing.has(refKey(ref))}
+        <div class="item" class:missing={gone} class:drop-before={dropBefore('music', index)} class:dragged={dragging?.list === 'music' && dragging.from === index}
              draggable={editable} role="listitem"
              ondragstart={(e) => entryDragStart(e, 'music', index)} ondragover={(e) => entryDragOver(e, 'music', index)}
              ondrop={(e) => void entryDrop(e, 'music')} ondragend={dragEnd}>
           {#if editable}<span class="grip" title={t('Drag to change the order')}><Icon name="menu" size={13} /></span>{/if}
-          <button type="button" class="play-item" class:on disabled={ref.type === 'playlist' && ref.unavailable} title={t('Play')} onclick={() => void playRef(ref)}>
+          <button type="button" class="play-item" class:on disabled={gone} title={gone ? missingTitle : t(on ? 'Pause' : 'Play')} onclick={() => void playRef(ref)}>
             <Icon name={on ? 'volume' : ref.type === 'song' ? 'music' : 'playlist'} size={15} />
             <span class="ellipsis">{ref.title || ref.path || t('Untitled')}</span>
           </button>
           {#if index === 0 && block.autoplay}<span class="start" title={t('Starts when the block is entered')}><Icon name="play" size={10} />{t('Start')}</span>{/if}
-          {#if ref.type === 'playlist' && ref.unavailable}<span class="warn">{t('unavailable')}</span>{/if}
+          {#if gone}<span class="warn" title={missingTitle}>{ref.type === 'playlist' && ref.unavailable ? t('unavailable') : t('not found')}</span>{/if}
           {#if editable}<button class="icon-btn mini" title={t('Remove')} onclick={() => change(() => block.music.splice(index, 1))}><Icon name="close" size={13} /></button>{/if}
         </div>
       {:else}
@@ -319,20 +341,24 @@
         <span class="label-xs">{t('Effects')}</span>
         <span class="grow"></span>
         {#if editable}
+          <button class="btn sm ghost" disabled={!aiSounds} title={aiSounds ? t('Create an ambience or a sound effect') : t('The sound generation is not configured')}
+                  onclick={() => openAi('sound', ['ambience', 'sfx'])}><Icon name="sparkles" size={13} />{t('AI')}</button>
           <button class="btn sm" onclick={addEffectDialog}><Icon name="plus" size={13} />{t('Add')}</button>
         {/if}
       </div>
       {#each block.effects as effect, index (effect.path)}
         {@const on = player.effectPlaying && player.effect?.path === effect.path}
-        <div class="item" class:drop-before={dropBefore('effects', index)} class:dragged={dragging?.list === 'effects' && dragging.from === index}
+        {@const gone = missing.has(effectKey(effect))}
+        <div class="item" class:missing={gone} class:drop-before={dropBefore('effects', index)} class:dragged={dragging?.list === 'effects' && dragging.from === index}
              draggable={editable} role="listitem"
              ondragstart={(e) => entryDragStart(e, 'effects', index)} ondragover={(e) => entryDragOver(e, 'effects', index)}
              ondrop={(e) => void entryDrop(e, 'effects')} ondragend={dragEnd}>
           {#if editable}<span class="grip" title={t('Drag to change the order')}><Icon name="menu" size={13} /></span>{/if}
-          <button type="button" class="play-item" class:on title={t('Play')} onclick={() => void startEffect(effect)}>
+          <button type="button" class="play-item" class:on disabled={gone} title={gone ? missingTitle : t(on ? 'Pause' : 'Play')} onclick={() => void startEffect(effect)}>
             <Icon name={on ? 'volume' : 'waves'} size={15} />
             <span class="ellipsis">{effect.name || effect.path}</span>
           </button>
+          {#if gone}<span class="warn" title={missingTitle}>{t('not found')}</span>{/if}
           <label class="check small"><input type="checkbox" checked={effect.loop} disabled={!editable} onchange={(e) => change(() => (effect.loop = e.currentTarget.checked))} />{t('Loop')}</label>
           <label class="check small"><input type="checkbox" checked={effect.autostart} disabled={!editable} onchange={(e) => change(() => (effect.autostart = e.currentTarget.checked))} />{t('Auto')}</label>
           {#if editable}<button class="icon-btn mini" title={t('Remove')} onclick={() => change(() => block.effects.splice(index, 1))}><Icon name="close" size={13} /></button>{/if}
@@ -426,5 +452,6 @@
   .play-item:disabled { cursor: default; opacity: 0.6; }
   .mini { width: 24px; height: 24px; }
   .small { font-size: var(--fs-sm); }
-  .warn { font-size: var(--fs-xs); color: var(--red); border: 1px solid var(--red); border-radius: 6px; padding: 0 6px; }
+  .item.missing .play-item { color: var(--red); text-decoration: line-through; cursor: not-allowed; }
+  .warn { flex: none; font-size: var(--fs-xs); color: var(--red); border: 1px solid var(--red); border-radius: 6px; padding: 0 6px; }
 </style>

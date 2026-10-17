@@ -1,10 +1,11 @@
 // The open adventure: editing (autosaved), the path through its blocks in play mode and what a block starts (music, effects).
 // Adventures are tabs next to folders and playlists (see stores/library.svelte.ts); the one of the active tab is `adventures.current`.
 import { api, pathToId } from '../api';
-import { addAdventureMusic, addMusic, appendBlock, assignMusic, removeBlock } from '../adventures';
+import { addAdventureMusic, addMusic, appendBlock, assignMusic, refKey, removeBlock } from '../adventures';
 import { t } from '../i18n.svelte';
 import { prefs } from '../prefs.svelte';
-import type { Adventure, AdventureBlock, AdventureSummary, EffectRef, MusicRef, PlaylistRef, SongRef, Track } from '../types';
+import type { Adventure, AdventureBlock, AdventureSummary, EffectRef, MusicRef, PlaylistRef, ComposePiece, SmartFilter, SongRef, SoundDescription, SoundKind, Track } from '../types';
+import { applyFilter } from './assistant.svelte';
 import { effects, loadEffects } from './effects.svelte';
 import { closeTab, library, openTab, setGlobal } from './library.svelte';
 import { playEffect, playQueue } from './player.svelte';
@@ -39,6 +40,13 @@ export function pickBlock(): AdventureBlock | null {
 export async function searchSongsForBlock(blockId: string) {
   adventures.pickFor = { blockId };
   await setGlobal(true);
+}
+
+/** "Suggest songs" of the AI dialog: the whole library opens for the block like "Search…", filtered and ranked by the choice of the
+ *  smart search (sliders, tags, genres, BPM). */
+export async function searchSongsWithFilter(blockId: string, chosen: SmartFilter) {
+  await searchSongsForBlock(blockId);
+  applyFilter(chosen);
 }
 
 /** Back from the search to the adventure; the search text was for the library and would filter the folders otherwise. */
@@ -320,6 +328,54 @@ export async function startEffect(ref: EffectRef) {
   playEffect(effect);
 }
 
+/** The key of an effect of a block in `missingEntries` (songs and playlists use `refKey`). */
+export const effectKey = (ref: EffectRef) => `effect:${ref.path}`;
+
+async function songExists(ufid: string, path = ''): Promise<boolean> {
+  try {
+    await api.resolve('song', ufid);
+    return true;
+  } catch { /* not under its id: perhaps still at its last known path */ }
+  if (!path) return false;
+  try {
+    await api.track(pathToId(path));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The songs and playlists of `refs` that can no longer be found, added to `missing` as `refKey` keys (a few checks at a time:
+ *  the music of an adventure can be long). */
+export async function missingMusic(refs: MusicRef[], missing = new Set<string>()): Promise<Set<string>> {
+  const queue = [...refs];
+  const worker = async () => {
+    for (let ref = queue.shift(); ref; ref = queue.shift()) {
+      const found = ref.type === 'song' ? await songExists(ref.ufid, ref.path)
+        : !ref.unavailable && await api.resolve('playlist', ref.id).then(() => true, () => false);
+      if (!found) missing.add(refKey(ref));
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  return missing;
+}
+
+/** What a block holds that can no longer be found (deleted, moved out of the library, a playlist that may not be seen, an effect
+ *  that is not in the effects folder), as `refKey`/`effectKey` keys; `songs` are the ids of song links in its notes. */
+export async function missingEntries(block: AdventureBlock, songs: string[] = []): Promise<Set<string>> {
+  const missing = new Set<string>();
+  const checks: Promise<unknown>[] = [missingMusic(block.music, missing)];
+  for (const ufid of new Set(songs)) checks.push(songExists(ufid).then((found) => { if (!found) missing.add(`song:${ufid}`); }));
+  if (block.effects.length) {
+    checks.push((async () => {
+      if (!effects.list.length) await loadEffects();
+      for (const ref of block.effects) if (!effects.list.some((item) => item.path === ref.path)) missing.add(effectKey(ref));
+    })());
+  }
+  await Promise.all(checks);
+  return missing;
+}
+
 /** Shows a block in play mode and starts what it holds: music (unless the block does not autoplay), and effects that start by themselves. */
 export async function enterBlock(id: string, remember = true) {
   const adventure = adventures.current;
@@ -327,9 +383,21 @@ export async function enterBlock(id: string, remember = true) {
   if (!adventure || !block) return;
   if (remember && adventures.playing && adventures.playing !== id) adventures.history.push(adventures.playing);
   adventures.playing = id;
+  adventures.selected = id; // "Edit" opens the block the game is at
   adventures.mode = 'play';
   for (const effect of block.effects) if (effect.autostart) void startEffect(effect);
   if (block.autoplay && block.music.length) await playBlockMusic(block);
+}
+
+/** "Play" of the header: play mode shows the block chosen in the editor, without starting its music or effects (the game master
+ *  starts them when the scene begins). The block shown before goes into the history for "back". */
+export function switchToPlay() {
+  const id = adventures.selected;
+  if (id && id !== adventures.playing && adventures.current?.blocks.some((block) => block.id === id)) {
+    if (adventures.playing) adventures.history.push(adventures.playing);
+    adventures.playing = id;
+  }
+  adventures.mode = 'play';
 }
 
 /** "Apply" of the cover dialog: the picture being painted (`painting`) becomes the cover of the block as soon as it is done, while
@@ -363,6 +431,46 @@ export async function applyCoverWhenReady(adventureId: string, blockId: string, 
 }
 
 export const coverPending = (adventureId: string, blockId: string) => adventures.pendingCovers.includes(`${adventureId}/${blockId}`);
+
+/** Adds a sound of the sound generation to a block: music to its songs (and to the music of the adventure), an effect or an ambience
+ *  (looped) to its effects. The open adventure is changed in place, another one is loaded, changed and saved. */
+async function addSoundToBlock(adventureId: string, blockId: string, kind: SoundKind, track: Track, title: string) {
+  const addTo = (adventure: Adventure) => {
+    const block = adventure.blocks.find((item) => item.id === blockId);
+    if (!block) throw new Error(t('This block does not exist any more.'));
+    if (kind === 'music') {
+      if (track.ufid) assignMusic(adventure, block, { type: 'song', ufid: track.ufid, path: track.path, title });
+    } else if (!block.effects.some((item) => item.path === track.path)) {
+      block.effects.push({ path: track.path, name: title, loop: kind === 'ambience', autostart: false });
+    }
+  };
+  if (kind !== 'music') await loadEffects();
+  if (adventures.current?.id === adventureId) {
+    change(addTo);
+  } else {
+    const adventure = await api.adventure(adventureId);
+    addTo(adventure);
+    await api.saveAdventure(adventure);
+  }
+}
+
+/** What the AI of a block generates: a piece of the music generation (ACE-Step) or a sound of the sound generation (Stable Audio),
+ *  with the length and the folder of the options of the create mode (see components/CreateOptions.svelte). */
+export type BlockCreation =
+  | { kind: 'song'; piece: ComposePiece; dir: string; duration: number }
+  | { kind: SoundKind; sound: SoundDescription; dir: string; duration: number };
+
+/** Generates a piece or a sound into its folder and adds it to the block with a toast. It also finishes when the dialog that started
+ *  it is closed ("Apply" of the AI dialog), so it works with ids only. */
+export async function createForBlock(adventureId: string, blockId: string, job: BlockCreation): Promise<Track> {
+  const { track } = job.kind === 'song'
+    ? await api.compose({ ...job.piece, dir: job.dir, duration: job.duration })
+    : await api.sound({ ...job.sound, kind: job.kind, duration: job.duration || job.sound.duration, dir: job.dir });
+  const title = (job.kind === 'song' ? job.piece.title : job.sound.title).trim() || track.title || track.name;
+  await addSoundToBlock(adventureId, blockId, job.kind === 'song' ? 'music' : job.kind, track, title);
+  toast(t('"{0}" is ready and was added to the block.', title), 'success');
+  return track;
+}
 
 /** Goes to a block found with the search of the header: the editor shows it, play mode enters it (with its music). The words of
  *  the search are marked in its notes (the view that shows them takes `adventures.highlight` and clears it). */

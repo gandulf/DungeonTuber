@@ -35,6 +35,7 @@ your text is used as the description as it is.
 | `DT_MUSIC_LM` | `acestep-5Hz-lm-1.7B` | The planner (structure, BPM, key, lyrics timing). `acestep-5Hz-lm-4B` plans a little better, but next to an XL composer it only fits a GPU with more memory than an L4 (e.g. `DT_MUSIC_GPU=L40S`). |
 | `DT_MUSIC_MAX_CONTAINERS` | `1` | Caps the number of parallel generations, and with it the cost. |
 | `DT_MUSIC_IDLE_SECONDS` | `120` | How long a container stays warm after its last piece. |
+| `DT_MUSIC_GPU_SNAPSHOT` | `1` | Modal's experimental GPU memory snapshot: cold starts restore both models already on the GPU. The first starts after each `modal deploy` are slower while Modal takes the snapshot. `0` loads the models on every start. |
 
 To download the models beforehand on a cheap CPU container, use the same options as for the deployment. This also repairs a
 download that was cut off:

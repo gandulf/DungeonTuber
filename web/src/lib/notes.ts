@@ -17,6 +17,19 @@ const SONG_PREFIX = 'song:';
 const IMAGE_PREFIX = 'image:';
 const IMAGE_NAME = /^[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
 
+/** The song ids (UFIDs) the notes link to. */
+export const songLinkIds = (markdown: string) => [...markdown.matchAll(/\]\(song:([^)\s]+)\)/g)].map((match) => match[1]);
+
+/** Marks the song links of rendered notes whose song can no longer be found (`missing` holds `song:<ufid>` keys) with `title`. */
+export function markMissingSongLinks(element: HTMLElement, missing: Set<string>, title: string) {
+  for (const link of element.querySelectorAll<HTMLElement>('a[data-song]')) {
+    const gone = missing.has(`song:${link.dataset.song}`);
+    link.classList.toggle('missing', gone);
+    if (gone) link.title = title;
+    else link.removeAttribute('title');
+  }
+}
+
 /** Where an image of an adventure (a picture of the notes or the cover of a block) is served from. */
 export const imageUrl = (adventure: string, name: string) => `/api/adventures/${encodeURIComponent(adventure)}/images/${encodeURIComponent(name)}`;
 

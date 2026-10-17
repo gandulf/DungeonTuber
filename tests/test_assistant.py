@@ -440,7 +440,7 @@ def test_the_story_mode_drafts_notes(client, gemini):
 
 def test_the_image_mode_has_its_own_instructions_with_a_style_default(client):
     style = assistant.DEFAULT_IMAGE_INSTRUCTIONS
-    assert client.get("/api/assistant/config").json()["imageInstructions"] == style and "DSA RPG style" in style
+    assert client.get("/api/assistant/config").json()["imageInstructions"] == style and "oil painting" in style
     assert assistant.system_prompt("image").endswith(style)
     client.put("/api/assistant/config", json={"generalInstructions": "Wir spielen DSA 4.1."})
     assert "DSA 4.1" not in assistant.system_prompt("image")  # the general chat instructions no longer reach the pictures

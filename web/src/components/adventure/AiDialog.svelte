@@ -1,24 +1,24 @@
 <script lang="ts">
   import { api } from '../../lib/api';
-  import { assignMusic } from '../../lib/adventures';
-  import { blockPrompt, plainText, rankTracks, tagsAndGenres, type Ranked } from '../../lib/adventureAi';
+  import { blockPrompt, plainText, tagsAndGenres } from '../../lib/adventureAi';
   import { t } from '../../lib/i18n.svelte';
   import { imageUrl } from '../../lib/notes';
-  import { prefs } from '../../lib/prefs.svelte';
-  import { scorePercent } from '../../lib/scoring';
-  import { adventures, applyCoverWhenReady, change } from '../../lib/stores/adventure.svelte';
+    import { adventures, applyCoverWhenReady, change, createForBlock, searchSongsWithFilter, type BlockCreation } from '../../lib/stores/adventure.svelte';
   import { data } from '../../lib/stores/data.svelte';
-  import { effects, loadEffects } from '../../lib/stores/effects.svelte';
+  import { composeOptions, describeSoundYourself, describeYourself, effectOptions, type CreateKind } from '../../lib/stores/assistant.svelte';
   import { globalTab, loadGlobal } from '../../lib/stores/library.svelte';
   import { playQueue } from '../../lib/stores/player.svelte';
   import { closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
-  import type { AssistantReply, SoundDescription, SoundKind, Track } from '../../lib/types';
+  import type { AssistantReply, ComposePiece, SoundDescription, Track } from '../../lib/types';
   import Icon from '../Icon.svelte';
+  import CreateOptions from '../CreateOptions.svelte';
   import Modal from '../dialogs/Modal.svelte';
 
-  /** The AI helpers of a block: `draft` writes its notes, `songs` ranks the songs of the library for it, `sound` creates an
-   *  ambience, an effect or background music with the sound generation, `cover` paints its cover with the image generation. */
-  let { task, blockId }: { task: 'draft' | 'songs' | 'sound' | 'cover'; blockId: string } = $props();
+  /** The AI helpers of a block: `draft` writes its notes, `songs` chooses filters for it and opens the library to add songs (like
+   *  "Search…" of its music), `sound` creates what
+   *  `kinds` allows (a piece of the music generation, background music, an ambience or an effect) with the options of the create mode
+   *  of the assistant (CreateOptions.svelte), `cover` paints its cover with the image generation. */
+  let { task, blockId, kinds = ['ambience', 'sfx'] }: { task: 'draft' | 'songs' | 'sound' | 'cover'; blockId: string; kinds?: CreateKind[] } = $props();
 
   const adventure = $derived(adventures.current!);
   const block = $derived(adventure.blocks.find((item) => item.id === blockId) ?? null);
@@ -31,9 +31,18 @@
   let history: { role: 'user' | 'assistant'; content: string }[] = [];
 
   let draft = $state('');
-  let ranked = $state<Ranked[]>([]);
-  let kind = $state<SoundKind>('ambience');
+  /** The notes go to the AI as they are (Markdown, not shortened) instead of a shortened plain text. */
+  let wholeText = $state(false);
+  const MAX_WHOLE_TEXT = 6000;
+  // svelte-ignore state_referenced_locally
+  let kind = $state<CreateKind>(kinds.includes(effectOptions.kind) ? effectOptions.kind : kinds[0]);
+  // the description of a piece (kind song) or of a sound, as the assistant wrote it; it can be changed before generating
+  let piece = $state<ComposePiece | null>(null);
   let sound = $state<SoundDescription | null>(null);
+  $effect(() => {
+    void kind;
+    piece = sound = null; // a description is made for its kind
+  });
   let made = $state<Track | null>(null);
   // cover: the English description Stable Diffusion paints from, the format and the painted image (its name in the adventure)
   let caption = $state('');
@@ -42,12 +51,12 @@
   let painting = $state(false);
   const sizes = [['landscape', 'Landscape'], ['square', 'Square'], ['portrait', 'Portrait']] as const;
 
-  const titles = {
-    draft: 'Draft the notes', songs: 'Suggest songs', sound: 'Create a sound', cover: 'Create a cover image',
-  };
+  const titles = $derived({
+    draft: 'Draft the notes', songs: 'AI search', sound: kinds.includes('song') || kinds.includes('music') ? 'Create music' : 'Create a sound', cover: 'Create a cover image',
+  });
 
   /** Asks the assistant; a follow-up (refine) continues the conversation, so "darker" changes the last answer. */
-  async function ask(text: string, mode: 'story' | 'smart' | 'effects' | 'image', context: Parameters<typeof api.assistantChat>[2]): Promise<AssistantReply | null> {
+  async function ask(text: string, mode: 'story' | 'smart' | 'compose' | 'effects' | 'image', context: Parameters<typeof api.assistantChat>[2]): Promise<AssistantReply | null> {
     history.push({ role: 'user', content: text });
     busy = true;
     try {
@@ -72,21 +81,28 @@
     if (!text) return;
     if (!followUp) history = [];
     if (task === 'draft') {
-      const context = followUp ? text : `Adventure: ${adventure.title}\nScene: ${block.title}\nNotes so far:\n${plainText(block.markdown) || '(none)'}\n\n${text}`;
+      const notes = wholeText ? block.markdown.trim().slice(0, MAX_WHOLE_TEXT) : plainText(block.markdown);
+      const context = followUp ? text : `Adventure: ${adventure.title}\nScene: ${block.title}\nNotes so far${wholeText ? ' (Markdown)' : ''}:\n${notes || '(none)'}\n\n${text}`;
       const reply = await ask(context, 'story', undefined);
       if (reply?.text) draft = reply.text;
     } else if (task === 'songs') {
       await loadGlobal();
       const reply = await ask(text, 'smart', tagsAndGenres(globalTab.tracks));
       if (reply?.filter) {
-        ranked = rankTracks(globalTab.tracks, reply.filter);
-        if (!ranked.length) message = t('No songs of the library fit. Try another description.');
+        void searchSongsWithFilter(block.id, reply.filter);
+        closeDialog();
+        return;
       }
     } else if (task === 'cover') {
       const reply = await ask(followUp ? text : `Adventure: ${adventure.title}\n\n${text}`, 'image', undefined);
       if (reply?.caption) caption = reply.caption;
+    } else if (kind === 'song') {
+      const context = { instrumental: composeOptions.instrumental, duration: composeOptions.duration,
+                        ...(composeOptions.instrumental || !composeOptions.language ? {} : { language: composeOptions.language }) };
+      const reply = aiReady ? await ask(text, 'compose', context) : describeYourself(text);
+      if (reply?.piece) piece = reply.piece;
     } else {
-      const reply = await ask(text, 'effects', { kind });
+      const reply = aiReady ? await ask(text, 'effects', { kind }) : describeSoundYourself(text, kind);
       if (reply?.sound) sound = reply.sound;
     }
     if (followUp) refine = '';
@@ -100,43 +116,37 @@
     closeDialog();
   }
 
-  function addSong(track: Track) {
-    if (!block || !track.ufid) return;
-    const ufid = track.ufid;
-    change((a) => assignMusic(a, block, { type: 'song', ufid, path: track.path, title: track.title || track.name }));
-    toast(t('Added: {0}', track.title || track.name));
-  }
-
-  const has = (track: Track) => !!block?.music.some((ref) => ref.type === 'song' && ref.ufid === track.ufid);
+  /** The piece or sound being generated; it is added to the block when it is done, also after "Apply" closed the dialog. */
+  let generating: Promise<Track> | null = $state(null);
 
   async function generate() {
-    if (!block || !sound) return;
-    const dir = kind === 'music' ? (prefs.treeRoot ?? data.settings?.libraryRoots[0]) : effects.directory;
+    if (!block || !(kind === 'song' ? piece : sound)) return;
+    const dir = kind === 'song' ? composeOptions.dir : effectOptions.dir;
     if (!dir) {
-      errorToast(new Error(kind === 'music' ? t('Choose a library folder first.') : t('Choose a folder for the sounds first.')));
+      errorToast(new Error(kind === 'song' ? t('Choose a folder for the composed pieces first.') : t('Choose a folder for the sounds first.')));
       return;
     }
     busy = true;
     made = null;
+    const creation: BlockCreation = kind === 'song'
+      ? { kind, piece: $state.snapshot(piece)!, dir, duration: composeOptions.duration }
+      : { kind, sound: $state.snapshot(sound)!, dir, duration: effectOptions.duration };
+    const job = (generating = createForBlock(adventure.id, block.id, creation));
     try {
-      const result = await api.sound({ ...sound, kind, dir });
-      made = result.track;
-      const track = result.track;
-      if (kind === 'music') {
-        if (track.ufid) {
-          const ufid = track.ufid;
-          change((a) => assignMusic(a, block, { type: 'song', ufid, path: track.path, title: sound!.title || track.name }));
-        }
-      } else {
-        await loadEffects();
-        change(() => block.effects.push({ path: track.path, name: sound!.title || track.name, loop: kind === 'ambience', autostart: false }));
-      }
-      toast(t('Created and added to the block.'), 'success');
+      made = await job;
     } catch (e) {
       errorToast(e);
     } finally {
+      if (generating === job) generating = null;
       busy = false;
     }
+  }
+
+  /** "Apply" while a sound is generated: the dialog closes, the generation goes on and adds the sound to the block when it is done. */
+  function applySound() {
+    if (!generating) return;
+    toast(t('The sound is generated in the background and added to the block when it is done.'), 'info');
+    closeDialog();
   }
 
   /** Paints the picture to look at; it is stored in the adventure right away and becomes the cover with "Apply". */
@@ -194,11 +204,7 @@
   {:else}
     <div class="body">
       {#if task === 'sound'}
-        <div class="seg">
-          {#each [['ambience', t('Ambience')], ['sfx', t('Effect')], ['music', t('Music')]] as [key, label] (key)}
-            <button type="button" class:on={kind === key} onclick={() => { kind = key as SoundKind; sound = null; }}>{label}</button>
-          {/each}
-        </div>
+        <div class="options"><CreateOptions {kinds} bind:kind /></div>
       {/if}
       {#if task === 'cover'}
         <div class="seg">
@@ -212,37 +218,31 @@
         <span class="label-xs">{task === 'draft' ? t('What should the notes say? (bullet points are fine)') : task === 'cover' && !aiReady ? t('Describe the picture (in English)') : t('Describe the scene')}</span>
         <textarea rows={task === 'draft' ? 4 : 5} bind:value={input} placeholder={task === 'draft' ? t('A smoky tavern, the innkeeper hides a secret…') : ''}></textarea>
       </label>
+      {#if task === 'draft'}
+        <label class="check" title={t('Without it the AI gets a shortened plain text of the notes (about 1500 characters).')}>
+          <input type="checkbox" bind:checked={wholeText} disabled={!block.markdown.trim()} />{t('Include the whole text of this block')}
+        </label>
+      {/if}
       <div class="row">
         {#if task === 'cover' && !aiReady}
           <button class="btn primary" disabled={busy || !input.trim()} onclick={() => void paint()}><Icon name="sparkles" size={14} />{t('Generate')}</button>
         {:else}
-          <button class="btn primary" disabled={busy || !input.trim()} onclick={() => void run()}><Icon name="sparkles" size={14} />{task === 'sound' ? t('Describe the sound') : task === 'cover' ? t('Describe the picture') : t('Ask')}</button>
+          <button class="btn primary" disabled={busy || !input.trim()} onclick={() => void run()}><Icon name="sparkles" size={14} />{task === 'sound' ? (kind === 'song' ? t('Describe the piece') : t('Describe the sound')) : task === 'cover' ? t('Describe the picture') : task === 'songs' ? t('Find songs in the library') : t('Ask')}</button>
         {/if}
-        {#if busy}<span class="muted small">{(task === 'sound' && sound) || painting ? t('Generating… this can take a few minutes.') : t('Thinking…')}</span>{/if}
+        {#if busy}<span class="muted small">{(task === 'sound' && (sound || piece)) || painting ? t('Generating… this can take a few minutes.') : t('Thinking…')}</span>{/if}
       </div>
       {#if message}<p class="message">{message}</p>{/if}
 
       {#if task === 'draft' && draft}
         <textarea class="result" rows="10" bind:value={draft}></textarea>
-      {:else if task === 'songs' && ranked.length}
-        <div class="songs">
-          {#each ranked as item (item.track.id)}
-            <div class="song">
-              <button class="icon-btn mini" title={t('Play')} aria-label={t('Play')} onclick={() => void playQueue([item.track])}><Icon name="play" size={13} /></button>
-              <span class="ellipsis">{item.track.title || item.track.name}</span>
-              <span class="muted ellipsis artist">{item.track.artist ?? ''}</span>
-              <span class="muted small">{scorePercent(item.score)}%</span>
-              {#if has(item.track)}<Icon name="check" size={14} />
-              {:else}<button class="btn sm" disabled={!item.track.ufid} title={item.track.ufid ? '' : t('This song has no stable id yet. Refresh the library first.')} onclick={() => addSong(item.track)}>{t('Add')}</button>{/if}
-            </div>
-          {/each}
-        </div>
-      {:else if task === 'sound' && sound}
+      {:else if task === 'sound' && (piece || sound)}
+        {@const description = (piece ?? sound)!}
         <div class="sound">
-          <input type="text" bind:value={sound.title} aria-label={t('Title')} />
-          <textarea rows="3" bind:value={sound.caption} aria-label={t('Description')}></textarea>
+          <input type="text" bind:value={description.title} aria-label={t('Title')} />
+          <textarea rows="3" bind:value={description.caption} aria-label={t('Description')}></textarea>
+          {#if piece && !piece.instrumental}<textarea rows="6" bind:value={piece.lyrics} aria-label={t('Lyrics')}></textarea>{/if}
           <div class="row">
-            <button class="btn primary" disabled={busy || !sound.caption.trim()} onclick={() => void generate()}><Icon name="waves" size={14} />{t('Generate')}</button>
+            <button class="btn primary" disabled={busy || !description.caption.trim()} onclick={() => void generate()}><Icon name="waves" size={14} />{t('Generate')}</button>
             {#if made}<button class="btn" onclick={() => void playQueue([made!])}><Icon name="play" size={14} />{t('Play')}</button>{/if}
           </div>
         </div>
@@ -259,7 +259,7 @@
         <img class="painted" src={imageUrl(adventure.id, painted)} alt={t('Cover image')} />
       {/if}
 
-      {#if (task === 'draft' && draft) || (task === 'songs' && ranked.length) || (task === 'cover' && caption)}
+      {#if (task === 'draft' && draft) || (task === 'cover' && caption)}
         <div class="row">
           <input type="text" bind:value={refine} placeholder={t('Change it: darker, shorter, more tense…')} onkeydown={(e) => e.key === 'Enter' && void run(true)} />
           <button class="btn" disabled={busy || !refine.trim()} onclick={() => void run(true)}>{t('Change')}</button>
@@ -276,6 +276,10 @@
       <button class="btn primary" disabled={!canApply || (busy && !painting)}
               title={painted && !painting ? t('Use this picture as the cover') : t('Closes the dialog: the picture becomes the cover as soon as it is painted')}
               onclick={apply}>{t('Apply')}</button>
+    {:else if task === 'sound'}
+      <button class="btn" onclick={closeDialog}>{t('Close')}</button>
+      <button class="btn primary" disabled={!generating} title={t('Closes the dialog: the sound is added to the block as soon as it is generated')}
+              onclick={applySound}>{t('Apply')}</button>
     {:else}
       <button class="btn" onclick={closeDialog}>{t('Close')}</button>
     {/if}
@@ -285,6 +289,8 @@
 <style>
   .body { display: flex; flex-direction: column; gap: 12px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
+  .options { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: var(--fs-xs); }
   textarea { width: 100%; box-sizing: border-box; resize: vertical; }
   .row { display: flex; align-items: center; gap: 8px; }
   .row input { flex: 1; min-width: 0; }
@@ -292,12 +298,6 @@
   .message { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
   .small { font-size: var(--fs-xs); }
   .result { min-height: 180px; line-height: 1.5; }
-  .songs { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
-  .song { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; }
-  .song:hover { background: var(--hover); }
-  .song .ellipsis { min-width: 0; flex: 1; }
-  .artist { flex: 0 1 30%; font-size: var(--fs-sm); }
-  .mini { width: 24px; height: 24px; }
   .sound { display: flex; flex-direction: column; gap: 8px; }
   .seg button { padding: 5px 13px; }
   .painted { display: block; max-width: 100%; max-height: 340px; margin: 0 auto; border-radius: 10px; object-fit: contain; }

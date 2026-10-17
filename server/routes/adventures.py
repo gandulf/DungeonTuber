@@ -1,5 +1,6 @@
 """Adventures: blocks of notes with music and effects, linked into a path. Private ones belong to their owner, public ones are
-visible to everybody; only the owner (and the SuperAdmin) changes them."""
+visible to everybody; only the owner (and the SuperAdmin) changes them. On a server (not the desktop app) private adventures of
+others stay hidden from the SuperAdmin too, like private playlists."""
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
@@ -10,6 +11,7 @@ from core.i18n import _
 from core.storage import StorageError
 from server import adventures, imagegen
 from server.auth import current_user, require_auth
+from server.config import get_config
 from server.events import hub
 from server.routes.library import hidden
 from server.users import ADMIN
@@ -18,7 +20,8 @@ router = APIRouter(dependencies=[Depends(require_auth)])
 
 
 def _can_view(adventure: dict, user: str) -> bool:
-    return adventure["visibility"] == "public" or adventure["owner"] == user or user == ADMIN
+    # in the desktop app the SuperAdmin is the person at this computer and sees everything
+    return adventure["visibility"] == "public" or adventure["owner"] == user or (user == ADMIN and get_config().local_mode)
 
 
 def _can_edit(adventure: dict, user: str) -> bool:

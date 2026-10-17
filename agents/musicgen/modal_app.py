@@ -14,6 +14,9 @@ To fill the volume beforehand on a cheap CPU container (also after changing DT_M
 that was cut off):
 
     modal run modal_app.py::download
+
+Cold starts restore a GPU memory snapshot (Modal, experimental) taken after each deploy, with both models already on the GPU;
+DT_MUSIC_GPU_SNAPSHOT=0 loads them on every start instead.
 """
 import asyncio
 import os
@@ -39,6 +42,8 @@ REWRITE_CAPTION = os.environ.get("DT_MUSIC_REWRITE_CAPTION", "0") == "1"
 LM_MODEL = os.environ.get("DT_MUSIC_LM", "acestep-5Hz-lm-1.7B")
 MAX_CONTAINERS = int(os.environ.get("DT_MUSIC_MAX_CONTAINERS", "1"))  # caps the parallel generations and with it the cost
 IDLE_SECONDS = int(os.environ.get("DT_MUSIC_IDLE_SECONDS", "120"))  # how long a container stays warm after its last piece
+# Modal's experimental GPU memory snapshot: ACE-Step loads straight onto the GPU, so there is no CPU snapshot to fall back to
+GPU_SNAPSHOT = os.environ.get("DT_MUSIC_GPU_SNAPSHOT", "1") == "1"
 
 # the ACE-Step release this app is tested with; a newer commit may change the Python API
 ACE_STEP_COMMIT = "ca1e85fe9430179831e6bc6be790c332190a3866"
@@ -50,6 +55,9 @@ MAX_CAPTION = 512
 MAX_LYRICS = 4096
 INSTRUMENTAL = "[Instrumental]"  # ACE-Step reads instrumental music from the lyrics, its `instrumental` flag alone does nothing
 SECTION_TAG = re.compile(r"\[[^\]\n]{1,60}\]")
+
+# random seeds from the OS: the state of `random` is frozen in the memory snapshot, every restore would draw the same seeds
+SEEDS = random.SystemRandom()
 
 image = (
     modal.Image.from_registry("nvidia/cuda:12.8.1-runtime-ubuntu22.04", add_python="3.11")
@@ -64,7 +72,8 @@ image = (
     .env({"ACESTEP_PROJECT_ROOT": ACE_STEP_DIR, "ACESTEP_CHECKPOINTS_DIR": CHECKPOINTS, "TOKENIZERS_PARALLELISM": "false",
           # the options of `modal deploy` are read again when the container imports this file: the image carries them
           "DT_MUSIC_DIT": DIT_MODEL, "DT_MUSIC_LM": LM_MODEL, "DT_MUSIC_STEPS": str(STEPS),
-          "DT_MUSIC_REWRITE_CAPTION": "1" if REWRITE_CAPTION else "0"})
+          "DT_MUSIC_REWRITE_CAPTION": "1" if REWRITE_CAPTION else "0",
+          "DT_MUSIC_GPU_SNAPSHOT": "1" if GPU_SNAPSHOT else "0"})
 )
 
 checkpoints = modal.Volume.from_name("dungeontuber-musicgen-models", create_if_missing=True)
@@ -111,10 +120,12 @@ def download():
     ensure_models()
 
 
-@app.cls(gpu=GPU, max_containers=MAX_CONTAINERS, scaledown_window=IDLE_SECONDS, timeout=1800, volumes={CHECKPOINTS: checkpoints})
+@app.cls(gpu=GPU, max_containers=MAX_CONTAINERS, scaledown_window=IDLE_SECONDS, timeout=1800, volumes={CHECKPOINTS: checkpoints},
+         enable_memory_snapshot=GPU_SNAPSHOT, experimental_options={"enable_gpu_snapshot": True} if GPU_SNAPSHOT else None)
 class MusicGen:
-    @modal.enter()
+    @modal.enter(snap=True)
     def start(self):
+        """Loads both models onto the GPU; with the GPU snapshot this runs once per snapshot, restores skip it."""
         from acestep.handler import AceStepHandler
         from acestep.llm_inference import LLMHandler
 
@@ -153,7 +164,7 @@ class MusicGen:
         from acestep.inference import GenerationConfig, GenerationParams, generate_music
 
         seed = request.get("seed")
-        seed = int(seed) if isinstance(seed, int) and seed >= 0 else random.randint(0, 2 ** 31 - 1)
+        seed = int(seed) if isinstance(seed, int) and seed >= 0 else SEEDS.randint(0, 2 ** 31 - 1)
         bpm = request.get("bpm")
         instrumental = bool(request.get("instrumental", True))
         caption = str(request.get("caption") or "").strip()

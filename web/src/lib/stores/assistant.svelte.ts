@@ -81,6 +81,8 @@ const EFFECT_KEY = 'dt-effect-options';
  *  generation (Stable Audio). */
 export type CreateKind = 'song' | SoundKind;
 export const CREATE_KINDS: CreateKind[] = ['song', 'music', 'ambience', 'sfx'];
+/** Music is composed by the music generation (ACE-Step), the other kinds are created by the sound generation (Stable Audio). */
+export const CREATE_KIND_LABELS: Record<CreateKind, string> = { song: 'Music', music: 'Background music', ambience: 'Ambience', sfx: 'Sound effect' };
 /** The lengths of a sound; 0 is the length the assistant suggests. */
 export const SOUND_DURATIONS = [0, 3, 5, 10, 30, 60, 120, 180];
 
@@ -168,14 +170,14 @@ export async function ask(text: string) {
 }
 
 /** Without an AI service (Groq or Gemini) the text of the user is the description of the piece. */
-function describeYourself(text: string): AssistantReply {
+export function describeYourself(text: string): AssistantReply {
   const piece: ComposePiece = { title: text.split(/[,.;\n]/)[0].trim().slice(0, 60), caption: text.slice(0, 512), lyrics: '', language: composeOptions.instrumental ? '' : composeOptions.language,
                                 instrumental: composeOptions.instrumental, bpm: null };
   return { content: text, message: '', songs: [], piece };
 }
 
 /** Without an AI service (Groq or Gemini) the text of the user is the description of the sound. */
-function describeSoundYourself(text: string, kind: SoundKind): AssistantReply {
+export function describeSoundYourself(text: string, kind: SoundKind): AssistantReply {
   const sound: SoundDescription = { title: text.split(/[,.;\n]/)[0].trim().slice(0, 60), caption: text.slice(0, 512), kind, duration: null };
   return { content: text, message: '', songs: [], sound };
 }

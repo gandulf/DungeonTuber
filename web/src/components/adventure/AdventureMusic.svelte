@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { canDropOnAdventure, dropOnAdventure } from '../../lib/actions';
+  import { canDropOnAdventure, dropOnAdventure, setMusicDrag } from '../../lib/actions';
   import { addAdventureMusic, blocksUsing, refKey, removeAdventureMusic } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
   import { matcher } from '../../lib/search';
-  import { adventures, change, refTracks } from '../../lib/stores/adventure.svelte';
+  import { adventures, change, missingMusic, refTracks } from '../../lib/stores/adventure.svelte';
   import { player, playQueue } from '../../lib/stores/player.svelte';
   import { askConfirm, openDialog } from '../../lib/stores/ui.svelte';
   import type { MusicRef } from '../../lib/types';
@@ -25,6 +25,31 @@
   async function play(ref: MusicRef) {
     const tracks = await refTracks(ref);
     if (tracks?.length) await playQueue(tracks);
+  }
+
+  // songs and playlists that can no longer be found are marked (checked again when the list changes)
+  let missing = $state(new Set<string>());
+  $effect(() => {
+    const refs = adventure.music.map((ref) => ({ ...ref }));
+    let stale = false;
+    void missingMusic(refs).then((found) => { if (!stale) missing = found; });
+    return () => (stale = true);
+  });
+  const missingTitle = $derived(t('No longer found: removed, moved or not visible to you.'));
+
+  /** Plays the whole adventure music (the songs of its playlists included; what can no longer be found is left out). Shuffle and
+   *  repeat follow the player. */
+  let loadingAll = $state(false);
+  async function playAll() {
+    loadingAll = true;
+    try {
+      const lists = await Promise.all(adventure.music.filter((ref) => !missing.has(refKey(ref))).map((ref) => refTracks(ref)));
+      const seen = new Set<string>();
+      const tracks = lists.flatMap((list) => list ?? []).filter((track) => !seen.has(track.id) && !!seen.add(track.id));
+      if (tracks.length) await playQueue(tracks);
+    } finally {
+      loadingAll = false;
+    }
   }
 
   const playing = (ref: MusicRef) => ref.type === 'song' && player.playing && player.track?.ufid === ref.ufid;
@@ -52,21 +77,26 @@
     <span class="label-xs">{t('Adventure music')}</span>
     <span class="muted small">{adventure.music.length}</span>
     <span class="grow"></span>
+    <button class="btn sm primary" disabled={loadingAll || adventure.music.length === missing.size} title={t('Play all songs of the adventure')}
+            onclick={() => void playAll()}><Icon name="play" size={13} />{t('Play')}</button>
     {#if adventure.music.length > 8}<input type="search" placeholder={t('Search…')} bind:value={query} />{/if}
     {#if editable}<button class="btn sm" onclick={addDialog}><Icon name="plus" size={13} />{t('Add')}</button>{/if}
   </div>
   <p class="hint muted">{t('The songs of this adventure; its blocks choose their music from them. Drag songs from the file tree or the song list onto the adventure in the sidebar, or here.')}</p>
 
-  <div class="list">
+  <div class="list" role="list">
     {#each shown as ref (refKey(ref))}
       {@const used = blocksUsing(adventure, ref)}
       {@const on = playing(ref)}
-      <div class="item">
-        <button type="button" class="play-item" class:on disabled={ref.type === 'playlist' && ref.unavailable} title={t('Play')} onclick={() => void play(ref)}>
+      {@const gone = missing.has(refKey(ref))}
+      <!-- dragged onto a block in the list on the left, the song (or the songs of a playlist) is added to that block -->
+      <div class="item" class:missing={gone} draggable={editable && !gone} role="listitem" title={editable && !gone ? t('Drag onto a block to add it there') : undefined}
+           ondragstart={(e) => setMusicDrag(e.dataTransfer, [$state.snapshot(ref) as MusicRef])}>
+        <button type="button" class="play-item" class:on disabled={gone} title={gone ? missingTitle : t('Play')} onclick={() => void play(ref)}>
           <Icon name={on ? 'volume' : ref.type === 'song' ? 'music' : 'playlist'} size={15} />
           <span class="ellipsis">{ref.title || ref.path || t('Untitled')}</span>
         </button>
-        {#if ref.type === 'playlist' && ref.unavailable}<span class="warn">{t('unavailable')}</span>{/if}
+        {#if gone}<span class="warn" title={missingTitle}>{ref.type === 'playlist' && ref.unavailable ? t('unavailable') : t('not found')}</span>{/if}
         <span class="uses">
           {#each used.slice(0, 3) as block (block.id)}
             <button type="button" class="chip" title={t('Show the block')} onclick={() => onselect(block.id)}>{block.title || t('Untitled')}</button>
@@ -90,7 +120,8 @@
   .btn { display: inline-flex; align-items: center; gap: 6px; }
   .hint { margin: 0; font-size: var(--fs-xs); line-height: 1.4; }
   .list { display: flex; flex-direction: column; gap: 2px; }
-  .item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .item { display: flex; align-items: center; gap: 8px; min-width: 0; border-radius: 7px; }
+  .item[draggable='true'] { cursor: grab; }
   .play-item { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 7px; text-align: left; color: var(--text); cursor: pointer; }
   .play-item:hover:not(:disabled) { background: var(--hover); }
   .play-item.on { color: var(--accent); }
@@ -100,5 +131,6 @@
   .mini { width: 24px; height: 24px; }
   .small { font-size: var(--fs-sm); }
   .empty { padding: 6px; }
-  .warn { font-size: var(--fs-xs); color: var(--red); border: 1px solid var(--red); border-radius: 6px; padding: 0 6px; }
+  .item.missing .play-item { color: var(--red); text-decoration: line-through; cursor: not-allowed; }
+  .warn { flex: none; font-size: var(--fs-xs); color: var(--red); border: 1px solid var(--red); border-radius: 6px; padding: 0 6px; }
 </style>

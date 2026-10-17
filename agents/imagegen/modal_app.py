@@ -44,6 +44,9 @@ MIN_SIDE, MAX_SIDE, DEFAULT_SIDE = 512, 1440, 1024  # SD 3.5 Medium is trained u
 MAX_STEPS = 80
 FORMATS = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}
 
+# random seeds from the OS: the state of `random` is frozen in the memory snapshot, every restore would draw the same seeds
+SEEDS = random.SystemRandom()
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install("torch==2.5.1", index_url="https://download.pytorch.org/whl/cu124")
@@ -131,7 +134,7 @@ class ImageGen:
         import torch
 
         seed = request.get("seed")
-        seed = int(seed) if isinstance(seed, int) and 0 <= seed < 2 ** 31 else random.randint(0, 2 ** 31 - 1)
+        seed = int(seed) if isinstance(seed, int) and 0 <= seed < 2 ** 31 else SEEDS.randint(0, 2 ** 31 - 1)
         prompt = str(request.get("prompt") or request.get("caption") or "").strip()[:MAX_PROMPT]
         negative = str(request.get("negative_prompt") or "").strip()[:MAX_PROMPT] or None
         width, height = side(request.get("width")), side(request.get("height"))

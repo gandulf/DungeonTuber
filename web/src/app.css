@@ -251,3 +251,5 @@ input[type='range'].range::-moz-range-thumb {
 .notes a.song-link { color: var(--green, var(--accent)); text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
 .notes a.song-link::before { content: '▶ '; font-size: 0.8em; }
 .notes a.song-link:hover { background: var(--accent-soft); }
+.notes a.song-link.missing { color: var(--red); text-decoration: line-through; border-bottom-style: dashed; }
+.notes a.song-link.missing::before { content: '⚠ '; }

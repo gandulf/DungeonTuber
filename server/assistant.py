@@ -88,8 +88,7 @@ Die Nachricht zur Auswahl besteht aus ein bis zwei kurzen Sätzen und endet exak
 - **"Weitere 10" / "Mehr":** 10 neue Stücke zur selben Szene. Keine Wiederholungen. Stile/Quellen bewusst variieren."""
 
 DEFAULT_SETTING_INSTRUCTIONS = """Wir spielen DSA in Aventurien. Thorwal: nordisch, Tagelharpa, Trommeln, Kehlgesang. Tulamidenlande/Khôm: orientalisch, Oud, Duduk, Darbuka. Mittelreich: Mittelalter-Folk, Laute, Fidel, Flöte. Al’Anfa/Südmeer: düstere Renaissance, Barock, lateinamerikanische Percussion. Elfen: ätherisch, Harfe, Flöte, Chor. Bevorzugt filmische, instrumentale Fantasy-Musik."""  # the smart search and the composing
-DEFAULT_IMAGE_INSTRUCTIONS = ("classic German dark fantasy book cover, DSA RPG style, oil painting, dramatic lighting, detailed medieval "
-                              "fantasy illustration, muted earthy tones, highly detailed")
+DEFAULT_IMAGE_INSTRUCTIONS = "oil painting, dramatic lighting, detailed medieval fantasy illustration, muted earthy tones."
 
 GENERAL_PROMPT = """You are the assistant of the game master of a tabletop role playing session, for example Das Schwarze Auge (DSA).
 Answer questions about the rules, the world and its lore, and help with ideas for the session: names, descriptions, plot hooks.
@@ -224,6 +223,8 @@ def lyrics_budget(duration: object) -> str:
     return f"The piece is {round(duration)} seconds long: write {max(low, 20)} to {max(high, 30)} words of lyrics in total, not more."
 MAX_CAPTION_LENGTH = 512
 MAX_STORY_TEXT = 6000
+# a request of the story mode may carry the whole notes of a block (the option of the AI dialog) next to the wishes of the user
+MAX_STORY_MESSAGE_LENGTH = MAX_STORY_TEXT + MAX_MESSAGE_LENGTH
 
 STORY_DRAFT_SCHEMA = {
     "type": "OBJECT",
@@ -686,7 +687,8 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
     The general mode answers in Markdown and suggests no songs. The smart mode returns a filter (categories, tags, genres, bpm)
     instead of songs; `context` holds the tags and genres it may choose from.
     """
-    history = [{"role": m["role"], "content": m["content"][:MAX_MESSAGE_LENGTH]} for m in messages[-MAX_MESSAGES:]]
+    limit = MAX_STORY_MESSAGE_LENGTH if mode == "story" else MAX_MESSAGE_LENGTH
+    history = [{"role": m["role"], "content": m["content"][:limit]} for m in messages[-MAX_MESSAGES:]]
     tags, genres = (context or {}).get("tags") or [], (context or {}).get("genres") or []
     schema = {"smart": smartsearch.schema(tags, genres), "compose": COMPOSE_SCHEMA, "effects": EFFECTS_SCHEMA,
               "story": STORY_DRAFT_SCHEMA, "image": IMAGE_SCHEMA,

@@ -1,20 +1,19 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { locale, t } from '../lib/i18n.svelte';
+  import { t } from '../lib/i18n.svelte';
   import { markdown } from '../lib/markdown';
-  import { applyFilter, ask, assistant, compose, COMPOSE_DURATIONS, composeOptions, CREATE_KINDS, createSound, currentChat, effectOptions, moreSongs, newChat,
-           saveComposeOptions, saveEffectOptions, setMode, SONGS_PER_ANSWER, SOUND_DURATIONS, youtubeSearchUrl, type AssistantMode, type ChatTurn, type CreateKind,
+  import { applyFilter, ask, assistant, compose, composeOptions, CREATE_KIND_LABELS, CREATE_KINDS, createSound, currentChat, effectOptions, moreSongs, newChat,
+           saveEffectOptions, setMode, SONGS_PER_ANSWER, youtubeSearchUrl, type AssistantMode, type ChatTurn, type CreateKind,
            type Take } from '../lib/stores/assistant.svelte';
-  import { effects } from '../lib/stores/effects.svelte';
   import { calculateScore, scorePercent } from '../lib/scoring';
   import { playTrack } from '../lib/stores/player.svelte';
   import { data } from '../lib/stores/data.svelte';
   import { activeTab, findsInTab, library } from '../lib/stores/library.svelte';
   import { songQueries } from '../lib/search';
-  import { openImportDialog, uploadTarget } from '../lib/actions';
+  import { openImportDialog } from '../lib/actions';
   import { openDialog } from '../lib/stores/ui.svelte';
   import type { AssistantSong, SmartFilter, Track } from '../lib/types';
-  import FolderSelect from './dialogs/FolderSelect.svelte';
+  import CreateOptions from './CreateOptions.svelte';
   import SettingsDialog from './dialogs/SettingsDialog.svelte';
   import Icon from './Icon.svelte';
 
@@ -24,8 +23,7 @@
     smart: ['A brawl in a crowded tavern', 'Exploring a haunted crypt', 'A sad farewell at a funeral'],
     create: ['A brawl in a crowded tavern', 'Rain on a tent at night', 'A heavy door slams shut in a dungeon', 'A festival in an elven forest'],
   };
-  /** Music is composed by the music generation (ACE-Step), the other kinds are created by the sound generation (Stable Audio). */
-  const KIND_LABELS: Record<CreateKind, string> = { song: 'Music', music: 'Background music', ambience: 'Ambience', sfx: 'Sound effect' };
+  const KIND_LABELS = CREATE_KIND_LABELS;
   /** What the user asks for when the kind of a description is not the chosen one any more. */
   const KIND_REQUESTS: Record<CreateKind, string> = {
     song: 'Make it a piece of music instead.', music: 'Make it instrumental background music instead.', ambience: 'Make it an ambience instead.',
@@ -92,22 +90,7 @@
     if (configured) input?.focus();
   });
 
-  $effect(() => {
-    if (composing && !composeOptions.dir) composeOptions.dir = uploadTarget() ?? '';
-  });
-  $effect(() => {
-    if (creating && kinds.length && !kinds.includes(effectOptions.kind)) effectOptions.kind = kinds[0];
-  });
-  // sounds go into the effects folder until another folder is chosen
-  $effect(() => {
-    if (sounding && !effectOptions.dir) effectOptions.dir = effects.directory || data.settings?.effectsDirectory || uploadTarget() || '';
-  });
-
-  // the lyrics can be written in the languages of the app; until one is chosen, in the language of the app
-  const lyricLanguages = $derived(data.locales.length ? data.locales : [locale()]);
-  $effect(() => {
-    if (composing && !lyricLanguages.includes(composeOptions.language)) composeOptions.language = lyricLanguages.includes(locale()) ? locale() : lyricLanguages[0];
-  });
+  // the kind, the length, the vocals and the target folder: CreateOptions.svelte (shared with the AI of a block)
   /** What a new description has to change so that the piece matches the options: the vocals or the language of the lyrics. */
   function outdated(piece: { instrumental: boolean; language: string }): 'vocals' | 'language' | null {
     if (piece.instrumental !== composeOptions.instrumental) return 'vocals';
@@ -324,27 +307,7 @@
 
   {#if configured && creating}
     <div class="options">
-      <select bind:value={effectOptions.kind} onchange={saveEffectOptions} aria-label={t('Kind')} title={t('Kind')}>
-        {#each kinds as kind (kind)}<option value={kind}>{t(KIND_LABELS[kind])}</option>{/each}
-      </select>
-      {#if composing}
-        <select bind:value={composeOptions.duration} onchange={saveComposeOptions} aria-label={t('Length')} title={t('Length')}>
-          {#each COMPOSE_DURATIONS as seconds (seconds)}<option value={seconds}>{formatDuration(seconds)}</option>{/each}
-        </select>
-        <label class="check"><input type="checkbox" checked={!composeOptions.instrumental}
-               onchange={(e) => { composeOptions.instrumental = !e.currentTarget.checked; saveComposeOptions(); }} /> {t('Vocals')}</label>
-        {#if !composeOptions.instrumental}
-          <select bind:value={composeOptions.language} onchange={saveComposeOptions} aria-label={t('Language of the lyrics')} title={t('Language of the lyrics')}>
-            {#each lyricLanguages as code (code)}<option value={code}>{t(code)}</option>{/each}
-          </select>
-        {/if}
-        <span class="folder" title={t('Target folder')}><FolderSelect bind:selected={composeOptions.dir} /></span>
-      {:else}
-        <select bind:value={effectOptions.duration} onchange={saveEffectOptions} aria-label={t('Length')} title={t('Length')}>
-          {#each SOUND_DURATIONS as seconds (seconds)}<option value={seconds}>{seconds ? formatDuration(seconds) : t('As suggested')}</option>{/each}
-        </select>
-        <span class="folder" title={t('Target folder')}><FolderSelect bind:selected={effectOptions.dir} /></span>
-      {/if}
+      <CreateOptions {kinds} bind:kind={effectOptions.kind} onkind={saveEffectOptions} />
     </div>
   {/if}
   {#if configured}
@@ -459,8 +422,6 @@
   .piece pre { margin: 4px 0 0; white-space: pre-wrap; font-family: inherit; font-size: var(--fs-xs); }
   .err { color: var(--red); font-size: var(--fs-xs); }
   .options { display: flex; align-items: center; gap: 10px; padding: 8px 10px 0; border-top: 1px solid var(--border); font-size: var(--fs-xs); }
-  .options .check { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-  .options .folder { flex: 1; min-width: 0; }
   .options + .compose { border-top: none; }
   .typing { align-self: flex-start; display: flex; gap: 4px; padding: 12px 14px; }
   .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite ease-in-out; }
