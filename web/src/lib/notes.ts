@@ -3,7 +3,7 @@
 // Links can point to a block of the adventure: `[text](block:<id>)` (the id survives renames), or `[[Block title]]` for short,
 // and to a song: `[text](song:<ufid>)` (a click plays it). Images of the adventure are `![alt](image:<name>)`; a size after a bar in
 // the alt text keeps the aspect ratio: `![map|300](…)` is 300 px wide, `![map|x200](…)` 200 px high, `![map|300x200](…)` fits into
-// that box.
+// that box. Highlighted text is `==text==` (yellow) or `=={green}text==` with one of HIGHLIGHT_COLORS.
 import { Marked } from 'marked';
 
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -11,6 +11,12 @@ const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;
 const safeUrl = (url: string) => /^(https?:|mailto:|\/|#)/i.test(url.trim());
 
 export interface BlockRef { id: string; title: string }
+
+/** The colors of highlighted text; the first is the one `==text==` has without a color. */
+export const HIGHLIGHT_COLORS = ['yellow', 'green', 'blue', 'red', 'purple'] as const;
+export type HighlightColor = (typeof HIGHLIGHT_COLORS)[number];
+/** `==text==` or `=={color}text==` at the start of the source: the color (or undefined) and the text. */
+export const HIGHLIGHT = new RegExp(`^==(?:\\{(${HIGHLIGHT_COLORS.join('|')})\\})?(?=\\S)([\\s\\S]*?\\S)==(?!=)`);
 
 const BLOCK_PREFIX = 'block:';
 const SONG_PREFIX = 'song:';
@@ -57,6 +63,20 @@ let known: BlockRef[] = []; // the blocks of the adventure being rendered (the r
 
 const marked = new Marked({ gfm: true, breaks: true });
 marked.use({
+  extensions: [{
+    name: 'highlight',
+    level: 'inline',
+    start: (src: string) => src.indexOf('=='),
+    tokenizer(src: string) {
+      const match = HIGHLIGHT.exec(src);
+      if (!match) return undefined;
+      return { type: 'highlight', raw: match[0], color: match[1] ?? HIGHLIGHT_COLORS[0], tokens: this.lexer.inlineTokens(match[2]) };
+    },
+    renderer(token) {
+      // the color is one of HIGHLIGHT_COLORS (the pattern allows no other), so it is safe in the class
+      return `<mark class="hl hl-${token.color}">${this.parser.parseInline(token.tokens ?? [])}</mark>`;
+    },
+  }],
   renderer: {
     html({ text }) {
       return escape(text);

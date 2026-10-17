@@ -65,6 +65,15 @@ def save(location: Location, adventure: dict):
 
 def create(title: str, owner: str) -> tuple[Location, dict]:
     """A new adventure with one block, in the first library."""
+    return store_new(model.new_adventure(title, owner))
+
+
+def has_library() -> bool:
+    return bool(get_roots())
+
+
+def store_new(adventure: dict) -> tuple[Location, dict]:
+    """Stores a new (normalized) adventure in the first library, e.g. one imported from a PDF."""
     roots = get_roots()
     if not roots:
         raise NoLibrary()
@@ -74,7 +83,6 @@ def create(title: str, owner: str) -> tuple[Location, dict]:
             folder.storage.mkdir(folder.rel)
     except AlreadyExists:
         pass
-    adventure = model.new_adventure(title, owner)
     slug = re.sub(r"[^\w]+", "-", adventure["title"], flags=re.UNICODE).strip("-").lower()[:40] or "adventure"
     location = folder.child(f"{slug}-{adventure['id'][:8]}{SUFFIX}")
     save(location, adventure)

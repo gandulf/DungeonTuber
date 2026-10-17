@@ -14,6 +14,18 @@ describe('notes markdown round trip', () => {
     same('Roll `1d20` and add\n\n```\nDC 15\n```');
   });
 
+  it('keeps highlighted text in its color', () => {
+    same('A ==yellow== and a **=={green}bold green==** mark.');
+    same('=={purple}secret==');
+    // the editor writes the highlight inside the other marks; it says the same
+    expect(roundTrip('=={green}**bold green**==', manager)).toBe('**=={green}bold green==**');
+    const doc = JSON.stringify(manager.parse('=={red}danger== and ==hint=='));
+    expect(doc).toContain('"color":"red"');
+    expect(doc).toContain('"color":"yellow"');
+    // not a highlight: an unknown color, spaces inside or a single =
+    expect(JSON.stringify(manager.parse('== y == and a = b'))).not.toContain('highlight');
+  });
+
   it('keeps links to blocks, songs and the web', () => {
     same('Go to [the crypt](block:b2) or play [Fight](song:u-1).');
     same('Web [link](https://example.com).');

@@ -453,6 +453,19 @@ export interface AdventureBlock {
 
 export interface AdventureLink { from: string; to: string; label: string | null }
 
+/** An import of an adventure book (PDF) running on the server (see server/adventureimport.py). */
+export interface AdventureImport {
+  id: string;
+  name: string;
+  status: 'running' | 'done' | 'error';
+  /** 0: reading the book, then the batches of notes (of `total`). */
+  step: number;
+  total: number;
+  /** The id of the new adventure once it is done. */
+  adventure: string | null;
+  error: string | null;
+}
+
 export interface AdventureSummary {
   id: string;
   title: string;

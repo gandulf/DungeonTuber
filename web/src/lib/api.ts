@@ -1,5 +1,5 @@
 import type {
-  Adventure, AdventureSummary, AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, SoundDescription, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, PlaylistInfo, Preset, ServerSettings, Track, TrackList,
+  Adventure, AdventureImport, AdventureSummary, AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, SoundDescription, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, PlaylistInfo, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -80,6 +80,12 @@ export const api = {
   adventures: () => get<{ adventures: AdventureSummary[] }>('/api/adventures'),
   adventure: (id: string) => get<Adventure>(`/api/adventures/${id}`),
   createAdventure: (title: string) => request<Adventure>('POST', '/api/adventures', { title }),
+  importAdventure: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<AdventureImport>('POST', '/api/adventures/import', form);
+  },
+  adventureImport: (id: string) => get<AdventureImport>(`/api/adventures/import/${id}`),
   saveAdventure: (adventure: Pick<Adventure, 'id' | 'title' | 'blocks' | 'links' | 'music'>) => request<Adventure>('PUT', `/api/adventures/${adventure.id}`, adventure),
   setAdventureVisibility: (id: string, visibility: 'private' | 'public', confirm = false) =>
     request<{ changed: boolean; visibility: 'private' | 'public'; private_playlists: string[] }>('POST', `/api/adventures/${id}/visibility`, { visibility, confirm }),

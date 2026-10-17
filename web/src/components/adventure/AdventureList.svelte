@@ -2,7 +2,8 @@
   import { canDropOnAdventure, dropOnAdventure } from '../../lib/actions';
   import { t } from '../../lib/i18n.svelte';
   import { library } from '../../lib/stores/library.svelte';
-  import { adventures, createAdventure, deleteAdventure, loadAdventures, openAdventureTab, renameAdventure } from '../../lib/stores/adventure.svelte';
+  import { adventures, createAdventure, deleteAdventure, importAdventure, loadAdventures, openAdventureTab, renameAdventure } from '../../lib/stores/adventure.svelte';
+  import { data } from '../../lib/stores/data.svelte';
   import { openMenu, ui } from '../../lib/stores/ui.svelte';
   import { onEvent } from '../../lib/ws';
   import Icon from '../Icon.svelte';
@@ -25,8 +26,20 @@
 <div class="nav-section">
   <div class="row">
     <span class="label-xs">{t('Adventures')}</span>
+    <span class="grow"></span>
+    {#if data.settings?.assistantConfigured}
+      <button class="icon-btn mini" title={t('Import an adventure book (PDF) with the AI')} disabled={!!adventures.importing}
+              onclick={importAdventure}><Icon name="upload" size={14} /></button>
+    {/if}
     <button class="icon-btn mini" title={t('New adventure')} onclick={() => void createAdventure()}><Icon name="plus" size={14} /></button>
   </div>
+  {#if adventures.importing}
+    {@const job = adventures.importing}
+    <div class="importing" title={job.name}>
+      <span class="spinner"></span>
+      <span class="ellipsis">{job.step ? t('Writing the notes ({0} of {1})', job.step, job.total - 1) : t('Reading "{0}"…', job.name)}</span>
+    </div>
+  {/if}
   {#each adventures.list as item (item.id)}
     <button class="nav-item" class:active={activeId === item.id} class:over={over === item.id} title={item.title}
             onclick={() => open(item.id)}
@@ -61,4 +74,8 @@
   .nav-item.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
   .meta { display: flex; flex: none; margin-left: auto; color: var(--faint); }
   .empty { font-size: var(--fs-xs); padding: 2px 10px 4px; line-height: 1.4; }
+  .grow { flex: 1; }
+  .importing { display: flex; align-items: center; gap: 8px; padding: 6px 10px; color: var(--muted); font-size: var(--fs-xs); }
+  .spinner { width: 10px; height: 10px; flex: none; border: 2px solid var(--faint); border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>

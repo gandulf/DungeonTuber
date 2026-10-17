@@ -1,12 +1,13 @@
 // The notes of a block in the WYSIWYG editor (Tiptap) and back to Markdown, which stays the stored format (play mode renders it with
 // lib/notes.ts). The editor and the round-trip tests use the same extensions, so what the tests check is what the editor writes.
 // Our own syntax: links to blocks `[text](block:<id>)` and songs `[text](song:<ufid>)`, images of the adventure
-// `![alt|300x200](image:<name>)` (the size after the bar keeps the aspect ratio, see notes.ts).
-import type { AnyExtension, JSONContent } from '@tiptap/core';
+// `![alt|300x200](image:<name>)` (the size after the bar keeps the aspect ratio, see notes.ts), and highlighted text `==text==` or
+// `=={green}text==`.
+import { Mark, type AnyExtension, type JSONContent } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 import { Markdown, MarkdownManager } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
-import { imageSize } from './notes';
+import { HIGHLIGHT, HIGHLIGHT_COLORS, imageSize, type HighlightColor } from './notes';
 
 export const BLOCK_PREFIX = 'block:';
 export const SONG_PREFIX = 'song:';
@@ -46,6 +47,55 @@ export const NoteImage = Image.extend<{ resolveSrc: (src: string) => string } & 
   },
 });
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    highlight: {
+      /** Highlights the selection in a color, or takes it away (null). */
+      setHighlight: (color: HighlightColor | null) => ReturnType;
+    };
+  }
+}
+
+/** Highlighted text in one of HIGHLIGHT_COLORS: `<mark class="hl hl-<color>">` in the editor and in play mode. */
+export const NoteHighlight = Mark.create({
+  name: 'highlight',
+  addAttributes() {
+    return {
+      color: {
+        default: HIGHLIGHT_COLORS[0],
+        parseHTML: (element: HTMLElement) => {
+          const color = element.getAttribute('data-color');
+          return HIGHLIGHT_COLORS.includes(color as HighlightColor) ? color : HIGHLIGHT_COLORS[0];
+        },
+        renderHTML: (attributes: Record<string, unknown>) => ({ 'data-color': attributes.color, class: `hl hl-${attributes.color}` }),
+      },
+    };
+  },
+  parseHTML: () => [{ tag: 'mark' }],
+  renderHTML: ({ HTMLAttributes }) => ['mark', HTMLAttributes, 0],
+  addCommands() {
+    return {
+      setHighlight: (color) => ({ commands }) => (color ? commands.setMark(this.name, { color }) : commands.unsetMark(this.name)),
+    };
+  },
+  markdownTokenName: 'highlight',
+  markdownTokenizer: {
+    name: 'highlight',
+    level: 'inline',
+    start: (src: string) => src.indexOf('=='),
+    tokenize: (src, _tokens, lexer) => {
+      const match = HIGHLIGHT.exec(src);
+      if (!match) return undefined;
+      return { type: 'highlight', raw: match[0], text: match[2], color: match[1] ?? HIGHLIGHT_COLORS[0], tokens: lexer.inlineTokens(match[2]) };
+    },
+  },
+  parseMarkdown: (token, helpers) => helpers.applyMark('highlight', helpers.parseInline(token.tokens || []), { color: token.color ?? HIGHLIGHT_COLORS[0] }),
+  renderMarkdown: (node, helpers) => {
+    const color = node.attrs?.color;
+    return `==${color && color !== HIGHLIGHT_COLORS[0] ? `{${color}}` : ''}${helpers.renderChildren(node)}==`;
+  },
+});
+
 /** The extensions of the notes. `resolveImage` turns `image:<name>` into the address the browser loads (none in the tests). */
 export function noteExtensions(options: { resolveImage?: (src: string) => string; resize?: boolean; extra?: AnyExtension[] } = {}): AnyExtension[] {
   return [
@@ -64,6 +114,7 @@ export function noteExtensions(options: { resolveImage?: (src: string) => string
       resolveSrc: options.resolveImage ?? ((src: string) => src),
       ...(options.resize ? { resize: { enabled: true, alwaysPreserveAspectRatio: true, minWidth: 40, minHeight: 30 } } : {}),
     }),
+    NoteHighlight,
     Markdown.configure({ markedOptions: MARKED_OPTIONS }),
     ...(options.extra ?? []),
   ];

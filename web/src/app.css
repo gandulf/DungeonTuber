@@ -245,6 +245,13 @@ input[type='range'].range::-moz-range-thumb {
 .switch input:checked + span::before { transform: translateX(18px); background: #fff; }
 
 /* links to blocks of an adventure inside rendered notes */
+/* highlighted text of the notes (==text== / =={green}text==), in the editor and in play mode; translucent so it works in both themes */
+mark.hl { color: inherit; padding: 0 2px; border-radius: 3px; }
+.hl-yellow { background: rgba(250, 204, 21, 0.45); }
+.hl-green { background: rgba(74, 222, 128, 0.4); }
+.hl-blue { background: rgba(96, 165, 250, 0.42); }
+.hl-red { background: rgba(248, 113, 113, 0.42); }
+.hl-purple { background: rgba(192, 132, 252, 0.42); }
 .notes a.block-link { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); cursor: pointer; }
 .notes a.block-link:hover { background: var(--accent-soft); }
 .notes a.block-link.broken { color: var(--red); border-bottom-color: var(--red); cursor: not-allowed; }

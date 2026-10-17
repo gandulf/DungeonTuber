@@ -8,6 +8,7 @@
   import { t } from '../../lib/i18n.svelte';
   import { imageUrl, resolveBlockTitles, type BlockRef } from '../../lib/notes';
   import { BLOCK_PREFIX, IMAGE_PREFIX, noteExtensions, SONG_PREFIX, toStoredMarkdown } from '../../lib/notesMarkdown';
+  import { HIGHLIGHT_COLORS, type HighlightColor } from '../../lib/notes';
   import { askText, errorToast, openDialog } from '../../lib/stores/ui.svelte';
   import type { MusicRef } from '../../lib/types';
   import Icon from '../Icon.svelte';
@@ -258,6 +259,16 @@
     { icon: 'redo', title: 'Redo', click: () => run((c) => c.redo()), disabled: () => !can('redo') },
   ];
 
+  // highlighting: the button uses the color picked last, the arrow next to it picks another one (or takes the highlight away)
+  let highlightColor = $state<HighlightColor>(HIGHLIGHT_COLORS[0]);
+  let highlightMenu = $state(false);
+  const COLOR_NAMES: Record<HighlightColor, string> = { yellow: 'Yellow', green: 'Green', blue: 'Blue', red: 'Red', purple: 'Purple' };
+  function applyHighlight(color: HighlightColor | null) {
+    if (color) highlightColor = color;
+    highlightMenu = false;
+    run((c) => (color && !active('highlight', { color }) ? c.setHighlight(color) : c.setHighlight(null)));
+  }
+
   function blockOrSongLink(): boolean {
     const href = String(editor?.getAttributes('link').href ?? '');
     return href.startsWith(BLOCK_PREFIX) || href.startsWith(SONG_PREFIX);
@@ -270,6 +281,26 @@
       {#if tool}
         <button type="button" class="fmt" class:on={tool.on?.()} disabled={tool.disabled?.()} title={t(tool.title)} aria-label={t(tool.title)}
                 onmousedown={(e) => e.preventDefault()} onclick={tool.click}><Icon name={tool.icon} size={16} /></button>
+        {#if tool.icon === 'strike'}
+          <span class="hl-tool">
+            <button type="button" class="fmt hl-main" class:on={active('highlight')} title={t('Highlight')} aria-label={t('Highlight')}
+                    onmousedown={(e) => e.preventDefault()} onclick={() => applyHighlight(highlightColor)}>
+              <Icon name="marker" size={16} /><span class="hl-bar hl-{highlightColor}"></span></button>
+            <button type="button" class="fmt hl-more" title={t('Highlight color')} aria-label={t('Highlight color')} aria-haspopup="menu"
+                    aria-expanded={highlightMenu} onmousedown={(e) => e.preventDefault()} onclick={() => (highlightMenu = !highlightMenu)}>
+              <Icon name={highlightMenu ? 'chevron-up' : 'chevron-down'} size={12} /></button>
+            {#if highlightMenu}
+              <span class="hl-menu" role="menu">
+                {#each HIGHLIGHT_COLORS as color (color)}
+                  <button type="button" role="menuitem" class="hl-swatch hl-{color}" class:on={active('highlight', { color })} title={t(COLOR_NAMES[color])}
+                          aria-label={t(COLOR_NAMES[color])} onmousedown={(e) => e.preventDefault()} onclick={() => applyHighlight(color)}></button>
+                {/each}
+                <button type="button" role="menuitem" class="fmt" title={t('Remove highlight')} aria-label={t('Remove highlight')}
+                        onmousedown={(e) => e.preventDefault()} onclick={() => applyHighlight(null)}><Icon name="close" size={14} /></button>
+              </span>
+            {/if}
+          </span>
+        {/if}
       {:else}
         <span class="sep" aria-hidden="true"></span>
       {/if}
@@ -305,6 +336,14 @@
   .fmt.on { background: var(--accent-soft); color: var(--accent); }
   .fmt:disabled { opacity: 0.35; }
   .sep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
+  .hl-tool { position: relative; display: inline-flex; align-items: center; }
+  .hl-main { position: relative; }
+  .hl-bar { position: absolute; left: 7px; right: 7px; bottom: 4px; height: 3px; border-radius: 2px; }
+  .hl-more { width: 16px; }
+  .hl-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 10px;
+             background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); }
+  .hl-swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+  .hl-swatch.on, .hl-swatch:hover { border-color: var(--text); }
   .block-pick { margin-left: auto; max-width: 160px; font-size: var(--fs-sm); }
   .hint { font-size: var(--fs-xs); }
   .suggest { position: fixed; z-index: 50; margin: 0; padding: 4px; list-style: none; min-width: 200px; max-width: 320px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); }

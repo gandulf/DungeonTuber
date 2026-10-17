@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { blockLinkTarget, imageSize, renderNotes, resolveBlockTitles, songLinkIds, songLinkTarget } from './notes';
 
 describe('renderNotes', () => {
+  it('renders highlighted text in its color and nothing else', () => {
+    expect(renderNotes('A ==note== and =={blue}*more*==')).toContain('<mark class="hl hl-yellow">note</mark> and <mark class="hl hl-blue"><em>more</em></mark>');
+    // an unknown color is plain text in a yellow highlight: nothing of it reaches the markup
+    expect(renderNotes('=={x" onclick="y}text==')).toBe('<p><mark class="hl hl-yellow">{x&quot; onclick=&quot;y}text</mark></p>\n');
+  });
+
   it('renders headings, emphasis and lists', () => {
     const html = renderNotes('# Crypt\n\nThe **door** is *locked*.\n\n- key\n- lever');
     expect(html).toContain('<h1>Crypt</h1>');

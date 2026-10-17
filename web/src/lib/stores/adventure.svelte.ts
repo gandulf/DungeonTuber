@@ -4,7 +4,7 @@ import { api, pathToId } from '../api';
 import { addAdventureMusic, addMusic, appendBlock, assignMusic, refKey, removeBlock } from '../adventures';
 import { t } from '../i18n.svelte';
 import { prefs } from '../prefs.svelte';
-import type { Adventure, AdventureBlock, AdventureSummary, EffectRef, MusicRef, PlaylistRef, ComposePiece, SmartFilter, SongRef, SoundDescription, SoundKind, Track } from '../types';
+import type { Adventure, AdventureBlock, AdventureImport, AdventureSummary, EffectRef, MusicRef, PlaylistRef, ComposePiece, SmartFilter, SongRef, SoundDescription, SoundKind, Track } from '../types';
 import { applyFilter } from './assistant.svelte';
 import { effects, loadEffects } from './effects.svelte';
 import { closeTab, library, openTab, setGlobal } from './library.svelte';
@@ -26,6 +26,8 @@ export const adventures = $state({
   pickFor: null as { blockId: string } | null,
   /** Blocks (`adventureId/blockId`) whose cover is still being painted in the background (see applyCoverWhenReady). */
   pendingCovers: [] as string[],
+  /** The import of an adventure book (PDF) that runs on the server, shown in the list of adventures until it is done. */
+  importing: null as AdventureImport | null,
   /** The words of the header search to mark in the notes of the block it went to (see goToBlock). */
   highlight: null as { blockId: string; terms: string[] } | null,
 });
@@ -118,6 +120,53 @@ export async function openAdventure(id: string) {
     const tab = library.tabs.find((item) => item.key === tabKey(id));
     if (tab) closeTab(tab.key);
     void loadAdventures();
+  }
+}
+
+const IMPORT_POLL_MS = 3000;
+
+/** "Import from PDF": the AI (Gemini) reads an adventure book and makes a private adventure of it, one block per scene. It runs on the
+ *  server for some minutes; the list of adventures shows how far it is, and the adventure opens when it is done. */
+export function importAdventure() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/pdf,.pdf';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      adventures.importing = await api.importAdventure(file);
+      toast(t('The AI reads "{0}". This takes a few minutes; you can go on meanwhile.', file.name), 'info');
+      void followImport(adventures.importing.id);
+    } catch (e) {
+      errorToast(e);
+    }
+  };
+  input.click();
+}
+
+async function followImport(id: string) {
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, IMPORT_POLL_MS));
+    let job: AdventureImport;
+    try {
+      job = await api.adventureImport(id);
+    } catch (e) {
+      adventures.importing = null;
+      errorToast(e);
+      return;
+    }
+    adventures.importing = job.status === 'running' ? job : null;
+    if (job.status === 'error') {
+      errorToast(new Error(t('The import of "{0}" failed: {1}', job.name, job.error ?? '')));
+      return;
+    }
+    if (job.status === 'done' && job.adventure) {
+      await loadAdventures();
+      toast(t('"{0}" was imported. Check the blocks against the book.', job.name), 'success');
+      await openAdventureTab(job.adventure);
+      return;
+    }
   }
 }
 

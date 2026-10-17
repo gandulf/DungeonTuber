@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from core import adventures as model
 from core.i18n import _
 from core.storage import StorageError
-from server import adventures, imagegen
+from server import adventureimport, adventures, assistant, imagegen
 from server.auth import current_user, require_auth
 from server.config import get_config
 from server.events import hub
@@ -78,6 +78,38 @@ def create_adventure(body: AdventureCreate, user: str = Depends(current_user)):
         raise HTTPException(status_code=502, detail=str(e))
     hub.publish("adventures.changed", {})
     return _view(adventure, user)
+
+
+@router.post("/api/adventures/import")
+async def import_adventure(file: UploadFile = File(...), user: str = Depends(current_user)):
+    """Starts the import of an adventure book (PDF) with Gemini in the background; the client polls the job."""
+    if not assistant.api_key():
+        raise HTTPException(status_code=400, detail=_("The AI assistant is not configured"))
+    if not adventures.has_library():
+        raise HTTPException(status_code=400, detail="No library configured")
+    data = await file.read(adventureimport.MAX_PDF + 1)
+    if not data.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail=_("This is not a PDF file"))
+    if len(data) > adventureimport.MAX_PDF:
+        raise HTTPException(status_code=413, detail=_("The PDF is larger than {0} MB").format(adventureimport.MAX_PDF // (1024 * 1024)))
+
+    def store(adventure: dict) -> str:
+        adventures.store_new(adventure)
+        hub.publish("adventures.changed", {})
+        return adventure["id"]
+
+    try:
+        return adventureimport.start(data, file.filename or "adventure.pdf", user, store)
+    except adventureimport.ImportFailed as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.get("/api/adventures/import/{job_id}")
+def import_status(job_id: str, user: str = Depends(current_user)):
+    job = adventureimport.status(job_id, user)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return job
 
 
 @router.get("/api/adventures/{adventure_id}")
