@@ -5,7 +5,9 @@
   import Icon from '../Icon.svelte';
 
   /** The playing effect in the player bar while the effects panel is hidden: its name, stop and the effects volume (a compact
-   *  slider of its own: the box is narrow). */
+   *  slider of its own: the box is narrow). `inline` lays it out as one line (tablets: above the volume). */
+  let { inline = false }: { inline?: boolean } = $props();
+
   let muted = $state(false);
   let lastVolume = prefs.effectsVolume;
 
@@ -22,8 +24,8 @@
   const shown = $derived(muted ? 0 : prefs.effectsVolume);
 </script>
 
-<!-- the effect's name on top, its controls below: two short rows instead of one long one -->
-<div class="effect" role="group" aria-label={t('Effects')}>
+<!-- the effect's name on top, its controls below: two short rows instead of one long one (inline: one row) -->
+<div class="effect" class:inline role="group" aria-label={t('Effects')}>
   <div class="head">
     <span class="glyph" title={prefs.effectsLoop ? t('Now looping') : t('Play once')}><Icon name="waves" size={13} /></span>
     <span class="name ellipsis" title={name}>{name}</span>
@@ -48,5 +50,9 @@
   .stop, .mute { flex: none; width: 26px; height: 26px; }
   .stop { color: var(--accent); }
   .range { flex: 1; min-width: 0; margin: 0 2px 0 4px; }
+  .effect.inline { flex-direction: row; align-items: center; gap: 6px; width: auto; margin: 0; padding: 0 4px 0 8px; }
+  .inline .head { flex: 1; }
+  .inline .stop, .inline .mute { width: 24px; height: 24px; }
+  .inline .range { flex: none; width: 80px; }
   .range.boost { background: linear-gradient(to right, var(--accent) 0, var(--accent-2) 66.6%, var(--gold) 66.6%, var(--gold) var(--pct), var(--track) var(--pct)); }
 </style>

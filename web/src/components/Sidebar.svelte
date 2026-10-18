@@ -14,7 +14,11 @@
   import type { BrowseItem } from '../lib/types';
   import AdventureList from './adventure/AdventureList.svelte';
   import Icon from './Icon.svelte';
+  import SectionToggle from './SectionToggle.svelte';
   import TreeNode from './TreeNode.svelte';
+
+  // fingers press and hold where a mouse right-clicks: the hints say so
+  const touch = window.matchMedia('(pointer: coarse)').matches;
 
   /** On a narrow screen the sidebar is a flyout: it closes once something has been opened. */
   function closeFlyout() {
@@ -190,7 +194,8 @@
 
   <nav class="nav">
     <div class="nav-section">
-      <span class="label-xs">{t('Favorites')}</span>
+      <SectionToggle name="favorites" label={t('Favorites')} />
+      {#if !prefs.collapsedSections.includes('favorites')}
       {#each favoriteFolders as path (path)}
         <button class="nav-item" use:longpress title={path} onclick={() => openTab('dir', path)}
                 oncontextmenu={(e) => openMenu(e, [
@@ -202,15 +207,17 @@
           <Icon name="bookmark" size={16} /><span class="ellipsis">{lastPart(path)}</span>
         </button>
       {:else}
-        <span class="empty muted">{t('Right-click a folder to add it to your favorites.')}</span>
+        <span class="empty muted">{touch ? t('Press and hold a folder to add it to your favorites.') : t('Right-click a folder to add it to your favorites.')}</span>
       {/each}
+      {/if}
     </div>
 
     <div class="nav-section">
       <div class="row">
-        <span class="label-xs">{t('Playlists')}</span>
+        <SectionToggle name="playlists" label={t('Playlists')} />
         <button class="icon-btn mini" title={t('New Playlist…')} onclick={() => newPlaylist()}><Icon name="plus" size={14} /></button>
       </div>
+      {#if !prefs.collapsedSections.includes('playlists')}
       {#each favoritePlaylists as playlist (playlist.path)}
         <button class="nav-item" class:active={!!playlist.tab && library.active === playlist.tab.key} class:over={overPlaylist === playlist.path} title={playlist.path} use:longpress
                 onclick={() => openTab('playlist', playlist.path)}
@@ -226,18 +233,20 @@
           {#if playlist.tab?.private}<span class="private" title={t('Private')}><Icon name="lock" size={12} /></span>{/if}
         </button>
       {:else}
-        <span class="empty muted">{t('Right-click a playlist to add it to the favorites.')}</span>
+        <span class="empty muted">{touch ? t('Press and hold a playlist to add it to the favorites.') : t('Right-click a playlist to add it to the favorites.')}</span>
       {/each}
+      {/if}
     </div>
 
     <AdventureList />
 
     <div class="nav-section files">
       <div class="row">
-        <span class="label-xs">{t('Library')}</span>
+        <SectionToggle name="library" label={t('Library')} />
         <span class="grow"></span>
         <button class="icon-btn mini" title={t('Refresh')} onclick={refresh}><Icon name="refresh" size={14} /></button>
       </div>
+      {#if !prefs.collapsedSections.includes('library')}
       <div class="tree" class:drop={dropTarget} role="tree" tabindex="-1"
            ondragover={(e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); dropTarget = true; } }}
            ondragleave={() => (dropTarget = false)} ondrop={onDrop} oncontextmenu={treeMenu}>
@@ -245,6 +254,7 @@
           <TreeNode {item} depth={1} version={refreshKey} bind:selected onOpen={openItem} onMenu={(e, i) => (i.type === 'mp3' ? void songMenu(e, i) : openMenu(e, itemMenu(i)))} />
         {/each}
       </div>
+      {/if}
     </div>
   </nav>
 
@@ -264,21 +274,27 @@
   .brand-text { display: flex; flex-direction: column; min-width: 0; }
   .name { font-family: var(--font-display); font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
   .tag { font-size: var(--fs-xs); color: var(--faint); }
-  .nav { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 6px 10px; overflow: hidden; }
-  .nav-section { display: flex; flex-direction: column; gap: 1px; }
-  .nav-section .label-xs { padding: 4px 8px 6px; }
+  .nav { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 6px 10px; overflow-y: auto; overscroll-behavior: contain; }
+  .nav-section { flex: none; display: flex; flex-direction: column; gap: 1px; }
   .row { display: flex; align-items: center; justify-content: space-between; }
   .grow { flex: 1; }
   .mini { width: 24px; height: 24px; }
   .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; color: var(--muted); text-align: left; transition: background 0.15s, color 0.15s; }
-  .nav-item:hover { background: var(--hover); color: var(--text); }
+  @media (hover: hover) { .nav-item:hover { background: var(--hover); color: var(--text); } }
   .nav-item.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
   .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .nav-item .private { display: flex; flex: none; margin-left: auto; color: var(--faint); }
   .empty { font-size: var(--fs-xs); padding: 2px 10px 4px; line-height: 1.4; }
-  .files { flex: 1; min-height: 0; }
-  .tree { flex: 1; overflow: auto; min-height: 80px; border-radius: 10px; padding: 4px; }
+  /* favorites, playlists, adventures and the library scroll together; the library fills the rest, so files can be dropped below it */
+  .files { flex: 1 0 auto; }
+  .tree { flex: 1 0 auto; min-height: 80px; border-radius: 10px; padding: 4px; }
   .tree.drop { box-shadow: inset 0 0 0 2px var(--accent); }
   .foot { display: flex; gap: 4px; padding: 10px 12px 14px; border-top: 1px solid var(--border); }
-  @media (pointer: coarse) { .nav-item { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
+  /* tablets: settings, theme and tour are in the main menu */
+  @media (max-width: 1024px), (pointer: coarse) and (max-width: 1366px) { .foot { display: none; } }
+  @media (pointer: coarse) {
+    .nav-item { min-height: 44px; padding-top: 0; padding-bottom: 0; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .nav-item:active { background: var(--hover); }
+    .mini { width: 40px; height: 40px; }
+  }
 </style>

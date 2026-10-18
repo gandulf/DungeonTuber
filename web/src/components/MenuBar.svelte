@@ -135,9 +135,14 @@
     </button>
   {/if}
   <button class="icon-btn" title={t('Menu')} data-tour="menubar" onclick={showMenu}><Icon name="menu" size={18} /></button>
-  {#if !ui.narrow && hasSidePanel}
+  {#if !ui.rightOverlay && hasSidePanel}
     <button class="icon-btn" class:active={prefs.rightOpen} title={prefs.rightOpen ? t('Hide effects and lights') : t('Show effects and lights')} aria-label={t('Effects and lights')}
             aria-pressed={prefs.rightOpen} onclick={() => togglePanel('rightOpen')}><Icon name="panel-right" size={18} /></button>
+  {/if}
+  <!-- tablets: the panel opens over the page (the library beside it stays); phones: the same with the bulb -->
+  {#if ui.rightOverlay && !ui.narrow && hasSidePanel}
+    <button class="icon-btn" class:active={ui.mobilePanel === 'side'} title={ui.mobilePanel === 'side' ? t('Hide effects and lights') : t('Show effects and lights')} aria-label={t('Effects and lights')}
+            aria-pressed={ui.mobilePanel === 'side'} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'side' ? null : 'side'; }}><Icon name="panel-right" size={18} /></button>
   {/if}
   {#if ui.narrow && hasSidePanel}
     <button class="icon-btn" title={t('Lights')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'side' ? null : 'side'; }}><Icon name="bulb" size={18} /></button>
@@ -183,9 +188,12 @@
     .tabs-area { order: 10; flex: 1 0 100%; }
     .tabs-area:has(.hint) { display: none; } /* only the welcome hint, no tabs */
     .opt { padding: 0 8px; }
-    .search { margin-left: auto; }
-    /* an open search takes the free space of the row: the mode switch and the assistant step aside */
+    .search, .search-wrap { margin-left: auto; }
+    .search-wrap .search { margin-left: 0; }
+    /* an open search takes the free space of the row: the mode switch and the assistant step aside
+       (the block search of an adventure sits in a wrapper, which grows instead) */
     .search:focus-within, .search.active { flex: 1; width: auto; min-width: 0; margin-left: 0; }
+    .search-wrap:has(.search:focus-within), .search-wrap:has(.search.active) { flex: 1; display: flex; min-width: 0; margin-left: 0; }
     .topbar:has(.search:focus-within) :is(.mode, .assistant), .topbar:has(.search.active) :is(.mode, .assistant) { display: none; }
   }
 </style>

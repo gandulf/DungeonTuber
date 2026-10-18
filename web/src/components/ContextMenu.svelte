@@ -122,6 +122,7 @@
   /* a finger leaves :hover stuck on the tapped entry, which would then show through where the submenu opens over it */
   @media (hover: hover) { .item:hover:not(:disabled) { background: var(--accent-soft); } }
   .item:active:not(:disabled) { background: var(--accent-soft); }
+  @media (pointer: coarse) { .item { min-height: 44px; padding-top: 0; padding-bottom: 0; } }
   .sub { isolation: isolate; }
   .ic { width: 18px; display: flex; justify-content: center; color: var(--muted); }
   .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

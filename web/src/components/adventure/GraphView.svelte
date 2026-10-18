@@ -49,12 +49,19 @@
     return [(event.clientX - rect.left - view.x) / view.k, (event.clientY - rect.top - view.y) / view.k];
   };
 
+  const clampZoom = (k: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
+
+  /** Zooms to `k`: the point of the world at (px, py) of the frame moves to (tx, ty), so by default it stays put. */
+  function zoomAt(k: number, px: number, py: number, tx = px, ty = py) {
+    view = { x: tx - ((px - view.x) / view.k) * k, y: ty - ((py - view.y) / view.k) * k, k };
+  }
+
   function wheel(event: WheelEvent) {
     event.preventDefault();
     const rect = frame!.getBoundingClientRect();
-    const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.k * (event.deltaY < 0 ? 1.1 : 1 / 1.1)));
-    const [px, py] = [event.clientX - rect.left, event.clientY - rect.top];
-    view = { x: px - ((px - view.x) / view.k) * k, y: py - ((py - view.y) / view.k) * k, k }; // the point under the pointer stays put
+    // the step follows the distance: a wheel notch (~100 px) zooms by ~10 %, a trackpad pinch (small deltas) zooms smoothly
+    const delta = Math.max(-100, Math.min(100, event.deltaY * (event.deltaMode === 1 ? 33 : 1)));
+    zoomAt(clampZoom(view.k * Math.exp(-delta * (Math.abs(delta) < 50 ? 0.01 : 0.001))), event.clientX - rect.left, event.clientY - rect.top);
   }
 
   $effect(() => {
@@ -65,9 +72,48 @@
 
   function zoomBy(factor: number) {
     const rect = frame!.getBoundingClientRect();
-    const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.k * factor));
-    const [px, py] = [rect.width / 2, rect.height / 2];
-    view = { x: px - ((px - view.x) / view.k) * k, y: py - ((py - view.y) / view.k) * k, k };
+    zoomAt(clampZoom(view.k * factor), rect.width / 2, rect.height / 2);
+  }
+
+  // the fingers on the frame: two of them pinch, which zooms around the middle between them and moves the view along with it
+  const fingers = new Map<number, [number, number]>();
+  let pinch: { dist: number; mx: number; my: number } | null = null;
+
+  function spread() {
+    const [[x1, y1], [x2, y2]] = [...fingers.values()];
+    return { dist: Math.max(1, Math.hypot(x2 - x1, y2 - y1)), mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
+  }
+
+  /** Runs before the handlers of the blocks (capture phase), so a second finger can end what the first one started. */
+  function fingerDown(event: PointerEvent) {
+    if (event.pointerType !== 'touch') return;
+    fingers.set(event.pointerId, [event.clientX, event.clientY]);
+    if (fingers.size !== 2) return;
+    // a block moved by the first finger goes back, a link being drawn is dropped
+    if (drag?.moved) {
+      const block = adventure.blocks.find((item) => item.id === drag!.id);
+      if (block) block.pos = [drag.origin[0], drag.origin[1]];
+    }
+    drag = null;
+    drawing = null;
+    pan = null;
+    pinch = spread();
+  }
+
+  function pinchMove(event: PointerEvent): boolean {
+    if (!fingers.has(event.pointerId)) return false;
+    fingers.set(event.pointerId, [event.clientX, event.clientY]);
+    if (!pinch || fingers.size < 2) return false;
+    const now = spread();
+    const rect = frame!.getBoundingClientRect();
+    zoomAt(clampZoom(view.k * (now.dist / pinch.dist)), pinch.mx - rect.left, pinch.my - rect.top, now.mx - rect.left, now.my - rect.top);
+    pinch = now;
+    return true;
+  }
+
+  function fingerUp(event: PointerEvent) {
+    fingers.delete(event.pointerId);
+    if (fingers.size < 2) pinch = null;
   }
 
   /** Shows all blocks. */
@@ -89,6 +135,7 @@
   }
 
   function backgroundDown(event: PointerEvent) {
+    if (pinch) return;
     if (event.target !== frame && !(event.target as Element).classList.contains('world')) return;
     selectedLink = null;
     pan = { startX: event.clientX, startY: event.clientY, x: view.x, y: view.y };
@@ -97,6 +144,7 @@
 
   function nodeDown(event: PointerEvent, id: string) {
     event.stopPropagation();
+    if (pinch) return;
     adventures.selected = id;
     selectedLink = null;
     if (!editable) return;
@@ -114,13 +162,14 @@
 
   function handleDown(event: PointerEvent, id: string) {
     event.stopPropagation();
-    if (!editable) return;
+    if (!editable || pinch) return;
     const [x, y] = world(event);
     drawing = { from: id, x, y };
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
 
   function move(event: PointerEvent) {
+    if (pinchMove(event)) return;
     if (drawing) {
       [drawing.x, drawing.y] = world(event);
     } else if (drag) {
@@ -139,6 +188,7 @@
   }
 
   function up(event: PointerEvent) {
+    fingerUp(event);
     if (drawing) {
       const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-node]')?.dataset.node;
       const from = drawing.from;
@@ -178,7 +228,7 @@
     <button class="btn sm ghost" title={t('Show all blocks')} onclick={fit}>{t('Fit')}</button>
   </div>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="frame" bind:this={frame} onpointerdown={backgroundDown} onpointermove={move} onpointerup={up} onpointercancel={up}>
+  <div class="frame" bind:this={frame} onpointerdowncapture={fingerDown} onpointerdown={backgroundDown} onpointermove={move} onpointerup={up} onpointercancel={up}>
     <div class="world" style:transform="translate({view.x}px, {view.y}px) scale({view.k})">
       <svg class="edges" width="1" height="1" overflow="visible" aria-hidden="true">
         <defs>

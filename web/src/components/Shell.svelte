@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { cubicOut } from 'svelte/easing';
+  import { fade, fly, slide as widthSlide } from 'svelte/transition';
   import { api, coverUrl } from '../lib/api';
   import { applyAmbient } from '../lib/ambient';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
@@ -50,7 +52,16 @@
       void flushSave();
     }
   });
-  const showRight = $derived(prefs.rightOpen && (prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false)));
+  // the side panel has something to show; on a desktop it is also switched on (rightOpen), on tablets and phones it opens as a flyout
+  const hasRight = $derived(prefs.showEffects || (prefs.showLights && data.settings?.lightsEnabled !== false));
+  const showRight = $derived(prefs.rightOpen && hasRight);
+
+  // a flyout slides in from its own edge and back out to it
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const slide = (node: HTMLElement, x: string) => fly(node, { x, opacity: 1, duration: reducedMotion.matches ? 0 : 240, easing: cubicOut });
+  const scrimFade = (node: HTMLElement) => fade(node, { duration: reducedMotion.matches ? 0 : 200 });
+  // on a wide screen a side panel grows from and shrinks to its edge; its content keeps its width, so it is uncovered instead of squeezed
+  const panelSlide = (node: HTMLElement) => widthSlide(node, { axis: 'x', duration: reducedMotion.matches ? 0 : 220, easing: cubicOut });
 
   // a flyout closes with a swipe towards its own edge
   let swipeStart: { x: number; y: number } | null = null;
@@ -171,16 +182,21 @@
 <div class="app">
   <div class="aura" aria-hidden="true"></div>
   <div class="body">
+    {#if (ui.narrow && ui.mobilePanel === 'tree') || (ui.rightOverlay && ui.mobilePanel === 'side' && hasRight)}
+      <div class="scrim" role="presentation" transition:scrimFade onclick={() => (ui.mobilePanel = null)}></div>
+    {/if}
+    {#if ui.rightOverlay && ui.mobilePanel === 'side' && hasRight}
+      <aside class="drawer right-drawer" transition:slide={'100%'} onpointerdown={drawerDown} onpointerup={drawerUp} onpointercancel={() => (swipeStart = null)}><RightPanel /></aside>
+    {/if}
     {#if ui.narrow}
-      {#if ui.mobilePanel && (ui.mobilePanel === 'tree' || showRight)}
-        <div class="scrim" role="presentation" onclick={() => (ui.mobilePanel = null)}></div>
-        <aside class="drawer" class:right-drawer={ui.mobilePanel === 'side'} onpointerdown={drawerDown} onpointerup={drawerUp} onpointercancel={() => (swipeStart = null)}>
-          {#if ui.mobilePanel === 'tree'}<Sidebar />{:else}<RightPanel />{/if}
-        </aside>
+      {#if ui.mobilePanel === 'tree'}
+        <aside class="drawer" transition:slide={'-100%'} onpointerdown={drawerDown} onpointerup={drawerUp} onpointercancel={() => (swipeStart = null)}><Sidebar /></aside>
       {/if}
     {:else}
       {#if prefs.leftOpen}
-        <aside class="sidebar" style:width="{prefs.leftWidth}px" data-tour="tree"><Sidebar /></aside>
+        <aside class="sidebar" style:width="{prefs.leftWidth}px" data-tour="tree" transition:panelSlide>
+          <div class="panel-inner" style:width="{prefs.leftWidth}px"><Sidebar /></div>
+        </aside>
         <Splitter bind:size={prefs.leftWidth} min={200} max={480} onchange={savePrefs} />
       {/if}
     {/if}
@@ -208,9 +224,11 @@
       {/if}
     </main>
 
-    {#if showRight && !ui.narrow}
+    {#if showRight && !ui.rightOverlay}
       <Splitter bind:size={prefs.rightWidth} min={260} max={480} invert onchange={savePrefs} />
-      <aside class="right" style:width="{prefs.rightWidth}px"><RightPanel /></aside>
+      <aside class="right" style:width="{prefs.rightWidth}px" transition:panelSlide>
+        <div class="panel-inner end" style:width="{prefs.rightWidth - 14}px"><RightPanel /></div>
+      </aside>
     {/if}
   </div>
 
@@ -263,6 +281,9 @@
   .body { flex: 1; display: flex; min-height: 0; }
   .sidebar { flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--bg-2); border-right: 1px solid var(--border); }
   .right { flex: none; display: flex; flex-direction: column; min-height: 0; padding: 14px 14px 14px 0; overflow-y: auto; }
+  .panel-inner { flex: 1 0 auto; display: flex; flex-direction: column; min-height: 0; }
+  .sidebar .panel-inner { flex: 1; }
+  .panel-inner.end { align-self: flex-end; }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 0 12px; }
   .pick-bar { display: flex; align-items: center; gap: 10px; margin: 0 16px; padding: 8px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .pick-bar .ellipsis { flex: 1; min-width: 0; }

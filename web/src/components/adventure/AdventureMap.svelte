@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { flushSync, untrack } from 'svelte';
   import { CARD, cardLayout } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
   import type { Adventure } from '../../lib/types';
@@ -40,28 +40,67 @@
   /** How far the world sits from the left/top edge of the map: while it is smaller than the map it is centered. */
   const inset = (k: number) => (frame ? [Math.max(0, (frame.clientWidth - size.w * k) / 2), Math.max(0, (frame.clientHeight - size.h * k) / 2)] : [0, 0]);
 
-  async function wheel(event: WheelEvent) {
-    if (!event.ctrlKey || !frame) return;
-    event.preventDefault(); // instead of zooming the whole page
-    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12)));
-    if (next === zoom) return;
-    // the point of the world under the pointer stays under the pointer
+  /** Zooms to `k`: the point of the world at (cx, cy) on the screen moves to (tx, ty), so by default it stays under the pointer. */
+  function zoomAt(k: number, cx: number, cy: number, tx = cx, ty = cy) {
+    if (!frame) return;
+    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
     const rect = frame.getBoundingClientRect();
-    const [px, py] = [event.clientX - rect.left, event.clientY - rect.top];
+    const [px, py] = [cx - rect.left, cy - rect.top];
     const [ix, iy] = inset(zoom);
     const [wx, wy] = [(frame.scrollLeft + px - ix) / zoom, (frame.scrollTop + py - iy) / zoom];
-    zoom = next;
-    await tick();
+    flushSync(() => (zoom = next)); // the sizer has its new size before the map scrolls
     const [nx, ny] = inset(next);
-    frame.scrollLeft = wx * next + nx - px;
-    frame.scrollTop = wy * next + ny - py;
+    frame.scrollLeft = wx * next + nx - (tx - rect.left);
+    frame.scrollTop = wy * next + ny - (ty - rect.top);
+  }
+
+  function wheel(event: WheelEvent) {
+    if (!event.ctrlKey) return;
+    event.preventDefault(); // instead of zooming the whole page
+    // the step follows the distance: a wheel notch (~100 px) zooms by ~12 %, a trackpad pinch (small deltas) zooms smoothly
+    const delta = Math.max(-100, Math.min(100, event.deltaY * (event.deltaMode === 1 ? 33 : 1)));
+    zoomAt(zoom * Math.exp(-delta * (Math.abs(delta) < 50 ? 0.01 : 0.0012)), event.clientX, event.clientY);
+  }
+
+  // --- two fingers pinch on a touch screen: zoom around the middle between them, moving the view along (one finger scrolls natively)
+  let pinch: { dist: number; mx: number; my: number } | null = null;
+
+  function spread(event: TouchEvent) {
+    const [a, b] = [event.touches[0], event.touches[1]];
+    return { dist: Math.max(1, Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY)), mx: (a.clientX + b.clientX) / 2, my: (a.clientY + b.clientY) / 2 };
+  }
+
+  function touchStart(event: TouchEvent) {
+    pinch = event.touches.length === 2 ? spread(event) : null;
+  }
+
+  function touchMove(event: TouchEvent) {
+    if (!pinch || event.touches.length !== 2) return;
+    event.preventDefault(); // instead of scrolling
+    const now = spread(event);
+    zoomAt(zoom * (now.dist / pinch.dist), pinch.mx, pinch.my, now.mx, now.my);
+    pinch = now;
+  }
+
+  function touchEnd(event: TouchEvent) {
+    if (event.touches.length < 2) pinch = null;
   }
 
   $effect(() => {
     const element = frame;
-    const listener = (event: WheelEvent) => void wheel(event);
-    element?.addEventListener('wheel', listener, { passive: false });
-    return () => element?.removeEventListener('wheel', listener);
+    if (!element) return;
+    element.addEventListener('wheel', wheel, { passive: false });
+    element.addEventListener('touchstart', touchStart, { passive: true });
+    element.addEventListener('touchmove', touchMove, { passive: false });
+    element.addEventListener('touchend', touchEnd);
+    element.addEventListener('touchcancel', touchEnd);
+    return () => {
+      element.removeEventListener('wheel', wheel);
+      element.removeEventListener('touchstart', touchStart);
+      element.removeEventListener('touchmove', touchMove);
+      element.removeEventListener('touchend', touchEnd);
+      element.removeEventListener('touchcancel', touchEnd);
+    };
   });
 
   // --- moving the view by dragging with the left mouse button (touch screens scroll on their own); a drag is no click on a card
@@ -153,7 +192,7 @@
   /* the map takes the height its container leaves (the rest of the welcome screen), at least a few cards high */
   .map { position: absolute; inset: 0; display: flex; overflow: auto; border-radius: 14px; background: var(--surface); border: 1px solid var(--border);
          background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 22px 22px; }
-  .map { cursor: grab; user-select: none; }
+  .map { cursor: grab; user-select: none; touch-action: pan-x pan-y; } /* the page does not zoom: a pinch zooms the map */
   .map.panning, .map.panning .card { cursor: grabbing; }
   .sizer { position: relative; flex: none; margin: auto; } /* centered while smaller than the map (auto margins of a flex item stay safe) */
   .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }

@@ -46,6 +46,8 @@ export interface Prefs {
   expanded: string[];
   /** Library roots that were already expanded once by default. */
   seenRoots: string[];
+  /** Sections of the sidebar folded to their heading ('favorites', 'playlists', 'adventures', 'library'). */
+  collapsedSections: string[];
   openTabs: { type: 'dir' | 'playlist'; path: string }[];
   activeTab: string | null;
   tourDone: boolean;
@@ -90,6 +92,7 @@ const defaults: Prefs = {
   treeRoot: null,
   expanded: [],
   seenRoots: [],
+  collapsedSections: [],
   openTabs: [],
   activeTab: null,
   tourDone: false,
@@ -131,5 +134,11 @@ export function applyViewMode(mode: ViewMode) {
   prefs.filter = { presets: !simple, circumplex: !simple, sliders: !simple, bpm: !simple, tags: true, genres: true };
   prefs.moodCollapsed = mode !== 'complex';
   if (mode === 'player') prefs.dynamicColumns = true;
+  savePrefs();
+}
+
+/** Folds a section of the sidebar to its heading, or unfolds it. */
+export function toggleSection(name: string) {
+  prefs.collapsedSections = prefs.collapsedSections.includes(name) ? prefs.collapsedSections.filter((item) => item !== name) : [...prefs.collapsedSections, name];
   savePrefs();
 }

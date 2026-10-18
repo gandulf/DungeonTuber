@@ -4,7 +4,7 @@
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { visibleRows } from '../../lib/stores/library.svelte';
-  import { cycleRepeat, next, player, previous, setNormalize, togglePlay, toggleShuffle } from '../../lib/stores/player.svelte';
+  import { cycleRepeat, next, player, previous, setNormalize, toggleEffect, togglePlay, toggleShuffle } from '../../lib/stores/player.svelte';
   import { openMenu, ui } from '../../lib/stores/ui.svelte';
   import Icon from '../Icon.svelte';
   import EffectMini from './EffectMini.svelte';
@@ -13,9 +13,12 @@
 
   const canPlay = $derived(!!player.track || visibleRows().length > 0);
 
-  // a playing effect gets its controls here while the effects panel (right side bar, on narrow screens its drawer) is hidden
-  const effectsShown = $derived(prefs.showEffects && (ui.narrow ? ui.mobilePanel === 'side' : prefs.rightOpen));
-  const effectHere = $derived(player.effectPlaying && !!player.effect && !effectsShown);
+  // a playing effect gets its controls here while the effects panel (right side bar, on tablets its flyout) is hidden: on a desktop
+  // in the right column, on a tablet as one line above the volume (the columns are narrow there); phones have no room for it
+  const effectsShown = $derived(prefs.showEffects && (ui.rightOverlay ? ui.mobilePanel === 'side' : prefs.rightOpen));
+  const effectHere = $derived(player.effectPlaying && !!player.effect && !effectsShown && !ui.narrow);
+  // phones only get a sign that an effect plays (its name as the tooltip) and a stop button
+  const effectSign = $derived(player.effectPlaying && !!player.effect && !effectsShown && ui.narrow);
 
   function optionsMenu(event: MouseEvent) {
     openMenu(event, [
@@ -68,10 +71,17 @@
     <SeekBar />
   </div>
 
-  <div class="right">
+  <div class="right" class:stacked={effectHere && ui.rightOverlay}>
+    {#if effectHere && ui.rightOverlay}<EffectMini inline />{/if}
     <VolumeControl />
     <button class="icon-btn" title={t('Settings')} onclick={optionsMenu}><Icon name="queue" size={19} /></button>
-    {#if effectHere}<EffectMini />{/if}
+    {#if effectHere && !ui.rightOverlay}<EffectMini />{/if}
+    {#if effectSign}
+      <div class="fx-sign" role="group" aria-label={t('Effects')} title={player.effect?.title || player.effect?.name}>
+        <span class="glyph"><Icon name="waves" size={15} /></span>
+        <button class="icon-btn fx-stop" title={t('Stop the effect')} aria-label={t('Stop the effect')} onclick={toggleEffect}><Icon name="stop" size={14} /></button>
+      </div>
+    {/if}
   </div>
 </footer>
 
@@ -114,9 +124,17 @@
   .play:hover:not(:disabled) { transform: scale(1.05); filter: brightness(1.08); }
   .right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   /* with the effect player the right column takes the room it needs and the main volume gets shorter */
-  .player:has(:global(.effect)) { grid-template-columns: minmax(200px, 1fr) minmax(300px, 1.6fr) auto; }
-  .right:has(:global(.effect)) :global(.volume input) { width: 80px; }
-  .right:has(:global(.effect)) :global(.volume .pct) { display: none; }
+  .player:has(.right:not(.stacked) :global(.effect)) { grid-template-columns: minmax(200px, 1fr) minmax(300px, 1.6fr) auto; }
+  .right:not(.stacked):has(:global(.effect)) :global(.volume input) { width: 80px; }
+  .right:not(.stacked):has(:global(.effect)) :global(.volume .pct) { display: none; }
+  /* tablets: the effect on a line of its own above the volume */
+  .right.stacked { flex-wrap: wrap; row-gap: 4px; }
+  .right.stacked :global(.effect) { flex: 1 0 100%; min-width: 0; }
+  .fx-sign { display: flex; align-items: center; gap: 2px; margin-left: auto; padding: 0 2px 0 9px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--border); }
+  .fx-sign .glyph { display: flex; color: var(--accent); animation: wave 1.6s ease-in-out infinite; }
+  @keyframes wave { 50% { transform: translateY(-2px); opacity: 0.7; } }
+  @media (prefers-reduced-motion: reduce) { .fx-sign .glyph { animation: none; } }
+  .fx-stop { width: 30px; height: 30px; color: var(--accent); }
   @media (max-width: 900px) {
     .player { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 14px; }
     .now { display: none; }

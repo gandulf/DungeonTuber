@@ -32,19 +32,14 @@
 
   let request = 0;
 
-  // Touch browsers do not reliably send dblclick, so a second tap within DOUBLE_TAP ms opens the item (the same as a double click)
-  const DOUBLE_TAP = 350;
-  let touching = false;
-  let lastTap = 0;
+  // With a finger one tap does what a double click does with the mouse: a song plays, a folder or playlist opens as a tab;
+  // only the arrow in front of a folder folds and unfolds it in the tree. A long press opens the menu (see longpress).
+  let touching = $state(false);
 
   function onClick() {
     selected = item.path;
     if (!touching) return;
-    const now = performance.now();
-    if (now - lastTap < DOUBLE_TAP) {
-      lastTap = 0;
-      onOpen(item);
-    } else lastTap = now;
+    onOpen(item);
   }
 
   /** Loads the items (the cached ones at once); the old ones stay visible until the new ones arrive, and only the latest request counts. */
@@ -156,13 +151,13 @@
 
 <div role="treeitem" aria-expanded={item.type === 'dir' ? expanded : undefined} aria-selected={selected === item.path}>
   <button class="row" class:selected={selected === item.path} class:over={dragOver} class:lib-root={isRoot} style:padding-left="{depth * 14 - 8}px"
-          title={item.file ?? item.name} draggable={!isRoot} use:longpress
+          title={item.file ?? item.name} draggable={!isRoot && !touching} use:longpress
           onpointerdown={(e) => (touching = e.pointerType !== 'mouse')} onclick={onClick} onfocus={() => (selected = item.path)} ondblclick={() => { if (!touching) onOpen(item); }}
           onkeydown={onKey} oncontextmenu={(e) => { selected = item.path; onMenu(e, item); }} ondragstart={dragStart}
           ondragover={(e) => { if (accepts(e)) { e.preventDefault(); dragOver = true; } }}
           ondragleave={() => (dragOver = false)} ondrop={drop}>
     {#if item.type === 'dir'}
-      <span class="twisty" role="presentation" onclick={(e) => { lastTap = 0; toggle(e); }} ondblclick={(e) => e.stopPropagation()}>
+      <span class="twisty" role="presentation" onclick={toggle} ondblclick={(e) => e.stopPropagation()}>
         <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={13} />
       </span>
       <span class="folder"><Icon name={isRoot && item.storage !== 'local' ? 'cloud' : 'folder'} size={16} /></span>
@@ -182,7 +177,7 @@
 
 <style>
   .row { display: flex; align-items: center; gap: 5px; width: 100%; padding: 4px 6px; border-radius: 8px; text-align: left; color: var(--muted); touch-action: manipulation; -webkit-touch-callout: none; }
-  .row:hover { background: var(--hover); color: var(--text); }
+  @media (hover: hover) { .row:hover { background: var(--hover); color: var(--text); } }
   .row.selected { background: var(--accent-soft); color: var(--accent); }
   .row.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
   .row:focus-visible { outline-offset: -2px; }
@@ -192,4 +187,10 @@
   .private { display: flex; flex: none; color: var(--faint); }
   .name { flex: 1; }
   .row.lib-root { font-weight: 600; color: var(--text); }
+  /* fingers: rows tall enough to hit, a wide arrow to fold a folder, feedback while pressed, no text selection */
+  @media (pointer: coarse) {
+    .row { min-height: 44px; gap: 8px; padding-top: 0; padding-bottom: 0; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+    .row:active { background: var(--hover); }
+    .twisty { align-self: stretch; width: 36px; margin: 0 -6px 0 -4px; align-items: center; }
+  }
 </style>

@@ -19,6 +19,9 @@ export interface MenuItem {
   tour?: string;
 }
 
+/** Tablets (and smaller screens): the same query hides the footer of the sidebar (Sidebar.svelte). */
+const TABLET = '(max-width: 1024px), (pointer: coarse) and (max-width: 1366px)';
+
 export const ui = $state({
   toasts: [] as Toast[],
   progress: null as string | null,
@@ -30,12 +33,20 @@ export const ui = $state({
   tour: false,
   /** Ids of the tour steps to show instead of the whole tour (the "What's new" tour of the steps a user has not seen yet). */
   tourNews: null as string[] | null,
+  /** Phones: both side panels are flyouts over the page. */
   narrow: window.matchMedia('(max-width: 900px)').matches,
+  /** Tablets and phones: the effects and lights panel is a flyout over the page (on tablets the library stays beside it). */
+  rightOverlay: window.matchMedia(TABLET).matches,
   mobilePanel: null as 'tree' | 'side' | null,
 });
 
 window.matchMedia('(max-width: 900px)').addEventListener('change', (e) => {
   ui.narrow = e.matches;
+  ui.mobilePanel = null;
+});
+
+window.matchMedia(TABLET).addEventListener('change', (e) => {
+  ui.rightOverlay = e.matches;
   ui.mobilePanel = null;
 });
 

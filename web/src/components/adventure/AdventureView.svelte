@@ -3,6 +3,7 @@
   import { canDropOnAdventure, canDropOnBlock, dropOnAdventure, dropOnBlock } from '../../lib/actions';
   import { t } from '../../lib/i18n.svelte';
   import { addBlock, adventures, change, switchToPlay, toggleVisibility } from '../../lib/stores/adventure.svelte';
+  import { ui } from '../../lib/stores/ui.svelte';
   import Icon from '../Icon.svelte';
   import AdventureMusic from './AdventureMusic.svelte';
   import BlockEditor from './BlockEditor.svelte';
@@ -10,6 +11,7 @@
   import PlayMode from './PlayMode.svelte';
 
   let layout = $state<'list' | 'graph'>('list');
+  const MUSIC = '#music'; // the drop-down entry of the adventure music (phones)
   const adventure = $derived(adventures.current);
   const stranded = $derived(adventure ? new Set(unreachable(adventure).map((block) => block.id)) : new Set<string>());
 
@@ -30,12 +32,21 @@
   }
 </script>
 
+{#snippet modes()}
+  <div class="seg">
+    {#if adventure?.editable}<button class:on={adventures.mode === 'edit'} title={t('Edit')} aria-label={t('Edit')} onclick={() => (adventures.mode = 'edit')}><Icon name="edit" size={13} /><span class="label">{t('Edit')}</span></button>{/if}
+    <button class:on={adventures.mode === 'play'} title={t('Play')} aria-label={t('Play')} onclick={switchToPlay}><Icon name="play" size={13} /><span class="label">{t('Play')}</span></button>
+  </div>
+{/snippet}
+
 {#if adventure}
+  <!-- on phones play mode has no header line: the mode buttons go to the end of its play bar -->
+  {@const compact = ui.narrow && adventures.mode === 'play'}
   <section class="adventure">
+    {#if !compact}
     <header>
       <h2 class="name ellipsis" title={adventure.title}>{adventure.title}</h2>
-      <span class="state muted">{adventures.saving ? t('Saving…') : ''}</span>
-      <button class="btn sm" disabled={!adventure.editable} onclick={() => void toggleVisibility()}
+      <button class="btn sm visibility" class:in-play={adventures.mode === 'play'} disabled={!adventure.editable} onclick={() => void toggleVisibility()}
               title={adventure.visibility === 'public' ? t('Everyone can see this adventure. Click to make it private.') : t('Only you can see this adventure. Click to publish it.')}>
         <Icon name={adventure.visibility === 'public' ? 'users' : 'lock'} size={14} />{adventure.visibility === 'public' ? t('Public') : t('Private')}
       </button>
@@ -45,18 +56,35 @@
           <button class:on={layout === 'graph'} onclick={() => (layout = 'graph')}><Icon name="tree" size={13} /> {t('Graph')}</button>
         </div>
       {/if}
-      <div class="seg">
-        {#if adventure.editable}<button class:on={adventures.mode === 'edit'} onclick={() => (adventures.mode = 'edit')}><Icon name="edit" size={13} /> {t('Edit')}</button>{/if}
-        <button class:on={adventures.mode === 'play'} onclick={switchToPlay}><Icon name="play" size={13} /> {t('Play')}</button>
-      </div>
+      {@render modes()}
     </header>
+    {/if}
 
     {#if adventures.mode === 'play'}
-      <div class="scroll play"><PlayMode /></div>
+      <div class="scroll play"><PlayMode tools={compact ? modes : undefined} /></div>
     {:else}
       <div class="edit" class:graph={layout === 'graph'}>
         {#if layout === 'graph'}
           <GraphView />
+        {:else if ui.narrow}
+          <!-- phones: the blocks as a drop-down with the actions of the chosen one beside it, instead of the list -->
+          {@const index = adventure.blocks.findIndex((block) => block.id === adventures.selected)}
+          <div class="block-bar">
+            <select aria-label={t('Blocks')} value={showMusic ? MUSIC : (adventures.selected ?? '')}
+                    onchange={(e) => { const value = e.currentTarget.value; if (value === MUSIC) showMusic = true; else selectBlock(value); }}>
+              {#each adventure.blocks as block, i (block.id)}
+                <option value={block.id}>{block.played ? '✓ ' : ''}{block.title || t('Untitled')}{stranded.has(block.id) && i > 0 ? ' ·' : ''}</option>
+              {/each}
+              <option value={MUSIC}>♫ {t('Adventure music')} ({adventure.music.length})</option>
+            </select>
+            {#if adventure.editable}
+              {#if !showMusic && index >= 0}
+                <button class="icon-btn" title={t('Move up')} aria-label={t('Move up')} disabled={index === 0} onclick={() => change((a) => moveBlock(a, adventure.blocks[index].id, -1))}><Icon name="chevron-up" size={15} /></button>
+                <button class="icon-btn" title={t('Move down')} aria-label={t('Move down')} disabled={index === adventure.blocks.length - 1} onclick={() => change((a) => moveBlock(a, adventure.blocks[index].id, 1))}><Icon name="chevron-down" size={15} /></button>
+              {/if}
+              <button class="icon-btn" title={t('Add block')} aria-label={t('Add block')} onclick={() => { showMusic = false; addBlock(); }}><Icon name="plus" size={16} /></button>
+            {/if}
+          </div>
         {:else}
         <nav class="blocks" aria-label={t('Blocks')}>
           {#each adventure.blocks as block, index (block.id)}
@@ -100,7 +128,6 @@
   .adventure { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 0 16px; }
   header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .name { flex: 1; min-width: 120px; margin: 0; font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; }
-  .state { font-size: var(--fs-xs); min-width: 56px; }
   .btn { display: inline-flex; align-items: center; gap: 6px; }
   .seg button { display: inline-flex; align-items: center; gap: 5px; }
   .edit { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
@@ -119,8 +146,16 @@
   .music-entry { margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--border); border-radius: 0 0 9px 9px; }
   .block.over, .music-entry.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
   .count { margin-left: auto; font-size: var(--fs-xs); font-weight: 400; }
-  @media (max-width: 760px) {
-    .edit { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-    .blocks { flex-direction: row; flex-wrap: wrap; max-height: 120px; }
+  /* phones: a compact header (one line in play mode): no title (the tab shows it), no visibility button while playing, the modes as icons */
+  @media (max-width: 900px) {
+    header { gap: 8px; justify-content: flex-end; }
+    .name { display: none; }
+    .visibility.in-play { display: none; }
+    .seg .label { display: none; }
+  }
+  .block-bar { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .block-bar select { flex: 1; min-width: 0; }
+  @media (max-width: 900px) {
+    .edit { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
   }
 </style>

@@ -38,11 +38,10 @@ services:
     image: dungeontuber:local
     ports:
       - "8765:8765"
+    env_file: ".env"
     environment:
-      DT_PASSWORD: dungeontuber
       DT_LIBRARY: /music
       DT_FAKE_LIGHTS: "1"                 # simulated WiZ bulbs (real discovery needs host networking on Linux)
-      DT_AGENT_TOKEN: dev-agent-token     # shared with the voxalyzer and youtube agents below (development only)
       DT_S3_BUCKET: music
       DT_S3_NAME: S3 (RustFS)
       DT_S3_ENDPOINT: http://rustfs:9000
@@ -51,6 +50,7 @@ services:
       DT_S3_ACCESS_KEY: rustfsadmin
       DT_S3_SECRET_KEY: rustfsadmin
       DT_S3_DIRECT: ${DT_S3_DIRECT:-0}
+
     volumes:
       - dt-data:/data                     # settings.json + library.db
       - ${DT_MUSIC_DIR:-${USERPROFILE}/Music/Dsa}:/music

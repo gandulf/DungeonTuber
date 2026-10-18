@@ -20,14 +20,14 @@
         "-m",
         "server",
         "--port",
-        "8765",
+        "8766",
         "--fake-lights",
         "--data-dir",
-        "C:/Users/gandu/AppData/Local/Temp/claude/C--Users-gandu-PycharmProjects-DungeonTuber/37a6be15-2ad3-4fbf-8da8-81be02d34965/scratchpad/dtdata",
+        "C:/Users/gandu/AppData/Local/Temp/claude/C--Users-gandu-PycharmProjects-DungeonTuber/97eab398-0364-447a-95e3-78c715274116/scratchpad/dtdata",
         "--library",
         "test-library"
       ],
-      "port": 8765
+      "port": 8766
     },
     {
       "name": "dungeontuber-web-dev",

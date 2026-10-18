@@ -359,8 +359,8 @@
             <span class="ellipsis">{effect.name || effect.path}</span>
           </button>
           {#if gone}<span class="warn" title={missingTitle}>{t('not found')}</span>{/if}
-          <label class="check small"><input type="checkbox" checked={effect.loop} disabled={!editable} onchange={(e) => change(() => (effect.loop = e.currentTarget.checked))} />{t('Loop')}</label>
-          <label class="check small"><input type="checkbox" checked={effect.autostart} disabled={!editable} onchange={(e) => change(() => (effect.autostart = e.currentTarget.checked))} />{t('Auto')}</label>
+          <label class="check small" title={t('Loop')}><input type="checkbox" checked={effect.loop} disabled={!editable} onchange={(e) => change(() => (effect.loop = e.currentTarget.checked))} /><span class="text">{t('Loop')}</span><span class="ic"><Icon name="repeat" size={14} /></span></label>
+          <label class="check small" title={t('Auto')}><input type="checkbox" checked={effect.autostart} disabled={!editable} onchange={(e) => change(() => (effect.autostart = e.currentTarget.checked))} /><span class="text">{t('Auto')}</span><span class="ic"><Icon name="play" size={14} /></span></label>
           {#if editable}<button class="icon-btn mini" title={t('Remove')} onclick={() => change(() => block.effects.splice(index, 1))}><Icon name="close" size={13} /></button>{/if}
         </div>
       {:else}
@@ -387,7 +387,7 @@
             <option value="">{t('Link to…')}</option>
             {#each others as other (other.id)}<option value={other.id}>{other.title || t('Untitled')}</option>{/each}
           </select>
-          <button class="btn sm" disabled={!linkTarget} onclick={newLink}>{t('Add link')}</button>
+          <button class="btn sm add-link" disabled={!linkTarget} title={t('Add link')} aria-label={t('Add link')} onclick={newLink}><span class="ic"><Icon name="plus" size={14} /></span><span class="text">{t('Add link')}</span></button>
         </div>
       {/if}
       {#if incoming.length}
@@ -424,6 +424,16 @@
   .flags { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .check { display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-sm); color: var(--muted); }
   .check.small { font-size: var(--fs-xs); }
+  /* the options of an effect: words, on phones icons (the words are their tooltips) */
+  .check .ic { display: none; }
+  .add-link .ic { display: none; }
+  @media (max-width: 900px) {
+    .check.small { gap: 3px; }
+    .check.small .text { display: none; }
+    .check.small .ic { display: flex; }
+    .add-link .text { display: none; }
+    .add-link .ic { display: flex; }
+  }
   section { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
   /* three in a row when they fit, else two with the third across the whole width, else one below the other */
   .panels { display: flex; flex-wrap: wrap; gap: 16px; }

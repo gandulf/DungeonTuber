@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, type Snippet } from 'svelte';
   import { blockById, defaultNext, linksFrom, refKey, startBlock } from '../../lib/adventures';
   import { clearHighlight, highlightTerms } from '../../lib/highlight';
   import { t } from '../../lib/i18n.svelte';
@@ -11,6 +11,9 @@
   import Icon from '../Icon.svelte';
   import ImagePopup from '../dialogs/ImagePopup.svelte';
   import AdventureMap from './AdventureMap.svelte';
+
+  /** Buttons of the adventure view put at the end of the play bar (on phones it has no header line of its own). */
+  let { tools }: { tools?: Snippet } = $props();
 
   const adventure = $derived(adventures.current!);
   const block = $derived(blockById(adventure, adventures.playing));
@@ -122,6 +125,7 @@
       {:else if start}
         <button class="btn primary" onclick={() => void enterBlock(start.id)}><Icon name="play" size={15} />{start.title || t('Untitled')}</button>
       {/if}
+      {@render tools?.()}
     </div>
     <AdventureMap {adventure} current={block?.id ?? start?.id ?? null} playing={!!block} onopen={openFromMap} />
   </div>
@@ -132,13 +136,15 @@
       <select aria-label={t('Jump to a block')} value={block.id} onchange={(e) => void enterBlock(e.currentTarget.value)}>
         {#each adventure.blocks as item (item.id)}<option value={item.id}>{item.played ? '✓ ' : ''}{item.title || t('Untitled')}</option>{/each}
       </select>
-      <button class="btn sm" title={t('All blocks and their links')} onclick={() => (overview = true)}><Icon name="compass" size={13} />{t('Overview')}</button>
+      <button class="btn sm" title={t('All blocks and their links')} aria-label={t('Overview')} onclick={() => (overview = true)}><Icon name="compass" size={13} /><span class="label">{t('Overview')}</span></button>
       <span class="grow"></span>
       {#if adventure.editable}
-        <button class="btn sm" class:on={block.played} onclick={() => setPlayed(block.id, !block.played)}>
-          <Icon name="check" size={13} />{block.played ? t('Played') : t('Mark as played')}
+        <!-- the button shows whether the block is played (on phones as an icon only) -->
+        <button class="btn sm" class:on={block.played} title={t('Mark as played')} aria-label={t('Played')} aria-pressed={block.played} onclick={() => setPlayed(block.id, !block.played)}>
+          <Icon name="check" size={13} /><span class="label">{t('Played')}</span>
         </button>
       {/if}
+      {@render tools?.()}
     </div>
 
     <div class="headline">
@@ -207,6 +213,13 @@
   .bar { display: flex; align-items: center; gap: 8px; }
   .bar select { min-width: 0; max-width: 60%; }
   .grow { flex: 1; }
+  /* phones: the play bar is one line: the block list takes the room, the buttons are icons */
+  @media (max-width: 900px) {
+    .bar { gap: 6px; }
+    .bar select { flex: 1; max-width: none; }
+    .bar .grow { display: none; }
+    .bar .label { display: none; }
+  }
   .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   .headline { display: flex; align-items: center; gap: 16px; min-width: 0; }
   .cover { flex: none; display: block; padding: 0; width: clamp(96px, 16vw, 168px); aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); cursor: zoom-in; }
