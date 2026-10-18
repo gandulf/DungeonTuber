@@ -208,8 +208,8 @@
   .cover { width: 160px; height: 160px; border-radius: 10px; border: 1px dashed var(--border-strong); display: grid; place-items: center; overflow: hidden; cursor: pointer; background: var(--surface-2); }
   .cover img { width: 100%; height: 100%; object-fit: cover; }
   .hint { font-size: var(--fs-xs); }
-  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
-  .triple { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
+  .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+  .triple { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
   .fields label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
   .fields input, .fields textarea { color: var(--text); }
   .wide { grid-column: 1 / -1; }
@@ -234,5 +234,5 @@
   .normalized { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: var(--fs-xs); font-weight: 600;
     background: var(--green-soft); color: var(--green); text-decoration: none; }
   .normalized.pending { background: transparent; border: 1px dashed var(--green); }
-  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } .fields { grid-template-columns: minmax(0, 1fr); } }
 </style>

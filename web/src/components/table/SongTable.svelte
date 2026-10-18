@@ -123,6 +123,25 @@
     }
   }
 
+  // touch has no Ctrl or Shift: "Select several" in the menu of a song starts a mode where a tap adds a song to the selection or
+  // takes it out again; a bar above the table holds what the keys would do (all, the menu of the selection, done)
+  let selecting = $state(false);
+  $effect(() => {
+    if (selecting && !library.selection.length) selecting = false; // a new tab, a reload or the last song taken out
+  });
+
+  function toggleSelected(id: string) {
+    library.selection = selected.has(id) ? library.selection.filter((s) => s !== id) : [...library.selection, id];
+  }
+
+  function rowMenu(event: MouseEvent, index: number, track: Track) {
+    if (!selected.has(track.id)) select(index, event);
+    const several: MenuItem[] = ui.coarse && !selecting
+      ? [{ label: t('Select several'), icon: 'check', action: () => { selecting = true; library.selection = [track.id]; } }, { separator: true }]
+      : [];
+    openMenu(event, [...several, ...trackMenu(selectedTracks())]);
+  }
+
   function selectedTracks(): Track[] {
     return rows.filter((row) => selected.has(row.track.id)).map((row) => row.track);
   }
@@ -532,8 +551,17 @@
 <div class="table card" style:--row-h="{rowHeight}px" class:filedrop={fileDrop} role="grid" tabindex="0" bind:this={table} onkeydown={onKeydown}
      ondragover={(e) => { const types = e.dataTransfer?.types ?? []; if (!tab.global && !tab.duplicates && (types.includes('Files') || (tab.type === 'playlist' && types.includes('application/x-dungeontuber-path')))) { e.preventDefault(); fileDrop = true; } }}
      ondragleave={(e) => { if (e.currentTarget === e.target) fileDrop = false; }} ondrop={onTableDrop}>
+  {#if selecting}
+    <div class="select-bar">
+      <span class="count">{t('{0} selected', library.selection.length)}</span>
+      <span class="grow"></span>
+      <button class="btn sm ghost" onclick={() => (library.selection = rows.map((row) => row.track.id))}>{t('Select all')}</button>
+      <button class="icon-btn" title={t('Actions…')} aria-label={t('Actions…')} onclick={(e) => { e.stopPropagation(); openMenu(e, trackMenu(selectedTracks())); }}><Icon name="more" size={17} /></button>
+      <button class="btn sm primary" onclick={() => { selecting = false; library.selection = []; }}>{t('Done')}</button>
+    </div>
+  {/if}
   <div class="viewport" bind:this={viewport} onscroll={() => (scrollTop = viewport!.scrollTop)}>
-  <div class="header" style:grid-template-columns={template} style:min-width="{minWidth}px" oncontextmenu={headerMenu} role="row" tabindex="-1">
+  <div class="header" style:grid-template-columns={template} style:min-width="{minWidth}px" use:longpress oncontextmenu={headerMenu} role="row" tabindex="-1">
     {#each columns as column (column.id)}
       <button class="th" class:right={column.align === 'right'} class:center={column.align === 'center'} title={column.title ?? column.label}
               onclick={() => column.sort && setSort(column.sort)}>
@@ -560,9 +588,10 @@
         {@const index = first + i}
         <div class="tr" class:selected={selected.has(track.id)} class:playing={player.track?.id === track.id} class:drop-above={dropIndex === index}
              style:transform="translateY({index * rowHeight}px)" style:height="{rowHeight}px" style:grid-template-columns={template}
-             role="row" tabindex="-1" aria-selected={selected.has(track.id)} draggable="true" use:longpress
-             onpointerdown={(e) => (touching = e.pointerType !== 'mouse')} onclick={(e) => { select(index, e); table?.focus({ preventScroll: true }); onRowTap(e, track); }} onkeydown={() => {}}
-             oncontextmenu={(e) => { if (!selected.has(track.id)) select(index, e); openMenu(e, trackMenu(selectedTracks())); }}
+             role="row" tabindex="-1" aria-selected={selected.has(track.id)} draggable={!ui.coarse} use:longpress
+             onpointerdown={(e) => (touching = e.pointerType !== 'mouse')}
+             onclick={(e) => { if (selecting && touching) return toggleSelected(track.id); select(index, e); table?.focus({ preventScroll: true }); onRowTap(e, track); }} onkeydown={() => {}}
+             oncontextmenu={(e) => rowMenu(e, index, track)}
              ondragstart={(e) => onDragStart(e, track)} ondragover={(e) => onRowDragOver(e, index)} ondragleave={() => (dropIndex = null)}
              ondrop={(e) => onRowDrop(e, track, index)}>
           {#each columns as column (column.id)}
@@ -659,20 +688,23 @@
   .table { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; overflow: hidden; margin-right: 2px; }
   .table:focus { outline: none; }
   .table.filedrop { box-shadow: inset 0 0 0 2px var(--accent); }
+  .select-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 14px; border-bottom: 1px solid var(--border); background: var(--accent-soft); }
+  .select-bar .count { font-weight: 600; color: var(--accent); white-space: nowrap; }
+  .select-bar .grow { flex: 1; }
   .header { display: grid; background: var(--surface); position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--border); }
   .th { display: flex; align-items: center; gap: 4px; padding: 12px 10px 10px; font-size: var(--fs-xs); font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); text-align: left; min-width: 0; }
   .th { position: relative; }
-  .th:hover { color: var(--text); }
+  @media (hover: hover) { .th:hover { color: var(--text); } }
   .resize { position: absolute; top: 0; bottom: 0; right: -5px; width: 10px; cursor: col-resize; z-index: 3; touch-action: none; }
   .resize::after { content: ''; position: absolute; top: 25%; bottom: 25%; left: 4px; width: 2px; border-radius: 1px; background: var(--border-strong); opacity: 0; transition: opacity 0.12s; }
-  .th:hover .resize::after, .resize:hover::after { opacity: 1; }
+  @media (hover: hover) { .th:hover .resize::after, .resize:hover::after { opacity: 1; } }
   .th.right { justify-content: flex-end; }
   .th.center { justify-content: center; }
   .sort { font-size: 8px; color: var(--accent); }
   .viewport { flex: 1; overflow: auto; position: relative; padding: 0 6px; }
   .spacer { position: relative; min-width: 100%; }
   .tr { position: absolute; left: 0; right: 0; top: 0; display: grid; align-items: center; cursor: default; border-radius: 10px; transition: background 0.12s; }
-  .tr:hover { background: var(--hover); }
+  @media (hover: hover) { .tr:hover { background: var(--hover); } }
   .tr.selected { background: var(--accent-soft); }
   .tr.playing { background: linear-gradient(90deg, rgba(var(--ambient), 0.22), transparent 75%); }
   .tr.playing.selected { background: linear-gradient(90deg, rgba(var(--ambient), 0.26), var(--accent-soft) 75%); }
@@ -694,8 +726,11 @@
   .num { font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
   .now { color: var(--accent); display: flex; }
   .fav { color: var(--faint); display: flex; opacity: 0.5; }
-  .tr:hover .fav { opacity: 1; }
+  @media (hover: hover) { .tr:hover .fav { opacity: 1; } }
   .fav.on { color: var(--rose); opacity: 1; filter: drop-shadow(0 0 6px var(--rose-soft)); }
+  /* fingers: the heart is visible without hovering; columns are not resized (the thin handle would turn a swipe into a resize) */
+  @media (hover: none) { .fav { opacity: 0.8; } }
+  @media (pointer: coarse) { .resize { display: none; } }
   .name-cell { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
   .thumb { position: relative; width: calc(var(--row-h) - 14px); height: calc(var(--row-h) - 14px); border-radius: 8px; overflow: hidden; flex: none; background: var(--surface-3); display: grid; place-items: center; color: var(--faint); }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -709,7 +744,7 @@
   .more-tags { font-size: var(--fs-xs); color: var(--faint); flex: none; white-space: nowrap; }
   .bulb { display: flex; filter: drop-shadow(0 0 4px currentColor); }
   .pick-add { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: white; background: var(--accent); box-shadow: var(--shadow); }
-  .pick-add:hover:not(:disabled) { transform: scale(1.08); }
+  @media (hover: hover) { .pick-add:hover:not(:disabled) { transform: scale(1.08); } }
   .pick-add.has { background: var(--surface); color: var(--green); box-shadow: none; cursor: default; }
   .bar-cell { display: flex; align-items: center; gap: 8px; width: 100%; }
   .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }

@@ -135,6 +135,9 @@
   .scroll { min-height: 0; overflow-y: auto; padding-bottom: 24px; }
   /* play mode fills the height: the overview of the welcome screen uses all of it */
   .scroll.play { flex: 1; display: flex; flex-direction: column; }
+  @media (max-width: 900px), (max-height: 600px) { .scroll.play { padding-bottom: 8px; } }
+  /* the overview (map of the blocks) never scrolls as a whole: the map takes the room that is left and scrolls inside */
+  .scroll.play:has(:global(.start)) { overflow: hidden; padding-bottom: 8px; }
   .blocks { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
   .block { display: flex; align-items: center; border-radius: 9px; }
   .block:hover { background: var(--hover); }

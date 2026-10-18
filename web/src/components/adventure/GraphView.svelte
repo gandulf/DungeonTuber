@@ -282,10 +282,13 @@
   .grow { flex: 1; }
   .btn { display: inline-flex; align-items: center; gap: 6px; }
   .mini { width: 26px; height: 26px; font-size: 1.1rem; line-height: 1; }
-  .frame { position: relative; height: clamp(300px, 52vh, 600px); overflow: hidden; resize: vertical; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); cursor: grab; touch-action: none;
+  .frame { position: relative; height: clamp(300px, 52dvh, 600px); overflow: hidden; resize: vertical; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); cursor: grab; touch-action: none;
            background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 22px 22px; }
   .frame:active { cursor: grabbing; }
   .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  /* phones: room for the block editor below; touch cannot use the resize grip */
+  @media (max-width: 900px) { .frame { height: clamp(220px, 38dvh, 480px); } }
+  @media (pointer: coarse) { .frame { resize: none; } }
   .edges { position: absolute; left: 0; top: 0; color: var(--muted); pointer-events: none; }
   .edge .line { fill: none; stroke: currentColor; stroke-width: 1.8; }
   .edge .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }

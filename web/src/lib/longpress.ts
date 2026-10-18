@@ -5,6 +5,9 @@
 const HOLD = 450; // ms
 const SLOP = 10; // px a finger may wander before it counts as a scroll or a drag
 
+// a press is handled by the innermost element with the action: an entry of a list with a menu of its own beats the list's menu
+const claimed = new WeakSet<PointerEvent>();
+
 export function longpress(node: HTMLElement) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let start = { x: 0, y: 0 };
@@ -23,7 +26,8 @@ export function longpress(node: HTMLElement) {
   function down(event: PointerEvent) {
     cancel();
     swallowClick = false;
-    if (event.pointerType === 'mouse' || !event.isPrimary) return;
+    if (event.pointerType === 'mouse' || !event.isPrimary || claimed.has(event)) return;
+    claimed.add(event);
     start = { x: event.clientX, y: event.clientY };
     timer = setTimeout(() => raise(start.x, start.y), HOLD);
   }

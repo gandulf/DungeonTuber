@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { longpress } from '../../lib/longpress';
   import { onMount } from 'svelte';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
@@ -6,7 +7,7 @@
   import { data, resetPresets as restoreDefaultPresets, savePresets } from '../../lib/stores/data.svelte';
   import { activeTab, filter, onFilterChanged } from '../../lib/stores/library.svelte';
   import { sameTags } from '../../lib/tags';
-  import { askConfirm, askText, openDialog, openMenu } from '../../lib/stores/ui.svelte';
+  import { askConfirm, askText, openDialog, openMenu, ui } from '../../lib/stores/ui.svelte';
   import type { MusicCategory, Preset } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import BpmDial from './BpmDial.svelte';
@@ -193,8 +194,8 @@
           {#each data.presets as preset (preset.name)}
             <button class="preset" class:on={selectedPreset === preset.name} class:dragging={draggedPreset === preset.name}
                     class:before={dropAt?.name === preset.name && !dropAt.after} class:after={dropAt?.name === preset.name && dropAt.after}
-                    aria-pressed={selectedPreset === preset.name} onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')}
-                    draggable="true" ondragstart={(e) => { draggedPreset = preset.name; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }}
+                    aria-pressed={selectedPreset === preset.name} onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')} use:longpress
+                    draggable={!ui.coarse} ondragstart={(e) => { draggedPreset = preset.name; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }}
                     ondragover={(e) => dragOverPreset(e, preset.name)} ondragleave={() => (dropAt = null)} ondrop={(e) => { e.preventDefault(); void dropPreset(); }}
                     ondragend={() => (draggedPreset = dropAt = null)}>
               <Icon name="bookmark" size={13} /> {preset.name}
@@ -263,7 +264,7 @@
   .head { display: flex; align-items: center; gap: 10px; min-height: 36px; flex-wrap: wrap; }
   .presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .preset { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 9px; font-size: var(--fs-sm); color: var(--gold); background: var(--gold-soft); border: 1px solid transparent; }
-  .preset:hover { border-color: var(--gold); }
+  @media (hover: hover) { .preset:hover { border-color: var(--gold); } }
   .preset.dragging { opacity: 0.4; }
   .preset.before { box-shadow: -4px 0 0 -1px var(--accent); }
   .preset.after { box-shadow: 4px 0 0 -1px var(--accent); }
@@ -276,7 +277,7 @@
   .map-toggle.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
   .head-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
   .help { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--fs-xs); font-weight: 700; line-height: 1; }
-  .help:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  @media (hover: hover) { .help:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); } }
   .seg.small button { padding: 3px 10px; font-size: var(--fs-xs); }
   .slider-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); column-gap: 26px; row-gap: 2px; overflow-x: hidden; overflow-y: auto; padding: 18px 4px 0 0; margin-top: -18px; align-content: start; } /* the top padding gives the value tip above the first row room inside the scroll area */
   .slider-list.wide { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }

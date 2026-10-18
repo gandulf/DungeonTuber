@@ -1004,5 +1004,21 @@
   "Prepare and play adventures with music, effects and AI": "Prepare and play adventures with music, effects and AI",
   "Play video": "Play video",
   "Press and hold a folder to add it to your favorites.": "Press and hold a folder to add it to your favorites.",
-  "Press and hold a playlist to add it to the favorites.": "Press and hold a playlist to add it to the favorites."
+  "Press and hold a playlist to add it to the favorites.": "Press and hold a playlist to add it to the favorites.",
+  "Enlarge": "Enlarge",
+  "Tap a block link to open it or a song link to play it.": "Tap a block link to open it or a song link to play it.",
+  "Tap a folder or playlist in the file tree to open it as a tab, then use the filters to find the perfect music for your scene.": "Tap a folder or playlist in the file tree to open it as a tab, then use the filters to find the perfect music for your scene.",
+  "Press and hold a song, folder or tab for more actions.": "Press and hold a song, folder or tab for more actions.",
+  "Tap a song to start": "Tap a song to start",
+  "The songs of this adventure; its blocks choose their music from them. Add songs with \"Add to adventure…\" in the menu of a song (press and hold it).": "The songs of this adventure; its blocks choose their music from them. Add songs with \"Add to adventure…\" in the menu of a song (press and hold it).",
+  "This adventure has no music yet. Find songs with \"Search…\" next to \"Add\".": "This adventure has no music yet. Find songs with \"Search…\" next to \"Add\".",
+  "Search effects…": "Search effects…",
+  "Move to…": "Move to…",
+  "Move {0} items to…": "Move {0} items to…",
+  "Move \"{0}\" to…": "Move \"{0}\" to…",
+  "Move left": "Move left",
+  "Move right": "Move right",
+  "Select several": "Select several",
+  "Actions…": "Actions…",
+  "There is no library folder to create the playlist in.": "There is no library folder to create the playlist in."
 }

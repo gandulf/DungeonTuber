@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { longpress } from '../../lib/longpress';
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { updateTrack } from '../../lib/stores/library.svelte';
@@ -94,7 +95,7 @@
   <span class="time">{format(position)}</span>
   <div class="bar" bind:this={bar} role="slider" tabindex="0" aria-label={t('Position')} aria-valuemin={0} aria-valuemax={duration}
        aria-valuenow={position} onpointerdown={down} onpointermove={move} onpointerup={up} onpointerleave={() => (hover = null)}
-       oncontextmenu={menu} onkeydown={(e) => { if (e.key === 'ArrowRight') seek(position + 5); if (e.key === 'ArrowLeft') seek(position - 5); }}>
+       use:longpress oncontextmenu={menu} onkeydown={(e) => { if (e.key === 'ArrowRight') seek(position + 5); if (e.key === 'ArrowLeft') seek(position - 5); }}>
     <div class="rail"><div class="progress" style:width="{duration ? (position / duration) * 100 : 0}%"></div></div>
     {#each chapters as chapter (chapter.time)}
       <div class="chapter" style:left="{duration ? (chapter.time / 1000 / duration) * 100 : 0}%" title="{format(chapter.time / 1000)} {chapter.title}">
@@ -116,7 +117,8 @@
   .rail { position: absolute; left: 0; right: 0; top: 50%; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--track); overflow: hidden; }
   .progress { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow: 0 0 10px var(--accent-glow); }
   .knob { position: absolute; top: 50%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); opacity: 0; transition: opacity 0.15s; }
-  .bar:hover .knob { opacity: 1; }
+  @media (hover: hover) { .bar:hover .knob { opacity: 1; } }
+  @media (hover: none) { .knob { opacity: 1; } } /* fingers: the knob shows where to grab */
   .chapter { position: absolute; top: 0; bottom: 0; width: 0; }
   .tick { position: absolute; top: 7px; height: 12px; width: 2px; margin-left: -1px; background: var(--text); opacity: 0.5; }
   .dot { position: absolute; top: 1px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; }

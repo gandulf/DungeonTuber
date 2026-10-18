@@ -2,7 +2,7 @@
   import { longpress } from '../lib/longpress';
   import { api } from '../lib/api';
   import { cached } from '../lib/cache';
-  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, editPlaylist, newPlaylist, openImportDialog, openItem as openBrowseItem, openUploadDialog, trackMenu, uploadFiles } from '../lib/actions';
+  import { analyze, canDelete, canDropOnPlaylist, deleteItems, dropOnPlaylist, editPlaylist, moveItems, newPlaylist, openImportDialog, openItem as openBrowseItem, openUploadDialog, trackMenu, uploadFiles } from '../lib/actions';
   import { itemsFromDrop } from '../lib/upload';
   import { t } from '../lib/i18n.svelte';
   import { openSettings, setTheme } from '../lib/menus';
@@ -145,6 +145,7 @@
     if (item.storage === undefined && canDelete(item.uploaded_by)) {
       if (item.type === 'm3u') items.push({ label: t('Edit Playlist…'), icon: 'edit', action: () => editPlaylist(item) });
       if (item.type === 'dir') items.push({ label: t('Rename'), icon: 'edit', action: () => renameFolder(item) });
+      items.push({ label: t('Move to…'), icon: 'folder', action: () => moveItems([{ path: item.path, name: item.name }]) });
       items.push({ label: t('Delete'), icon: 'trash', action: () => deleteItems([{ path: item.path, name: item.name, dir: item.type === 'dir' }]) });
     }
     return items;
@@ -215,7 +216,7 @@
     <div class="nav-section">
       <div class="row">
         <SectionToggle name="playlists" label={t('Playlists')} />
-        <button class="icon-btn mini" title={t('New Playlist…')} onclick={() => newPlaylist()}><Icon name="plus" size={14} /></button>
+        <button class="icon-btn mini" title={t('New Playlist…')} onclick={() => void newPlaylist([], undefined, true)}><Icon name="plus" size={14} /></button>
       </div>
       {#if !prefs.collapsedSections.includes('playlists')}
       {#each favoritePlaylists as playlist (playlist.path)}
@@ -249,7 +250,7 @@
       {#if !prefs.collapsedSections.includes('library')}
       <div class="tree" class:drop={dropTarget} role="tree" tabindex="-1"
            ondragover={(e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); dropTarget = true; } }}
-           ondragleave={() => (dropTarget = false)} ondrop={onDrop} oncontextmenu={treeMenu}>
+           ondragleave={() => (dropTarget = false)} ondrop={onDrop} use:longpress oncontextmenu={treeMenu}>
         {#each roots as item (item.path)}
           <TreeNode {item} depth={1} version={refreshKey} bind:selected onOpen={openItem} onMenu={(e, i) => (i.type === 'mp3' ? void songMenu(e, i) : openMenu(e, itemMenu(i)))} />
         {/each}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dirname } from '../../lib/actions';
   import { api } from '../../lib/api';
-  import { moveFavorites } from '../../lib/stores/data.svelte';
+  import { addFavorite, moveFavorites } from '../../lib/stores/data.svelte';
   import { t } from '../../lib/i18n.svelte';
   import { closeTab, library, openTab, reloadDirTabs, reloadPlaylistTabs } from '../../lib/stores/library.svelte';
   import { closeDialog, errorToast } from '../../lib/stores/ui.svelte';
@@ -9,8 +9,9 @@
   import FolderSelect from './FolderSelect.svelte';
   import Modal from './Modal.svelte';
 
-  /** Without `playlist` a new playlist is created in `directory`; with it the name and visibility of that playlist are edited. */
-  let { directory = '', ids = [], playlist }: { directory?: string; ids?: string[]; playlist?: { path: string; name: string; private: boolean } } = $props();
+  /** Without `playlist` a new playlist is created in `directory`; with it the name and visibility of that playlist are edited.
+   *  `favorite`: the new playlist is added to the favorites (the playlists listed in the sidebar are the favorite ones). */
+  let { directory = '', ids = [], playlist, favorite = false }: { directory?: string; ids?: string[]; playlist?: { path: string; name: string; private: boolean }; favorite?: boolean } = $props();
 
   // svelte-ignore state_referenced_locally
   let name = $state(playlist?.name ?? '');
@@ -27,11 +28,13 @@
     const songs = ids;
     const folder = target;
     const hidden = isPrivate;
+    const pin = favorite;
     busy = true;
     closeDialog();
     try {
       const created = await api.createPlaylist(`${folder}/${playlistName}`, songs, hidden);
       reloadDirTabs(folder);
+      if (pin) await addFavorite(created.path);
       await openTab('playlist', created.path);
     } catch (e) {
       errorToast(e);

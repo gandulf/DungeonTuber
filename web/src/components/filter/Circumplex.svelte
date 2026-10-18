@@ -2,6 +2,7 @@
   import { t } from '../../lib/i18n.svelte';
   import { activeTab } from '../../lib/stores/library.svelte';
   import { player } from '../../lib/stores/player.svelte';
+  import Icon from '../Icon.svelte';
 
   let { valence, arousal, onchange }: { valence: number | null; arousal: number | null; onchange: (valence: number | null, arousal: number | null) => void } = $props();
 
@@ -68,10 +69,15 @@ ${t('Gentle, calm and friendly: travelling, resting and towns.')}`}>{t('Peaceful
       <span class="handle" style:left="{point.v * 10}%" style:bottom="{point.a * 10}%"></span>
     {/if}
   </div>
+  <!-- clears the point (also a double click or Delete; touch has neither) -->
+  {#if point}<button class="clear" title={t('Clear')} aria-label={t('Clear')} onclick={() => onchange(null, null)}><Icon name="close" size={13} /></button>{/if}
 </div>
 
 <style>
   .wrap { position: relative; flex: 1; min-height: 150px; display: flex; }
+  .clear { position: absolute; top: 6px; right: 6px; z-index: 2; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: var(--muted); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+  @media (hover: hover) { .clear:hover { color: var(--text); border-color: var(--border-strong); } }
+  @media (pointer: coarse) { .clear { width: 36px; height: 36px; } }
   .pad {
     flex: 1; position: relative; border-radius: 14px; cursor: crosshair; touch-action: none; overflow: hidden;
     background:

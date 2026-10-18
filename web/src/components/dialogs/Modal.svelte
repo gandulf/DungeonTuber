@@ -38,10 +38,10 @@
 
 <style>
   dialog.resizable { resize: both; overflow: hidden; min-width: min(360px, calc(100vw - 24px)); min-height: 180px; }
-  dialog { padding: 0; border: 1px solid var(--border-strong); border-radius: 18px; background: var(--surface); color: var(--text); box-shadow: var(--shadow), 0 0 60px rgba(var(--ambient), 0.12); max-width: calc(100vw - 24px); max-height: calc(100vh - 40px); }
+  dialog { padding: 0; border: 1px solid var(--border-strong); border-radius: 18px; background: var(--surface); color: var(--text); box-shadow: var(--shadow), 0 0 60px rgba(var(--ambient), 0.12); max-width: calc(100vw - 24px); max-height: calc(100dvh - 40px); }
   dialog::backdrop { background: rgba(8, 6, 18, 0.55); backdrop-filter: blur(4px); }
   dialog[open] { display: flex; }
-  .box { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; max-height: calc(100vh - 42px); }
+  .box { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; max-height: calc(100dvh - 42px); }
   header { display: flex; align-items: center; padding: 14px 16px 6px 20px; }
   h2 { margin: 0; font-size: 18px; flex: 1; font-family: var(--font-display); letter-spacing: -0.01em; }
   .content { padding: 8px 20px 16px; overflow: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; }

@@ -26,5 +26,6 @@
   .off .name { color: var(--muted); }
   .off input { opacity: 0.55; }
   .clear { color: var(--faint); font-size: 16px; line-height: 1; border-radius: 4px; }
-  .clear:hover { color: var(--text); background: var(--hover); }
+  @media (pointer: coarse) { .clear { padding: 8px; margin: -8px; } } /* a bigger target around the small × */
+  @media (hover: hover) { .clear:hover { color: var(--text); background: var(--hover); } }
 </style>

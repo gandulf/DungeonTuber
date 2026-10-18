@@ -11,7 +11,7 @@
   import { activeTab, findsInTab, library } from '../lib/stores/library.svelte';
   import { songQueries } from '../lib/search';
   import { openImportDialog } from '../lib/actions';
-  import { openDialog } from '../lib/stores/ui.svelte';
+  import { openDialog, ui } from '../lib/stores/ui.svelte';
   import type { AssistantSong, SmartFilter, Track } from '../lib/types';
   import CreateOptions from './CreateOptions.svelte';
   import SettingsDialog from './dialogs/SettingsDialog.svelte';
@@ -85,9 +85,10 @@
     void tick().then(() => log?.scrollTo({ top: log.scrollHeight, behavior: 'smooth' }));
   });
 
+  // the text box gets the focus (not on touch screens: the on-screen keyboard would cover half the chat on every mode switch)
   $effect(() => {
     void assistant.mode;
-    if (configured) input?.focus();
+    if (configured && !ui.coarse) input?.focus();
   });
 
   // the kind, the length, the vocals and the target folder: CreateOptions.svelte (shared with the AI of a block)
@@ -351,7 +352,7 @@
 
 <style>
   .chat {
-    position: fixed; top: 58px; right: 16px; z-index: 40; width: min(440px, calc(100vw - 32px)); height: min(640px, calc(100vh - 150px));
+    position: fixed; top: 58px; right: 16px; z-index: 40; width: min(440px, calc(100vw - 32px)); height: min(640px, calc(100dvh - 150px));
     display: flex; flex-direction: column; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg); box-shadow: var(--shadow), 0 0 60px rgba(var(--ambient), 0.12); overflow: hidden;
   }
@@ -431,5 +432,5 @@
   .compose { display: flex; gap: 8px; align-items: flex-end; padding: 10px; border-top: 1px solid var(--border); }
   .compose textarea { flex: 1; resize: none; min-height: 40px; max-height: 120px; }
   .send { height: 40px; width: 44px; justify-content: center; padding: 0; }
-  @media (max-width: 900px) { .chat { top: 52px; right: 8px; width: calc(100vw - 16px); height: calc(100vh - 140px); } }
+  @media (max-width: 900px) { .chat { top: 52px; right: 8px; width: calc(100vw - 16px); height: calc(100dvh - 140px); } }
 </style>

@@ -8,7 +8,7 @@
   import { adventures, change, deleteBlock, effectKey, coverPending, flushSave, missingEntries, playSongLink, refTracks, searchSongsForBlock, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
   import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import { data } from '../../lib/stores/data.svelte';
-  import { askConfirm, errorToast, openDialog, toast } from '../../lib/stores/ui.svelte';
+  import { askConfirm, errorToast, openDialog, toast, ui } from '../../lib/stores/ui.svelte';
   import type { Effect, MusicRef } from '../../lib/types';
   import type { CreateKind } from '../../lib/stores/assistant.svelte';
   import Icon from '../Icon.svelte';
@@ -195,6 +195,11 @@
   // on touch screens a tap on the cover shows its buttons (a mouse shows them on hover); another block closes them again
   let coverOpen = $state(false);
   let coverTouch = false;
+
+  /** The cover large (a double click on it, or its button: touch has no double click). */
+  function enlargeCover() {
+    if (block?.cover) openDialog(ImagePopup, { src: imageUrl(adventures.current!.id, block.cover), title: block.title || t('Cover image') });
+  }
   $effect(() => {
     void block?.id;
     coverOpen = false;
@@ -232,7 +237,7 @@
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
         <div class="cover" class:empty={!block.cover} class:open={coverOpen}
              onpointerdown={(e) => (coverTouch = e.pointerType !== 'mouse')}
-             onclick={() => { if (coverTouch) coverOpen = !coverOpen; }}>
+             onclick={() => { if (!coverTouch) return; if (editable) coverOpen = !coverOpen; else if (block.cover) enlargeCover(); }}>
           {#if coverPending(adventure.id, block.id)}
             <span class="pending" title={t('The cover image is being painted…')}><Icon name="sparkles" size={16} /></span>
           {/if}
@@ -253,6 +258,8 @@
                         onclick={(e) => { e.stopPropagation(); coverOpen = false; openDialog(AiDialog, { task: 'cover', blockId: block.id }); }}><Icon name="sparkles" size={14} /></button>
               {/if}
               {#if block.cover}
+                <button class="icon-btn mini" title={t('Enlarge')} aria-label={t('Enlarge')}
+                        onclick={(e) => { e.stopPropagation(); coverOpen = false; enlargeCover(); }}><Icon name="image" size={14} /></button>
                 <button class="icon-btn mini" title={t('Remove the cover')} aria-label={t('Remove the cover')}
                         onclick={(e) => { e.stopPropagation(); coverOpen = false; change(() => (block.cover = null)); }}><Icon name="close" size={14} /></button>
               {/if}
@@ -317,10 +324,13 @@
         {@const on = songPlaying(ref)}
         {@const gone = missing.has(refKey(ref))}
         <div class="item" class:missing={gone} class:drop-before={dropBefore('music', index)} class:dragged={dragging?.list === 'music' && dragging.from === index}
-             draggable={editable} role="listitem"
+             draggable={editable && !ui.coarse} role="listitem"
              ondragstart={(e) => entryDragStart(e, 'music', index)} ondragover={(e) => entryDragOver(e, 'music', index)}
              ondrop={(e) => void entryDrop(e, 'music')} ondragend={dragEnd}>
-          {#if editable}<span class="grip" title={t('Drag to change the order')}><Icon name="menu" size={13} /></span>{/if}
+          {#if editable && ui.coarse}
+            <!-- touch has no drag and drop: the entry moves up one place -->
+            <button class="icon-btn mini" title={t('Move up')} aria-label={t('Move up')} disabled={index === 0} onclick={() => change(() => moveEntry(block.music, index, index - 1))}><Icon name="chevron-up" size={13} /></button>
+          {:else if editable}<span class="grip" title={t('Drag to change the order')}><Icon name="menu" size={13} /></span>{/if}
           <button type="button" class="play-item" class:on disabled={gone} title={gone ? missingTitle : t(on ? 'Pause' : 'Play')} onclick={() => void playRef(ref)}>
             <Icon name={on ? 'volume' : ref.type === 'song' ? 'music' : 'playlist'} size={15} />
             <span class="ellipsis">{ref.title || ref.path || t('Untitled')}</span>
@@ -350,10 +360,13 @@
         {@const on = player.effectPlaying && player.effect?.path === effect.path}
         {@const gone = missing.has(effectKey(effect))}
         <div class="item" class:missing={gone} class:drop-before={dropBefore('effects', index)} class:dragged={dragging?.list === 'effects' && dragging.from === index}
-             draggable={editable} role="listitem"
+             draggable={editable && !ui.coarse} role="listitem"
              ondragstart={(e) => entryDragStart(e, 'effects', index)} ondragover={(e) => entryDragOver(e, 'effects', index)}
              ondrop={(e) => void entryDrop(e, 'effects')} ondragend={dragEnd}>
-          {#if editable}<span class="grip" title={t('Drag to change the order')}><Icon name="menu" size={13} /></span>{/if}
+          {#if editable && ui.coarse}
+            <!-- touch has no drag and drop: the entry moves up one place -->
+            <button class="icon-btn mini" title={t('Move up')} aria-label={t('Move up')} disabled={index === 0} onclick={() => change(() => moveEntry(block.effects, index, index - 1))}><Icon name="chevron-up" size={13} /></button>
+          {:else if editable}<span class="grip" title={t('Drag to change the order')}><Icon name="menu" size={13} /></span>{/if}
           <button type="button" class="play-item" class:on disabled={gone} title={gone ? missingTitle : t(on ? 'Pause' : 'Play')} onclick={() => void startEffect(effect)}>
             <Icon name={on ? 'volume' : 'waves'} size={15} />
             <span class="ellipsis">{effect.name || effect.path}</span>

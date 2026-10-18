@@ -1004,5 +1004,21 @@
   "Prepare and play adventures with music, effects and AI": "Abenteuer mit Musik, Effekten und KI vorbereiten und spielen",
   "Play video": "Video abspielen",
   "Press and hold a folder to add it to your favorites.": "Ordner gedrückt halten, um ihn zu den Favoriten hinzuzufügen.",
-  "Press and hold a playlist to add it to the favorites.": "Playlist gedrückt halten, um sie zu den Favoriten hinzuzufügen."
+  "Press and hold a playlist to add it to the favorites.": "Playlist gedrückt halten, um sie zu den Favoriten hinzuzufügen.",
+  "Enlarge": "Vergrößern",
+  "Tap a block link to open it or a song link to play it.": "Tippe auf einen Block-Link, um ihn zu öffnen, oder auf einen Song-Link, um ihn abzuspielen.",
+  "Tap a folder or playlist in the file tree to open it as a tab, then use the filters to find the perfect music for your scene.": "Tippe auf einen Ordner oder eine Playlist in der Dateiliste, um sie als Tab zu öffnen, und finde dann mit den Filtern die passende Musik für deine Szene.",
+  "Press and hold a song, folder or tab for more actions.": "Halte einen Song, Ordner oder Tab gedrückt, um weitere Aktionen zu sehen.",
+  "Tap a song to start": "Tippe auf einen Song, um zu starten",
+  "The songs of this adventure; its blocks choose their music from them. Add songs with \"Add to adventure…\" in the menu of a song (press and hold it).": "Die Songs dieses Abenteuers; seine Blöcke wählen ihre Musik daraus. Füge Songs mit „Zum Abenteuer hinzufügen…“ im Menü eines Songs hinzu (Song gedrückt halten).",
+  "This adventure has no music yet. Find songs with \"Search…\" next to \"Add\".": "Dieses Abenteuer hat noch keine Musik. Finde Songs mit „Suchen…“ neben „Hinzufügen“.",
+  "Search effects…": "Effekte suchen…",
+  "Move to…": "Verschieben nach…",
+  "Move {0} items to…": "{0} Einträge verschieben nach…",
+  "Move \"{0}\" to…": "„{0}“ verschieben nach…",
+  "Move left": "Nach links",
+  "Move right": "Nach rechts",
+  "Select several": "Mehrere auswählen",
+  "Actions…": "Aktionen…",
+  "There is no library folder to create the playlist in.": "Es gibt keinen Bibliotheksordner, in dem die Playlist angelegt werden kann."
 }

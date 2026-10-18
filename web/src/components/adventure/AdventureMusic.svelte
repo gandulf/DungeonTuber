@@ -5,7 +5,7 @@
   import { matcher } from '../../lib/search';
   import { adventures, change, missingMusic, refTracks } from '../../lib/stores/adventure.svelte';
   import { player, playQueue } from '../../lib/stores/player.svelte';
-  import { askConfirm, openDialog } from '../../lib/stores/ui.svelte';
+  import { askConfirm, openDialog, ui } from '../../lib/stores/ui.svelte';
   import type { MusicRef } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import PickMusicDialog from './PickMusicDialog.svelte';
@@ -82,7 +82,8 @@
     {#if adventure.music.length > 8}<input type="search" placeholder={t('Search…')} bind:value={query} />{/if}
     {#if editable}<button class="btn sm" onclick={addDialog}><Icon name="plus" size={13} />{t('Add')}</button>{/if}
   </div>
-  <p class="hint muted">{t('The songs of this adventure; its blocks choose their music from them. Drag songs from the file tree or the song list onto the adventure in the sidebar, or here.')}</p>
+  <p class="hint muted">{ui.coarse ? t('The songs of this adventure; its blocks choose their music from them. Add songs with "Add to adventure…" in the menu of a song (press and hold it).')
+                                    : t('The songs of this adventure; its blocks choose their music from them. Drag songs from the file tree or the song list onto the adventure in the sidebar, or here.')}</p>
 
   <div class="list" role="list">
     {#each shown as ref (refKey(ref))}
@@ -90,7 +91,7 @@
       {@const on = playing(ref)}
       {@const gone = missing.has(refKey(ref))}
       <!-- dragged onto a block in the list on the left, the song (or the songs of a playlist) is added to that block -->
-      <div class="item" class:missing={gone} draggable={editable && !gone} role="listitem" title={editable && !gone ? t('Drag onto a block to add it there') : undefined}
+      <div class="item" class:missing={gone} draggable={editable && !gone} role="listitem" title={editable && !gone && !ui.coarse ? t('Drag onto a block to add it there') : undefined}
            ondragstart={(e) => setMusicDrag(e.dataTransfer, [$state.snapshot(ref) as MusicRef])}>
         <button type="button" class="play-item" class:on disabled={gone} title={gone ? missingTitle : t('Play')} onclick={() => void play(ref)}>
           <Icon name={on ? 'volume' : ref.type === 'song' ? 'music' : 'playlist'} size={15} />

@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { longpress } from '../lib/longpress';
   import { t } from '../lib/i18n.svelte';
   import { closeAllTabs, closeDuplicates, closeOtherTabs, closeTab, library, loadTab, moveTab, selectTab } from '../lib/stores/library.svelte';
   import { adventures, deleteAdventure, openAdventure, renameAdventure } from '../lib/stores/adventure.svelte';
-  import { openMenu } from '../lib/stores/ui.svelte';
+  import { openMenu, ui } from '../lib/stores/ui.svelte';
   import type { Tab } from '../lib/stores/library.svelte';
   import Icon from './Icon.svelte';
 
@@ -39,7 +40,8 @@
   }
 
   function menu(event: MouseEvent, key: string) {
-    const tab = library.tabs.find((item) => item.key === key);
+    const index = library.tabs.findIndex((item) => item.key === key);
+    const tab = library.tabs[index];
     const adventure = tab?.type === 'adventure' ? adventures.list.find((item) => item.id === tab.path) : null;
     openMenu(event, [
       tab?.type === 'adventure'
@@ -49,6 +51,10 @@
         { label: t('Rename'), icon: 'edit', action: () => void renameAdventure(adventure.id) },
         { label: t('Delete'), icon: 'trash', action: () => void deleteAdventure(adventure.id, adventure.title) },
       ] : []),
+      { separator: true },
+      // the order of the tabs without dragging (touch)
+      { label: t('Move left'), icon: 'chevron-left', disabled: index <= 0, action: () => moveTab(index, index - 1) },
+      { label: t('Move right'), icon: 'chevron-right', disabled: index < 0 || index >= library.tabs.length - 1, action: () => moveTab(index, index + 1) },
       { separator: true },
       { label: t('Close'), icon: 'close', action: () => closeTab(key) },
       { label: t('Close Other'), action: () => closeOtherTabs(key) },
@@ -61,7 +67,7 @@
 <div class="tabs" role="tablist">
   {#each shown as { tab, index } (tab.key)}
     <div class="tab" class:active={tab.key === library.active && !library.global && !library.duplicates} role="tab" tabindex="0" aria-selected={tab.key === library.active}
-         title={tab.path} draggable="true"
+         title={tab.path} draggable={!ui.coarse} use:longpress
          onclick={() => selectTab(tab.key)} onkeydown={(e) => e.key === 'Enter' && selectTab(tab.key)}
          onauxclick={(e) => e.button === 1 && closeTab(tab.key)} oncontextmenu={(e) => menu(e, tab.key)}
          ondragstart={() => (dragIndex = index)} ondragover={(e) => dragIndex !== null && e.preventDefault()}
@@ -94,16 +100,25 @@
 <style>
   .wrap { display: flex; align-items: center; gap: 4px; min-width: 0; }
   .more { display: flex; align-items: center; gap: 3px; flex: none; height: 34px; padding: 0 8px; border-radius: 10px; color: var(--muted); border: 1px solid var(--border); background: var(--surface); }
-  .more:hover { color: var(--text); background: var(--hover); }
+  @media (hover: hover) { .more:hover { color: var(--text); background: var(--hover); } }
   .count { font-size: var(--fs-xs); font-weight: 600; }
   .tabs { display: flex; flex: 1; min-width: 0; gap: 6px; overflow: hidden; padding: 2px; }
   .tab { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 6px 0 13px; border-radius: 10px; color: var(--muted); cursor: pointer; flex: 0 1 auto; min-width: 120px; max-width: 260px; user-select: none; border: 1px solid transparent; transition: background 0.15s, color 0.15s; }
-  .tab:hover { color: var(--text); background: var(--hover); }
+  @media (hover: hover) { .tab:hover { color: var(--text); background: var(--hover); } }
   .tab.active { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); font-weight: 600; }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .close { display: flex; padding: 4px; border-radius: 6px; color: inherit; opacity: 0; }
-  .tab:hover .close, .tab.active .close { opacity: 0.8; }
-  .close:hover { background: var(--hover); opacity: 1; }
+  .tab.active .close { opacity: 0.8; }
+  @media (hover: hover) {
+    .tab:hover .close { opacity: 0.8; }
+    .close:hover { background: var(--hover); opacity: 1; }
+  }
+  /* fingers: a tap on a background tab switches to it (its close button is not there to be hit by accident); the active one has a bigger target */
+  @media (hover: none) {
+    .tab:not(.active) .close { display: none; }
+    .tab:not(.active) { padding-right: 13px; }
+    .close { padding: 8px; margin-right: -4px; }
+  }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite alternate; }
   @keyframes pulse { to { opacity: 0.3; } }
 </style>

@@ -103,7 +103,7 @@
         <ul class="hits" id="block-hits" role="listbox" aria-label={t('Blocks')}>
           {#each hits as hit, index (hit.block.id)}
             <li role="option" aria-selected={index === hitIndex} class:on={index === hitIndex}>
-              <button type="button" onmousedown={(e) => { e.preventDefault(); go(hit.block.id); }} onmouseenter={() => (hitIndex = index)}>
+              <button type="button" onpointerdown={(e) => { e.preventDefault(); go(hit.block.id); }} onpointerenter={() => (hitIndex = index)}>
                 <span class="hit-title ellipsis">{hit.block.title || t('Untitled')}</span>
                 <span class="hit-text">{hit.before}{#if hit.match}<mark>{hit.match}</mark>{/if}{hit.after}</span>
               </button>
@@ -185,6 +185,7 @@
   /* phones: the fixed size controls no longer fit next to the tabs, so the tabs get their own row */
   @media (max-width: 480px) {
     .topbar { flex-wrap: wrap; gap: 6px; }
+    .icon-btn { min-width: 36px; min-height: 36px; } /* the touch size of 40px would push the last button onto a line of its own */
     .tabs-area { order: 10; flex: 1 0 100%; }
     .tabs-area:has(.hint) { display: none; } /* only the welcome hint, no tabs */
     .opt { padding: 0 8px; }

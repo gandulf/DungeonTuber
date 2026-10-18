@@ -2,9 +2,9 @@
 import { api, pathToId } from './api';
 import { t } from './i18n.svelte';
 import { prefs, savePrefs } from './prefs.svelte';
-import { data, forgetFavorites, isPlaylistPath } from './stores/data.svelte';
+import { data, forgetFavorites, isPlaylistPath, moveFavorites } from './stores/data.svelte';
 import { loadEffects } from './stores/effects.svelte';
-import { activeTab, addToPlaylist, closeTab, library, loadTab, openTab, reloadAllDirTabs, reloadDirTabs, reloadPlaylistTabs, removeFromPlaylist, updateTrack } from './stores/library.svelte';
+import { activeTab, addToPlaylist, closeTab, library, loadTab, openTab, reloadAllDirTabs, reloadDirTabs, reloadPlaylistTabs, removeFromPlaylist, reorderPlaylist, updateTrack } from './stores/library.svelte';
 import { playTrack, refreshCurrentTrack } from './stores/player.svelte';
 import { askConfirm, askText, errorToast, openDialog, toast, ui, type MenuItem } from './stores/ui.svelte';
 import type { JobKind } from './stores/downloads.svelte';
@@ -19,6 +19,7 @@ import DownloadsDialog from '../components/dialogs/DownloadsDialog.svelte';
 import ImportDialog from '../components/dialogs/ImportDialog.svelte';
 import PlaylistDialog from '../components/dialogs/PlaylistDialog.svelte';
 import UploadDialog from '../components/dialogs/UploadDialog.svelte';
+import SelectFolderDialog from '../components/dialogs/SelectFolderDialog.svelte';
 
 export function dirname(path: string): string {
   const index = path.lastIndexOf('/');
@@ -137,12 +138,23 @@ export async function toggleFavorite(track: Track) {
   }
 }
 
-/** Asks for a name and the folder of a new playlist; the folder of the open tab (or the given one) is preselected. */
-export function newPlaylist(ids: string[] = [], directory?: string) {
+/** Asks for a name and the folder of a new playlist; the folder of the open tab (or the given one) is preselected. `favorite`:
+ *  the new playlist is added to the favorites, so it shows in the sidebar's list of playlists (the + of that list). */
+export async function newPlaylist(ids: string[] = [], directory?: string, favorite = false) {
   const tab = activeTab();
   const current = tab?.type === 'dir' ? tab.path : tab?.type === 'playlist' ? dirname(tab.path) : null;
-  const dir = directory ?? current ?? prefs.treeRoot ?? data.settings?.libraryRoots[0];
-  if (dir) openDialog(PlaylistDialog, { directory: dir, ids });
+  let dir = directory ?? current ?? prefs.treeRoot ?? data.settings?.libraryRoots[0];
+  if (!dir) {
+    // e.g. an adventure tab is open and no library is known (only admins get the settings): the libraries this user sees
+    try {
+      dir = (await api.roots())[0]?.path;
+    } catch (e) {
+      errorToast(e);
+      return;
+    }
+  }
+  if (dir) openDialog(PlaylistDialog, { directory: dir, ids, favorite });
+  else toast(t('There is no library folder to create the playlist in.'), 'error');
 }
 
 /** Names the scene a song is used for in one playlist (kept in the playlist, the mp3 stays as it is). */
@@ -321,6 +333,27 @@ export async function deleteItems(items: { path: string; name: string; dir?: boo
   for (const tab of library.tabs) void loadTab(tab.key, true);
 }
 
+/** "Move to…": files, folders and playlists to another folder (the menu way of dragging them in the tree; touch has no drag and drop). */
+export function moveItems(items: { path: string; name: string }[]) {
+  if (!items.length) return;
+  openDialog(SelectFolderDialog, {
+    title: items.length > 1 ? t('Move {0} items to…', items.length) : t('Move "{0}" to…', items[0].name),
+    onselect: async (target: string) => {
+      try {
+        for (const item of items) {
+          if (target === item.path || target.startsWith(item.path + '/')) continue; // not into itself
+          const moved = await api.move(item.path, target);
+          await moveFavorites(item.path, moved.path);
+          for (const tab of [...library.tabs]) if (tab.path === item.path || tab.path.startsWith(item.path + '/')) closeTab(tab.key);
+        }
+      } catch (e) {
+        errorToast(e);
+      }
+      for (const tab of library.tabs) if (tab.type !== 'adventure') void loadTab(tab.key, true); // folders and playlists show the new paths
+    },
+  });
+}
+
 export function openUploadDialog(directory?: string, initial: UploadItem[] = []) {
   const target = directory ?? uploadTarget();
   if (target) openDialog(UploadDialog, { directory: target, initial });
@@ -374,10 +407,19 @@ export function trackMenu(tracks: Track[], inTree = false): MenuItem[] {
   if (tab?.type === 'playlist') {
     if (single) items.push({ label: t('Scene name…'), icon: 'marker', action: () => editScene(tab.path, single) });
     if (single?.scene) items.push({ label: t('Remove scene name'), icon: 'close', action: () => setScene(tab.path, single, '') });
+    // the order of the playlist without dragging (touch); only while the table shows that order
+    if (single && library.sortKey === 'index' && library.sortAsc && !library.search) {
+      const order = tab.tracks.map((track) => track.id);
+      const at = order.indexOf(single.id);
+      const move = (to: number) => () => { order.splice(to, 0, ...order.splice(at, 1)); void reorderPlaylist(tab, order); };
+      items.push({ label: t('Move up'), icon: 'chevron-up', disabled: at <= 0, action: move(at - 1) });
+      items.push({ label: t('Move down'), icon: 'chevron-down', disabled: at < 0 || at >= order.length - 1, action: move(at + 1) });
+    }
     items.push({ label: t('Remove from playlist'), icon: 'trash', action: () => removeFromPlaylist(tab.path, ids) });
   }
   if (tracks.length && tracks.every((track) => canDelete(track.uploaded_by))) {
-    items.push({ separator: true }, { label: t('Delete file'), icon: 'trash',
+    items.push({ separator: true }, { label: t('Move to…'), icon: 'folder', action: () => moveItems(tracks.map((track) => ({ path: track.path, name: track.title || track.name }))) });
+    items.push({ label: t('Delete file'), icon: 'trash',
       action: () => deleteItems(tracks.map((track) => ({ path: track.path, name: track.name }))) });
   }
   return items;

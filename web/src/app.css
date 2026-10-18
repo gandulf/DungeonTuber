@@ -127,6 +127,12 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 textarea { resize: vertical; }
+/* iPhone and iPad zoom the page into any field with text under 16px when it gets the focus (only iOS has -webkit-touch-callout) */
+@supports (-webkit-touch-callout: none) {
+  @media (pointer: coarse) {
+    input:not([type='range']):not([type='checkbox']):not([type='radio']), select, textarea, [contenteditable='true'] { font-size: max(16px, 1em) !important; }
+  }
+}
 select option { background: var(--surface); }
 input[type='checkbox'] { accent-color: var(--accent); width: 15px; height: 15px; }
 
@@ -160,7 +166,8 @@ input[type='range'].range::-moz-range-thumb {
   white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
 }
-.btn:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-hover); }
+@media (hover: hover) { .btn:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-hover); } }
+.btn:active:not(:disabled) { border-color: var(--accent); background: var(--accent-hover); }
 .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; color: var(--accent-text); box-shadow: 0 4px 14px var(--accent-soft); }
 .btn.primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; filter: brightness(1.08); }
 .btn.ghost { border-color: transparent; background: transparent; }
@@ -175,7 +182,8 @@ input[type='range'].range::-moz-range-thumb {
   flex: none;
   transition: background 0.15s, color 0.15s;
 }
-.icon-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+@media (hover: hover) { .icon-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); } }
+.icon-btn:active:not(:disabled) { background: var(--hover); color: var(--text); }
 .icon-btn.active { background: var(--accent-soft); color: var(--accent); }
 
 .card {
@@ -199,7 +207,7 @@ input[type='range'].range::-moz-range-thumb {
 /* segmented control */
 .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--border); }
 .seg button { padding: 5px 13px; border-radius: 8px; color: var(--muted); font-size: var(--fs-sm); font-weight: 550; }
-.seg button:hover { color: var(--text); }
+@media (hover: hover) { .seg button:hover { color: var(--text); } }
 .seg button.on { background: var(--accent-soft); color: var(--accent); }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -219,7 +227,7 @@ input[type='range'].range::-moz-range-thumb {
   white-space: nowrap; user-select: none;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.chip:hover { border-color: var(--border-strong); background: var(--surface-3); }
+@media (hover: hover) { .chip:hover { border-color: var(--border-strong); background: var(--surface-3); } }
 .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; box-shadow: 0 0 0 1px var(--accent) inset; }
 .chip.genre.on { background: var(--green-soft); border-color: var(--green); color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
 
@@ -260,3 +268,16 @@ mark.hl { color: inherit; padding: 0 2px; border-radius: 3px; }
 .notes a.song-link:hover { background: var(--accent-soft); }
 .notes a.song-link.missing { color: var(--red); text-decoration: line-through; border-bottom-style: dashed; }
 .notes a.song-link.missing::before { content: '⚠ '; }
+
+/* fingers: controls big enough to hit (about 40px; the size of a control on screen stays close to the desktop one where it can) */
+@media (pointer: coarse) {
+  .icon-btn { min-width: 40px; min-height: 40px; }
+  .btn { min-height: 40px; }
+  .btn.sm { min-height: 36px; }
+  .seg button { min-height: 34px; }
+  .chip { height: 36px; }
+  input[type='checkbox'] { width: 20px; height: 20px; }
+  input[type='range'].range { height: 8px; border-radius: 4px; }
+  input[type='range'].range::-webkit-slider-thumb { width: 24px; height: 24px; }
+  input[type='range'].range::-moz-range-thumb { width: 18px; height: 18px; }
+}

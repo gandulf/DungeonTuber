@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { closeMenu, ui, type MenuItem } from '../lib/stores/ui.svelte';
   import Icon from './Icon.svelte';
 
@@ -7,8 +8,11 @@
   let openSub = $state<number | null>(null);
   const MARGIN = 8;
   const SWITCH_DELAY = 250;
-  let touched = false; // the last pointer was a finger: no hover, a tap on an entry with a submenu opens it
+  let touched = $state(false); // the last pointer was a finger: no hover, a tap on an entry with a submenu opens it
   let switchTimer: ReturnType<typeof setTimeout> | undefined;
+  // fingers: a submenu takes the place of the menu (with a way back) instead of opening beside it, and a long menu scrolls
+  let drill = $state<number | null>(null);
+  const touch = $derived(ui.coarse || touched);
 
   // keeps the menu completely inside the window (it is shown once it has been measured)
   $effect(() => {
@@ -20,12 +24,26 @@
     if (!menuEl) return;
     clearTimeout(switchTimer);
     openSub = null;
+    drill = null;
+    place();
+  });
+
+  function place() {
+    const menu = ui.menu;
+    if (!menu || !menuEl) return;
     const rect = menuEl.getBoundingClientRect();
     position = {
       x: Math.max(MARGIN, Math.min(menu.x, window.innerWidth - rect.width - MARGIN)),
       y: Math.max(MARGIN, Math.min(menu.y, window.innerHeight - rect.height - MARGIN)),
     };
-  });
+  }
+
+  async function drillTo(i: number | null) {
+    drill = i;
+    await tick();
+    if (menuEl) menuEl.scrollTop = 0;
+    place();
+  }
 
   /** A submenu opens to the left when there is no room on the right, and moves up when it would leave the window at the bottom. */
   function fit(node: HTMLElement) {
@@ -59,7 +77,8 @@
     if (item.children) {
       // a tap emulates a mouse move before the click, which would show the submenu under the finger and let the click hit its first entry; so touch opens it on the click only
       clearTimeout(switchTimer);
-      openSub = i;
+      if (touch) void drillTo(i);
+      else openSub = i;
       return;
     }
     closeMenu();
@@ -87,7 +106,7 @@
           {#if item.shortcut}<span class="shortcut">{item.shortcut}</span>{/if}
           {#if item.children}<Icon name="chevron-right" size={14} />{/if}
         </button>
-        {#if item.children && openSub === i && level === 0}
+        {#if item.children && openSub === i && level === 0 && !touch}
           <div class="menu sub" data-tour={item.tour ? `${item.tour}-sub` : undefined} role="menu" tabindex="-1" use:fit onmouseenter={() => clearTimeout(switchTimer)}>{@render items(item.children, 1)}</div>
         {/if}
       </div>
@@ -98,8 +117,17 @@
 {#if ui.menu}
   <div class="menu" bind:this={menuEl} style:left="{position?.x ?? ui.menu.x}px" style:top="{position?.y ?? ui.menu.y}px" style:visibility={position ? 'visible' : 'hidden'}
        role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()} oncontextmenu={(e) => e.preventDefault()}
-       onkeydown={() => {}} onpointerdowncapture={(e) => (touched = e.pointerType !== 'mouse')}>
-    {@render items(ui.menu.items, 0)}
+       class:scroll={touch} onkeydown={() => {}} onpointerdowncapture={(e) => (touched = e.pointerType !== 'mouse')}>
+    {#if drill !== null && ui.menu.items[drill]?.children}
+      {@const parent = ui.menu.items[drill]}
+      <button class="item back" onclick={(e) => { e.stopPropagation(); void drillTo(null); }}>
+        <span class="ic"><Icon name="back" size={15} /></span><span class="label">{parent.label}</span>
+      </button>
+      <div class="sep"></div>
+      {@render items(parent.children ?? [], 1)}
+    {:else}
+      {@render items(ui.menu.items, 0)}
+    {/if}
   </div>
 {/if}
 
@@ -116,6 +144,8 @@
     padding: 6px;
     backdrop-filter: blur(12px);
   }
+  .menu.scroll { max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain; }
+  .back { font-weight: 600; }
   .sub { position: absolute; z-index: 1; /* above the entries that follow its own, which are positioned too */  left: 100%; top: -5px; margin-left: 2px; }
   .item-wrap { position: relative; }
   .item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px 7px 7px; border-radius: 8px; text-align: left; -webkit-tap-highlight-color: transparent; }

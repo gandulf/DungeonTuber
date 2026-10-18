@@ -50,6 +50,7 @@
   .off .name { color: var(--muted); }
   .off input { opacity: 0.55; }
   .clear { color: var(--faint); font-size: 16px; line-height: 1; border-radius: 4px; }
-  .clear:hover { color: var(--text); background: var(--hover); }
+  @media (pointer: coarse) { .clear { padding: 8px; margin: -8px; } } /* a bigger target around the small × */
+  @media (hover: hover) { .clear:hover { color: var(--text); background: var(--hover); } }
   .tip { position: absolute; right: 48px; top: -18px; background: var(--text); color: var(--bg); padding: 2px 8px; border-radius: 6px; font-size: var(--fs-xs); white-space: nowrap; pointer-events: none; z-index: 5; }
 </style>

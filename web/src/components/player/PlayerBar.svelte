@@ -46,7 +46,7 @@
         {/if}
       {:else}
         <span class="title muted">{t('No Track Selected')}</span>
-        <span class="sub">{t('Double-click a song to start')}</span>
+        <span class="sub">{ui.coarse ? t('Tap a song to start') : t('Double-click a song to start')}</span>
       {/if}
     </div>
     {#if player.track}
@@ -56,6 +56,8 @@
     {/if}
   </div>
 
+  <!-- phones have no room for the cover and the details: the title of the song on a line of its own -->
+  {#if ui.narrow && player.track}<div class="now-mini ellipsis" title={player.track.path}>{player.track.title || player.track.name}</div>{/if}
   <div class="center">
     <div class="controls">
       <button class="icon-btn" class:active={prefs.shuffle} title={t('Shuffle')} onclick={toggleShuffle}><Icon name="shuffle" size={18} /></button>
@@ -121,7 +123,7 @@
     box-shadow: 0 0 0 6px var(--accent-soft), 0 6px 22px var(--accent-glow);
     transition: transform 0.15s, filter 0.15s;
   }
-  .play:hover:not(:disabled) { transform: scale(1.05); filter: brightness(1.08); }
+  @media (hover: hover) { .play:hover:not(:disabled) { transform: scale(1.05); filter: brightness(1.08); } }
   .right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   /* with the effect player the right column takes the room it needs and the main volume gets shorter */
   .player:has(.right:not(.stacked) :global(.effect)) { grid-template-columns: minmax(200px, 1fr) minmax(300px, 1.6fr) auto; }
@@ -135,6 +137,7 @@
   @keyframes wave { 50% { transform: translateY(-2px); opacity: 0.7; } }
   @media (prefers-reduced-motion: reduce) { .fx-sign .glyph { animation: none; } }
   .fx-stop { width: 30px; height: 30px; color: var(--accent); }
+  .now-mini { text-align: center; font-weight: 650; font-size: var(--fs-sm); margin-bottom: -4px; min-width: 0; }
   @media (max-width: 900px) {
     .player { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 14px; }
     .now { display: none; }

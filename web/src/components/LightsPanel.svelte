@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { longpress } from '../lib/longpress';
   import { api } from '../lib/api';
   import { t } from '../lib/i18n.svelte';
   import { discoverLights, lights, patchSelected, renameLight } from '../lib/stores/lights.svelte';
@@ -75,7 +76,7 @@
       {#each lights.list as light (light.mac)}
         <button class="bulb" class:selected={lights.selected.includes(light.mac)} class:off={!light.state || !light.online}
                 title="{light.name} · {light.mac}{light.online ? '' : ' (offline)'}"
-                onclick={(e) => select(e, light)} ondblclick={() => rename(light)}
+                onclick={(e) => select(e, light)} ondblclick={() => rename(light)} use:longpress
                 oncontextmenu={(e) => openMenu(e, [{ label: t('Rename'), icon: 'edit', action: () => rename(light) }])}>
           <span class="orb" style:--c={light.state ? light.color ?? '#f5c542' : 'transparent'}><Icon name="bulb" size={18} filled={light.state} /></span>
           <span class="name ellipsis">{light.name}</span>
@@ -143,7 +144,7 @@
   .empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px; text-align: center; }
   .bulbs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
   .bulb { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 6px; min-width: 70px; border-radius: 12px; border: 1px solid transparent; }
-  .bulb:hover { background: var(--hover); }
+  @media (hover: hover) { .bulb:hover { background: var(--hover); } }
   .bulb.selected { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
   .orb { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--c); background: radial-gradient(circle, color-mix(in srgb, var(--c) 35%, transparent), transparent 70%); filter: drop-shadow(0 0 8px var(--c)); }
   .bulb.off .orb { color: var(--faint); filter: none; background: var(--surface-3); }
@@ -158,7 +159,7 @@
   .range.temperature { background: linear-gradient(to right, #ff8a1f, #ffd9a3 45%, #fffaf0 60%, #c9daff); }
   .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
   .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong); transition: transform 0.12s; }
-  .swatch:hover { transform: scale(1.12); }
+  @media (hover: hover) { .swatch:hover { transform: scale(1.12); } }
   .swatch.on { box-shadow: 0 0 0 2px var(--text); }
   .custom { display: grid; place-items: center; background: var(--surface-2); color: var(--muted); cursor: pointer; position: relative; overflow: hidden; }
   .custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

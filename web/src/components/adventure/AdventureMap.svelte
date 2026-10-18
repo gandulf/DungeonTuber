@@ -196,7 +196,8 @@
   .map.panning, .map.panning .card { cursor: grabbing; }
   .sizer { position: relative; flex: none; margin: auto; } /* centered while smaller than the map (auto margins of a flex item stay safe) */
   .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-  .map-wrap { position: relative; width: 100%; flex: 1; min-height: 320px; }
+  /* the map takes the room that is left, so the overview fits the screen (the map scrolls inside, the page does not) */
+  .map-wrap { position: relative; width: 100%; flex: 1; min-height: 0; }
   .zoom { position: absolute; right: 10px; bottom: 10px; padding: 3px 9px; border-radius: 999px;
           font-size: var(--fs-xs); background: var(--bg-2); border: 1px solid var(--border); color: var(--muted); box-shadow: var(--shadow); }
   .zoom:hover { color: var(--accent); border-color: var(--accent); }

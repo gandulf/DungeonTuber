@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { longpress } from '../../lib/longpress';
   import FolderPicker from './FolderPicker.svelte';
   import { api } from '../../lib/api';
   import { errorToast } from '../../lib/stores/ui.svelte';
@@ -31,6 +32,9 @@
     }
   }
 
+  // with a finger a tap on a folder selects it and unfolds it (touch has no double click)
+  let touching = false;
+
   function toggle(event: Event) {
     event.stopPropagation();
     expanded = open ? expanded.filter((path) => path !== item.path) : [...expanded, item.path];
@@ -39,7 +43,8 @@
 
 <div role="treeitem" aria-expanded={children?.length ? open : undefined} aria-selected={selected === item.path}>
   <button class="row" class:selected={selected === item.path} class:lib-root={isRoot} style:padding-left="{depth * 14 - 8}px"
-          title={item.path} onclick={() => (selected = item.path)}
+          title={item.path} use:longpress onpointerdown={(e) => (touching = e.pointerType !== 'mouse')}
+          onclick={(e) => { selected = item.path; if (touching && children?.length && !open) toggle(e); }}
           oncontextmenu={(e) => { if (onMenu) { e.preventDefault(); e.stopPropagation(); onMenu(e, item); } }} ondblclick={(e) => children?.length && toggle(e)}>
     <span class="twisty" role="presentation" onclick={(e) => children?.length && toggle(e)} ondblclick={(e) => e.stopPropagation()}>
       {#if children?.length}<Icon name={open ? 'chevron-down' : 'chevron-right'} size={13} />{/if}
@@ -56,9 +61,14 @@
 
 <style>
   .row { display: flex; align-items: center; gap: 5px; width: 100%; padding: 4px 6px; border-radius: 8px; text-align: left; color: var(--muted); }
-  .row:hover { background: var(--hover); color: var(--text); }
+  @media (hover: hover) { .row:hover { background: var(--hover); color: var(--text); } }
   .row.selected { background: var(--accent-soft); color: var(--accent); }
   .row.lib-root { font-weight: 600; }
   .twisty { width: 16px; display: flex; justify-content: center; flex: none; }
   .folder { color: var(--gold); display: flex; opacity: 0.85; }
+  @media (pointer: coarse) {
+    .row { min-height: 44px; padding-top: 0; padding-bottom: 0; -webkit-touch-callout: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .row:active { background: var(--hover); }
+    .twisty { align-self: stretch; width: 36px; margin: 0 -6px 0 -4px; align-items: center; }
+  }
 </style>

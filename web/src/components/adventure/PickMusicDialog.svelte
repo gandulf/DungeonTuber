@@ -6,7 +6,7 @@
   import { effects, loadEffects } from '../../lib/stores/effects.svelte';
   import { globalTab, loadGlobal } from '../../lib/stores/library.svelte';
   import { player, playEffect, playQueue, togglePlay } from '../../lib/stores/player.svelte';
-  import { closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
+  import { closeDialog, errorToast, toast, ui } from '../../lib/stores/ui.svelte';
   import type { Effect, MusicRef, PlaylistInfo, SongRef, Track } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Modal from '../dialogs/Modal.svelte';
@@ -178,7 +178,7 @@
           </button>
         </div>
       {:else}
-        {#if !loadingPool}<span class="muted">{pool?.length ? t('No songs found.') : t('This adventure has no music yet. Drag songs onto it in the sidebar, or find them with "Search…" next to "Add".')}</span>{/if}
+        {#if !loadingPool}<span class="muted">{pool?.length ? t('No songs found.') : (ui.coarse ? t('This adventure has no music yet. Find songs with "Search…" next to "Add".') : t('This adventure has no music yet. Drag songs onto it in the sidebar, or find them with "Search…" next to "Add".'))}</span>{/if}
       {/each}
     {:else if kind === 'song'}
       {#if globalTab.loading && !globalTab.tracks.length}<span class="muted">{t('Loading…')}</span>{/if}
@@ -221,6 +221,7 @@
 <style>
   .top { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
   .top input { flex: 1; min-width: 0; }
+  @media (max-width: 900px) { .top { flex-wrap: wrap; } .top input { flex-basis: 100%; } } /* phones: the search gets a line of its own */
   .seg button { display: inline-flex; align-items: center; gap: 6px; }
   .list { display: flex; flex-direction: column; gap: 1px; max-height: min(55vh, 460px); overflow-y: auto; }
   .seg.hidden { display: none; }

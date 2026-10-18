@@ -7,7 +7,7 @@
   import { adventures, effectKey, enterBlock, missingEntries, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
   import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import type { MusicRef } from '../../lib/types';
-  import { openDialog } from '../../lib/stores/ui.svelte';
+  import { openDialog, ui } from '../../lib/stores/ui.svelte';
   import Icon from '../Icon.svelte';
   import ImagePopup from '../dialogs/ImagePopup.svelte';
   import AdventureMap from './AdventureMap.svelte';
@@ -151,6 +151,7 @@
       {#if block.cover}
         {@const src = imageUrl(adventure.id, block.cover)}
         <button type="button" class="cover" title={t('Double-click to enlarge')}
+                onclick={() => { if (ui.coarse) openDialog(ImagePopup, { src, title: block.title || t('Cover image') }); }}
                 ondblclick={() => openDialog(ImagePopup, { src, title: block.title || t('Cover image') })}>
           <img {src} alt={block.title || t('Cover image')} />
         </button>
@@ -204,7 +205,15 @@
 
 <style>
   .start { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 16px; width: 100%; }
-  .intro { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 14px; color: var(--muted); }
+  .intro { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 12px 14px; color: var(--muted); }
+  /* low screens (a phone held sideways): the line under the title gives its room to the map */
+  @media (max-height: 600px) { .intro p { display: none; } }
+  @media (max-width: 900px), (max-height: 600px) {
+    .start { gap: 10px; }
+    .intro { gap: 8px 10px; }
+    .intro > :global(svg) { display: none; } /* the mask beside the title */
+    .intro h2 { font-size: 1.15rem; }
+  }
   .intro-text { min-width: 0; }
   .intro h2 { margin: 0; color: var(--text); font-family: var(--font-display); }
   .intro p { margin: 2px 0 0; }

@@ -37,6 +37,8 @@ export const ui = $state({
   narrow: window.matchMedia('(max-width: 900px)').matches,
   /** Tablets and phones: the effects and lights panel is a flyout over the page (on tablets the library stays beside it). */
   rightOverlay: window.matchMedia(TABLET).matches,
+  /** A finger is the main pointer: dragging is off there (a long press opens the menu instead). */
+  coarse: window.matchMedia('(pointer: coarse)').matches,
   mobilePanel: null as 'tree' | 'side' | null,
 });
 

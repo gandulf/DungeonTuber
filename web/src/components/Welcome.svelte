@@ -9,7 +9,8 @@
 <div class="welcome">
   <img src="/icon.png" alt="" width="72" height="72" />
   <h1>{t('Welcome to Dungeon Tuber')}</h1>
-  <p class="muted">{t('Double-click a folder or playlist in the file tree to open it as a tab, then use the filters to find the perfect music for your scene.')}</p>
+  <p class="muted">{ui.coarse ? t('Tap a folder or playlist in the file tree to open it as a tab, then use the filters to find the perfect music for your scene.')
+                                 : t('Double-click a folder or playlist in the file tree to open it as a tab, then use the filters to find the perfect music for your scene.')}</p>
   <div class="actions">
     {#if prefs.treeRoot}
       <button class="btn primary" onclick={() => openTab('dir', prefs.treeRoot!)}><Icon name="folder" size={16} /> {t('Open current folder')}</button>
@@ -17,9 +18,14 @@
     <button class="btn" onclick={() => (ui.tour = true)}><Icon name="info" size={16} /> {t('Show Tour')}</button>
   </div>
   <ul class="tips muted">
-    <li><kbd>Ctrl</kbd>+<kbd>P</kbd> {t('Play')} · <kbd>Ctrl</kbd>+<kbd>N</kbd> {t('Next')} · <kbd>Ctrl</kbd>+<kbd>B</kbd> {t('Previous')}</li>
-    <li>{t('Drop mp3 files or folders on the file tree to upload them.')}</li>
-    <li>{t('Drag a tag chip onto a song to tag it.')}</li>
+    {#if ui.coarse}
+      <!-- touch screens have no shortcuts and no drag and drop -->
+      <li>{t('Press and hold a song, folder or tab for more actions.')}</li>
+    {:else}
+      <li><kbd>Ctrl</kbd>+<kbd>P</kbd> {t('Play')} · <kbd>Ctrl</kbd>+<kbd>N</kbd> {t('Next')} · <kbd>Ctrl</kbd>+<kbd>B</kbd> {t('Previous')}</li>
+      <li>{t('Drop mp3 files or folders on the file tree to upload them.')}</li>
+      <li>{t('Drag a tag chip onto a song to tag it.')}</li>
+    {/if}
   </ul>
 </div>
 

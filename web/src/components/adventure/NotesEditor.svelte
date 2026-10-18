@@ -9,7 +9,7 @@
   import { imageUrl, resolveBlockTitles, type BlockRef } from '../../lib/notes';
   import { BLOCK_PREFIX, IMAGE_PREFIX, noteExtensions, SONG_PREFIX, toStoredMarkdown } from '../../lib/notesMarkdown';
   import { HIGHLIGHT_COLORS, type HighlightColor } from '../../lib/notes';
-  import { askText, errorToast, openDialog } from '../../lib/stores/ui.svelte';
+  import { askText, errorToast, openDialog, ui } from '../../lib/stores/ui.svelte';
   import type { MusicRef } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import PickMusicDialog from './PickMusicDialog.svelte';
@@ -63,7 +63,9 @@
       suggest = null;
       return;
     }
-    suggest = { items: props.items, index: Math.min(suggest?.index ?? 0, props.items.length - 1), left: rect.left, top: rect.bottom + 4, command: props.command };
+    // the list stays inside the window (on a phone the caret may be near its right edge)
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(320, window.innerWidth - 16) - 8));
+    suggest = { items: props.items, index: Math.min(suggest?.index ?? 0, props.items.length - 1), left, top: rect.bottom + 4, command: props.command };
   }
 
   function linkText(chain: ReturnType<Editor['chain']>, range: Range | null, text: string, href: string) {
@@ -153,12 +155,12 @@
     });
   }
 
-  /** Ctrl/Cmd + click on a link to a block opens it, on a song link plays it. */
+  /** Ctrl/Cmd + click on a link to a block opens it, on a song link plays it; with a finger a tap does (touch has no Ctrl). */
   function followLink(event: MouseEvent): boolean {
     const href = (event.target as Element | null)?.closest?.('a')?.getAttribute('href') ?? '';
     if (!href.startsWith(BLOCK_PREFIX) && !href.startsWith(SONG_PREFIX)) return false;
     event.preventDefault();
-    if (!(event.ctrlKey || event.metaKey)) return true; // a plain click puts the caret into the link
+    if (!(event.ctrlKey || event.metaKey || ui.coarse)) return true; // a plain click puts the caret into the link
     if (href.startsWith(BLOCK_PREFIX)) onopenblock(href.slice(BLOCK_PREFIX.length));
     else onplaysong(href.slice(SONG_PREFIX.length));
     return true;
@@ -316,7 +318,7 @@
            onchange={(e) => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ''; if (file) void upload(file); }} />
   </div>
   <div class="surface selectable" data-notes={scope} bind:this={element}></div>
-  <span class="hint muted">{t('Ctrl + click opens a block link or plays a song link.')}</span>
+  <span class="hint muted">{ui.coarse ? t('Tap a block link to open it or a song link to play it.') : t('Ctrl + click opens a block link or plays a song link.')}</span>
   {#if suggest}
     <ul class="suggest" role="listbox" aria-label={t('Blocks')} style:left="{suggest.left}px" style:top="{suggest.top}px">
       {#each suggest.items as item, index (item.id)}
@@ -346,7 +348,7 @@
   .hl-swatch.on, .hl-swatch:hover { border-color: var(--text); }
   .block-pick { margin-left: auto; max-width: 160px; font-size: var(--fs-sm); }
   .hint { font-size: var(--fs-xs); }
-  .suggest { position: fixed; z-index: 50; margin: 0; padding: 4px; list-style: none; min-width: 200px; max-width: 320px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); }
+  .suggest { position: fixed; z-index: 50; margin: 0; padding: 4px; list-style: none; min-width: 200px; max-width: min(320px, calc(100vw - 16px)); border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); }
   .suggest button { display: block; width: 100%; padding: 6px 10px; border-radius: 7px; text-align: left; color: var(--text); }
   .suggest li.on button, .suggest button:hover { background: var(--accent-soft); color: var(--accent); }
 
