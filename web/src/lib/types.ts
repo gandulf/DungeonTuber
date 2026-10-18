@@ -294,6 +294,8 @@ export interface UserState {
   tour_seen: string[];
   /** No "What's new" popup for tour steps the user has not seen. */
   news_off: boolean;
+  /** Ids of the announced videos (lib/videos.ts) the user was already shown. */
+  videos_seen: string[];
   player: PlayerSettings | null;
   /** The view preferences (see stores/profile.svelte.ts). */
   view: Partial<ViewSettings> | null;

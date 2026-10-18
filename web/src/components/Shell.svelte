@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { coverUrl } from '../lib/api';
+  import { api, coverUrl } from '../lib/api';
   import { applyAmbient } from '../lib/ambient';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
   import { openDownloadsDialog } from '../lib/actions';
-  import { t } from '../lib/i18n.svelte';
+  import { locale, t } from '../lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import { data } from '../lib/stores/data.svelte';
   import { adventures, endSongSearch, flushSave, openAdventure, pickBlock } from '../lib/stores/adventure.svelte';
@@ -12,8 +12,10 @@
   import { effects } from '../lib/stores/effects.svelte';
   import { activeTab, library } from '../lib/stores/library.svelte';
   import { cycleRepeat, next, player, previous, setVolume, toggleEffect, toggleMute, togglePlay } from '../lib/stores/player.svelte';
-  import { closeMenu, ui } from '../lib/stores/ui.svelte';
+  import { closeMenu, openDialog, ui } from '../lib/stores/ui.svelte';
   import { unseenTourSteps } from '../lib/tourSteps';
+  import { nextVideo } from '../lib/videos';
+  import VideoDialog from './dialogs/VideoDialog.svelte';
   import AdventureView from './adventure/AdventureView.svelte';
   import AssistantChat from './AssistantChat.svelte';
   import ConfirmDialog from './dialogs/ConfirmDialog.svelte';
@@ -83,6 +85,23 @@
         }, 800);
       }
     }
+  });
+
+  let videoShown = false; // an announced video (lib/videos.ts) is shown once per user, at most one per page load
+
+  $effect(() => {
+    // after the tour and the "What's new" popup, when nothing else is open
+    if (videoShown || !data.user.tour_done || ui.tour || ui.dialog) return;
+    const video = nextVideo(data.user, locale());
+    if (!video) return;
+    const timer = setTimeout(() => {
+      if (videoShown || ui.tour || ui.dialog) return;
+      videoShown = true;
+      data.user.videos_seen = [...data.user.videos_seen, video.key];
+      void api.putUserState({ videos_seen: data.user.videos_seen }).catch(() => undefined);
+      openDialog(VideoDialog, { youtube: video.id, title: video.title, text: video.text });
+    }, 1500);
+    return () => clearTimeout(timer);
   });
 
   $effect(() => {

@@ -2,10 +2,11 @@
   import { t } from '../../lib/i18n.svelte';
   import { data } from '../../lib/stores/data.svelte';
   import { closeDialog } from '../../lib/stores/ui.svelte';
+  import VideoTeasers from '../VideoTeasers.svelte';
   import Modal from './Modal.svelte';
 </script>
 
-<Modal title={t('About')} onclose={closeDialog} width="420px">
+<Modal title={t('About')} onclose={closeDialog} width="min(820px, calc(100vw - 24px))">
   <div class="about">
     <img src="/icon.png" alt="" width="72" height="72" />
     <h3>Dungeon Tuber</h3>
@@ -15,6 +16,7 @@
     {/if}
     <p>{t('Author')}: Gandulf Kohlweiss</p>
     <p><a href="https://github.com/gandulf/DungeonTuber" target="_blank" rel="noreferrer">github.com/gandulf/DungeonTuber</a></p>
+    <div class="videos"><VideoTeasers /></div>
   </div>
 </Modal>
 
@@ -23,4 +25,5 @@
   h3 { margin: 8px 0 2px; }
   p { margin: 4px 0; }
   a { color: var(--accent); }
+  .videos { width: 100%; margin-top: 16px; }
 </style>

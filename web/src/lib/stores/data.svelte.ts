@@ -9,7 +9,7 @@ import { errorToast } from './ui.svelte';
 export const data = $state({
   auth: null as AuthState | null,
   settings: null as ServerSettings | null,
-  user: { favorites: [], tabs: null, accent: '', tour_done: false, tour_seen: [], news_off: false, player: null, view: null, locale: '' } as UserState,
+  user: { favorites: [], tabs: null, accent: '', tour_done: false, tour_seen: [], news_off: false, videos_seen: [], player: null, view: null, locale: '' } as UserState,
   categories: [] as MusicCategory[],
   presets: [] as Preset[],
   version: null as VersionInfo | null,

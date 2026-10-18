@@ -11,7 +11,7 @@
  
 ![Screenshot der Anwendung](docs/screen1.png)
 
-[![DungeonTuber-Intro auf YouTube ansehen](https://img.youtube.com/vi/6qrLKajl07k/maxresdefault.jpg)](https://youtu.be/6qrLKajl07k "DungeonTuber-Intro auf YouTube ansehen")
+[![DungeonTuber-Intro auf YouTube ansehen](https://img.youtube.com/vi/mWnSz5cADNA/maxresdefault.jpg)](https://youtu.be/mWnSz5cADNA "DungeonTuber-Intro auf YouTube ansehen")
 
 ---
 
