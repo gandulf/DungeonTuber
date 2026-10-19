@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { addLink, autoLayout, CARD, fromCard, removeLink, toCard } from '../../lib/adventures';
+  import { addLink, autoLayout, CARD, fromCard, removeLink, shownBlocks, toCard } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
   import { imageUrl } from '../../lib/notes';
   import { addBlock, adventures, change } from '../../lib/stores/adventure.svelte';
@@ -27,7 +27,7 @@
   // the blocks are drawn as cards at their stored positions stretched to the card size (see CARD_SCALE); the world is in card pixels
   const center = (id: string): [number, number] | null => {
     const block = adventure.blocks.find((item) => item.id === id);
-    if (!block) return null;
+    if (!block || block.inline) return null;
     const [x, y] = toCard(block.pos);
     return [x + CARD.w / 2, y + CARD.h / 2];
   };
@@ -36,7 +36,7 @@
   function edge(link: AdventureLink) {
     const from = adventure.blocks.find((item) => item.id === link.from);
     const to = adventure.blocks.find((item) => item.id === link.to);
-    if (!from || !to) return null;
+    if (!from || !to || from.inline || to.inline) return null;
     const [[fx, fy], [tx, ty]] = [toCard(from.pos), toCard(to.pos)];
     const [x1, y1] = [fx + CARD.w, fy + CARD.h / 2];
     const [x2, y2] = [tx, ty + CARD.h / 2];
@@ -118,8 +118,9 @@
 
   /** Shows all blocks. */
   function fit() {
-    if (!frame || !adventure.blocks.length) return;
-    const spots = adventure.blocks.map((block) => toCard(block.pos));
+    const shown = shownBlocks(adventure);
+    if (!frame || !shown.length) return;
+    const spots = shown.map((block) => toCard(block.pos));
     const xs = spots.map(([x]) => x);
     const ys = spots.map(([, y]) => y);
     const [left, top] = [Math.min(...xs), Math.min(...ys)];
@@ -212,7 +213,7 @@
 
   onMount(() => {
     // blocks that were never placed (all at the same spot) are arranged once
-    const [first, ...rest] = adventure.blocks;
+    const [first, ...rest] = shownBlocks(adventure);
     if (editable && rest.length && rest.every((block) => block.pos[0] === first.pos[0] && block.pos[1] === first.pos[1])) change((a) => autoLayout(a));
     fit();
   });
@@ -249,6 +250,7 @@
         {/if}
       </svg>
       {#each adventure.blocks as block, index (block.id)}
+        {#if !block.inline}
         {@const [x, y] = toCard(block.pos)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="node" class:selected={adventures.selected === block.id} class:played={block.played} class:first={index === 0} data-node={block.id}
@@ -261,6 +263,7 @@
             <span class="handle" title={t('Drag to another block to link it')} onpointerdown={(e) => handleDown(e, block.id)}></span>
           {/if}
         </div>
+        {/if}
       {/each}
       {#if selectedLink && editable}
         {@const shape = edge(selectedLink)}

@@ -1,10 +1,11 @@
 <script lang="ts">
   import { tick, type Snippet } from 'svelte';
-  import { blockById, defaultNext, linksFrom, refKey, startBlock } from '../../lib/adventures';
+  import { blockById, defaultNext, linksFrom, nextBlock, refKey, startBlock } from '../../lib/adventures';
   import { clearHighlight, highlightTerms } from '../../lib/highlight';
   import { t } from '../../lib/i18n.svelte';
-  import { blockLinkTarget, imageUrl, markMissingSongLinks, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
-  import { adventures, effectKey, enterBlock, missingEntries, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
+  import { blockLinkTarget, imageUrl, markMissingSongLinks, pdfLinkTarget, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
+  import { adventures, effectKey, enterBlock, missingEntries, openPdf, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
+  import { scrollsSideways, swipeOf } from '../../lib/swipe';
   import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import type { MusicRef } from '../../lib/types';
   import { openDialog, ui } from '../../lib/stores/ui.svelte';
@@ -68,6 +69,12 @@
       void playSongLink(song);
       return;
     }
+    const pdfPage = pdfLinkTarget(event.target);
+    if (pdfPage) {
+      event.preventDefault();
+      void openPdf(pdfPage);
+      return;
+    }
     const target = blockLinkTarget(event.target);
     if (!target) return;
     event.preventDefault();
@@ -94,6 +101,51 @@
     void enterBlock(id);
   }
 
+  /** Arrow keys: right goes to the next block (the only linked one; with none or several links the next of the list), left back to the one before. They leave the
+   *  arrows alone where those have a meaning of their own (text fields, sliders) and while a dialog or a menu is open. */
+  function onKey(event: KeyboardEvent) {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    if (!block || overview || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    if ((event.target as Element | null)?.closest?.('input, textarea, select, [contenteditable], [role="slider"]') || document.querySelector('dialog[open]') || ui.menu) return;
+    if (event.key === 'ArrowLeft' ? goBack() : goNext()) event.preventDefault();
+  }
+
+  /** To the next block (see nextBlock); false when there is none. */
+  function goNext(): boolean {
+    const next = block ? nextBlock(adventure, block.id) : null;
+    if (next) advance(next.id);
+    return !!next;
+  }
+
+  /** Back to the block before, false when there is none. */
+  function goBack(): boolean {
+    if (!adventures.history.length) return false;
+    previousBlock();
+    return true;
+  }
+
+  // touch screens: swipe left for the next block, right for the one before (the arrow keys of play mode); not where a finger has its own
+  // job (a text field, a table that scrolls sideways), while text is selected, or while a dialog or a menu is open
+  let swipe: { x: number; y: number; time: number } | null = null;
+
+  function swipeStart(event: TouchEvent) {
+    swipe = null;
+    const touch = event.touches[0];
+    const target = event.target as Element | null;
+    if (event.touches.length !== 1 || !touch || overview) return;
+    if (target?.closest('input, textarea, select, [contenteditable], [role="slider"]') || scrollsSideways(target, event.currentTarget as Element)) return;
+    swipe = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  }
+
+  function swipeEnd(event: TouchEvent) {
+    const [start, touch] = [swipe, event.changedTouches[0]];
+    swipe = null;
+    if (!start || !touch || !block || getSelection()?.toString() || document.querySelector('dialog[open]') || ui.menu) return;
+    const direction = swipeOf(touch.clientX - start.x, touch.clientY - start.y, Date.now() - start.time);
+    if (direction === 'left') goNext();
+    else if (direction === 'right') goBack();
+  }
+
   /** The overview of all blocks (the map) instead of the scene being played; before the session starts it is the welcome screen. */
   let overview = $state(false);
 
@@ -104,6 +156,8 @@
     else void enterBlock(id);
   }
 </script>
+
+<svelte:window onkeydown={onKey} />
 
 {#if !block || overview}
   <div class="start">
@@ -130,11 +184,11 @@
     <AdventureMap {adventure} current={block?.id ?? start?.id ?? null} playing={!!block} onopen={openFromMap} />
   </div>
 {:else}
-  <article class="play">
+  <article class="play" ontouchstart={swipeStart} ontouchend={swipeEnd}>
     <div class="bar">
-      <button class="icon-btn" title={t('Back')} disabled={!adventures.history.length} onclick={previousBlock}><Icon name="back" size={17} /></button>
+      <button class="icon-btn" title="{t('Back')} (←)" disabled={!adventures.history.length} onclick={previousBlock}><Icon name="back" size={17} /></button>
       <select aria-label={t('Jump to a block')} value={block.id} onchange={(e) => void enterBlock(e.currentTarget.value)}>
-        {#each adventure.blocks as item (item.id)}<option value={item.id}>{item.played ? '✓ ' : ''}{item.title || t('Untitled')}</option>{/each}
+        {#each adventure.blocks.filter((entry) => !entry.inline || entry.id === block.id) as item (item.id)}<option value={item.id}>{item.played ? '✓ ' : ''}{item.title || t('Untitled')}</option>{/each}
       </select>
       <button class="btn sm" title={t('All blocks and their links')} aria-label={t('Overview')} onclick={() => (overview = true)}><Icon name="compass" size={13} /><span class="label">{t('Overview')}</span></button>
       <span class="grow"></span>

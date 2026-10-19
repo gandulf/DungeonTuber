@@ -4,12 +4,37 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
+import threading
+import time
+import uuid
 from pathlib import Path
 from typing import BinaryIO, Iterator
 
 from core.storage.base import AlreadyExists, InvalidPath, NotFound, Storage, StorageEntry, copy_stream, normalize
 
 CHUNK = 1024 * 1024
+# Windows refuses to replace or open a file that another thread (or a sync client, a virus scanner) has open at that moment: that is
+# gone after a few milliseconds, so the access is tried again for about a second
+RETRIES, RETRY_DELAY = 20, 0.05
+
+_write_locks: dict[Path, threading.Lock] = {}
+_write_locks_guard = threading.Lock()
+
+
+def _write_lock(target: Path) -> threading.Lock:
+    with _write_locks_guard:
+        return _write_locks.setdefault(target, threading.Lock())
+
+
+def _retry(action):
+    """Runs `action`, again while Windows reports the file as in use (PermissionError)."""
+    for attempt in range(RETRIES):
+        try:
+            return action()
+        except PermissionError:
+            if attempt == RETRIES - 1:
+                raise
+            time.sleep(RETRY_DELAY)
 
 
 class LocalStorage(Storage):
@@ -64,7 +89,7 @@ class LocalStorage(Storage):
         if not file.is_file():
             raise NotFound(path)
         remaining = None if end is None else end - start + 1
-        with open(file, "rb") as f:
+        with _retry(lambda: open(file, "rb")) as f:
             f.seek(start)
             while remaining is None or remaining > 0:
                 chunk = f.read(CHUNK if remaining is None else min(CHUNK, remaining))
@@ -88,14 +113,16 @@ class LocalStorage(Storage):
         if target.exists() and not overwrite:
             raise AlreadyExists(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_name(target.name + ".part")
+        # one writer per file (two saves of an adventure at once), each with a temporary file of its own
+        tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex[:8]}.part")
         try:
-            with open(tmp, "wb") as out:
-                if isinstance(data, bytes):
-                    out.write(data)
-                else:
-                    copy_stream(data, out, CHUNK)
-            os.replace(tmp, target)
+            with _write_lock(target):
+                with open(tmp, "wb") as out:
+                    if isinstance(data, bytes):
+                        out.write(data)
+                    else:
+                        copy_stream(data, out, CHUNK)
+                _retry(lambda: os.replace(tmp, target))
         finally:
             tmp.unlink(missing_ok=True)
 

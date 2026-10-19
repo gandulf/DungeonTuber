@@ -209,3 +209,23 @@ def test_real_boto3_client_is_configured_for_s3_compatible_services():
     assert config.response_checksum_validation == "when_required"
     assert config.s3["addressing_style"] == "path"
     assert storage.url("a.mp3").startswith("https://public.example.com/bucket/a.mp3?")
+
+
+def test_concurrent_writes_to_one_file_do_not_clash(tmp_path):
+    import threading
+    storage = LocalStorage(tmp_path)
+    errors = []
+
+    def save(n):
+        try:
+            for i in range(20):
+                storage.write("a.dtadv", f"{n}-{i}".encode(), overwrite=True)
+        except OSError as e:  # pragma: no cover
+            errors.append(e)
+
+    threads = [threading.Thread(target=save, args=(n,)) for n in range(6)]
+    [thread.start() for thread in threads]
+    [thread.join() for thread in threads]
+    assert errors == []
+    assert storage.read_bytes("a.dtadv").decode().split("-")[1] == "19"
+    assert [p.name for p in tmp_path.iterdir()] == ["a.dtadv"]

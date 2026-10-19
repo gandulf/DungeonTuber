@@ -14,6 +14,7 @@
   import { openDialog, ui } from '../lib/stores/ui.svelte';
   import type { AssistantSong, SmartFilter, Track } from '../lib/types';
   import CreateOptions from './CreateOptions.svelte';
+  import DictateButton from './DictateButton.svelte';
   import SettingsDialog from './dialogs/SettingsDialog.svelte';
   import Icon from './Icon.svelte';
 
@@ -314,6 +315,7 @@
   {#if configured}
     <form class="compose" onsubmit={(e) => { e.preventDefault(); send(); }}>
       <textarea bind:this={input} bind:value={text} rows="2" placeholder={music ? t('Which songs fit…? e.g. a chase through the sewers') : composing ? t('Describe the piece… e.g. a chase through the sewers') : sounding ? t('Describe the sound… e.g. rain on a tent at night') : smart ? t('Describe the scene… e.g. a chase through the sewers') : t('Your question…')} onkeydown={onKeydown}></textarea>
+      <DictateButton disabled={chat.busy} ontext={(spoken) => { text = text.trim() ? `${text.trimEnd()} ${spoken}` : spoken; input?.focus(); }} />
       <button class="btn primary send" type="submit" disabled={chat.busy || !text.trim()} title={t('Send')} aria-label={t('Send')}><Icon name="send" size={16} /></button>
     </form>
   {/if}

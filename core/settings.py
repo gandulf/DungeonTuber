@@ -72,6 +72,8 @@ class SettingKeys(StrEnum):
     ASSISTANT_EFFECTS_INSTRUCTIONS = "assistantEffectsInstructions"
     # the same for the image mode (the picture style of the block covers for the image generation)
     ASSISTANT_IMAGE_INSTRUCTIONS = "assistantImageInstructions"
+    # the same for the PDF import of adventures (server/adventureimport.py): how the AI splits the book and writes the notes
+    ASSISTANT_IMPORT_INSTRUCTIONS = "assistantImportInstructions"
     # the built-in prompts of the assistant that the SuperAdmin changed ({"compose.vocals": "..."}, see server/assistant.py PROMPTS)
     ASSISTANT_PROMPTS = "assistantPrompts"
     # application key of AcoustID for the metadata lookup (see core/musiclookup.py); never sent back to the browser

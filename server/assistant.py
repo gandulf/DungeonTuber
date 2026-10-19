@@ -331,7 +331,8 @@ def provider(mode: str) -> str | None:
 
 _INSTRUCTION_KEYS = {"general": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, "story": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS,
                      "image": SettingKeys.ASSISTANT_IMAGE_INSTRUCTIONS, "compose": SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS,
-                     "smart": SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, "effects": SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS}
+                     "smart": SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, "effects": SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS,
+                     "import": SettingKeys.ASSISTANT_IMPORT_INSTRUCTIONS}
 
 PROMPTS = {
     "music.system": SYSTEM_PROMPT,
@@ -435,7 +436,7 @@ def status() -> dict:
             "instructions": instructions(), "defaultInstructions": {mode: default_instructions(mode) for mode in ("music", "smart", "compose", "image")},
             "generalInstructions": instructions("general"), "composeInstructions": instructions("compose"),
             "smartInstructions": instructions("smart"), "effectsInstructions": instructions("effects"),
-            "imageInstructions": instructions("image"),
+            "imageInstructions": instructions("image"), "importInstructions": instructions("import"),
             "groqConfigured": bool(groq), "groqModel": groq_model(), "groqDefaultModel": GROQ_DEFAULT_MODEL, "groqKeyHint": _hint(groq),
             "groqModels": GROQ_MODELS, "prompts": prompts()}
 
@@ -457,7 +458,7 @@ def _store(key_setting: str, model_setting: str, default_model: str, key: str | 
 def configure(key: str | None, model_name: str | None, extra_instructions: str | None = None, general_instructions: str | None = None,
               groq_api_key: str | None = None, groq_model_name: str | None = None, compose_instructions: str | None = None,
               smart_instructions: str | None = None, changed_prompts: dict[str, str] | None = None,
-              effects_instructions: str | None = None, image_instructions: str | None = None):
+              effects_instructions: str | None = None, image_instructions: str | None = None, import_instructions: str | None = None):
     """Stores the keys and models of Gemini and Groq and the additional instructions of the modes; None keeps the stored value."""
     for legacy in _LEGACY_KEYS:
         AppSettings.remove(legacy)
@@ -470,7 +471,8 @@ def configure(key: str | None, model_name: str | None, extra_instructions: str |
                                  ("compose", SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS, compose_instructions),
                                  ("smart", SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, smart_instructions),
                                  ("effects", SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS, effects_instructions),
-                                 ("image", SettingKeys.ASSISTANT_IMAGE_INSTRUCTIONS, image_instructions)):
+                                 ("image", SettingKeys.ASSISTANT_IMAGE_INSTRUCTIONS, image_instructions),
+                                 ("import", SettingKeys.ASSISTANT_IMPORT_INSTRUCTIONS, import_instructions)):
         if value is None:
             continue
         default = default_instructions(mode)

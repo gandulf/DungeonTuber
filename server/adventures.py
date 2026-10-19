@@ -175,6 +175,23 @@ def read_image(location: Location, adventure_id: str, name: str) -> tuple[bytes,
     return data, next(mime for extension, mime in IMAGE_TYPES.values() if extension == name.rsplit(".", 1)[1])
 
 
+PDF_NAME = "book.pdf"
+
+
+def save_pdf(location: Location, adventure_id: str, data: bytes):
+    """Keeps the PDF of the book next to the adventure; the notes link to its pages (`pdf:<page>`)."""
+    target = assets_folder(location, adventure_id).child(PDF_NAME)
+    target.storage.write(target.rel, data, overwrite=True)
+
+
+def read_pdf(location: Location, adventure_id: str) -> bytes | None:
+    pdf = assets_folder(location, adventure_id).child(PDF_NAME)
+    try:
+        return pdf.storage.read_bytes(pdf.rel)
+    except StorageError:
+        return None
+
+
 def referenced_images(adventure: dict) -> set[str]:
     """The images the notes and the covers of the blocks use."""
     used = {name for block in adventure["blocks"] for name in IMAGE_LINK.findall(block["markdown"])}

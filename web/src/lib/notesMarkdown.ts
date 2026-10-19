@@ -12,6 +12,7 @@ import { HIGHLIGHT, HIGHLIGHT_COLORS, imageSize, type HighlightColor } from './n
 export const BLOCK_PREFIX = 'block:';
 export const SONG_PREFIX = 'song:';
 export const IMAGE_PREFIX = 'image:';
+export const PDF_PREFIX = 'pdf:';
 
 /** Notes are written with single line breaks, which the notes always showed as breaks (marked's `breaks`). */
 export const MARKED_OPTIONS = { gfm: true, breaks: true };
@@ -106,7 +107,7 @@ export function noteExtensions(options: { resolveImage?: (src: string) => string
       link: {
         openOnClick: false,
         autolink: true,
-        protocols: ['block', 'song'],
+        protocols: ['block', 'song', 'pdf'],
         HTMLAttributes: { target: null, rel: null },
       },
     }),

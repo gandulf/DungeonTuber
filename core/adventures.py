@@ -84,6 +84,8 @@ def normalize_block(raw: dict) -> dict:
         "played": bool(raw.get("played", False)),
         "pos": [_number(pos[0]), _number(pos[1])] if isinstance(pos, list) and len(pos) == 2 else [0.0, 0.0],
         "autoplay": bool(raw.get("autoplay", True)),
+        # an embedded block: not shown in the graph and the overview, only reached through links (extra material, the pages of persons)
+        "inline": bool(raw.get("inline", False)),
         "music": normalize_music(raw.get("music")),
         "effects": normalize_effects(raw.get("effects")),
         "images": [_text(image) for image in (raw.get("images") or [])[:MAX_IMAGES] if _text(image)] if isinstance(raw.get("images"), list) else [],
@@ -125,6 +127,8 @@ def normalize(data: dict, owner: str | None = None, previous: dict | None = None
         "blocks": blocks,
         "links": links,
         "music": adventure_music(data.get("music"), blocks),
+        # the file name of the book (PDF) kept with the adventure (server/adventures.py); the client cannot set it
+        "pdf": _text(previous.get("pdf"), MAX_TITLE),
     }
 
 

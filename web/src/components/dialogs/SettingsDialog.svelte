@@ -232,7 +232,7 @@
   let assistantStatus = $state<AssistantStatus | null>(null);
   let assistantKey = $state('');
   let assistantModel = $state('');
-  type InstructionMode = 'music' | 'smart' | 'compose' | 'effects' | 'image' | 'general';
+  type InstructionMode = 'music' | 'smart' | 'compose' | 'effects' | 'image' | 'import' | 'general';
   /** The additional instructions, one tab per mode of the assistant. */
   const INSTRUCTION_TABS: { mode: InstructionMode; label: string; icon: string; placeholder: string; hint: string; promptHint: string }[] = [
     { mode: 'music', label: 'New music', icon: 'music',
@@ -255,6 +255,10 @@
       placeholder: 'e.g. watercolor illustration, soft light, muted colors',
       hint: 'The picture style, added to every block cover the assistant describes for the image generation. Keep it short: the generator reads only about the first 60 words of a description. "Reset to default" inserts the default style again; saved empty, the default is used.',
       promptHint: 'The built-in prompt tells the AI how to describe a block cover for Stable Diffusion.' },
+    { mode: 'import', label: 'PDF import', icon: 'upload',
+      placeholder: 'e.g. Keep the read-aloud texts in the words of the book. Skip the bestiary and the appendix. Write the notes in German.',
+      hint: 'Added to every import of an adventure book (PDF): how the AI splits the book into blocks and what the notes of a block contain. The number of blocks is chosen in the import dialog.',
+      promptHint: '' },
     { mode: 'general', label: 'General', icon: 'mask', placeholder: 'e.g. We play DSA 4.1 with the core rules and the Aventurian Compendium.',
       hint: 'Added to every question of the general chat: the rules edition, the setting, house rules or the heroes.',
       promptHint: 'The built-in prompt sets the role of the assistant; your instructions above are added to it.' },
@@ -271,10 +275,10 @@
   let instructionTab = $state<InstructionMode>('music');
   /** The default text of the instructions that are open (undefined for the modes that have none). */
   const instructionDefault = $derived(assistantStatus?.defaultInstructions[instructionTab as 'music' | 'smart' | 'compose' | 'image']);
-  let instructions = $state<Record<InstructionMode, string>>({ music: '', smart: '', compose: '', effects: '', image: '', general: '' });
+  let instructions = $state<Record<InstructionMode, string>>({ music: '', smart: '', compose: '', effects: '', image: '', import: '', general: '' });
   const storedInstructions = (status: AssistantStatus): Record<InstructionMode, string> =>
     ({ music: status.instructions, smart: status.smartInstructions, compose: status.composeInstructions, effects: status.effectsInstructions,
-       image: status.imageInstructions, general: status.generalInstructions });
+       image: status.imageInstructions, import: status.importInstructions, general: status.generalInstructions });
   let assistantModels = $state<{ id: string; name: string }[]>([]);
   let groqKey = $state('');
   let groqModel = $state('');
@@ -330,7 +334,7 @@
 
   const assistantPayload = () => ({ ...(assistantKey.trim() ? { key: assistantKey.trim() } : {}), model: assistantModel.trim(),
     instructions: instructions.music.trim(), smartInstructions: instructions.smart.trim(), composeInstructions: instructions.compose.trim(),
-    effectsInstructions: instructions.effects.trim(), imageInstructions: instructions.image.trim(), generalInstructions: instructions.general.trim(), prompts: { ...prompts } });
+    effectsInstructions: instructions.effects.trim(), imageInstructions: instructions.image.trim(), importInstructions: instructions.import.trim(), generalInstructions: instructions.general.trim(), prompts: { ...prompts } });
 
   async function saveAssistant() {
     try {

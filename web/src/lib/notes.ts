@@ -1,7 +1,7 @@
 // Markdown of the notes of an adventure block. Raw HTML is shown as text and only safe link targets survive, so notes
 // (which other users can read once an adventure is public) can never inject markup or scripts.
 // Links can point to a block of the adventure: `[text](block:<id>)` (the id survives renames), or `[[Block title]]` for short,
-// and to a song: `[text](song:<ufid>)` (a click plays it). Images of the adventure are `![alt](image:<name>)`; a size after a bar in
+// and to a song: `[text](song:<ufid>)` (a click plays it), and to a page of the book (PDF): `[text](pdf:<page>)`. Images of the adventure are `![alt](image:<name>)`; a size after a bar in
 // the alt text keeps the aspect ratio: `![map|300](…)` is 300 px wide, `![map|x200](…)` 200 px high, `![map|300x200](…)` fits into
 // that box. Highlighted text is `==text==` (yellow) or `=={green}text==` with one of HIGHLIGHT_COLORS.
 import { Marked } from 'marked';
@@ -21,6 +21,8 @@ export const HIGHLIGHT = new RegExp(`^==(?:\\{(${HIGHLIGHT_COLORS.join('|')})\\}
 const BLOCK_PREFIX = 'block:';
 const SONG_PREFIX = 'song:';
 const IMAGE_PREFIX = 'image:';
+const PDF_PREFIX = 'pdf:';
+const PDF_PAGE = /^[1-9]\d{0,3}$/;
 const IMAGE_NAME = /^[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
 
 /** The song ids (UFIDs) the notes link to. */
@@ -88,6 +90,10 @@ marked.use({
         return `<a href="#" class="block-link${known.some((block) => block.id === id) ? '' : ' broken'}" data-block="${escape(id)}">${text}</a>`;
       }
       if (href.startsWith(SONG_PREFIX)) return `<a href="#" class="song-link" data-song="${escape(href.slice(SONG_PREFIX.length))}">${text}</a>`;
+      if (href.startsWith(PDF_PREFIX)) {
+        const page = href.slice(PDF_PREFIX.length);
+        return PDF_PAGE.test(page) ? `<a href="#" class="pdf-link" data-pdf="${page}">${text}</a>` : text;
+      }
       if (!safeUrl(href)) return text;
       return `<a href="${escape(href)}"${title ? ` title="${escape(title)}"` : ''} target="_blank" rel="noopener noreferrer">${text}</a>`;
     },
@@ -127,4 +133,10 @@ export function blockLinkTarget(target: EventTarget | null): string | null {
 export function songLinkTarget(target: EventTarget | null): string | null {
   const link = (target as Element | null)?.closest?.<HTMLElement>('a[data-song]');
   return link?.dataset.song ?? null;
+}
+
+/** The page of the book (PDF) a click on rendered notes points to (a link `pdf:<page>`), or null. */
+export function pdfLinkTarget(target: EventTarget | null): number | null {
+  const page = (target as Element | null)?.closest?.<HTMLElement>('a[data-pdf]')?.dataset.pdf;
+  return page ? Number(page) : null;
 }

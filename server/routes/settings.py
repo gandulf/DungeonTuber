@@ -10,7 +10,7 @@ from core.utils import DOWNLOAD_LINK, get_broadcast_ip, get_ip, get_current_vers
     is_newer_version_available
 from server.auth import current_user, require_admin, require_auth
 from server.config import default_library_roots, get_config, get_library_roots
-from server import assistant, imagegen, musicgen, soundgen
+from server import assistant, imagegen, musicgen, soundgen, transcribe
 from server.events import hub
 from server.index import get_index
 from server.voxagent import current_backend
@@ -42,6 +42,7 @@ def _settings_dict() -> dict:
     result["voxalyzerActive"] = current_backend() is not None
     result["assistantConfigured"] = assistant.configured()
     result["groqConfigured"] = assistant.groq_configured()
+    result["dictationConfigured"] = transcribe.configured()
     result["musicGenConfigured"] = musicgen.configured()
     result["soundGenConfigured"] = soundgen.configured()
     result["imageGenConfigured"] = imagegen.configured()

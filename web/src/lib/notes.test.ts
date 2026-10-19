@@ -101,3 +101,15 @@ describe('songLinkIds', () => {
     expect(songLinkIds('No links.')).toEqual([]);
   });
 });
+
+describe('links to pages of the book', () => {
+  it('render as links that open the PDF at the page', () => {
+    expect(renderNotes('See [the map](pdf:12).')).toContain('<a href="#" class="pdf-link" data-pdf="12">the map</a>');
+  });
+
+  it('are plain text when the page is not a number', () => {
+    const html = renderNotes('See [x](pdf:abc) and [y](pdf:0).');
+    expect(html).not.toContain('pdf-link');
+    expect(html).toContain('See x and y.');
+  });
+});

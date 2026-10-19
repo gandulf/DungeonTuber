@@ -1,9 +1,10 @@
 """Adventures: blocks of notes with music and effects, linked into a path. Private ones belong to their owner, public ones are
 visible to everybody; only the owner (and the SuperAdmin) changes them. On a server (not the desktop app) private adventures of
 others stay hidden from the SuperAdmin too, like private playlists."""
+import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from core import adventures as model
@@ -16,6 +17,7 @@ from server.events import hub
 from server.routes.library import hidden
 from server.users import ADMIN
 
+logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_auth)])
 
 
@@ -81,8 +83,10 @@ def create_adventure(body: AdventureCreate, user: str = Depends(current_user)):
 
 
 @router.post("/api/adventures/import")
-async def import_adventure(file: UploadFile = File(...), user: str = Depends(current_user)):
-    """Starts the import of an adventure book (PDF) with Gemini in the background; the client polls the job."""
+async def import_adventure(file: UploadFile = File(...), detail: Literal["low", "medium", "high"] = Form(default=adventureimport.DEFAULT_DETAIL),
+                           user: str = Depends(current_user)):
+    """Starts the import of an adventure book (PDF) with Gemini in the background; the client polls the job. `detail` is how fine the AI splits
+    the book into scenes (blocks) and how much their notes hold."""
     if not assistant.api_key():
         raise HTTPException(status_code=400, detail=_("The AI assistant is not configured"))
     if not adventures.has_library():
@@ -94,12 +98,20 @@ async def import_adventure(file: UploadFile = File(...), user: str = Depends(cur
         raise HTTPException(status_code=413, detail=_("The PDF is larger than {0} MB").format(adventureimport.MAX_PDF // (1024 * 1024)))
 
     def store(adventure: dict) -> str:
-        adventures.store_new(adventure)
+        # the book stays with the adventure: its notes link to the pages, the viewer of the app shows it
+        adventure["pdf"] = file.filename or "adventure.pdf"
+        location, stored = adventures.store_new(adventure)
+        try:
+            adventures.save_pdf(location, stored["id"], data)
+        except StorageError as e:
+            logger.warning("Could not keep the PDF of %s: %s", stored["id"], e)
+            stored["pdf"] = ""
+            adventures.save(location, stored)
         hub.publish("adventures.changed", {})
-        return adventure["id"]
+        return stored["id"]
 
     try:
-        return adventureimport.start(data, file.filename or "adventure.pdf", user, store)
+        return adventureimport.start(data, file.filename or "adventure.pdf", user, store, detail)
     except adventureimport.ImportFailed as e:
         raise HTTPException(status_code=409, detail=str(e))
 
@@ -189,6 +201,16 @@ def generate_image(adventure_id: str, body: ImageRequest, user: str = Depends(cu
     except StorageError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return {"name": name, "seed": seed}
+
+
+@router.get("/api/adventures/{adventure_id}/pdf")
+def get_pdf(adventure_id: str, user: str = Depends(current_user)):
+    """The PDF of the book an adventure was imported from."""
+    location, adventure = _load(adventure_id, user)
+    data = adventures.read_pdf(location, adventure_id) if adventure.get("pdf") else None
+    if data is None:
+        raise HTTPException(status_code=404, detail=_("This adventure has no PDF"))
+    return Response(content=data, media_type="application/pdf", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.get("/api/adventures/{adventure_id}/images/{name}")

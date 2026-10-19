@@ -2,6 +2,8 @@
 // Adventures are tabs next to folders and playlists (see stores/library.svelte.ts); the one of the active tab is `adventures.current`.
 import { api, pathToId } from '../api';
 import { addAdventureMusic, addMusic, appendBlock, assignMusic, refKey, removeBlock } from '../adventures';
+import { blockPrompt } from '../adventureAi';
+import { data } from './data.svelte';
 import { t } from '../i18n.svelte';
 import { prefs } from '../prefs.svelte';
 import type { Adventure, AdventureBlock, AdventureImport, AdventureSummary, EffectRef, MusicRef, PlaylistRef, ComposePiece, SmartFilter, SongRef, SoundDescription, SoundKind, Track } from '../types';
@@ -9,7 +11,8 @@ import { applyFilter } from './assistant.svelte';
 import { effects, loadEffects } from './effects.svelte';
 import { closeTab, library, openTab, setGlobal } from './library.svelte';
 import { playEffect, playQueue } from './player.svelte';
-import { askConfirm, askText, errorToast, toast } from './ui.svelte';
+import ImportAdventureDialog from '../../components/adventure/ImportAdventureDialog.svelte';
+import { askConfirm, askText, errorToast, openDialog, toast } from './ui.svelte';
 
 export const adventures = $state({
   list: [] as AdventureSummary[],
@@ -123,26 +126,46 @@ export async function openAdventure(id: string) {
   }
 }
 
+/** Opens the book (PDF) the adventure was imported from, at `page`. The viewer is loaded when it is first needed. */
+export async function openPdf(page = 1) {
+  const adventure = adventures.current;
+  if (!adventure?.pdf) {
+    toast(t('This adventure has no PDF'), 'error');
+    return;
+  }
+  const { default: PdfViewerDialog } = await import('../../components/dialogs/PdfViewerDialog.svelte');
+  openDialog(PdfViewerDialog, { adventureId: adventure.id, title: adventure.pdf, page });
+}
+
+/** Lets the user choose a page of the book (PDF) of the current adventure in the viewer, for a link in the notes: the page, or null when
+ *  the dialog is closed without a choice (or the adventure has no PDF). */
+export async function pickPdfPage(): Promise<number | null> {
+  const adventure = adventures.current;
+  if (!adventure?.pdf) {
+    toast(t('This adventure has no PDF'), 'error');
+    return null;
+  }
+  const { default: PdfViewerDialog } = await import('../../components/dialogs/PdfViewerDialog.svelte');
+  return new Promise((resolve) => openDialog(PdfViewerDialog, { adventureId: adventure.id, title: adventure.pdf, page: 1, onpick: resolve }));
+}
+
 const IMPORT_POLL_MS = 3000;
 
 /** "Import from PDF": the AI (Gemini) reads an adventure book and makes a private adventure of it, one block per scene. It runs on the
  *  server for some minutes; the list of adventures shows how far it is, and the adventure opens when it is done. */
 export function importAdventure() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'application/pdf,.pdf';
-  input.onchange = async () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    try {
-      adventures.importing = await api.importAdventure(file);
-      toast(t('The AI reads "{0}". This takes a few minutes; you can go on meanwhile.', file.name), 'info');
-      void followImport(adventures.importing.id);
-    } catch (e) {
-      errorToast(e);
-    }
-  };
-  input.click();
+  openDialog(ImportAdventureDialog);
+}
+
+/** Starts the import of the chosen PDF; `detail` is how fine the AI splits the book into blocks and how much their notes hold. */
+export async function startAdventureImport(file: File, detail: 'low' | 'medium' | 'high') {
+  try {
+    adventures.importing = await api.importAdventure(file, detail);
+    toast(t('The AI reads "{0}". This takes a few minutes; you can go on meanwhile.', file.name), 'info');
+    void followImport(adventures.importing.id);
+  } catch (e) {
+    errorToast(e);
+  }
 }
 
 async function followImport(id: string) {
@@ -476,6 +499,58 @@ export async function applyCoverWhenReady(adventureId: string, blockId: string, 
     errorToast(e);
   } finally {
     adventures.pendingCovers = adventures.pendingCovers.filter((item) => item !== key);
+  }
+}
+
+/** Deletes the images no block uses any more, in all blocks of the open adventure. */
+export async function cleanUpImages() {
+  const adventure = adventures.current;
+  if (!adventure?.editable) return;
+  try {
+    await flushSave(); // the server looks at the saved notes
+    const { removed } = await api.cleanupAdventureImages(adventure.id);
+    toast(t('{0} unused image(s) removed.', removed));
+  } catch (e) {
+    errorToast(e);
+  }
+}
+
+/** Deletes the selected block after a question. */
+export async function askDeleteBlock() {
+  const block = selectedBlock();
+  if (block && (await askConfirm(t('Delete the block "{0}"?', block.title || t('Untitled'))))) deleteBlock(block.id);
+}
+
+/** Paints a cover for every block of the open adventure that has none: the assistant describes the block (title and notes) as a picture,
+ *  the image generation paints it. One after the other (the generator is a single service that has to start first); the blocks wait
+ *  with their cover pending, and every cover is set as soon as it is done. */
+export async function generateCovers() {
+  const adventure = adventures.current;
+  if (!adventure?.editable) return;
+  const todo = adventure.blocks.filter((block) => !block.cover && !coverPending(adventure.id, block.id) && blockPrompt(block));
+  if (!todo.length) {
+    toast(t('Every block has a cover image already.'));
+    return;
+  }
+  if (!(await askConfirm(t('Paint a cover image for {0} block(s) with AI? This takes a while; it runs in the background.', todo.length)))) return;
+  const described = !!(data.settings?.groqConfigured || data.settings?.assistantConfigured);
+  const keys = todo.map((block) => `${adventure.id}/${block.id}`);
+  adventures.pendingCovers = [...adventures.pendingCovers, ...keys];
+  toast(t('The cover images are painted in the background.'), 'info');
+  for (const block of todo) {
+    const scene = `Adventure: ${adventure.title}\n\n${blockPrompt(block)}`;
+    const painting = (async () => {
+      let text = scene;
+      if (described) {
+        try {
+          text = (await api.assistantChat([{ role: 'user', content: scene }], 'image')).caption?.trim() || scene;
+        } catch {
+          // the notes themselves are the description
+        }
+      }
+      return api.generateAdventureImage(adventure.id, text, 'landscape');
+    })();
+    await applyCoverWhenReady(adventure.id, block.id, painting);
   }
 }
 

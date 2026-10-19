@@ -63,7 +63,7 @@ def test_the_key_is_never_sent_back(client):
                       "instructions": assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip(),
                       "defaultInstructions": {"music": assistant.DEFAULT_MUSIC_INSTRUCTIONS.strip(), "smart": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(),
                                               "compose": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "image": assistant.DEFAULT_IMAGE_INSTRUCTIONS},
-                      "generalInstructions": "", "composeInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "smartInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "effectsInstructions": "", "imageInstructions": assistant.DEFAULT_IMAGE_INSTRUCTIONS, "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
+                      "generalInstructions": "", "composeInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "smartInstructions": assistant.DEFAULT_SETTING_INSTRUCTIONS.strip(), "effectsInstructions": "", "imageInstructions": assistant.DEFAULT_IMAGE_INSTRUCTIONS, "importInstructions": "", "groqConfigured": False, "groqModel": assistant.GROQ_DEFAULT_MODEL,
                       "groqDefaultModel": assistant.GROQ_DEFAULT_MODEL, "groqKeyHint": "", "groqModels": assistant.GROQ_MODELS,
                       "prompts": assistant.prompts()}
     assert "gsk_secret" not in client.get("/api/assistant/config").text
@@ -449,3 +449,41 @@ def test_the_image_mode_has_its_own_instructions_with_a_style_default(client):
     assert status["imageInstructions"] == "watercolor, soft light"
     assert assistant.system_prompt("image").endswith("watercolor, soft light")
     assert client.put("/api/assistant/config", json={"imageInstructions": ""}).json()["imageInstructions"] == style
+
+
+def test_dictation_transcribes_with_groq_whisper(client, services, monkeypatch):
+    calls, _answers = services
+    assert client.get("/api/settings").json()["dictationConfigured"] is False
+    audio = {"file": ("dictation.webm", b"AUDIO", "audio/webm;codecs=opus")}
+    assert client.post("/api/assistant/transcribe", files=audio).status_code == 409
+    client.put("/api/assistant/config", json={"groqKey": "gsk_groq_secret_5678"})
+    assert client.get("/api/settings").json()["dictationConfigured"] is True
+
+    sent = []
+
+    def urlopen(request, timeout=None):
+        sent.append({"url": request.full_url, "headers": dict(request.header_items()), "body": request.data})
+        return _Response(json.dumps({"text": " Eine Taverne. "}).encode())
+
+    monkeypatch.setattr(assistant.urllib.request, "urlopen", urlopen)
+    result = client.post("/api/assistant/transcribe", files=audio, data={"language": "de"})
+    assert result.json() == {"text": "Eine Taverne."}
+    assert sent[0]["url"] == "https://api.groq.com/openai/v1/audio/transcriptions"
+    assert sent[0]["headers"]["Authorization"] == "Bearer gsk_groq_secret_5678"
+    assert b"whisper-large-v3-turbo" in sent[0]["body"] and b'name="language"\r\n\r\nde' in sent[0]["body"] and b"AUDIO" in sent[0]["body"]
+    assert b'filename="dictation.webm"' in sent[0]["body"]
+    assert calls == []
+
+
+def test_dictation_falls_back_to_gemini_and_validates_the_recording(client, services):
+    calls, answers = services
+    client.put("/api/assistant/config", json={"key": "gemini_secret_1234"})
+    answers["gemini"].append("Eine Taverne.")
+    result = client.post("/api/assistant/transcribe", files={"file": ("a.ogg", b"AUDIO", "audio/ogg")})
+    assert result.json() == {"text": "Eine Taverne."}
+    part = calls[0]["body"]["contents"][0]["parts"][1]["inline_data"]
+    assert part["mime_type"] == "audio/ogg" and part["data"] == "QVVESU8="
+    assert client.post("/api/assistant/transcribe", files={"file": ("a.ogg", b"", "audio/ogg")}).status_code == 502
+    too_long = b"0" * (10 * 1024 * 1024 + 1)
+    assert client.post("/api/assistant/transcribe", files={"file": ("a.ogg", too_long, "audio/ogg")}).status_code == 502
+    assert client.post("/api/assistant/transcribe", files={"file": ("a.ogg", b"A", "audio/ogg")}, data={"language": "Deutsch!"}).status_code == 422

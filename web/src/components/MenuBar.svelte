@@ -184,11 +184,14 @@
   .assistant.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
   /* phones: the fixed size controls no longer fit next to the tabs, so the tabs get their own row */
   @media (max-width: 480px) {
-    .topbar { flex-wrap: wrap; gap: 6px; }
-    .icon-btn { min-width: 36px; min-height: 36px; } /* the touch size of 40px would push the last button onto a line of its own */
+    .topbar { flex-wrap: wrap; gap: 4px; }
+    .icon-btn { min-width: 34px; min-height: 36px; padding-inline: 0; } /* the touch size of 40px would push the last button onto a line of its own */
+    .search { width: 34px; padding: 0 9px; }
+    .assistant { min-width: 34px; padding: 0 8px; }
     .tabs-area { order: 10; flex: 1 0 100%; }
     .tabs-area:has(.hint) { display: none; } /* only the welcome hint, no tabs */
-    .opt { padding: 0 8px; }
+    .mode { font-size: var(--fs-xs); }
+    .opt { padding: 0 6px; }
     .search, .search-wrap { margin-left: auto; }
     .search-wrap .search { margin-left: 0; }
     /* an open search takes the free space of the row: the mode switch and the assistant step aside
@@ -196,5 +199,12 @@
     .search:focus-within, .search.active { flex: 1; width: auto; min-width: 0; margin-left: 0; }
     .search-wrap:has(.search:focus-within), .search-wrap:has(.search.active) { flex: 1; display: flex; min-width: 0; margin-left: 0; }
     .topbar:has(.search:focus-within) :is(.mode, .assistant), .topbar:has(.search.active) :is(.mode, .assistant) { display: none; }
+  }
+  /* the narrowest phones: the controls (library, search, mode switch, assistant, menu, lights) still have to share one line */
+  @media (max-width: 360px) {
+    .topbar { gap: 3px; }
+    .icon-btn, .search, .assistant { min-width: 32px; }
+    .search { width: 32px; padding: 0 8px; }
+    .opt { padding: 0 4px; }
   }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { coverUrl } from '../../lib/api';
   import { toggleFavorite } from '../../lib/actions';
+  import { listening, stopDictation } from '../../lib/dictation.svelte';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { visibleRows } from '../../lib/stores/library.svelte';
@@ -9,6 +10,7 @@
   import Icon from '../Icon.svelte';
   import EffectMini from './EffectMini.svelte';
   import SeekBar from './SeekBar.svelte';
+  import SpectrumOrb from './SpectrumOrb.svelte';
   import VolumeControl from './VolumeControl.svelte';
 
   const canPlay = $derived(!!player.track || visibleRows().length > 0);
@@ -62,9 +64,17 @@
     <div class="controls">
       <button class="icon-btn" class:active={prefs.shuffle} title={t('Shuffle')} onclick={toggleShuffle}><Icon name="shuffle" size={18} /></button>
       <button class="icon-btn big" title="{t('Previous')} (Ctrl+B)" onclick={previous} disabled={!canPlay}><Icon name="prev" size={20} /></button>
-      <button class="play" title="{t('Play')} (Ctrl+P)" onclick={togglePlay} disabled={!canPlay}>
-        <Icon name={player.playing ? 'pause' : 'play'} size={22} />
-      </button>
+      <!-- while the microphone dictates, the button is the spectrum ball of the voice; a click ends the dictation -->
+      {#if listening.active}
+        <button class="play listening" title={t('Stop dictating')} aria-label={t('Stop dictating')} onclick={stopDictation}
+                style:box-shadow="0 0 0 {6 + listening.level * 6}px var(--accent-soft), 0 6px {22 + listening.level * 18}px var(--accent-glow)">
+          <SpectrumOrb />
+        </button>
+      {:else}
+        <button class="play" title="{t('Play')} (Ctrl+P)" onclick={togglePlay} disabled={!canPlay}>
+          <Icon name={player.playing ? 'pause' : 'play'} size={22} />
+        </button>
+      {/if}
       <button class="icon-btn big" title="{t('Next')} (Ctrl+N)" onclick={() => next()} disabled={!canPlay}><Icon name="next" size={20} /></button>
       <button class="icon-btn" class:active={prefs.repeat !== 'none'} title="{t('Repeat')}: {prefs.repeat} (Ctrl+R)" onclick={cycleRepeat}>
         <Icon name={prefs.repeat === 'single' ? 'repeat-one' : 'repeat'} size={18} />

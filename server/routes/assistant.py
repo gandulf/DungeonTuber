@@ -2,11 +2,11 @@
 music generation (ACE-Step on Modal), sounds of the sound generation (Stable Audio 3 on Modal), and their configuration."""
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from core.i18n import _
-from server import assistant, imagegen, musicgen, songcheck, soundgen
+from server import assistant, imagegen, musicgen, songcheck, soundgen, transcribe
 from server.auth import current_user, require_admin, require_auth
 from server.paths import safe_path
 
@@ -80,6 +80,7 @@ class AssistantConfig(BaseModel):
     smartInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     effectsInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     imageInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
+    importInstructions: str | None = Field(default=None, max_length=assistant.MAX_INSTRUCTIONS_LENGTH)
     # the built-in prompts by name (see assistant.PROMPTS); empty or the default restores the built-in one
     prompts: dict[str, Annotated[str, Field(max_length=assistant.MAX_PROMPT_LENGTH)]] | None = Field(default=None, max_length=20)
     groqKey: str | None = None  # None keeps the stored key
@@ -94,6 +95,18 @@ def chat(body: ChatRequest):
         raise HTTPException(status_code=400, detail="The last message must come from the user")
     try:
         return assistant.chat([m.model_dump() for m in body.messages], body.mode, body.context.model_dump() if body.context else None)
+    except assistant.AssistantError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.post("/api/assistant/transcribe")
+def transcribe_speech(file: UploadFile = File(...), language: str = Form(default="", pattern=r"^([a-z]{2,3})?$")):
+    """The text of a recording of the microphone (dictation)."""
+    if not transcribe.configured():
+        raise HTTPException(status_code=409, detail=_("The AI assistant is not configured"))
+    audio = file.file.read(transcribe.MAX_AUDIO_BYTES + 1)
+    try:
+        return {"text": transcribe.transcribe(audio, file.content_type or "", language)}
     except assistant.AssistantError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -119,7 +132,7 @@ def get_models():
 def put_config(body: AssistantConfig):
     assistant.configure(body.key, body.model, body.instructions, body.generalInstructions, body.groqKey, body.groqModel,
                          body.composeInstructions, body.smartInstructions, body.prompts, body.effectsInstructions,
-                         body.imageInstructions)
+                         body.imageInstructions, body.importInstructions)
     return assistant.status()
 
 

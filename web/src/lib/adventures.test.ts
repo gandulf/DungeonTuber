@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addAdventureMusic, addLink, addMusic, appendBlock, blocksUsing, moveEntry, searchBlocks, removeAdventureMusic, autoLayout, CARD, CARD_GAP, cardLayout, fromCard, toCard, NODE_H, NODE_W, defaultNext, moveBlock, newBlock, removeBlock, removeLink, startBlock, unreachable } from './adventures';
+import { addAdventureMusic, addLink, addMusic, appendBlock, blocksUsing, moveEntry, searchBlocks, removeAdventureMusic, autoLayout, CARD, CARD_GAP, cardLayout, fromCard, toCard, NODE_H, NODE_W, defaultNext, moveBlock, newBlock, removeBlock, nextBlock, removeLink, shownBlocks, startBlock, unreachable } from './adventures';
 import type { Adventure, MusicRef } from './types';
 
 function graph(...titles: string[]): Pick<Adventure, 'blocks' | 'links'> {
@@ -158,5 +158,54 @@ describe('adventure graph', () => {
     expect(addMusic(block, { type: 'song', ufid: 'u1', path: 'x.mp3', title: 'X' })).toBe(true);
     expect(addMusic(block, { type: 'song', ufid: 'u1', path: 'moved.mp3', title: 'X' })).toBe(false);
     expect(addMusic(block, { type: 'playlist', id: 'u1', path: 'p.m3u', title: 'P' })).toBe(true);
+  });
+});
+
+describe('embedded (inline) blocks', () => {
+  function withInline() {
+    const g = graph('a', 'b', 'p');
+    g.blocks[2].inline = true;
+    addLink(g, 'a', 'b');
+    return g;
+  }
+
+  it('are not part of the layout of the overview and the graph', () => {
+    const g = withInline();
+    expect(shownBlocks(g).map((block) => block.id)).toEqual(['a', 'b']);
+    expect([...cardLayout(g).pos.keys()]).toEqual(['a', 'b']);
+    autoLayout(g);
+    expect(g.blocks[2].pos).toEqual([2 * 40, 2 * 40]); // never arranged
+  });
+
+  it('are not marked as unreachable and do not start a session', () => {
+    const g = withInline();
+    expect(unreachable(g)).toEqual([]);
+    g.blocks[0].played = true;
+    g.blocks[1].played = true;
+    expect(startBlock(g)?.id).toBe('a'); // all scenes played: the first block, not the embedded one
+  });
+});
+
+describe('next block (the right arrow key)', () => {
+  it('follows a single link, else the next block of the list', () => {
+    const g = graph('a', 'b', 'c', 'd');
+    addLink(g, 'a', 'c'); // a single link wins over the list order
+    expect(nextBlock(g, 'a')?.id).toBe('c');
+    expect(nextBlock(g, 'b')?.id).toBe('c'); // no link: the next in the list
+    expect(nextBlock(g, 'd')).toBeNull(); // the end of the list
+  });
+
+  it('takes the next block of the list when there is a choice', () => {
+    const g = graph('a', 'b', 'c', 'd');
+    addLink(g, 'a', 'd', 'left door');
+    addLink(g, 'a', 'c', 'right door');
+    expect(nextBlock(g, 'a')?.id).toBe('b');
+  });
+
+  it('skips embedded blocks in the list and does not continue from one', () => {
+    const g = graph('a', 'p', 'b');
+    g.blocks[1].inline = true;
+    expect(nextBlock(g, 'a')?.id).toBe('b');
+    expect(nextBlock(g, 'p')).toBeNull();
   });
 });

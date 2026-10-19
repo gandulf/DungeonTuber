@@ -7,11 +7,14 @@
   import { clearHighlight, highlightTerms } from '../../lib/highlight';
   import { t } from '../../lib/i18n.svelte';
   import { imageUrl, resolveBlockTitles, type BlockRef } from '../../lib/notes';
-  import { BLOCK_PREFIX, IMAGE_PREFIX, noteExtensions, SONG_PREFIX, toStoredMarkdown } from '../../lib/notesMarkdown';
+  import { adventures, openPdf, pickPdfPage } from '../../lib/stores/adventure.svelte';
+  import { BLOCK_PREFIX, IMAGE_PREFIX, noteExtensions, PDF_PREFIX, SONG_PREFIX, toStoredMarkdown } from '../../lib/notesMarkdown';
   import { HIGHLIGHT_COLORS, type HighlightColor } from '../../lib/notes';
   import { askText, errorToast, openDialog, ui } from '../../lib/stores/ui.svelte';
   import type { MusicRef } from '../../lib/types';
+  import DictateButton from '../DictateButton.svelte';
   import Icon from '../Icon.svelte';
+  import PickBlockDialog from './PickBlockDialog.svelte';
   import PickMusicDialog from './PickMusicDialog.svelte';
 
   /** The notes of a block as a WYSIWYG editor (Tiptap). They are stored as Markdown (lib/notesMarkdown.ts): `onchange` gets the
@@ -127,22 +130,115 @@
     }
   }
 
-  // --- links: the selected text becomes the link, or without a selection the title is inserted as the link's text
+  // --- links: the selected text becomes the link, or without a selection the title is inserted as the link's text. With the caret in a
+  // link (and nothing selected) the link gets the new target instead of a second link being inserted.
+  type LinkKind = 'block' | 'song' | 'pdf' | 'web';
+  const LINK_ICONS: Record<LinkKind, string> = { block: 'tree', song: 'music', pdf: 'library', web: 'link' };
+  const kindOf = (href: string): LinkKind =>
+    href.startsWith(BLOCK_PREFIX) ? 'block' : href.startsWith(SONG_PREFIX) ? 'song' : href.startsWith(PDF_PREFIX) ? 'pdf' : 'web';
+
+  /** What a link points to, in words: the block, the song, the page or the address. */
+  function targetLabel(href: string): string {
+    const kind = kindOf(href);
+    if (kind === 'block') return blocks.find((block) => block.id === href.slice(BLOCK_PREFIX.length))?.title || t('Untitled');
+    if (kind === 'song') {
+      const ufid = href.slice(SONG_PREFIX.length);
+      const song = pool.find((ref) => ref.type === 'song' && ref.ufid === ufid);
+      return song?.title || t('Song');
+    }
+    return kind === 'pdf' ? t('Page {0}', Number(href.slice(PDF_PREFIX.length)) || 1) : href;
+  }
+
+  /** The link under the caret (the toolbar follows every change of the editor). */
+  const caretLink = $derived.by(() => {
+    void version;
+    if (!editor?.isActive('link')) return null;
+    const href = String(editor.getAttributes('link').href ?? '');
+    return { href, kind: kindOf(href) };
+  });
+
+  let host = $state<HTMLDivElement | null>(null);
+  let toolbarEl = $state<HTMLDivElement | null>(null);
+  let barWidth = $state(0);
+  let barHeight = $state(0);
+
+  /** Where the popup of the link under the caret goes: above the link, below it when there is no room above (the toolbar sticks to the top). */
+  const popup = $derived.by(() => {
+    void version;
+    if (!caretLink || !editor || !host) return null;
+    try {
+      const caret = editor.view.coordsAtPos(editor.state.selection.from);
+      const box = host.getBoundingClientRect();
+      const floor = toolbarEl?.getBoundingClientRect().bottom ?? box.top;
+      const above = caret.top - barHeight - 8 >= floor;
+      return { left: Math.max(0, Math.min(caret.left - box.left, box.width - barWidth)), top: (above ? caret.top - barHeight - 6 : caret.bottom + 6) - box.top };
+    } catch {
+      return null; // the caret is not in the visible document
+    }
+  });
+
   function link(href: string, title: string) {
     if (!editor) return;
     const chain = editor.chain().focus();
-    if (editor.state.selection.empty) linkText(chain, null, title, href);
-    else chain.extendMarkRange('link').setLink({ href }).run();
+    if (!editor.state.selection.empty) {
+      chain.extendMarkRange('link').setLink({ href }).run();
+    } else if (editor.isActive('link')) {
+      // the link under the caret: its text follows the new target when it was the name of the old one, otherwise it stays as written
+      const old = targetLabel(String(editor.getAttributes('link').href ?? ''));
+      chain.extendMarkRange('link').run();
+      const { from, to } = editor.state.selection;
+      if (editor.state.doc.textBetween(from, to) === old) {
+        editor.chain().focus().insertContentAt({ from, to }, [{ type: 'text', text: title, marks: [{ type: 'link', attrs: { href } }] }]).run();
+      } else {
+        editor.chain().focus().setLink({ href }).run();
+      }
+    } else {
+      linkText(chain, null, title, href);
+    }
   }
 
   async function webLink() {
     if (!editor) return;
-    if (editor.isActive('link')) {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
-    }
-    const href = (await askText(t('Link'), t('Address'), 'https://'))?.trim();
+    const current = caretLink?.kind === 'web' ? caretLink.href : 'https://';
+    const href = (await askText(t('Link'), t('Address'), current))?.trim();
     if (href) link(href, href);
+  }
+
+  function removeLink() {
+    editor?.chain().focus().extendMarkRange('link').unsetLink().run();
+  }
+
+  /** The block, song or page the link under the caret points to, as Ctrl/Cmd + click does; a web page opens in a new window. */
+  function openLink() {
+    const href = caretLink?.href ?? '';
+    if (caretLink?.kind === 'block') onopenblock(href.slice(BLOCK_PREFIX.length));
+    else if (caretLink?.kind === 'song') onplaysong(href.slice(SONG_PREFIX.length));
+    else if (caretLink?.kind === 'pdf') void openPdf(Number(href.slice(PDF_PREFIX.length)) || 1);
+    else if (href) window.open(href, '_blank', 'noopener,noreferrer');
+  }
+
+  /** Chooses another target for the link under the caret. */
+  function changeLink() {
+    if (caretLink?.kind === 'block') blockLink();
+    else if (caretLink?.kind === 'song') songLink();
+    else if (caretLink?.kind === 'pdf') void pdfLink();
+    else void webLink();
+  }
+
+  /** A link to a page of the adventure's book: the page is chosen in the viewer (only pages the book has). */
+  async function pdfLink() {
+    const page = await pickPdfPage();
+    if (page) link(PDF_PREFIX + page, t('Page {0}', page));
+  }
+
+  /** A link to another block of the adventure: the block is chosen in a dialog. */
+  function blockLink() {
+    const target = caretLink?.kind === 'block' ? caretLink.href.slice(BLOCK_PREFIX.length) : null;
+    openDialog(PickBlockDialog, {
+      blocks,
+      current: target,
+      onpick: (block: BlockRef) => link(BLOCK_PREFIX + block.id, block.title || t('Untitled')),
+    });
   }
 
   function songLink() {
@@ -158,10 +254,11 @@
   /** Ctrl/Cmd + click on a link to a block opens it, on a song link plays it; with a finger a tap does (touch has no Ctrl). */
   function followLink(event: MouseEvent): boolean {
     const href = (event.target as Element | null)?.closest?.('a')?.getAttribute('href') ?? '';
-    if (!href.startsWith(BLOCK_PREFIX) && !href.startsWith(SONG_PREFIX)) return false;
+    if (!href.startsWith(BLOCK_PREFIX) && !href.startsWith(SONG_PREFIX) && !href.startsWith(PDF_PREFIX)) return false;
     event.preventDefault();
     if (!(event.ctrlKey || event.metaKey || ui.coarse)) return true; // a plain click puts the caret into the link
-    if (href.startsWith(BLOCK_PREFIX)) onopenblock(href.slice(BLOCK_PREFIX.length));
+    if (href.startsWith(PDF_PREFIX)) void openPdf(Number(href.slice(PDF_PREFIX.length)) || 1);
+    else if (href.startsWith(BLOCK_PREFIX)) onopenblock(href.slice(BLOCK_PREFIX.length));
     else onplaysong(href.slice(SONG_PREFIX.length));
     return true;
   }
@@ -240,7 +337,7 @@
   const run = (apply: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => editor && apply(editor.chain().focus()).run();
 
   // every button shows an icon of the app's own set (one stroke style), no letters or emoji
-  type Tool = { icon: string; title: string; on?: () => boolean; click: () => void; disabled?: () => boolean };
+  type Tool = { icon: string; title: string; on?: () => boolean; click: () => void; disabled?: () => boolean; hidden?: () => boolean };
   const tools: (Tool | null)[] = [
     { icon: 'bold', title: 'Bold', on: () => active('bold'), click: () => run((c) => c.toggleBold()) },
     { icon: 'italic', title: 'Italic', on: () => active('italic'), click: () => run((c) => c.toggleItalic()) },
@@ -253,8 +350,10 @@
     { icon: 'quote', title: 'Read-aloud text (quote)', on: () => active('blockquote'), click: () => run((c) => c.toggleBlockquote()) },
     { icon: 'divider', title: 'Divider', click: () => run((c) => c.setHorizontalRule()) },
     null,
-    { icon: 'link', title: 'Link to a web page', on: () => active('link') && !blockOrSongLink(), click: () => void webLink() },
+    { icon: 'link', title: 'Link to a web page', on: () => active('link') && caretLink?.kind === 'web', click: () => void webLink() },
+    { icon: 'tree', title: 'Link the selected text to a block (or type [[)', click: blockLink, hidden: () => !blocks.length },
     { icon: 'music', title: 'Link the selected text to a song', click: songLink },
+    { icon: 'library', title: 'Link the selected text to a page of the book (PDF)', click: () => void pdfLink(), hidden: () => !adventures.current?.pdf },
     { icon: 'image', title: 'Insert an image', click: () => fileInput?.click() },
     null,
     { icon: 'undo', title: 'Undo', click: () => run((c) => c.undo()), disabled: () => !can('undo') },
@@ -270,17 +369,14 @@
     highlightMenu = false;
     run((c) => (color && !active('highlight', { color }) ? c.setHighlight(color) : c.setHighlight(null)));
   }
-
-  function blockOrSongLink(): boolean {
-    const href = String(editor?.getAttributes('link').href ?? '');
-    return href.startsWith(BLOCK_PREFIX) || href.startsWith(SONG_PREFIX);
-  }
 </script>
 
-<div class="notes-editor">
-  <div class="toolbar" role="toolbar" aria-label={t('Format')}>
+<div class="notes-editor" bind:this={host}>
+  <div class="toolbar" role="toolbar" aria-label={t('Format')} bind:this={toolbarEl}>
     {#each tools as tool, index (index)}
-      {#if tool}
+      {#if tool?.hidden?.()}
+        <!-- no book: no button -->
+      {:else if tool}
         <button type="button" class="fmt" class:on={tool.on?.()} disabled={tool.disabled?.()} title={t(tool.title)} aria-label={t(tool.title)}
                 onmousedown={(e) => e.preventDefault()} onclick={tool.click}><Icon name={tool.icon} size={16} /></button>
         {#if tool.icon === 'strike'}
@@ -307,17 +403,22 @@
         <span class="sep" aria-hidden="true"></span>
       {/if}
     {/each}
-    {#if blocks.length}
-      <select class="block-pick" aria-label={t('Link to a block')} title={t('Link the selected text to a block (or type [[)')} value=""
-              onchange={(e) => { const target = blocks.find((block) => block.id === e.currentTarget.value); e.currentTarget.value = ''; if (target) link(BLOCK_PREFIX + target.id, target.title || t('Untitled')); }}>
-        <option value="">{t('Block link…')}</option>
-        {#each blocks as block (block.id)}<option value={block.id}>{block.title || t('Untitled')}</option>{/each}
-      </select>
-    {/if}
+    <span class="sep" aria-hidden="true"></span>
+    <DictateButton ontext={(spoken) => editor?.chain().focus().insertContent(`${spoken} `).run()} />
     <input bind:this={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden
            onchange={(e) => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ''; if (file) void upload(file); }} />
   </div>
   <div class="surface selectable" data-notes={scope} bind:this={element}></div>
+  {#if caretLink && popup}
+    <div class="link-pop" role="group" aria-label={t('Link')} bind:clientWidth={barWidth} bind:clientHeight={barHeight}
+         style:left="{popup.left}px" style:top="{popup.top}px">
+      <Icon name={LINK_ICONS[caretLink.kind]} size={14} />
+      <span class="target ellipsis" title={caretLink.href}>{caretLink.kind === 'block' && !blocks.some((block) => caretLink!.href.endsWith(block.id)) ? t('Block not found') : targetLabel(caretLink.href)}</span>
+      <button type="button" class="btn sm" onmousedown={(e) => e.preventDefault()} onclick={changeLink}>{t('Change…')}</button>
+      <button type="button" class="btn sm" onmousedown={(e) => e.preventDefault()} onclick={openLink}>{t('Open')}</button>
+      <button type="button" class="btn sm" onmousedown={(e) => e.preventDefault()} onclick={removeLink}>{t('Remove link')}</button>
+    </div>
+  {/if}
   <span class="hint muted">{ui.coarse ? t('Tap a block link to open it or a song link to play it.') : t('Ctrl + click opens a block link or plays a song link.')}</span>
   {#if suggest}
     <ul class="suggest" role="listbox" aria-label={t('Blocks')} style:left="{suggest.left}px" style:top="{suggest.top}px">
@@ -331,7 +432,7 @@
 </div>
 
 <style>
-  .notes-editor { display: flex; flex-direction: column; gap: 6px; }
+  .notes-editor { position: relative; display: flex; flex-direction: column; gap: 6px; }
   .toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border); }
   .fmt { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-radius: 7px; color: var(--muted); }
   .fmt:hover:not(:disabled) { background: var(--hover); color: var(--text); }
@@ -346,8 +447,10 @@
              background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); }
   .hl-swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
   .hl-swatch.on, .hl-swatch:hover { border-color: var(--text); }
-  .block-pick { margin-left: auto; max-width: 160px; font-size: var(--fs-sm); }
   .hint { font-size: var(--fs-xs); }
+  .link-pop { position: absolute; z-index: 4; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; padding: 6px 8px; border-radius: 10px;
+              background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); color: var(--accent); }
+  .link-pop .target { min-width: 0; max-width: 240px; font-size: var(--fs-sm); }
   .suggest { position: fixed; z-index: 50; margin: 0; padding: 4px; list-style: none; min-width: 200px; max-width: min(320px, calc(100vw - 16px)); border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); }
   .suggest button { display: block; width: 100%; padding: 6px 10px; border-radius: 7px; text-align: left; color: var(--text); }
   .suggest li.on button, .suggest button:hover { background: var(--accent-soft); color: var(--accent); }
@@ -367,6 +470,8 @@
   .surface :global(.ProseMirror a[href^="block:"]::before) { content: '↪ '; }
   .surface :global(.ProseMirror a[href^="song:"]) { text-decoration: none; padding: 0 6px; border-radius: 6px; background: var(--accent-soft); }
   .surface :global(.ProseMirror a[href^="song:"]::before) { content: '♪ '; }
+  .surface :global(.ProseMirror a[href^="pdf:"]) { text-decoration: none; padding: 0 6px; border-radius: 6px; background: var(--accent-soft); }
+  .surface :global(.ProseMirror a[href^="pdf:"]::before) { content: '▤ '; }
   .surface :global(.ProseMirror img) { max-width: 100%; border-radius: 8px; object-fit: contain; vertical-align: bottom; }
   .surface :global(.ProseMirror img.ProseMirror-selectednode), .surface :global([data-resize-container].ProseMirror-selectednode img) { outline: 2px solid var(--accent); }
   .surface :global([data-resize-container]) { display: inline-block; max-width: 100%; }

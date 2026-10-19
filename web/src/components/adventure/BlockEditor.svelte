@@ -2,13 +2,14 @@
   import { untrack } from 'svelte';
   import { api } from '../../lib/api';
   import { blockSongsFromTransfer, canDropOnBlock } from '../../lib/actions';
+  import { portal } from '../../lib/portal';
   import { addAdventureMusic, addLink, addMusic, assignMusic, linksFrom, linksTo, moveEntry, refKey, removeLink } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
-  import { blockLinkTarget, imageUrl, markMissingSongLinks, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
-  import { adventures, change, deleteBlock, effectKey, coverPending, flushSave, missingEntries, playSongLink, refTracks, searchSongsForBlock, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
+  import { blockLinkTarget, imageUrl, markMissingSongLinks, pdfLinkTarget, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
+  import { adventures, change, cleanUpImages, effectKey, coverPending, missingEntries, openPdf, playSongLink, refTracks, searchSongsForBlock, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
   import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import { data } from '../../lib/stores/data.svelte';
-  import { askConfirm, errorToast, openDialog, toast, ui } from '../../lib/stores/ui.svelte';
+  import { errorToast, openDialog, ui } from '../../lib/stores/ui.svelte';
   import type { Effect, MusicRef } from '../../lib/types';
   import type { CreateKind } from '../../lib/stores/assistant.svelte';
   import Icon from '../Icon.svelte';
@@ -20,6 +21,9 @@
   let notesEditor: Promise<typeof import('./NotesEditor.svelte').default> | null = null;
   const loadNotesEditor = () => (notesEditor ??= import('./NotesEditor.svelte').then((module) => module.default));
 
+  /** With room the title and the delete button of the block move into the header of the adventure (`portalTo`), next to its other buttons. */
+  let { portalTo = null }: { portalTo?: HTMLElement | null } = $props();
+
   const block = $derived(selectedBlock());
   const adventure = $derived(adventures.current!);
 
@@ -30,21 +34,17 @@
   const incoming = $derived(block ? linksTo(adventure, block.id) : []);
   const titleOf = (id: string) => adventure.blocks.find((item) => item.id === id)?.title || t('Untitled');
 
-  async function cleanUpImages() {
-    try {
-      await flushSave(); // the server looks at the saved notes
-      const { removed } = await api.cleanupAdventureImages(adventure.id);
-      toast(t('{0} unused image(s) removed.', removed));
-    } catch (e) {
-      errorToast(e);
-    }
-  }
-
   function previewClick(event: MouseEvent) {
     const song = songLinkTarget(event.target);
     if (song) {
       event.preventDefault();
       void playSongLink(song);
+      return;
+    }
+    const pdfPage = pdfLinkTarget(event.target);
+    if (pdfPage) {
+      event.preventDefault();
+      void openPdf(pdfPage);
       return;
     }
     const target = blockLinkTarget(event.target);
@@ -216,19 +216,14 @@
     }
   }
 
-  async function remove() {
-    if (block && (await askConfirm(t('Delete the block "{0}"?', block.title || t('Untitled'))))) deleteBlock(block.id);
-  }
-
 </script>
 
 {#if block}
   {@const editable = adventure.editable}
   <div class="editor">
-    <div class="head">
+    <div class="head" use:portal={portalTo}>
       <input class="title" type="text" placeholder={t('Block title')} value={block.title} readonly={!editable}
              oninput={(e) => change(() => (block.title = e.currentTarget.value))} />
-      {#if editable}<button class="icon-btn" title={t('Delete block')} onclick={() => void remove()}><Icon name="trash" size={16} /></button>{/if}
     </div>
 
     <!-- the cover (its buttons lie over it: on hover with a mouse, after a tap on touch screens) and the options of the block next to it -->
@@ -273,6 +268,9 @@
         <label class="check"><input type="checkbox" checked={block.played} onchange={(e) => setPlayed(block.id, e.currentTarget.checked)} disabled={!editable} />{t('Played')}</label>
         <label class="check"><input type="checkbox" checked={block.autoplay} disabled={!editable}
                                     onchange={(e) => change(() => (block.autoplay = e.currentTarget.checked))} />{t('Start the music when the block is entered')}</label>
+        <label class="check" title={t('Embedded blocks are not shown in the graph and the overview; they are reached through links (extra material, pages of persons).')}>
+          <input type="checkbox" checked={block.inline} disabled={!editable || adventure.blocks[0]?.id === block.id}
+                 onchange={(e) => change(() => (block.inline = e.currentTarget.checked))} />{t('Embedded (only reached through links)')}</label>
       </div>
     </div>
 

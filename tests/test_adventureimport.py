@@ -48,7 +48,7 @@ def test_the_outline_and_the_notes_become_linked_blocks():
     assert [block["title"] for block in adventure["blocks"]] == ["Ankunft", "Die Gruft", "Epilog"]
     first, second, third = adventure["blocks"]
     assert f"[Die Gruft](block:{second['id']})" in first["markdown"] and "[[s9]]" in first["markdown"]
-    assert first["markdown"].endswith("*Pages: 4-5*")
+    assert first["markdown"].endswith("*Pages: [4-5](pdf:4)*")
     assert third["markdown"] == "Ende."  # no notes and no pages: the summary
     assert adventure["links"] == [{"from": first["id"], "to": second["id"], "label": "sie folgen der Spur"},
                                   {"from": second["id"], "to": third["id"], "label": None}]
@@ -82,7 +82,7 @@ def test_an_import_runs_in_the_background_and_stores_a_private_adventure(client,
     AppSettings.setValue(SettingKeys.ASSISTANT_API_KEY, "gemini_key_1234")
     assert client.post("/api/adventures/import", files={"file": ("x.pdf", b"not a pdf", "application/pdf")}).status_code == 400
 
-    monkeypatch.setattr(adventureimport, "convert", lambda data, name, owner, progress: adventureimport.build(OUTLINE, {}, owner))
+    monkeypatch.setattr(adventureimport, "convert", lambda data, name, owner, progress, detail=None: adventureimport.build(OUTLINE, {}, owner))
     job = client.post("/api/adventures/import", files=pdf).json()
     assert job["status"] == "running" and job["name"] == "gruft.pdf"
     for _ in range(100):
@@ -99,7 +99,7 @@ def test_an_import_runs_in_the_background_and_stores_a_private_adventure(client,
 def test_a_failed_import_reports_its_error(client, monkeypatch):
     AppSettings.setValue(SettingKeys.ASSISTANT_API_KEY, "gemini_key_1234")
 
-    def fail(data, name, owner, progress):
+    def fail(data, name, owner, progress, detail=None):
         raise adventureimport.ImportFailed("The AI found no scenes in the PDF")
 
     monkeypatch.setattr(adventureimport, "convert", fail)
@@ -111,3 +111,170 @@ def test_a_failed_import_reports_its_error(client, monkeypatch):
         time.sleep(0.02)
     assert job == {**job, "status": "error", "error": "The AI found no scenes in the PDF", "adventure": None}
     assert client.get("/api/adventures").json()["adventures"] == []
+
+
+def test_the_level_of_detail_goes_to_the_ai(monkeypatch):
+    asked = []
+    monkeypatch.setattr(adventureimport, "upload", lambda pdf, name: {"name": "files/1", "uri": "uri"})
+    monkeypatch.setattr(adventureimport, "remove", lambda file: None)
+
+    def ask(file, system, text, schema):
+        asked.append((" ".join(system.split()), text))
+        return OUTLINE if schema is adventureimport.OUTLINE_SCHEMA else {"scenes": []}
+
+    monkeypatch.setattr(adventureimport, "ask", ask)
+    adventureimport.convert(b"%PDF", "gruft.pdf", "anna", detail="high")
+    split, notes = adventureimport.DETAILS["high"]
+    assert split in asked[0][0] and "level of detail: high" in asked[0][1] and notes in asked[1][0]
+    assert "__SPLIT__" not in asked[0][0] and "__NOTES_DETAIL__" not in asked[1][0] and "700 words" not in asked[1][0]
+    asked.clear()
+    adventureimport.convert(b"%PDF", "gruft.pdf", "anna")  # the default is the middle level
+    assert adventureimport.DETAILS["medium"][0] in asked[0][0] and "level of detail: medium" in asked[0][1]
+    assert [adventureimport.detail_of(d) for d in (None, "low", "extreme")] == ["medium", "low", "medium"]
+
+
+def test_the_import_route_takes_the_level_of_detail(client, monkeypatch):
+    AppSettings.setValue(SettingKeys.ASSISTANT_API_KEY, "gemini_key_1234")
+    seen = []
+
+    def convert(data, name, owner, progress, detail=None):
+        seen.append(detail)
+        return adventureimport.build(OUTLINE, {}, owner)
+
+    monkeypatch.setattr(adventureimport, "convert", convert)
+    pdf = {"file": ("gruft.pdf", b"%PDF-1.7 ...", "application/pdf")}
+    assert client.post("/api/adventures/import", files=pdf, data={"detail": "extreme"}).status_code == 422
+    job = client.post("/api/adventures/import", files=pdf, data={"detail": "low"}).json()
+    for _ in range(100):
+        if client.get(f"/api/adventures/import/{job['id']}").json()["status"] != "running":
+            break
+        time.sleep(0.02)
+    assert seen == ["low"]
+
+
+def test_the_import_instructions_are_added_to_both_prompts(client, monkeypatch):
+    assert client.get("/api/assistant/config").json()["importInstructions"] == ""
+    assert client.put("/api/assistant/config", json={"importInstructions": "Skip the bestiary."}).json()["importInstructions"] == "Skip the bestiary."
+    asked = []
+    monkeypatch.setattr(adventureimport, "upload", lambda pdf, name: {"name": "files/1", "uri": "uri"})
+    monkeypatch.setattr(adventureimport, "remove", lambda file: None)
+
+    def ask(file, system, text, schema):
+        asked.append(system)
+        return OUTLINE if schema is adventureimport.OUTLINE_SCHEMA else {"scenes": []}
+
+    monkeypatch.setattr(adventureimport, "ask", ask)
+    adventureimport.convert(b"%PDF", "gruft.pdf", "anna")
+    assert len(asked) == 2 and all(system.endswith("Skip the bestiary.") for system in asked)
+    client.put("/api/assistant/config", json={"importInstructions": ""})
+    asked.clear()
+    adventureimport.convert(b"%PDF", "gruft.pdf", "anna")
+    assert not any("Additional instructions" in system for system in asked)
+
+
+PEOPLE = [
+    {"key": "x", "name": "Hauptmann Torben", "aliases": ["Torben", "Hauptmann"], "pages": "7", "summary": "Der Wirt, der mehr weiß."},
+    {"key": "x", "name": "Lysandra", "summary": "Die Magierin."},
+    {"key": "x", "name": "Ab", "summary": "Zu kurzer Name."},
+    {"key": "x", "name": "   ", "summary": "dropped"},
+]
+
+
+def test_the_persons_get_an_overview_and_pages_and_their_names_become_links():
+    outline = {**OUTLINE, "characters": PEOPLE}
+    notes = {"s1": "Torben wartet. Später: Lysandra und [Torben](block:x). Lysandra geht.\n## Torben\n**Torben** lacht.",
+             "p1": "Torben kennt Lysandra.", "p2": "Lysandra mag Torben nicht."}
+    adventure = adventureimport.build(outline, notes, "anna")
+    titles = [block["title"] for block in adventure["blocks"]]
+    assert titles == ["Ankunft", "Die Gruft", "Epilog", "Dramatis Personae", "Hauptmann Torben", "Lysandra", "Ab"]
+    ids = {block["title"]: block["id"] for block in adventure["blocks"]}
+    first = adventure["blocks"][0]["markdown"]
+    # the first mention of each person is linked (not the ones in a link or in a heading); the shortest names are not
+    assert f"[Torben](block:{ids['Hauptmann Torben']}) wartet." in first and f"[Lysandra](block:{ids['Lysandra']}) und [Torben](block:x). Lysandra geht." in first
+    assert "## Torben\n**Torben** lacht." in first
+    overview = next(block for block in adventure["blocks"] if block["title"] == "Dramatis Personae")["markdown"].split("\n")
+    assert overview[0] == f"- [Hauptmann Torben](block:{ids['Hauptmann Torben']}) – Der Wirt, der mehr weiß."
+    assert len(overview) == 3
+    # a person page does not link to itself, but to the others
+    torben = next(block for block in adventure["blocks"] if block["title"] == "Hauptmann Torben")["markdown"]
+    assert torben.startswith(f"Torben kennt [Lysandra](block:{ids['Lysandra']}).") and "*Pages: [7](pdf:7)*" in torben
+
+
+def test_fewer_than_three_persons_get_blocks_but_no_overview():
+    adventure = adventureimport.build({**OUTLINE, "characters": PEOPLE[:2]}, {"s1": "Torben wartet."}, "anna")
+    assert [block["title"] for block in adventure["blocks"]] == ["Ankunft", "Die Gruft", "Epilog", "Hauptmann Torben", "Lysandra"]
+    assert adventure["blocks"][0]["markdown"].startswith("[Torben](block:")
+
+
+def test_the_stat_block_uses_the_language_of_the_book_or_of_the_user():
+    from core import i18n
+    i18n.set_language("de")
+    try:
+        assert "write them in German" in adventureimport.stat_block() and "__LANGUAGE__" not in adventureimport.stat_block()
+    finally:
+        i18n.set_language(None)
+    assert "write them in English" in adventureimport.stat_block()
+
+
+def test_the_notes_of_persons_are_asked_for_in_their_own_batches(monkeypatch):
+    asked = []
+    monkeypatch.setattr(adventureimport, "upload", lambda pdf, name: {"name": "files/1", "uri": "uri"})
+    monkeypatch.setattr(adventureimport, "remove", lambda file: None)
+
+    def ask(file, system, text, schema):
+        asked.append(text)
+        if schema is adventureimport.OUTLINE_SCHEMA:
+            return {**OUTLINE, "characters": PEOPLE}
+        return {"scenes": [{"key": "p1", "markdown": "Der Wirt."}]}
+
+    monkeypatch.setattr(adventureimport, "ask", ask)
+    adventure = adventureimport.convert(b"%PDF", "gruft.pdf", "anna")
+    assert len(asked) == 3 and "Write the notes of these persons: p1, p2, p3." in asked[2]
+    assert "p1: Hauptmann Torben (pages 7)" in asked[1]
+    assert next(block for block in adventure["blocks"] if block["title"] == "Hauptmann Torben")["markdown"].startswith("Der Wirt.")
+
+
+def test_the_imported_pdf_is_kept_with_the_adventure(client, monkeypatch):
+    AppSettings.setValue(SettingKeys.ASSISTANT_API_KEY, "gemini_key_1234")
+    monkeypatch.setattr(adventureimport, "convert", lambda data, name, owner, progress, detail=None: adventureimport.build(OUTLINE, {}, owner))
+    book = b"%PDF-1.7 the book"
+    job = client.post("/api/adventures/import", files={"file": ("Gruft.pdf", book, "application/pdf")}).json()
+    for _ in range(100):
+        job = client.get(f"/api/adventures/import/{job['id']}").json()
+        if job["status"] != "running":
+            break
+        time.sleep(0.02)
+    adventure_id = job["adventure"]
+    adventure = client.get(f"/api/adventures/{adventure_id}").json()
+    assert adventure["pdf"] == "Gruft.pdf"
+    pdf = client.get(f"/api/adventures/{adventure_id}/pdf")
+    assert pdf.status_code == 200 and pdf.content == book and pdf.headers["content-type"] == "application/pdf"
+    # saving the adventure keeps the book; the client cannot set the field
+    saved = client.put(f"/api/adventures/{adventure_id}", json={**adventure, "pdf": "other.pdf"}).json()
+    assert saved["pdf"] == "Gruft.pdf"
+    assert client.get(f"/api/adventures/{adventure_id}/pdf").content == book
+    # an adventure without a book has no PDF
+    own = client.post("/api/adventures", json={"title": "Frei"}).json()
+    assert own["pdf"] == "" and client.get(f"/api/adventures/{own['id']}/pdf").status_code == 404
+    # deleting the adventure deletes the book too
+    assert client.delete(f"/api/adventures/{adventure_id}").status_code == 200
+    assert client.get(f"/api/adventures/{adventure_id}/pdf").status_code == 404
+
+
+def test_pages_link_to_the_book():
+    assert adventureimport.page_link("12-14") == "[12-14](pdf:12)"
+    assert adventureimport.page_link("7") == "[7](pdf:7)"
+    # every page or range gets its own link, so a click goes to the page that was clicked
+    assert adventureimport.page_link("7-8, 18-19") == "[7-8](pdf:7), [18-19](pdf:18)"
+    assert adventureimport.page_link("S. 3 und 9–10") == "S. [3](pdf:3) und [9–10](pdf:9)"
+    assert adventureimport.page_link("0") == "0" and adventureimport.page_link("") == "" and adventureimport.page_link("Anhang") == "Anhang"
+
+
+def test_the_pages_of_persons_are_embedded_blocks():
+    adventure = adventureimport.build({**OUTLINE, "characters": PEOPLE}, {}, "anna")
+    inline = {block["title"]: block["inline"] for block in adventure["blocks"]}
+    assert inline == {"Ankunft": False, "Die Gruft": False, "Epilog": False, "Dramatis Personae": False,
+                      "Hauptmann Torben": True, "Lysandra": True, "Ab": True}
+    # the attribute is kept when the adventure is saved again
+    again = adventureimport.model.normalize(adventure, previous=adventure)
+    assert [block["inline"] for block in again["blocks"]] == [block["inline"] for block in adventure["blocks"]]

@@ -80,9 +80,10 @@ export const api = {
   adventures: () => get<{ adventures: AdventureSummary[] }>('/api/adventures'),
   adventure: (id: string) => get<Adventure>(`/api/adventures/${id}`),
   createAdventure: (title: string) => request<Adventure>('POST', '/api/adventures', { title }),
-  importAdventure: (file: File) => {
+  importAdventure: (file: File, detail?: 'low' | 'medium' | 'high') => {
     const form = new FormData();
     form.append('file', file);
+    if (detail) form.append('detail', detail);
     return request<AdventureImport>('POST', '/api/adventures/import', form);
   },
   adventureImport: (id: string) => get<AdventureImport>(`/api/adventures/import/${id}`),
@@ -162,9 +163,16 @@ export const api = {
   assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' | 'compose' | 'effects' | 'story' | 'image' = 'music',
     context?: { tags?: string[]; genres?: string[]; instrumental?: boolean; duration?: number; language?: string; kind?: string }) =>
     request<AssistantReply>('POST', '/api/assistant/chat', { messages, mode, context }),
+  /** The text of a recording of the microphone; `language` (e.g. "de") is a hint for the recognition. */
+  transcribe: (audio: Blob, language: string) => {
+    const form = new FormData();
+    form.append('file', audio, `dictation.${audio.type.includes('mp4') ? 'mp4' : audio.type.includes('ogg') ? 'ogg' : 'webm'}`);
+    form.append('language', language);
+    return request<{ text: string }>('POST', '/api/assistant/transcribe', form);
+  },
   assistantVerify: (songs: { title: string; artist: string }[]) => request<{ results: SongCheck[] }>('POST', '/api/assistant/verify', { songs }),
   assistantConfig: () => get<AssistantStatus>('/api/assistant/config'),
-  putAssistantConfig: (config: { key?: string; model?: string; instructions?: string; generalInstructions?: string; composeInstructions?: string; smartInstructions?: string; effectsInstructions?: string; imageInstructions?: string; prompts?: Record<string, string>; groqKey?: string; groqModel?: string }) => request<AssistantStatus>('PUT', '/api/assistant/config', config),
+  putAssistantConfig: (config: { key?: string; model?: string; instructions?: string; generalInstructions?: string; composeInstructions?: string; smartInstructions?: string; effectsInstructions?: string; imageInstructions?: string; importInstructions?: string; prompts?: Record<string, string>; groqKey?: string; groqModel?: string }) => request<AssistantStatus>('PUT', '/api/assistant/config', config),
   assistantModels: () => get<{ models: { id: string; name: string }[]; live: boolean }>('/api/assistant/models'),
   // music generation (ACE-Step on Modal)
   compose: (piece: ComposePiece & { dir: string; duration: number; seed?: number | null }) => request<ComposeResult>('POST', '/api/assistant/compose', piece),

@@ -18,6 +18,7 @@ import uuid
 from urllib.parse import quote
 
 from core import adventures as model
+from core import i18n
 from core.i18n import _
 from server import assistant
 
@@ -28,7 +29,22 @@ API_ROOT = "https://generativelanguage.googleapis.com/v1beta/"
 MAX_PDF = 50 * 1024 * 1024  # the limit of the File API for PDFs
 TIMEOUT = 300  # reading a whole book takes a while
 SCENES_PER_REQUEST = 4
-MAX_SCENES = 60
+MAX_SCENES = 200  # a long book at a high level of detail has many scenes
+MAX_CHARACTERS = 25
+MIN_OVERVIEW = 3  # the overview block "Dramatis Personae" only for at least this many persons (every person has a block of its own)
+MIN_NAME = 3  # shorter names are not linked in the notes (too many false hits)
+# the level of detail the user asks for: how fine the book is split into scenes (blocks) and how much the notes of a scene hold. The AI
+# decides how many scenes that takes, so a long book gets more of them.
+DETAILS = {
+    "low": ("Few, large scenes: one per chapter or per major location; small places and encounters belong to the scene they are in.",
+            "Keep the notes short: the read-aloud text and the essentials (what happens, the decisive checks and values); leave out minor details."),
+    "medium": ("One scene per place, encounter or situation the heroes play through.",
+               "Write what the scene needs for play: the important details, the checks and the values of the book."),
+    "high": ("Fine scenes: every room, every encounter, every important conversation and every event is a scene of its own.",
+             "Write complete notes: every detail, check, value, rule and hint of the book for the scene; leave nothing important out, however "
+             "long that makes the notes."),
+}
+DEFAULT_DETAIL = "medium"
 RETRIES = 3
 RETRY_WAIT = 30  # seconds after "too many requests": the free tier counts requests per minute
 FINISHED_JOBS_KEPT = 3600  # seconds a finished job can still be polled
@@ -37,15 +53,33 @@ OUTLINE_PROMPT = """You read a published adventure for a tabletop role playing g
 into the scenes a game master plays through, for the notes of the game master's software.
 Answer with a JSON object only:
 {"title": "<the title of the adventure>", "scenes": [{"key": "s1", "title": "<short title>", "pages": "<pages of the book, e.g. 12-14>",
- "summary": "<one or two sentences>"}], "links": [{"from": "s1", "to": "s2", "label": "<how the heroes get there, or empty>"}]}
+ "summary": "<one or two sentences>"}], "links": [{"from": "s1", "to": "s2", "label": "<how the heroes get there, or empty>"}],
+ "characters": [{"key": "p1", "name": "<full name>", "aliases": ["<other ways the book names the person>"], "pages": "<pages>",
+ "summary": "<one short line: the role and what the person wants>"}]}
 Rules:
-- A scene is a place, an encounter or a situation the heroes play through. List them in the order of play, the start first, between
-  5 and 40 scenes; keys are s1, s2, … in that order.
+- A scene is a place, an encounter or a situation the heroes play through. List them in the order of play, the start first; keys are
+  s1, s2, … in that order. How fine you split the book is set by the level of detail: __SPLIT__ Make as many scenes as that takes: the
+  longer the book, the more scenes.
 - Background chapters for the game master (the persons, the places, the secret story) become one or two scenes at the end, e.g.
   "For the game master: persons", when they matter during play. Leave out the rules summary, the credits and the advertisements.
 - links say which scene can follow which: label names the choice or the condition in a few words ("they follow the tracks"), or is
   empty when the next scene simply follows.
+- characters are the persons with a name who matter in play: allies, opponents, patrons, victims, the villain. Keys are p1, p2, … in
+  the order of their first appearance. aliases are the short forms and titles the book uses ("Torben" and "Hauptmann Torben"); leave
+  them out when there is none. Skip nameless extras and the heroes of the players. Answer an empty list when there is no such
+  person.
+- Page numbers (pages) are those of the PDF file, where its first page is 1, not the numbers printed on the pages.
 - Write the titles and summaries in the language of the book."""
+
+STAT_BLOCK = """Stat blocks (the master data of a person or an opponent: attributes, combat values, talents) always look like this, with the
+abbreviations and values of the book's rules edition, and only the lines the book has values for:
+**Attributes:** MU 13 · KL 12 · IN 14 · CH 11 · FF 12 · GE 13 · KO 12 · KK 13
+**Combat:** LeP 30 · AsP 24 · INI 12 · PA 8 · RS 2 · GS 8
+**Weapons:** Sword (TP 1W+4, AT 14)
+**Skills:** Body control 8, Perception 10
+**Special:** special abilities, spells, advantages and disadvantages, in one line
+The line names above are English: write them, and the names of skills, weapons and abilities, in the language of the adventure book
+(German: Eigenschaften, Kampf, Waffen, Talente, Besonderes); if you cannot tell its language, write them in __LANGUAGE__."""
 
 NOTES_PROMPT = """You write the notes of some scenes of a published adventure for a tabletop role playing game, from the attached
 book, for the game master's software. The game master reads them during play.
@@ -55,10 +89,16 @@ For each scene:
   to four vivid sentences of what the heroes see, hear and smell.
 - Then short sections with "## " headings and bullet points: who is there and what they want, secrets, what the heroes can find out
   or try (with the checks and values of the book), dangers and fights (the values of the opponents), and what happens next.
-- Refer to another scene by its key in double brackets, e.g. [[s4]], where the book says where the heroes go next.
+- Refer to another scene by its key in double brackets, e.g. [[s4]], where the book says where the heroes go next. Name persons
+  plainly, with the name the book uses; the software links them to their own pages.
+- For an opponent or a person with values in the book, add the stat block in the form below.
+- Where the book has a map, a floor plan, a picture or a handout for the scene, name it and link its page of the PDF: [Map of the
+  tavern](pdf:12), with the page number of the PDF (the first page of the file is 1).
+- A key that starts with "p" is a person, not a scene. Write the page of that person instead: first a short description (looks,
+  manner, voice), then what the person wants and knows, how they treat the heroes, and the stat block if the book has one.
 - Keep every name, place and number of the book; do not invent a different plot. Plain Markdown only: **bold**, *italic*, lists,
   "> " quotes and "## "/"### " headings; no tables and no HTML.
-- Write in the language of the book, as long as the scene needs (up to about 700 words)."""
+- Write in the language of the book. __NOTES_DETAIL__"""
 
 OUTLINE_SCHEMA = {
     "type": "OBJECT",
@@ -74,8 +114,14 @@ OUTLINE_SCHEMA = {
             "properties": {"from": {"type": "STRING"}, "to": {"type": "STRING"}, "label": {"type": "STRING"}},
             "required": ["from", "to"],
         }},
+        "characters": {"type": "ARRAY", "items": {
+            "type": "OBJECT",
+            "properties": {"key": {"type": "STRING"}, "name": {"type": "STRING"}, "aliases": {"type": "ARRAY", "items": {"type": "STRING"}},
+                           "pages": {"type": "STRING"}, "summary": {"type": "STRING"}},
+            "required": ["key", "name", "summary"],
+        }},
     },
-    "required": ["title", "scenes", "links"],
+    "required": ["title", "scenes", "links", "characters"],
 }
 
 NOTES_SCHEMA = {
@@ -88,7 +134,8 @@ NOTES_SCHEMA = {
     "required": ["scenes"],
 }
 
-SCENE_LINK = re.compile(r"\[\[\s*(s\d+)\s*\]\]")
+SCENE_LINK = re.compile(r"\[\[\s*([sp]\d+)\s*\]\]")
+MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\([^)]*\)")
 
 
 class ImportFailed(Exception):
@@ -182,53 +229,147 @@ def scenes_of(outline: dict) -> list[dict]:
     return scenes[:MAX_SCENES]
 
 
-def outline_text(scenes: list[dict]) -> str:
-    return "\n".join(f"{scene['key']}: {scene['title']} (pages {scene.get('pages') or '?'}) - {scene.get('summary') or ''}" for scene in scenes)
+def characters_of(outline: dict) -> list[dict]:
+    """The persons of the outline with the keys p1, p2, … in their order, at most MAX_CHARACTERS."""
+    people = []
+    for person in outline.get("characters") or []:
+        if isinstance(person, dict) and str(person.get("name") or "").strip():
+            people.append({**person, "key": f"p{len(people) + 1}", "name": str(person["name"]).strip()})
+    people = people[:MAX_CHARACTERS]
+    return people
+
+
+def names_of(person: dict) -> list[str]:
+    """The names a person is called in the notes: the name and the aliases the AI found (names that are too short are left out)."""
+    aliases = [alias.strip() for alias in person.get("aliases") or [] if isinstance(alias, str)]
+    return sorted({name for name in [person["name"], *aliases] if len(name) >= MIN_NAME}, key=len, reverse=True)
+
+
+def outline_text(scenes: list[dict], people: list[dict] = ()) -> str:
+    text = "\n".join(f"{scene['key']}: {scene['title']} (pages {scene.get('pages') or '?'}) - {scene.get('summary') or ''}" for scene in scenes)
+    if people:
+        text += "\n\nPersons:\n" + "\n".join(f"{person['key']}: {person['name']} (pages {person.get('pages') or '?'}) - {person.get('summary') or ''}"
+                                              for person in people)
+    return text
+
+
+def link_people(text: str, names: dict[str, str], own: str | None = None) -> str:
+    """Links the first mention of each person in `text` to the block of the person (`names` maps a name to a block id; `own` is the
+    block the text belongs to). Existing links and headings stay as they are."""
+    names = {name: block for name, block in names.items() if block != own}
+    if not names:
+        return text
+    pattern = re.compile(r"(?<!\w)(" + "|".join(re.escape(name) for name in sorted(names, key=len, reverse=True)) + r")(?!\w)")
+    linked: set[str] = set()
+
+    def replace(match: re.Match) -> str:
+        block = names[match.group(1)]
+        if block in linked:
+            return match.group(0)
+        linked.add(block)
+        return f"[{match.group(1)}](block:{block})"
+
+    lines = []
+    for line in text.split("\n"):
+        if line.lstrip().startswith("#"):
+            lines.append(line)
+            continue
+        parts, links = MARKDOWN_LINK.split(line), MARKDOWN_LINK.findall(line)
+        lines.append("".join(pattern.sub(replace, part) + (links[index] if index < len(links) else "") for index, part in enumerate(parts)))
+    return "\n".join(lines)
+
+
+PAGES = re.compile(r"(?<![\d.])(\d{1,4})(?:\s*[-–]\s*\d{1,4})?(?!\d)")
+
+
+def page_link(pages: str) -> str:
+    """Every page or range in `pages` ("7-8, 18-19") as a link to its first page in the book (PDF) of the adventure:
+    [7-8](pdf:7), [18-19](pdf:18); other text stays."""
+    return PAGES.sub(lambda match: f"[{match.group(0)}](pdf:{int(match.group(1))})" if int(match.group(1)) > 0 else match.group(0), pages)
 
 
 def build(outline: dict, notes: dict[str, str], owner: str) -> dict:
-    """The adventure of the outline and the notes: one block per scene, [[key]] references become links to the blocks."""
-    scenes = scenes_of(outline)
-    ids = {scene["key"]: model.new_id() for scene in scenes}
-    titles = {scene["key"]: str(scene["title"]).strip() for scene in scenes}
+    """The adventure of the outline and the notes: one block per scene, [[key]] references become links to the blocks. With at least
+    MIN_OVERVIEW persons there is a block "Dramatis Personae"; every person has a block, their names in the notes link to it."""
+    scenes, people = scenes_of(outline), characters_of(outline)
+    ids = {item["key"]: model.new_id() for item in [*scenes, *people]}
+    titles = {**{scene["key"]: str(scene["title"]).strip() for scene in scenes}, **{person["key"]: person["name"] for person in people}}
+    names = {name: ids[person["key"]] for person in people for name in names_of(person)}
 
     def link(match: re.Match) -> str:
         key = match.group(1)
         return f"[{titles[key]}](block:{ids[key]})" if key in ids else match.group(0)
 
-    blocks = []
-    for scene in scenes:
-        text = SCENE_LINK.sub(link, notes.get(scene["key"]) or str(scene.get("summary") or "")).strip()
-        pages = str(scene.get("pages") or "").strip()
+    def block_of(item: dict, inline: bool = False) -> dict:
+        key = item["key"]
+        text = link_people(SCENE_LINK.sub(link, notes.get(key) or str(item.get("summary") or "")).strip(), names, ids[key])
+        pages = str(item.get("pages") or "").strip()
         if pages:
-            text += f"\n\n*{_('Pages')}: {pages}*"
-        blocks.append({"id": ids[scene["key"]], "title": titles[scene["key"]], "markdown": text, "pos": [0, 0]})
+            text += f"\n\n*{_('Pages')}: {page_link(pages)}*"
+        return {"id": ids[key], "title": titles[key], "markdown": text, "pos": [0, 0], "inline": inline}
+
+    blocks = [block_of(scene) for scene in scenes]
+    if len(people) >= MIN_OVERVIEW:
+        overview = "\n".join(f"- [{person['name']}](block:{ids[person['key']]})" + (f" – {str(person.get('summary') or '').strip()}" if str(person.get("summary") or "").strip() else "")
+                             for person in people)
+        blocks.append({"id": model.new_id(), "title": _("Dramatis Personae"), "markdown": overview, "pos": [0, 0]})
+    blocks.extend(block_of(person, inline=True) for person in people)  # reached through the overview and the names in the notes
     links = [{"from": ids.get(str(item.get("from"))), "to": ids.get(str(item.get("to"))), "label": item.get("label") or None}
              for item in outline.get("links") or [] if isinstance(item, dict)]
     return model.normalize({"title": outline.get("title") or _("Imported adventure"), "blocks": blocks,
                             "links": [item for item in links if item["from"] and item["to"]]}, owner=owner)
 
 
-def convert(pdf: bytes, name: str, owner: str, progress=lambda step, total: None) -> dict:
-    """Reads the book and returns the adventure (not stored yet)."""
+def stat_block() -> str:
+    """The stat block rule; the language of the user (the language of the app) is the fallback for its line names."""
+    language = i18n.language() or "en"
+    return STAT_BLOCK.replace("__LANGUAGE__", assistant.LANGUAGE_NAMES.get(language, language))
+
+
+def with_instructions(prompt: str) -> str:
+    """The prompt with the additional instructions of the game master for the import (see the AI assistant settings), if any."""
+    extra = assistant.instructions("import")
+    if not extra:
+        return prompt
+    return "\n\n".join([prompt, "Additional instructions of the game master for this import (they come first when they differ from the rules above):", extra])
+
+
+def detail_of(detail: str | None) -> str:
+    return detail if detail in DETAILS else DEFAULT_DETAIL
+
+
+def outline_prompt(detail: str) -> str:
+    return OUTLINE_PROMPT.replace("__SPLIT__", DETAILS[detail_of(detail)][0])
+
+
+def notes_prompt(detail: str) -> str:
+    return NOTES_PROMPT.replace("__NOTES_DETAIL__", DETAILS[detail_of(detail)][1])
+
+
+def convert(pdf: bytes, name: str, owner: str, progress=lambda step, total: None, detail: str | None = None) -> dict:
+    """Reads the book and returns the adventure (not stored yet); `detail` ("low", "medium" or "high") is how fine the book is split into scenes
+    and how much their notes hold."""
+    detail = detail_of(detail)
     file = upload(pdf, name)
     try:
         progress(0, 1)
-        outline = ask(file, OUTLINE_PROMPT, "Split this adventure into scenes.", OUTLINE_SCHEMA)
+        outline = ask(file, with_instructions(outline_prompt(detail)), f"Split this adventure into scenes at the level of detail: {detail}.", OUTLINE_SCHEMA)
         scenes = scenes_of(outline)
         if not scenes:
             raise ImportFailed(_("The AI found no scenes in the PDF"))
-        batches = [scenes[index:index + SCENES_PER_REQUEST] for index in range(0, len(scenes), SCENES_PER_REQUEST)]
+        people = characters_of(outline)
+        batches = [("scenes", scenes[index:index + SCENES_PER_REQUEST]) for index in range(0, len(scenes), SCENES_PER_REQUEST)]
+        batches += [("persons", people[index:index + SCENES_PER_REQUEST]) for index in range(0, len(people), SCENES_PER_REQUEST)]
         notes: dict[str, str] = {}
-        for number, batch in enumerate(batches, start=1):
+        for number, (kind, batch) in enumerate(batches, start=1):
             progress(number, len(batches) + 1)
-            text = (f"All scenes of the adventure:\n{outline_text(scenes)}\n\n"
-                    f"Write the notes of these scenes: {', '.join(scene['key'] for scene in batch)}.")
+            text = (f"All scenes and persons of the adventure:\n{outline_text(scenes, people)}\n\n"
+                    f"Write the notes of these {kind}: {', '.join(item['key'] for item in batch)}.")
             try:
-                answer = ask(file, NOTES_PROMPT, text, NOTES_SCHEMA)
+                answer = ask(file, with_instructions(f"{notes_prompt(detail)}\n\n{stat_block()}"), text, NOTES_SCHEMA)
             except ImportFailed as e:
-                logger.warning("Notes of %s failed: %s", [scene["key"] for scene in batch], e)
-                continue  # these scenes keep their summary
+                logger.warning("Notes of %s failed: %s", [item["key"] for item in batch], e)
+                continue  # these scenes and persons keep their summary
             for item in answer.get("scenes") or []:
                 if isinstance(item, dict) and isinstance(item.get("markdown"), str):
                     notes[str(item.get("key"))] = item["markdown"]
@@ -250,7 +391,7 @@ def _forget_old():
             del _jobs[job_id]
 
 
-def start(pdf: bytes, name: str, user: str, store) -> dict:
+def start(pdf: bytes, name: str, user: str, store, detail: str | None = None) -> dict:
     """Starts an import in the background; `store(adventure)` saves the result and returns its id. One import per user at a time."""
     with _lock:
         _forget_old()
@@ -265,7 +406,7 @@ def start(pdf: bytes, name: str, user: str, store) -> dict:
 
     def run():
         try:
-            job["adventure"] = store(convert(pdf, name, user, progress))
+            job["adventure"] = store(convert(pdf, name, user, progress, detail))
             job["status"] = "done"
         except Exception as e:  # reported to the client
             logger.exception("Import of %s failed", name)

@@ -10,7 +10,7 @@ export function newId(): string {
 }
 
 export function newBlock(title = '', index = 0): AdventureBlock {
-  return { id: newId(), title, markdown: '', played: false, pos: [index * 40, index * 40], autoplay: true, music: [], effects: [], images: [], cover: null };
+  return { id: newId(), title, markdown: '', played: false, pos: [index * 40, index * 40], autoplay: true, inline: false, music: [], effects: [], images: [], cover: null };
 }
 
 /** The grid of the stored block positions: a block took this much room and these gaps when the graph showed small nodes. The cards of
@@ -28,6 +28,9 @@ export const CARD_SCALE = { x: (CARD.w + CARD_GAP.x) / (NODE_W + GAP_X), y: (CAR
 /** Where a card is drawn for a stored position, and back. */
 export const toCard = (pos: [number, number]): [number, number] => [Math.round(pos[0] * CARD_SCALE.x), Math.round(pos[1] * CARD_SCALE.y)];
 export const fromCard = (x: number, y: number): [number, number] => [Math.round(x / CARD_SCALE.x), Math.round(y / CARD_SCALE.y)];
+
+/** The blocks the graph and the overview show: embedded (inline) blocks are left out, they are only reached through links. */
+export const shownBlocks = (graph: Graph): AdventureBlock[] => graph.blocks.filter((block) => !block.inline);
 
 /** Adds a block at the end of the list, to the right of the one that was last, and links that block to it (without a label, so it is the
  *  default next block). */
@@ -51,6 +54,17 @@ export function defaultNext(graph: Graph, id: string): AdventureBlock | null {
   const links = linksFrom(graph, id);
   const link = links.find((item) => !item.label) ?? links[0];
   return link ? blockById(graph, link.to) : null;
+}
+
+/** Where "next" (the right arrow key and the left swipe in play mode) goes from a block: the block its only link leads to; with no link or
+ *  several links (the game master chooses among them with the buttons) the next block of the list. Embedded blocks are not part of that
+ *  path, and from one there is no next. */
+export function nextBlock(graph: Graph, id: string): AdventureBlock | null {
+  const links = linksFrom(graph, id);
+  if (links.length === 1) return blockById(graph, links[0].to);
+  const path = shownBlocks(graph);
+  const index = path.findIndex((block) => block.id === id);
+  return index >= 0 ? path[index + 1] ?? null : null;
 }
 
 /** Adds a link (no self links, no duplicates); returns whether the graph changed. */
@@ -83,9 +97,9 @@ export function moveBlock(graph: Graph, id: string, offset: number) {
   graph.blocks.splice(target, 0, block);
 }
 
-/** The block to start a session with: the first one not played yet, in list order (the first block when all are played or none is). */
+/** The block to start a session with: the first one not played yet (embedded blocks are not scenes to start with), in list order (the first block when all are played or none is). */
 export function startBlock(graph: Graph): AdventureBlock | null {
-  return graph.blocks.find((block) => !block.played) ?? graph.blocks[0] ?? null;
+  return graph.blocks.find((block) => !block.played && !block.inline) ?? graph.blocks[0] ?? null;
 }
 
 /** Blocks that no link leads to and that are not the first one: they can only be reached by hand. */
@@ -101,7 +115,7 @@ export function unreachable(graph: Graph): AdventureBlock[] {
       }
     }
   }
-  return graph.blocks.filter((block) => !reached.has(block.id));
+  return graph.blocks.filter((block) => !reached.has(block.id) && !block.inline);
 }
 
 export const refKey = (ref: MusicRef) => (ref.type === 'song' ? `song:${ref.ufid}` : `playlist:${ref.id}`);
@@ -182,7 +196,7 @@ export function addMusic(block: AdventureBlock, ref: MusicRef): boolean {
 /** Arranges the blocks in columns by their distance from the first block (blocks nothing leads to start their own tree below). */
 export function autoLayout(graph: Graph) {
   const cells = layers(graph);
-  for (const block of graph.blocks) {
+  for (const block of shownBlocks(graph)) {
     const [column, row] = cells.get(block.id)!;
     block.pos = [column * (NODE_W + GAP_X), row * (NODE_H + GAP_Y)];
   }
@@ -191,7 +205,8 @@ export function autoLayout(graph: Graph) {
 /** The column (distance from the first block) and the row of every block, as autoLayout places them. */
 function layers(graph: Graph): Map<string, [number, number]> {
   const depth = new Map<string, number>();
-  for (const root of graph.blocks) {
+  const shown = shownBlocks(graph);
+  for (const root of shown) {
     if (depth.has(root.id)) continue;
     depth.set(root.id, 0);
     const queue = [root.id];
@@ -207,7 +222,7 @@ function layers(graph: Graph): Map<string, [number, number]> {
   }
   const rows = new Map<number, number>();
   const cells = new Map<string, [number, number]>();
-  for (const block of graph.blocks) {
+  for (const block of shown) {
     const column = depth.get(block.id) ?? 0;
     const row = rows.get(column) ?? 0;
     rows.set(column, row + 1);
@@ -228,14 +243,15 @@ export interface CardLayout {
  *  columns of autoLayout. */
 export function cardLayout(graph: Graph, card: { w: number; h: number } = CARD, gap: { x: number; y: number } = CARD_GAP): CardLayout {
   const pos = new Map<string, [number, number]>();
-  const [first, ...rest] = graph.blocks;
+  const shown = shownBlocks(graph);
+  const [first, ...rest] = shown;
   if (!first) return { pos, width: 0, height: 0 };
   if (rest.every((block) => block.pos[0] === first.pos[0] && block.pos[1] === first.pos[1])) {
     for (const [id, [column, row]] of layers(graph)) pos.set(id, [column * (card.w + gap.x), row * (card.h + gap.y)]);
   } else {
     const [sx, sy] = [(card.w + gap.x) / (NODE_W + GAP_X), (card.h + gap.y) / (NODE_H + GAP_Y)];
-    const [left, top] = [Math.min(...graph.blocks.map((block) => block.pos[0])), Math.min(...graph.blocks.map((block) => block.pos[1]))];
-    for (const block of graph.blocks) pos.set(block.id, [Math.round((block.pos[0] - left) * sx), Math.round((block.pos[1] - top) * sy)]);
+    const [left, top] = [Math.min(...shown.map((block) => block.pos[0])), Math.min(...shown.map((block) => block.pos[1]))];
+    for (const block of shown) pos.set(block.id, [Math.round((block.pos[0] - left) * sx), Math.round((block.pos[1] - top) * sy)]);
   }
   const corners = [...pos.values()];
   return { pos, width: Math.max(...corners.map(([x]) => x)) + card.w, height: Math.max(...corners.map(([, y]) => y)) + card.h };

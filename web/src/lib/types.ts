@@ -151,6 +151,8 @@ export interface ServerSettings {
   assistantConfigured: boolean;
   /** Groq has a key: it answers the smart search and the compose mode of the assistant. */
   groqConfigured: boolean;
+  /** Dictation (speech to text) works: Groq or Gemini has a key. */
+  dictationConfigured: boolean;
   /** The music generation (ACE-Step on Modal) is set up. */
   musicGenConfigured: boolean;
   /** The sound generation (Stable Audio 3 on Modal) is set up. */
@@ -252,6 +254,8 @@ export interface AssistantStatus {
   effectsInstructions: string;
   /** Additional instructions of the SuperAdmin for the image mode: the picture style of the block covers. */
   imageInstructions: string;
+  /** Additional instructions of the SuperAdmin for the PDF import of adventures. */
+  importInstructions: string;
   groqConfigured: boolean;
   groqModel: string;
   groqDefaultModel: string;
@@ -446,6 +450,8 @@ export interface AdventureBlock {
   played: boolean;
   pos: [number, number];
   autoplay: boolean;
+  /** An embedded block: the graph and the overview do not show it; it is reached through links (extra material, pages of persons). */
+  inline: boolean;
   music: MusicRef[];
   effects: EffectRef[];
   images: string[];
@@ -491,6 +497,8 @@ export interface Adventure {
   /** The adventure's own playlist: the songs (and playlists) assigned to it, which its blocks choose from. It always holds what the
    *  blocks play (the server adds it). */
   music: MusicRef[];
+  /** The file name of the book (PDF) the adventure was imported from; empty without one. The notes link to its pages (`pdf:<page>`). */
+  pdf: string;
   editable: boolean;
 }
 
