@@ -24,7 +24,6 @@
   import PromptDialog from './dialogs/PromptDialog.svelte';
   import ContextMenu from './ContextMenu.svelte';
   import FilterPanel from './filter/FilterPanel.svelte';
-  import TagBar from './filter/TagBar.svelte';
   import MenuBar from './MenuBar.svelte';
   import PlayerBar from './player/PlayerBar.svelte';
   import RightPanel from './RightPanel.svelte';
@@ -215,7 +214,6 @@
           </div>
         {/if}
         <FilterPanel />
-        <TagBar />
         {#if tab}
           <div class="table-wrap" data-tour="table"><SongTable {tab} /></div>
         {:else}

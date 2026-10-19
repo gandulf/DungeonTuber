@@ -24,11 +24,47 @@
 
   function optionsMenu(event: MouseEvent) {
     openMenu(event, [
+      { label: t('Shuffle'), icon: 'shuffle', checked: prefs.shuffle, action: toggleShuffle },
+      { separator: true },
       { label: t('Crossfade'), checked: prefs.crossfade, action: () => { prefs.crossfade = !prefs.crossfade; savePrefs(); } },
       { label: t('Normalize Volume'), checked: prefs.normalize, action: () => setNormalize(!prefs.normalize) },
     ]);
   }
 </script>
+
+<!-- the options of the player (crossfade, normalize) -->
+{#snippet options()}
+  <button class="icon-btn" title={t('Settings')} onclick={optionsMenu}><Icon name="queue" size={19} /></button>
+{/snippet}
+
+<!-- the buttons of the transport row (the same on every size, placed differently) -->
+{#snippet previousButton()}
+  <button class="icon-btn big" title="{t('Previous')} (Ctrl+B)" onclick={previous} disabled={!canPlay}><Icon name="prev" size={20} /></button>
+{/snippet}
+
+<!-- while the microphone dictates, the button is the spectrum ball of the voice; a click ends the dictation -->
+{#snippet playButton()}
+  {#if listening.active}
+    <button class="play listening" title={t('Stop dictating')} aria-label={t('Stop dictating')} onclick={stopDictation}
+            style:box-shadow="0 0 0 {6 + listening.level * 6}px var(--accent-soft), 0 6px {22 + listening.level * 18}px var(--accent-glow)">
+      <SpectrumOrb />
+    </button>
+  {:else}
+    <button class="play" title="{t('Play')} (Ctrl+P)" onclick={togglePlay} disabled={!canPlay}>
+      <Icon name={player.playing ? 'pause' : 'play'} size={22} />
+    </button>
+  {/if}
+{/snippet}
+
+{#snippet nextButton()}
+  <button class="icon-btn big" title="{t('Next')} (Ctrl+N)" onclick={() => next()} disabled={!canPlay}><Icon name="next" size={20} /></button>
+{/snippet}
+
+{#snippet repeatButton()}
+  <button class="icon-btn" class:active={prefs.repeat !== 'none'} title="{t('Repeat')}: {prefs.repeat} (Ctrl+R)" onclick={cycleRepeat}>
+    <Icon name={prefs.repeat === 'single' ? 'repeat-one' : 'repeat'} size={18} />
+  </button>
+{/snippet}
 
 <footer class="player" data-tour="player">
   <div class="now">
@@ -61,32 +97,33 @@
   <!-- phones have no room for the cover and the details: the title of the song on a line of its own -->
   {#if ui.narrow && player.track}<div class="now-mini ellipsis" title={player.track.path}>{player.track.title || player.track.name}</div>{/if}
   <div class="center">
-    <div class="controls">
-      <button class="icon-btn" class:active={prefs.shuffle} title={t('Shuffle')} onclick={toggleShuffle}><Icon name="shuffle" size={18} /></button>
-      <button class="icon-btn big" title="{t('Previous')} (Ctrl+B)" onclick={previous} disabled={!canPlay}><Icon name="prev" size={20} /></button>
-      <!-- while the microphone dictates, the button is the spectrum ball of the voice; a click ends the dictation -->
-      {#if listening.active}
-        <button class="play listening" title={t('Stop dictating')} aria-label={t('Stop dictating')} onclick={stopDictation}
-                style:box-shadow="0 0 0 {6 + listening.level * 6}px var(--accent-soft), 0 6px {22 + listening.level * 18}px var(--accent-glow)">
-          <SpectrumOrb />
-        </button>
-      {:else}
-        <button class="play" title="{t('Play')} (Ctrl+P)" onclick={togglePlay} disabled={!canPlay}>
-          <Icon name={player.playing ? 'pause' : 'play'} size={22} />
-        </button>
-      {/if}
-      <button class="icon-btn big" title="{t('Next')} (Ctrl+N)" onclick={() => next()} disabled={!canPlay}><Icon name="next" size={20} /></button>
-      <button class="icon-btn" class:active={prefs.repeat !== 'none'} title="{t('Repeat')}: {prefs.repeat} (Ctrl+R)" onclick={cycleRepeat}>
-        <Icon name={prefs.repeat === 'single' ? 'repeat-one' : 'repeat'} size={18} />
-      </button>
-    </div>
+    {#if ui.narrow}
+      <!-- phones: the play button is in the middle (the two sides take the same room), the repeat button and the previous one are to its left, the
+           next one, the volume (a button with a bar that pops up) and the options to its right; shuffle is in the options menu -->
+      <div class="controls phone">
+        <div class="side left">{@render repeatButton()}{@render previousButton()}</div>
+        {@render playButton()}
+        <div class="side right">{@render nextButton()}<VolumeControl popup />{@render options()}</div>
+      </div>
+    {:else}
+      <div class="controls">
+        <button class="icon-btn" class:active={prefs.shuffle} title={t('Shuffle')} onclick={toggleShuffle}><Icon name="shuffle" size={18} /></button>
+        {@render previousButton()}
+        {@render playButton()}
+        {@render nextButton()}
+        {@render repeatButton()}
+      </div>
+    {/if}
     <SeekBar />
   </div>
 
+  {#if !ui.narrow || effectSign}
   <div class="right" class:stacked={effectHere && ui.rightOverlay}>
     {#if effectHere && ui.rightOverlay}<EffectMini inline />{/if}
-    <VolumeControl />
-    <button class="icon-btn" title={t('Settings')} onclick={optionsMenu}><Icon name="queue" size={19} /></button>
+    {#if !ui.narrow}
+      <VolumeControl />
+      {@render options()}
+    {/if}
     {#if effectHere && !ui.rightOverlay}<EffectMini />{/if}
     {#if effectSign}
       <div class="fx-sign" role="group" aria-label={t('Effects')} title={player.effect?.title || player.effect?.name}>
@@ -95,12 +132,13 @@
       </div>
     {/if}
   </div>
+  {/if}
 </footer>
 
 <style>
   .player {
     display: grid; grid-template-columns: minmax(220px, 1fr) minmax(340px, 1.6fr) minmax(220px, 1fr); align-items: center; gap: 24px;
-    padding: 12px 22px; position: relative;
+    padding: 12px 22px; position: relative; z-index: 25; /* above the song table: the volume bar pops up over it */
     background: linear-gradient(180deg, color-mix(in srgb, var(--bg-2) 70%, transparent), var(--bg-2));
     border-top: 1px solid var(--border);
     backdrop-filter: blur(14px);
@@ -152,5 +190,15 @@
     .player { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 14px; }
     .now { display: none; }
     .right { justify-content: center; }
+    .controls { gap: 8px; }
+    .controls.phone { display: grid; grid-template-columns: 1fr auto 1fr; justify-content: stretch; }
+    .side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .side.left { justify-content: flex-end; }
+    .side.right { justify-content: flex-start; }
+  }
+  /* the narrowest phones: seven buttons share the line */
+  @media (max-width: 380px) {
+    .controls, .side { gap: 4px; }
+    .controls :global(.icon-btn) { width: 34px; min-width: 34px; }
   }
 </style>

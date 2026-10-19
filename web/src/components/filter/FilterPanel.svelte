@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TagBar from './TagBar.svelte';
   import { longpress } from '../../lib/longpress';
   import { onMount } from 'svelte';
   import { t } from '../../lib/i18n.svelte';
@@ -153,6 +154,49 @@
     if (order.some((p, i) => p.name !== data.presets[i].name)) await savePresets(order);
   }
 
+  // tablets and phones: the chips share one line, those that do not fit are in a popup behind a button (like the tabs)
+  const single = $derived(ui.rightOverlay);
+  let presetsEl = $state<HTMLElement | null>(null);
+  let fit = $state(Infinity); // the number of chips that fit the line
+  const hiddenPresets = $derived(single ? data.presets.slice(fit) : []);
+
+  $effect(() => {
+    void data.presets;
+    const element = presetsEl;
+    if (!element || !single) {
+      fit = Infinity;
+      return;
+    }
+    const GAP = 6;
+    const MORE = 52; // the room of the button with the rest
+    const measure = () => {
+      const widths = [...element.querySelectorAll<HTMLElement>('.chips > .preset')].map((chip) => chip.offsetWidth);
+      const count = (space: number) => {
+        let used = 0;
+        let number = 0;
+        for (const width of widths) {
+          const next = used + width + (number ? GAP : 0);
+          if (next > space) break;
+          used = next;
+          number++;
+        }
+        return number;
+      };
+      fit = count(element.clientWidth) === widths.length ? widths.length : count(element.clientWidth - MORE - GAP);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
+
+  function showMorePresets(event: MouseEvent) {
+    event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    openMenu({ clientX: Math.max(8, rect.right - 240), clientY: rect.bottom + 6 },
+             hiddenPresets.map((preset) => ({ label: preset.name, icon: 'bookmark', checked: selectedPreset === preset.name, action: () => applyPreset(preset) })));
+  }
+
   function toggleMap() {
     prefs.showMoodMap = !prefs.showMoodMap;
     prefs.moodCollapsed = false;
@@ -190,9 +234,10 @@
       {/if}
 
       {#if prefs.filter.presets}
-        <div class="presets">
-          {#each data.presets as preset (preset.name)}
-            <button class="preset" class:on={selectedPreset === preset.name} class:dragging={draggedPreset === preset.name}
+        <div class="presets" class:single bind:this={presetsEl}>
+          <div class="chips">
+          {#each data.presets as preset, index (preset.name)}
+            <button class="preset" class:clipped={index >= fit} class:on={selectedPreset === preset.name} class:dragging={draggedPreset === preset.name}
                     class:before={dropAt?.name === preset.name && !dropAt.after} class:after={dropAt?.name === preset.name && dropAt.after}
                     aria-pressed={selectedPreset === preset.name} onclick={() => applyPreset(preset)} oncontextmenu={(e) => presetMenu(e, preset)} title={t('Presets')} use:longpress
                     draggable={!ui.coarse} ondragstart={(e) => { draggedPreset = preset.name; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }}
@@ -201,6 +246,13 @@
               <Icon name="bookmark" size={13} /> {preset.name}
             </button>
           {/each}
+          </div>
+          {#if hiddenPresets.length}
+            <button class="more" class:on={hiddenPresets.some((preset) => preset.name === selectedPreset)} title={t('More presets')} aria-label={t('More presets')}
+                    aria-haspopup="menu" onclick={showMorePresets}>
+              <Icon name="chevron-down" size={14} /><span class="count">{hiddenPresets.length}</span>
+            </button>
+          {/if}
         </div>
       {/if}
       <span class="grow"></span>
@@ -259,10 +311,29 @@
   </section>
 {/if}
 
+<!-- the tags and genres belong to the filter: folding it away (the arrow) hides them too. Without the arrow (no mood filter in this view) they stay. -->
+{#if !(visible && prefs.moodCollapsed)}
+  <TagBar />
+{/if}
+
 <style>
   .mood { display: flex; flex-direction: column; gap: 10px; flex: none; padding-right: 2px; }
-  .head { display: flex; align-items: center; gap: 10px; min-height: 36px; flex-wrap: wrap; }
-  .presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  /* the preset chips take the room that is left and wrap inside it, so the buttons at the end (reset, show or hide the sliders) stay at the
+     right of the first line instead of getting a line of their own */
+  .head { display: flex; align-items: flex-start; gap: 10px; min-height: 36px; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; align-content: flex-start; flex: 1; min-width: 0; padding-block: 4px; }
+  .presets + .grow { display: none; }
+  .chips { display: contents; }
+  /* one line: the chips do not wrap, the ones that do not fit are hidden (their button is in the popup) */
+  .presets.single { flex-wrap: nowrap; }
+  .presets.single .chips { display: flex; flex: 1; min-width: 0; gap: 6px; overflow: hidden; align-items: center; }
+  .presets.single .preset { flex: none; white-space: nowrap; }
+  .preset.clipped { visibility: hidden; }
+  .more { display: inline-flex; align-items: center; gap: 3px; flex: none; height: 28px; padding: 0 8px; border-radius: 9px; color: var(--muted); border: 1px solid var(--border); background: var(--surface); }
+  .more.on { color: var(--gold); background: var(--gold-soft); border-color: var(--gold); }
+  .count { font-size: var(--fs-xs); font-weight: 600; }
+  /* the buttons at the end are as high as the first line of chips plus its padding (28 + 2 x 4), so that they sit level with the chips */
+  .head > .icon-btn, .head > .btn { height: 36px; min-height: 36px; }
   .preset { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 9px; font-size: var(--fs-sm); color: var(--gold); background: var(--gold-soft); border: 1px solid transparent; }
   @media (hover: hover) { .preset:hover { border-color: var(--gold); } }
   .preset.dragging { opacity: 0.4; }

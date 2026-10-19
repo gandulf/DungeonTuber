@@ -1063,5 +1063,6 @@
   "Generate covers": "Generate covers",
   "Every block has a cover image already.": "Every block has a cover image already.",
   "Paint a cover image for {0} block(s) with AI? This takes a while; it runs in the background.": "Paint a cover image for {0} block(s) with AI? This takes a while; it runs in the background.",
-  "The cover images are painted in the background.": "The cover images are painted in the background."
+  "The cover images are painted in the background.": "The cover images are painted in the background.",
+  "More presets": "More presets"
 }
