@@ -278,3 +278,153 @@ def test_the_pages_of_persons_are_embedded_blocks():
     # the attribute is kept when the adventure is saved again
     again = adventureimport.model.normalize(adventure, previous=adventure)
     assert [block["inline"] for block in again["blocks"]] == [block["inline"] for block in adventure["blocks"]]
+
+
+def test_a_busy_ai_service_is_logged_and_retried(monkeypatch):
+    import io
+    import json as jsonlib
+    import urllib.error
+
+    class Response(io.BytesIO):
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.close()
+
+    answers = [429, 503, "ok"]
+
+    def urlopen(request, timeout=None):
+        answer = answers.pop(0)
+        if answer == "ok":
+            return Response(jsonlib.dumps({"fine": True}).encode())
+        raise urllib.error.HTTPError(request.full_url, answer, "busy", {}, io.BytesIO(jsonlib.dumps({"error": {"message": "quota used up"}}).encode()))
+
+    monkeypatch.setattr(adventureimport.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(adventureimport, "RETRY_WAIT", 0)
+    monkeypatch.setattr(adventureimport.assistant, "api_key", lambda: "key")
+    job = {"log": [], "stage": "Reading the book", "stage_key": "Reading the book", "stage_args": []}
+    adventureimport._local.job = job
+    try:
+        data, _headers = adventureimport._call("https://example.test/x", b"{}")
+    finally:
+        adventureimport._local.job = None
+    assert data == {"fine": True}
+    warnings = [line for line in job["log"] if line["level"] == "warning"]
+    assert len(warnings) == 2 and "429" in warnings[0]["message"] and "quota used up" in warnings[0]["message"] and "1 of 3" in warnings[0]["message"]
+    assert job["stage"] == "Reading the book" and job["stage_key"] == "Reading the book"  # what it was doing before the wait
+
+
+def test_the_imports_of_a_user_are_listed_with_their_log_and_can_be_dismissed(client, monkeypatch):
+    import threading
+    AppSettings.setValue(SettingKeys.ASSISTANT_API_KEY, "gemini_key_1234")
+    monkeypatch.setattr(adventureimport, "_jobs", {})  # the imports of the other tests are not part of this one
+    release = threading.Event()
+
+    def convert(data, name, owner, progress, detail=None):
+        adventureimport.stage("Writing the notes (1 of 2)")
+        adventureimport.note("Notes 1 of 2: scenes s1, s2")
+        adventureimport.note("The AI service is busy (429: quota); waiting 0 s", "warning")
+        progress(1, 3)
+        release.wait(5)
+        return adventureimport.build(OUTLINE, {}, owner)
+
+    monkeypatch.setattr(adventureimport, "convert", convert)
+    assert client.get("/api/adventures/import").json() == {"jobs": []}
+    job = client.post("/api/adventures/import", files={"file": ("gruft.pdf", b"%PDF-1.7 ...", "application/pdf")}).json()
+    for _ in range(100):  # the thread has written its log
+        jobs = client.get("/api/adventures/import").json()["jobs"]
+        if jobs and jobs[0]["log"]:
+            break
+        time.sleep(0.02)
+    running = jobs[0]
+    assert running["id"] == job["id"] and running["status"] == "running" and running["stage"] == "Writing the notes (1 of 2)"
+    assert running["stageKey"] == "Writing the notes (1 of 2)" and running["stageArgs"] == []
+    assert [line["level"] for line in running["log"]] == ["info", "warning"] and (running["step"], running["total"]) == (1, 3)
+    assert client.delete(f"/api/adventures/import/{job['id']}").status_code == 409  # still running
+    release.set()
+    for _ in range(100):
+        finished = client.get(f"/api/adventures/import/{job['id']}").json()
+        if finished["status"] != "running":
+            break
+        time.sleep(0.02)
+    assert finished["status"] == "done" and finished["stage"] == "Done" and finished["log"][-1]["message"] == "The adventure is stored"
+    assert client.delete(f"/api/adventures/import/{job['id']}").json() == {"dismissed": True}
+    assert client.get("/api/adventures/import").json() == {"jobs": []}
+    assert client.delete("/api/adventures/import/unknown").status_code == 404
+
+
+def test_the_stage_has_a_key_and_arguments_for_the_language_of_the_client():
+    job = {"log": [], "stage": "", "stage_key": "", "stage_args": []}
+    adventureimport._local.job = job
+    try:
+        before = adventureimport.stage("Writing the notes ({0} of {1})", 2, 5)
+        assert job["stage"] == "Writing the notes (2 of 5)" and job["stage_key"] == "Writing the notes ({0} of {1})" and job["stage_args"] == [2, 5]
+        adventureimport.stage("Done")
+        assert (job["stage"], job["stage_args"]) == ("Done", [])
+        adventureimport.stage(*before)
+    finally:
+        adventureimport._local.job = None
+    assert job["stage_key"] == ""
+
+
+def test_a_cancel_ends_the_wait_for_a_busy_ai_service_at_once(monkeypatch):
+    import io
+    import json as jsonlib
+    import threading
+    import urllib.error
+
+    def urlopen(request, timeout=None):
+        raise urllib.error.HTTPError(request.full_url, 429, "busy", {}, io.BytesIO(jsonlib.dumps({"error": {"message": "quota"}}).encode()))
+
+    monkeypatch.setattr(adventureimport.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(adventureimport, "RETRY_WAIT", 30)  # it would wait half a minute
+    monkeypatch.setattr(adventureimport.assistant, "api_key", lambda: "key")
+    job = {"log": [], "stage": "", "stage_key": "", "stage_args": [], "cancel": threading.Event()}
+    threading.Timer(0.3, job["cancel"].set).start()
+    adventureimport._local.job = job
+    started = time.time()
+    try:
+        with pytest.raises(adventureimport.Cancelled):
+            adventureimport._call("https://example.test/x", b"{}")
+    finally:
+        adventureimport._local.job = None
+    assert time.time() - started < 5
+
+
+def test_a_running_import_can_be_cancelled_and_stores_nothing(client, monkeypatch):
+    import threading
+    AppSettings.setValue(SettingKeys.ASSISTANT_API_KEY, "gemini_key_1234")
+    monkeypatch.setattr(adventureimport, "_jobs", {})
+    reached = threading.Event()
+    ended = threading.Event()
+
+    def convert(data, name, owner, progress, detail=None):
+        adventureimport.note("working")
+        reached.set()
+        try:
+            adventureimport.pause(30)  # a long wait: the cancel ends it
+        finally:
+            ended.set()
+        return adventureimport.build(OUTLINE, {}, owner)
+
+    monkeypatch.setattr(adventureimport, "convert", convert)
+    pdf = {"file": ("gruft.pdf", b"%PDF-1.7 ...", "application/pdf")}
+    job = client.post("/api/adventures/import", files=pdf).json()
+    assert reached.wait(5)
+    assert client.post("/api/adventures/import/unknown/cancel").status_code == 404
+    cancelled = client.post(f"/api/adventures/import/{job['id']}/cancel")
+    assert cancelled.status_code == 200
+    body = cancelled.json()
+    assert body["status"] == "cancelled" and body["stage"] == "Cancelled" and body["stageKey"] == "Cancelled" and body["finished"] > 0
+    assert body["log"][-1]["message"] == "The import was cancelled by the user" and body["log"][-1]["level"] == "warning"
+    assert ended.wait(5)  # the thread stopped waiting
+    time.sleep(0.2)
+    assert client.get("/api/adventures").json()["adventures"] == []  # nothing was stored
+    assert client.get(f"/api/adventures/import/{job['id']}").json()["status"] == "cancelled"
+    assert client.post(f"/api/adventures/import/{job['id']}/cancel").status_code == 409  # not running any more
+    # another import can start right away, and the cancelled one can be dismissed
+    assert client.post("/api/adventures/import", files=pdf).status_code == 200
+    assert client.delete(f"/api/adventures/import/{job['id']}").json() == {"dismissed": True}

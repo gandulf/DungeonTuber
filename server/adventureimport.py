@@ -142,31 +142,93 @@ class ImportFailed(Exception):
     pass
 
 
+class Cancelled(Exception):
+    """The user cancelled the import: the thread of the import ends at its next request or pause."""
+
+
+# --- the log of an import: what happens (and what goes wrong) is shown in the progress popup of the app and written to the server log ------
+
+MAX_LOG = 200
+_local = threading.local()  # the import that runs in this thread
+
+
+def _write(job: dict | None, message: str, level: str = "info"):
+    getattr(logger, level)(message)
+    if job is not None:
+        job["log"].append({"time": time.time(), "level": level, "message": message})
+        del job["log"][:-MAX_LOG]
+
+
+def note(message: str, level: str = "info"):
+    """Writes `message` to the log of the import running in this thread (level "info", "warning" or "error") and to the server log."""
+    _write(getattr(_local, "job", None), message, level)
+
+
+def _set_stage(job: dict, key: str, *args):
+    job["stage_key"], job["stage_args"] = key, list(args)
+    job["stage"] = _(key).format(*args) if args else _(key)
+
+
+def check_cancelled():
+    """Ends the import running in this thread when the user cancelled it."""
+    event = (getattr(_local, "job", None) or {}).get("cancel")
+    if event is not None and event.is_set():
+        raise Cancelled()
+
+
+def pause(seconds: float, checked: bool = True):
+    """Waits; a cancel of the import running in this thread ends the wait at once (and the import)."""
+    event = (getattr(_local, "job", None) or {}).get("cancel")
+    if event is not None and checked:
+        if event.wait(seconds):
+            raise Cancelled()
+    else:
+        time.sleep(seconds)
+
+
+def stage(key: str | None = None, *args) -> tuple[str, tuple]:
+    """Sets what the import is doing right now (shown under the progress bar): `key` is the English text with {0}, {1} for `args`. The client
+    translates it into the language of the user; the text in the language of the server is there as well. Returns the key and the
+    arguments of what it was doing before (for `stage(*before)`)."""
+    job = getattr(_local, "job", None)
+    previous = (job["stage_key"], tuple(job["stage_args"])) if job is not None else ("", ())
+    if job is not None and key is not None:
+        _set_stage(job, key, *args)
+    return previous
+
+
 # --- Gemini -----------------------------------------------------------------------------------------------------------------------
 
-def _call(url: str, data: bytes | None = None, headers: dict | None = None, method: str = "POST") -> tuple[dict, dict]:
+def _call(url: str, data: bytes | None = None, headers: dict | None = None, method: str = "POST", checked: bool = True) -> tuple[dict, dict]:
     """A request to Gemini with the key of the assistant; retries when the quota per minute is used up. Returns the JSON answer and
     the headers of the answer."""
     key = assistant.api_key()
     if not key:
         raise ImportFailed(_("The AI assistant is not configured"))
     for attempt in range(RETRIES + 1):
+        if checked:
+            check_cancelled()
         request = urllib.request.Request(url, data=data, method=method, headers={**(headers or {}), "x-goog-api-key": key})
         try:
             with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
                 body = response.read()
                 return (json.loads(body) if body else {}), dict(response.headers)
         except urllib.error.HTTPError as e:
-            if e.code in (429, 503) and attempt < RETRIES:
-                logger.info("Gemini is busy (%s), waiting %s s", e.code, RETRY_WAIT)
-                time.sleep(RETRY_WAIT)
-                continue
             detail = assistant._detail(e)
+            if e.code in (429, 503) and attempt < RETRIES:
+                note(f"The AI service is busy ({e.code}: {detail[:160]}); waiting {RETRY_WAIT} s, then trying again ({attempt + 1} of {RETRIES})", "warning")
+                before = stage("The AI service is busy, waiting to try again ({0} of {1})", attempt + 1, RETRIES)
+                pause(RETRY_WAIT, checked)
+                stage(*before)
+                continue
+            note(f"The AI service answered {e.code}: {detail[:300]}", "error")
             if e.code in (401, 403):
                 raise ImportFailed(_("The AI service rejected the API key ({0})").format(detail)) from e
             raise ImportFailed(_("The AI service failed ({0}): {1}").format(e.code, detail)) from e
         except (urllib.error.URLError, TimeoutError, ValueError) as e:
+            note(f"The AI service is not reachable: {e}", "error")
             raise ImportFailed(_("The AI service is not reachable: {0}").format(e)) from e
+    note("The AI service stayed busy; giving up", "error")
     raise ImportFailed(_("The AI service is busy, please try again in a moment ({0})").format(""))
 
 
@@ -185,15 +247,15 @@ def upload(pdf: bytes, name: str) -> dict:
             return file
         if file.get("state") == "FAILED":
             raise ImportFailed(_("The AI service could not read the PDF"))
-        time.sleep(2)
+        pause(2)
         file, _headers = _call(API_ROOT + file["name"], method="GET")
     raise ImportFailed(_("The AI service could not read the PDF"))
 
 
 def remove(file: dict):
     try:
-        _call(API_ROOT + file["name"], method="DELETE")
-    except (ImportFailed, KeyError):
+        _call(API_ROOT + file["name"], method="DELETE", checked=False)  # also after a cancel: the file is not left at Gemini
+    except (ImportFailed, KeyError, Cancelled):
         pass  # Gemini deletes uploaded files after 48 hours anyway
 
 
@@ -350,9 +412,13 @@ def convert(pdf: bytes, name: str, owner: str, progress=lambda step, total: None
     """Reads the book and returns the adventure (not stored yet); `detail` ("low", "medium" or "high") is how fine the book is split into scenes
     and how much their notes hold."""
     detail = detail_of(detail)
+    note(f"Import of \"{name}\" started ({len(pdf) // 1024} KB, level of detail: {detail})")
+    stage("Uploading the PDF")
     file = upload(pdf, name)
+    note("The PDF is uploaded and processed by the AI service")
     try:
         progress(0, 1)
+        stage("Reading the book")
         outline = ask(file, with_instructions(outline_prompt(detail)), f"Split this adventure into scenes at the level of detail: {detail}.", OUTLINE_SCHEMA)
         scenes = scenes_of(outline)
         if not scenes:
@@ -360,20 +426,26 @@ def convert(pdf: bytes, name: str, owner: str, progress=lambda step, total: None
         people = characters_of(outline)
         batches = [("scenes", scenes[index:index + SCENES_PER_REQUEST]) for index in range(0, len(scenes), SCENES_PER_REQUEST)]
         batches += [("persons", people[index:index + SCENES_PER_REQUEST]) for index in range(0, len(people), SCENES_PER_REQUEST)]
+        note(f"Outline: {len(scenes)} scenes and {len(people)} persons, the notes are written in {len(batches)} steps")
         notes: dict[str, str] = {}
         for number, (kind, batch) in enumerate(batches, start=1):
             progress(number, len(batches) + 1)
+            stage("Writing the notes ({0} of {1})", number, len(batches))
+            note(f"Notes {number} of {len(batches)}: {kind} {', '.join(item['key'] for item in batch)}")
             text = (f"All scenes and persons of the adventure:\n{outline_text(scenes, people)}\n\n"
                     f"Write the notes of these {kind}: {', '.join(item['key'] for item in batch)}.")
             try:
                 answer = ask(file, with_instructions(f"{notes_prompt(detail)}\n\n{stat_block()}"), text, NOTES_SCHEMA)
             except ImportFailed as e:
-                logger.warning("Notes of %s failed: %s", [item["key"] for item in batch], e)
+                note(f"Notes {number} of {len(batches)} failed ({e}); these keep their summary", "warning")
                 continue  # these scenes and persons keep their summary
             for item in answer.get("scenes") or []:
                 if isinstance(item, dict) and isinstance(item.get("markdown"), str):
                     notes[str(item.get("key"))] = item["markdown"]
-        return build(outline, notes, owner)
+        stage("Building the adventure")
+        adventure = build(outline, notes, owner)
+        note(f"Built the adventure with {len(adventure['blocks'])} blocks, {len(notes)} of {len(scenes) + len(people)} with notes")
+        return adventure
     finally:
         remove(file)
 
@@ -398,28 +470,75 @@ def start(pdf: bytes, name: str, user: str, store, detail: str | None = None) ->
         if any(job["user"] == user and job["status"] == "running" for job in _jobs.values()):
             raise ImportFailed(_("An import is already running"))
         job = {"id": uuid.uuid4().hex, "user": user, "name": name, "status": "running", "step": 0, "total": 1, "adventure": None,
-               "error": None, "finished": 0.0}
+               "error": None, "started": time.time(), "finished": 0.0, "stage": _("Starting"), "stage_key": "Starting", "stage_args": [], "log": [], "cancel": threading.Event()}
         _jobs[job["id"]] = job
 
     def progress(step: int, total: int):
         job["step"], job["total"] = step, total
 
     def run():
+        _local.job = job
         try:
-            job["adventure"] = store(convert(pdf, name, user, progress, detail))
+            adventure = convert(pdf, name, user, progress, detail)
+            check_cancelled()  # nothing is stored after a cancel
+            stage("Saving the adventure")
+            job["adventure"] = store(adventure)
             job["status"] = "done"
+            stage("Done")
+            note("The adventure is stored")
+        except Cancelled:
+            note("The import was cancelled")  # the status and the stage were set by the cancel
         except Exception as e:  # reported to the client
             logger.exception("Import of %s failed", name)
             job["status"], job["error"] = "error", str(e) or type(e).__name__
+            stage("Failed")
+            note(f"The import failed: {job['error']}", "error")
         finally:
-            job["finished"] = time.time()
+            job["finished"] = job["finished"] or time.time()
+            _local.job = None
 
     threading.Thread(target=run, name=f"adventure-import-{job['id'][:8]}", daemon=True).start()
     return view(job)
 
 
 def view(job: dict) -> dict:
-    return {key: job[key] for key in ("id", "name", "status", "step", "total", "adventure", "error")}
+    return {**{key: job[key] for key in ("id", "name", "status", "step", "total", "adventure", "error", "stage", "started", "finished")},
+            "stageKey": job["stage_key"], "stageArgs": list(job["stage_args"]), "log": list(job["log"])}
+
+
+def list_jobs(user: str) -> list[dict]:
+    """The imports of a user, running and finished (the newest first), so a client that was closed in between finds them again."""
+    with _lock:
+        _forget_old()
+        return [view(job) for job in sorted(_jobs.values(), key=lambda item: item["started"], reverse=True) if job["user"] == user]
+
+
+def cancel(job_id: str, user: str) -> bool | None:
+    """Cancels a running import: it is cancelled at once for the user (it can be dismissed and another one can be started); its thread ends at
+    its next request or pause and stores nothing. None when there is no such import, False when it is not running."""
+    with _lock:
+        job = _jobs.get(job_id)
+        if job is None or job["user"] != user:
+            return None
+        if job["status"] != "running":
+            return False
+        job["cancel"].set()
+        job["status"], job["finished"] = "cancelled", time.time()
+        _set_stage(job, "Cancelled")
+        _write(job, "The import was cancelled by the user", "warning")
+        return True
+
+
+def dismiss(job_id: str, user: str) -> bool | None:
+    """Removes a finished import from the list; None when there is no such import, False while it is still running."""
+    with _lock:
+        job = _jobs.get(job_id)
+        if job is None or job["user"] != user:
+            return None
+        if job["status"] == "running":
+            return False
+        del _jobs[job_id]
+        return True
 
 
 def status(job_id: str, user: str) -> dict | None:

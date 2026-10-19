@@ -2,7 +2,9 @@
 visible to everybody; only the owner (and the SuperAdmin) changes them. On a server (not the desktop app) private adventures of
 others stay hidden from the SuperAdmin too, like private playlists."""
 import logging
+import re
 from typing import Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
@@ -114,6 +116,74 @@ async def import_adventure(file: UploadFile = File(...), detail: Literal["low", 
         return adventureimport.start(data, file.filename or "adventure.pdf", user, store, detail)
     except adventureimport.ImportFailed as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.get("/api/adventures/{adventure_id}/export")
+def export_adventure(adventure_id: str, user: str = Depends(current_user)):
+    """The adventure as a ZIP file: the adventure itself, its images and the book it was imported from."""
+    location, adventure = _load(adventure_id, user)
+    try:
+        data = adventures.export_package(location, adventure)
+    except StorageError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    title = adventure["title"].strip() or "adventure"
+    ascii_name = re.sub(r"[^A-Za-z0-9._-]+", "-", title).strip("-") or "adventure"
+    return Response(content=data, media_type="application/zip", headers={
+        "Content-Disposition": f"attachment; filename=\"{ascii_name}.zip\"; filename*=UTF-8''{quote(title)}.zip"})
+
+
+@router.post("/api/adventures/import-package")
+def import_package(file: UploadFile = File(...), overwrite: bool = Form(default=False), as_copy: bool = Form(default=False, alias="copy"), user: str = Depends(current_user)):
+    """Imports an adventure file (ZIP, see export). An adventure that exists already (the same id) is not touched unless `overwrite` says so (only
+    its owner may); `copy` imports it as a new adventure instead. Answers {"status": "exists", ...} for a duplicate that was not allowed to be
+    replaced, so the client can ask, and {"status": "imported", ...} when it is stored."""
+    if not adventures.has_library():
+        raise HTTPException(status_code=400, detail="No library configured")
+    data = file.file.read(adventures.MAX_PACKAGE_UPLOAD + 1)
+    if len(data) > adventures.MAX_PACKAGE_UPLOAD:
+        raise HTTPException(status_code=413, detail=_("The adventure file is too large"))
+    try:
+        adventure, assets = adventures.read_package(data)
+        found = adventures.find(str(adventure.get("id") or "")) if adventure.get("id") and not as_copy else None
+        if found is not None and not overwrite:
+            return {"status": "exists", "id": found[1]["id"], "title": str(adventure.get("title") or ""), "editable": _can_edit(found[1], user)}  # the title of the file: of a private adventure of somebody else nothing is told
+        if found is not None and not _can_edit(found[1], user):
+            raise HTTPException(status_code=403, detail=_("Only the owner can change this adventure"))
+        location, stored = adventures.install_package(adventure, assets, user, found, as_copy)
+    except adventures.PackageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (StorageError, adventures.NoLibrary) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    hub.publish("adventures.changed", {})
+    return {"status": "imported", "id": stored["id"], "title": stored["title"], "overwritten": found is not None}
+
+
+@router.get("/api/adventures/import")
+def import_jobs(user: str = Depends(current_user)):
+    """The imports of the user (running and finished) with their logs, for the progress popup."""
+    return {"jobs": adventureimport.list_jobs(user)}
+
+
+@router.post("/api/adventures/import/{job_id}/cancel")
+def cancel_import(job_id: str, user: str = Depends(current_user)):
+    """Cancels a running import."""
+    result = adventureimport.cancel(job_id, user)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if result is False:
+        raise HTTPException(status_code=409, detail=_("The import is not running"))
+    return adventureimport.status(job_id, user)
+
+
+@router.delete("/api/adventures/import/{job_id}")
+def dismiss_import(job_id: str, user: str = Depends(current_user)):
+    """Removes a finished import from the list."""
+    result = adventureimport.dismiss(job_id, user)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if result is False:
+        raise HTTPException(status_code=409, detail=_("The import is still running"))
+    return {"dismissed": True}
 
 
 @router.get("/api/adventures/import/{job_id}")

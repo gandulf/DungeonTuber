@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { restoreImports } from './lib/stores/adventure.svelte';
   import { libraryRootsChanged } from './lib/actions';
   import { applyAccent } from './lib/accent';
   import { api, setUnauthorizedHandler } from './lib/api';
@@ -45,6 +46,7 @@
       void api.analysisStatus().then(setAnalysis).catch(() => undefined);
       if (data.settings?.lightsEnabled) void loadLights().catch(() => undefined);
       connectEvents();
+      void restoreImports(); // imports that run on the server while this window was closed
       ready = true;
     } catch (e) {
       failed = e instanceof Error ? e.message : String(e);

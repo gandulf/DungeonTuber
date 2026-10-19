@@ -1,6 +1,6 @@
 // The open adventure: editing (autosaved), the path through its blocks in play mode and what a block starts (music, effects).
 // Adventures are tabs next to folders and playlists (see stores/library.svelte.ts); the one of the active tab is `adventures.current`.
-import { api, pathToId } from '../api';
+import { adventureExportUrl, api, pathToId } from '../api';
 import { addAdventureMusic, addMusic, appendBlock, assignMusic, refKey, removeBlock } from '../adventures';
 import { blockPrompt } from '../adventureAi';
 import { data } from './data.svelte';
@@ -30,7 +30,8 @@ export const adventures = $state({
   /** Blocks (`adventureId/blockId`) whose cover is still being painted in the background (see applyCoverWhenReady). */
   pendingCovers: [] as string[],
   /** The import of an adventure book (PDF) that runs on the server, shown in the list of adventures until it is done. */
-  importing: null as AdventureImport | null,
+  /** The imports of adventure books (PDF) of the user, running and finished, with their logs: the progress popup shows them. */
+  imports: [] as AdventureImport[],
   /** The words of the header search to mark in the notes of the block it went to (see goToBlock). */
   highlight: null as { blockId: string; terms: string[] } | null,
 });
@@ -126,6 +127,51 @@ export async function openAdventure(id: string) {
   }
 }
 
+/** Downloads an adventure as a ZIP file with its images and its book (the browser or the app asks where to save it). */
+export function exportAdventure(id: string) {
+  const link = document.createElement('a');
+  link.href = adventureExportUrl(id);
+  link.download = '';
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+/** "Import from a file": the user picks an adventure file (ZIP). An adventure with the same id that exists already is only overwritten after a
+ *  question (only its owner may; others can import it as a copy). */
+export function importAdventureFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.zip,application/zip';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (file) void importPackage(file);
+  };
+  input.click();
+}
+
+async function importPackage(file: File) {
+  try {
+    let result = await api.importAdventurePackage(file);
+    if (result.status === 'exists') {
+      if (result.editable) {
+        if (!(await askConfirm(t('"{0}" exists already. Overwrite it?', result.title)))) return;
+        await flushSave(); // a save that is waiting must not come after the new content
+        result = await api.importAdventurePackage(file, { overwrite: true });
+      } else {
+        if (!(await askConfirm(t('"{0}" exists already and belongs to somebody else, so it cannot be overwritten. Import it as a copy?', result.title)))) return;
+        result = await api.importAdventurePackage(file, { copy: true });
+      }
+    }
+    await loadAdventures();
+    if (adventures.current?.id === result.id) await openAdventure(result.id); // the open adventure shows the new content
+    toast(result.overwritten ? t('"{0}" was overwritten.', result.title) : t('"{0}" was imported.', result.title), 'success');
+    await openAdventureTab(result.id, result.title);
+  } catch (e) {
+    errorToast(e);
+  }
+}
+
 /** Opens the book (PDF) the adventure was imported from, at `page`. The viewer is loaded when it is first needed. */
 export async function openPdf(page = 1) {
   const adventure = adventures.current;
@@ -149,7 +195,7 @@ export async function pickPdfPage(): Promise<number | null> {
   return new Promise((resolve) => openDialog(PdfViewerDialog, { adventureId: adventure.id, title: adventure.pdf, page: 1, onpick: resolve }));
 }
 
-const IMPORT_POLL_MS = 3000;
+const IMPORT_POLL_MS = 2000;
 
 /** "Import from PDF": the AI (Gemini) reads an adventure book and makes a private adventure of it, one block per scene. It runs on the
  *  server for some minutes; the list of adventures shows how far it is, and the adventure opens when it is done. */
@@ -160,36 +206,106 @@ export function importAdventure() {
 /** Starts the import of the chosen PDF; `detail` is how fine the AI splits the book into blocks and how much their notes hold. */
 export async function startAdventureImport(file: File, detail: 'low' | 'medium' | 'high') {
   try {
-    adventures.importing = await api.importAdventure(file, detail);
+    const job = await api.importAdventure(file, detail);
+    startedHere.add(job.id);
+    adventures.imports = [job, ...adventures.imports.filter((item) => item.id !== job.id)];
+    watching.add(job.id);
     toast(t('The AI reads "{0}". This takes a few minutes; you can go on meanwhile.', file.name), 'info');
-    void followImport(adventures.importing.id);
+    openImportProgress();
+    pollImports();
   } catch (e) {
     errorToast(e);
   }
 }
 
-async function followImport(id: string) {
-  for (;;) {
-    await new Promise((resolve) => setTimeout(resolve, IMPORT_POLL_MS));
-    let job: AdventureImport;
+// --- the imports: the server keeps them (and their logs) while they run, so they are found again after a reload
+
+const startedHere = new Set<string>(); // imports started in this window: when one is done, its adventure opens
+const watching = new Set<string>(); // imports that were running the last time we looked: their end is reported
+let polling = false;
+let progressOpen = false;
+
+/** What an import does right now, in the language of the app. */
+export const importStage = (job: AdventureImport) => (job.stageKey ? t(job.stageKey, ...job.stageArgs) : job.stage);
+
+export const importsRunning = () => adventures.imports.some((job) => job.status === 'running');
+
+/** Shows the progress popup with all imports (once; it stays until it is closed). */
+export async function openImportProgress() {
+  if (progressOpen) return;
+  progressOpen = true;
+  const { default: ImportProgressDialog } = await import('../../components/adventure/ImportProgressDialog.svelte');
+  openDialog(ImportProgressDialog, { onclosed: () => (progressOpen = false) });
+}
+
+/** Loads the imports of the user; an import that ended since the last look is reported (and its adventure opens if it was started here). */
+export async function refreshImports() {
+  let jobs: AdventureImport[];
+  try {
+    jobs = (await api.adventureImports()).jobs;
+  } catch {
+    return; // the server is not reachable for the moment: the next look tries again
+  }
+  adventures.imports = jobs;
+  for (const job of jobs) {
+    if (job.status === 'running') {
+      watching.add(job.id);
+    } else if (watching.delete(job.id)) {
+      if (job.status === 'error') {
+        errorToast(new Error(t('The import of "{0}" failed: {1}', job.name, job.error ?? '')));
+      } else if (job.status === 'cancelled') {
+        toast(t('The import of "{0}" was cancelled.', job.name), 'info');
+      } else {
+        await loadAdventures();
+        toast(t('"{0}" was imported. Check the blocks against the book.', job.name), 'success');
+        if (job.adventure && startedHere.has(job.id)) await openAdventureTab(job.adventure);
+      }
+    }
+  }
+}
+
+/** Looks at the imports every few seconds for as long as one is running. */
+export function pollImports() {
+  if (polling) return;
+  polling = true;
+  void (async () => {
     try {
-      job = await api.adventureImport(id);
-    } catch (e) {
-      adventures.importing = null;
-      errorToast(e);
-      return;
+      do {
+        await new Promise((resolve) => setTimeout(resolve, IMPORT_POLL_MS));
+        await refreshImports();
+      } while (importsRunning());
+    } finally {
+      polling = false;
     }
-    adventures.importing = job.status === 'running' ? job : null;
-    if (job.status === 'error') {
-      errorToast(new Error(t('The import of "{0}" failed: {1}', job.name, job.error ?? '')));
-      return;
-    }
-    if (job.status === 'done' && job.adventure) {
-      await loadAdventures();
-      toast(t('"{0}" was imported. Check the blocks against the book.', job.name), 'success');
-      await openAdventureTab(job.adventure);
-      return;
-    }
+  })();
+}
+
+/** After the start of the app (or a login): imports that are still running are shown in the progress popup. */
+export async function restoreImports() {
+  await refreshImports();
+  if (importsRunning()) {
+    openImportProgress();
+    pollImports();
+  }
+}
+
+/** Cancels a running import after a question. */
+export async function cancelImport(job: AdventureImport) {
+  if (!(await askConfirm(t('Cancel the import of "{0}"?', job.name)))) return;
+  try {
+    await api.cancelAdventureImport(job.id);
+  } catch (e) {
+    errorToast(e); // it may have ended in the meantime
+  }
+  await refreshImports();
+}
+
+export async function dismissImport(id: string) {
+  try {
+    await api.dismissAdventureImport(id);
+    adventures.imports = adventures.imports.filter((job) => job.id !== id);
+  } catch (e) {
+    errorToast(e);
   }
 }
 

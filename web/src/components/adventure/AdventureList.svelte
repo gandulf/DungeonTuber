@@ -3,7 +3,7 @@
   import { canDropOnAdventure, dropOnAdventure } from '../../lib/actions';
   import { t } from '../../lib/i18n.svelte';
   import { library } from '../../lib/stores/library.svelte';
-  import { adventures, createAdventure, deleteAdventure, importAdventure, loadAdventures, openAdventureTab, renameAdventure } from '../../lib/stores/adventure.svelte';
+  import { adventures, createAdventure, deleteAdventure, exportAdventure, importAdventure, importAdventureFile, importsRunning, importStage, loadAdventures, openAdventureTab, openImportProgress, renameAdventure } from '../../lib/stores/adventure.svelte';
   import { data } from '../../lib/stores/data.svelte';
   import { openMenu, ui } from '../../lib/stores/ui.svelte';
   import { onEvent } from '../../lib/ws';
@@ -20,6 +20,15 @@
 
   let over = $state<string | null>(null); // the adventure songs are dragged over
 
+  /** The ways to get an adventure: from a file of this app (ZIP), or from a book (PDF) read by the AI. */
+  function importMenu(event: MouseEvent) {
+    openMenu(event, [
+      { label: t('Import an adventure file (ZIP)…'), icon: 'upload', action: importAdventureFile },
+      ...(data.settings?.assistantConfigured
+        ? [{ label: t('Import an adventure book (PDF) with the AI'), icon: 'sparkles', disabled: importsRunning(), action: importAdventure }] : []),
+    ]);
+  }
+
   function open(id: string) {
     if (ui.mobilePanel === 'tree') ui.mobilePanel = null;
     void openAdventureTab(id);
@@ -30,18 +39,16 @@
   <div class="row">
     <SectionToggle name="adventures" label={t('Adventures')} />
     <span class="grow"></span>
-    {#if data.settings?.assistantConfigured}
-      <button class="icon-btn mini" title={t('Import an adventure book (PDF) with the AI')} disabled={!!adventures.importing}
-              onclick={importAdventure}><Icon name="upload" size={14} /></button>
-    {/if}
+    <button class="icon-btn mini" title={t('Import an adventure')} aria-label={t('Import an adventure')} aria-haspopup="menu" onclick={importMenu}><Icon name="upload" size={14} /></button>
     <button class="icon-btn mini" title={t('New adventure')} onclick={() => void createAdventure()}><Icon name="plus" size={14} /></button>
   </div>
-  {#if adventures.importing}
-    {@const job = adventures.importing}
-    <div class="importing" title={job.name}>
-      <span class="spinner"></span>
-      <span class="ellipsis">{job.step ? t('Writing the notes ({0} of {1})', job.step, job.total - 1) : t('Reading "{0}"…', job.name)}</span>
-    </div>
+  {#if adventures.imports.length}
+    <!-- the imports (running ones first): a click shows the progress popup with their logs -->
+    {@const job = adventures.imports.find((item) => item.status === 'running') ?? adventures.imports[0]}
+    <button class="importing" class:failed={job.status === 'error'} title={t('Show the progress and the log of the imports')} onclick={() => void openImportProgress()}>
+      {#if job.status === 'running'}<span class="spinner"></span>{:else if job.status === 'done'}<Icon name="check" size={13} />{:else if job.status === 'cancelled'}<Icon name="close" size={13} />{:else}<Icon name="info" size={13} />{/if}
+      <span class="ellipsis">{job.status === 'running' ? `${importStage(job)} · ${job.name}` : job.status === 'error' ? t('Import failed: {0}', job.name) : job.status === 'cancelled' ? t('Import cancelled: {0}', job.name) : t('Imported: {0}', job.name)}</span>
+    </button>
   {/if}
   {#if !prefs.collapsedSections.includes('adventures')}
   {#each adventures.list as item (item.id)}
@@ -52,6 +59,7 @@
             ondrop={(e) => { e.preventDefault(); over = null; void dropOnAdventure(item.id, item.title, e.dataTransfer); }}
             oncontextmenu={(e) => openMenu(e, [
               { label: t('Open'), icon: 'mask', action: () => open(item.id) },
+              { label: t('Export (ZIP)'), icon: 'download', action: () => exportAdventure(item.id) },
               ...(item.editable ? [
                 { label: t('Rename'), icon: 'edit', action: () => void renameAdventure(item.id) },
                 { label: t('Delete'), icon: 'trash', action: () => void deleteAdventure(item.id, item.title) },
@@ -79,7 +87,9 @@
   .meta { display: flex; flex: none; margin-left: auto; color: var(--faint); }
   .empty { font-size: var(--fs-xs); padding: 2px 10px 4px; line-height: 1.4; }
   .grow { flex: 1; }
-  .importing { display: flex; align-items: center; gap: 8px; padding: 6px 10px; color: var(--muted); font-size: var(--fs-xs); }
+  .importing { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border-radius: 8px; text-align: left; color: var(--muted); font-size: var(--fs-xs); }
+  .importing:hover { background: var(--hover); color: var(--text); }
+  .importing.failed { color: var(--red); }
   .spinner { width: 10px; height: 10px; flex: none; border: 2px solid var(--faint); border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (pointer: coarse) {

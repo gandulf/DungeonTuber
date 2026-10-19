@@ -1,5 +1,5 @@
 import type {
-  Adventure, AdventureImport, AdventureSummary, AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, SoundDescription, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, PlaylistInfo, Preset, ServerSettings, Track, TrackList,
+  Adventure, AdventureImport, PackageResult, AdventureSummary, AgentInfo, AgentState, AssistantReply, CloudStatus, ComposePiece, ComposeResult, SoundDescription, AssistantStatus, AuthState, SongCheck, BrowseItem, BrowseResult, Chapter, DownloadItem, Effect, ImportPreview, Light, LightSetting, LookupResult, MetadataStatus, MusicCategory, PlaylistInfo, Preset, ServerSettings, Track, TrackList,
   StorageConfig, UserInfo, UserState, VersionInfo,
 } from './types';
 
@@ -41,6 +41,9 @@ async function request<T>(method: string, url: string, body?: unknown, raw = fal
 const get = <T>(url: string) => request<T>('GET', url);
 const qs = (params: Record<string, string | boolean | undefined>) =>
   new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString();
+
+/** Where an adventure is downloaded as a ZIP file (the adventure, its images and its book). */
+export const adventureExportUrl = (id: string) => `/api/adventures/${encodeURIComponent(id)}/export`;
 
 export const api = {
   // auth
@@ -86,7 +89,20 @@ export const api = {
     if (detail) form.append('detail', detail);
     return request<AdventureImport>('POST', '/api/adventures/import', form);
   },
+  /** Imports an adventure file (ZIP, see `adventureExportUrl`); an adventure that exists already is only replaced with `overwrite`, `copy` stores a new one. */
+  importAdventurePackage: (file: File, options: { overwrite?: boolean; copy?: boolean } = {}) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (options.overwrite) form.append('overwrite', 'true');
+    if (options.copy) form.append('copy', 'true');
+    return request<PackageResult>('POST', '/api/adventures/import-package', form);
+  },
   adventureImport: (id: string) => get<AdventureImport>(`/api/adventures/import/${id}`),
+  /** All imports of the user, running and finished, with their logs. */
+  adventureImports: () => get<{ jobs: AdventureImport[] }>('/api/adventures/import'),
+  dismissAdventureImport: (id: string) => request('DELETE', `/api/adventures/import/${id}`),
+  /** Cancels a running import: it ends at once for the user, the server stops what it does at the next request. */
+  cancelAdventureImport: (id: string) => request<AdventureImport>('POST', `/api/adventures/import/${id}/cancel`),
   saveAdventure: (adventure: Pick<Adventure, 'id' | 'title' | 'blocks' | 'links' | 'music'>) => request<Adventure>('PUT', `/api/adventures/${adventure.id}`, adventure),
   setAdventureVisibility: (id: string, visibility: 'private' | 'public', confirm = false) =>
     request<{ changed: boolean; visibility: 'private' | 'public'; private_playlists: string[] }>('POST', `/api/adventures/${id}/visibility`, { visibility, confirm }),

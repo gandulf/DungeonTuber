@@ -2,7 +2,7 @@
   import { moveBlock, unreachable } from '../../lib/adventures';
   import { canDropOnAdventure, canDropOnBlock, dropOnAdventure, dropOnBlock } from '../../lib/actions';
   import { t } from '../../lib/i18n.svelte';
-  import { addBlock, adventures, askDeleteBlock, change, cleanUpImages, generateCovers, openPdf, selectedBlock, switchToPlay, toggleVisibility } from '../../lib/stores/adventure.svelte';
+  import { addBlock, adventures, askDeleteBlock, change, cleanUpImages, exportAdventure, generateCovers, openPdf, selectedBlock, switchToPlay, toggleVisibility } from '../../lib/stores/adventure.svelte';
   import { data } from '../../lib/stores/data.svelte';
   import { openMenu, ui } from '../../lib/stores/ui.svelte';
   import Icon from '../Icon.svelte';
@@ -40,6 +40,7 @@
         action: () => void toggleVisibility() },
       { separator: true },
       { label: t('Delete block'), icon: 'trash', disabled: !adventure?.editable || !block || showMusic, action: () => void askDeleteBlock() },
+      { label: t('Export (ZIP)'), icon: 'download', action: () => adventure && exportAdventure(adventure.id) },
       { separator: true },
       { label: t('Clean up all images'), icon: 'image', disabled: !adventure?.editable, action: () => void cleanUpImages() },
       { label: t('Generate covers'), icon: 'wand', disabled: !adventure?.editable || !data.settings?.imageGenConfigured, action: () => void generateCovers() },

@@ -461,17 +461,37 @@ export interface AdventureBlock {
 
 export interface AdventureLink { from: string; to: string; label: string | null }
 
+/** The answer to the import of an adventure file (ZIP): stored, or "exists" when an adventure with its id is there already (nothing was changed). */
+export interface PackageResult {
+  status: 'imported' | 'exists';
+  id: string;
+  title: string;
+  /** For "exists": whether the user may overwrite it (only its owner may). */
+  editable?: boolean;
+  overwritten?: boolean;
+}
+
 /** An import of an adventure book (PDF) running on the server (see server/adventureimport.py). */
 export interface AdventureImport {
   id: string;
   name: string;
-  status: 'running' | 'done' | 'error';
+  status: 'running' | 'done' | 'error' | 'cancelled';
   /** 0: reading the book, then the batches of notes (of `total`). */
   step: number;
   total: number;
   /** The id of the new adventure once it is done. */
   adventure: string | null;
   error: string | null;
+  /** What it is doing right now ("Writing the notes (3 of 7)", "The AI service is busy, waiting to try again (1 of 3)"). */
+  stage: string;
+  /** The same as an English text with {0}, {1} and its values: the app translates it into the language of the user. */
+  stageKey: string;
+  stageArgs: (string | number)[];
+  /** Seconds since 1970: when it started and when it ended (0 while it runs). */
+  started: number;
+  finished: number;
+  /** What happened, oldest first (the last 200 lines). */
+  log: { time: number; level: 'info' | 'warning' | 'error'; message: string }[];
 }
 
 export interface AdventureSummary {
