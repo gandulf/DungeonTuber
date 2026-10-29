@@ -9,7 +9,7 @@
   import { data, saveCategories, saveSettings, setAccent, setUserLocale } from '../../lib/stores/data.svelte';
   import { loadLights } from '../../lib/stores/lights.svelte';
   import { setNormalize } from '../../lib/stores/player.svelte';
-  import { askConfirm, closeDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
+  import { askConfirm, closeDialog, ownDialog, errorToast, toast } from '../../lib/stores/ui.svelte';
   import AgentTokenDialog from './AgentTokenDialog.svelte';
   import CategoryEditDialog, { type CategoryRow } from './CategoryEditDialog.svelte';
   import type { AgentInfo, AgentState, AgentToken, AssistantStatus, CloudStatus, KeySource, MetadataStatus, MusicCategory, ServerSettings, StorageConfig } from '../../lib/types';
@@ -395,6 +395,7 @@
   }
 
   let saving = $state(false);
+  const close = ownDialog(); // after the save: this dialog, not one opened meanwhile
 
   async function save() {
     saving = true;
@@ -428,7 +429,7 @@
         }
         await saveCategories(list);
       }
-      closeDialog();
+      close();
     } catch (e) {
       errorToast(e);
     } finally {

@@ -269,7 +269,8 @@
 <ConfirmDialog />
 {#if ui.dialog}
   {@const Dialog = ui.dialog.component}
-  <Dialog {...ui.dialog.props} />
+  <!-- a new dialog is a new instance, also of the same component (dialogs take their props into their own state once) -->
+  {#key ui.dialog}<Dialog {...ui.dialog.props} />{/key}
 {/if}
 {#if ui.tour}<Tour news={ui.tourNews} />{/if}
 

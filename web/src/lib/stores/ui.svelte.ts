@@ -89,6 +89,15 @@ export function closeDialog() {
   ui.dialog = null;
 }
 
+/** For a dialog that closes itself after waiting for the server: call it while the dialog is set up; the function it returns closes
+ *  that dialog only, not another one the user opened in the meantime. */
+export function ownDialog(): () => void {
+  const own = ui.dialog;
+  return () => {
+    if (ui.dialog === own) ui.dialog = null;
+  };
+}
+
 /** Simple text prompt rendered by PromptDialog. */
 export const prompt = $state({
   open: false,

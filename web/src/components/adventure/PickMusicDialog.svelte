@@ -30,6 +30,9 @@
   // loaded once when the dialog opens (an effect that reloads while the list is empty would never stop with an empty folder)
   // svelte-ignore state_referenced_locally
   if (effectPick) void loadEffects();
+  // the songs of the library likewise: an effect would start a failed load again and again (loadGlobal reads and writes its state)
+  // svelte-ignore state_referenced_locally
+  else void loadGlobal();
 
   // --- listening before picking: a click on the play button of a playing song pauses it, an effect plays or stops
   const songPlaying = (ufid: string | null | undefined, id?: string) =>
@@ -61,10 +64,6 @@
   let lists = $state<PlaylistInfo[]>([]);
   let loadingLists = $state(false);
   let added = $state(0); // makes the "added" marks update
-
-  $effect(() => {
-    if (!effectPick) void loadGlobal();
-  });
 
   /** The songs of the adventure: its own songs, then the songs of its playlists (`from` names the playlist), each song once. */
   let poolSongs = $state<{ ref: SongRef; from: string | null }[]>([]);

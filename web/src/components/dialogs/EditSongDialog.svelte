@@ -5,7 +5,7 @@
   import { reloadPlaylistTabs, updateTrack } from '../../lib/stores/library.svelte';
   import { refreshCurrentTrack } from '../../lib/stores/player.svelte';
   import { updateEffectTrack } from '../../lib/stores/effects.svelte';
-  import { closeDialog, errorToast } from '../../lib/stores/ui.svelte';
+  import { closeDialog, ownDialog, errorToast } from '../../lib/stores/ui.svelte';
   import type { LightSetting, LookupCandidate, LookupResult, Normalized, Track } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import LightEditor from './LightEditor.svelte';
@@ -87,7 +87,10 @@
     preview = URL.createObjectURL(file);
   }
 
+  const close = ownDialog(); // after the save: this dialog, not one opened meanwhile
+
   async function save() {
+    if (saving) return; // Enter in a field submits the form as well
     saving = true;
     try {
       // before a rename: the playlist still refers to the song by its current path
@@ -105,7 +108,7 @@
       updateTrack(updated);
       updateEffectTrack(updated);
       refreshCurrentTrack(updated);
-      closeDialog();
+      close();
     } catch (e) {
       errorToast(e);
     } finally {
@@ -194,7 +197,7 @@
         <span class="wide path muted" title={t('Stable song id, kept when the file is moved or renamed')}>{t('ID')} {track.ufid}</span>
       {/if}
     </div>
-    <button type="submit" hidden aria-label={t('Save')}></button>
+    <button type="submit" hidden disabled={saving} aria-label={t('Save')}></button>
   </form>
   {#snippet footer()}
     <button class="btn" onclick={closeDialog}>{t('Cancel')}</button>

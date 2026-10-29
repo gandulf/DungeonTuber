@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import { api } from '../../lib/api';
   import { blockSongsFromTransfer, canDropOnBlock } from '../../lib/actions';
   import { portal } from '../../lib/portal';
@@ -178,7 +177,7 @@
     void [block.music.map(refKey), block.effects.map((item) => item.path)];
     const songs = linkedSongs ? linkedSongs.split('\n') : [];
     let stale = false;
-    void missingEntries(untrack(() => block), songs).then((found) => { if (!stale) missing = found; });
+    void missingEntries(block, songs).then((found) => { if (!stale) missing = found; });
     return () => (stale = true);
   });
   const missingSongs = $derived([...missing].filter((key) => key.startsWith('song:')).map((key) => key.slice(5)));

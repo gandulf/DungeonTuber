@@ -41,6 +41,7 @@
   let missing = $state(new Set<string>());
   $effect(() => {
     if (!block) return;
+    void [block.music.map(refKey), block.effects.map((item) => item.path)]; // checked again when the lists change
     let stale = false;
     const songs = songLinkIds(block.markdown);
     void missingEntries(block, songs).then((found) => { if (!stale) missing = found; });

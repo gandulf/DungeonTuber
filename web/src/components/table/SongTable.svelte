@@ -583,7 +583,8 @@
         : tab.duplicates ? t('No duplicates found.') : t('No MP3 files found.')}</div>
     {/if}
     <div class="spacer" style:height="{rows.length * rowHeight}px" style:min-width="{minWidth}px">
-      {#each visible as row, i (row.track.id)}
+      <!-- keyed by the entry, not the song: a playlist may hold the same song twice -->
+      {#each visible as row, i (`${row.track.id}:${row.track.index ?? ''}`)}
         {@const track = row.track}
         {@const index = first + i}
         <div class="tr" class:selected={selected.has(track.id)} class:playing={player.track?.id === track.id} class:drop-above={dropIndex === index}

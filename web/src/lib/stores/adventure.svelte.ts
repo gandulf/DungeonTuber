@@ -1,5 +1,6 @@
 // The open adventure: editing (autosaved), the path through its blocks in play mode and what a block starts (music, effects).
 // Adventures are tabs next to folders and playlists (see stores/library.svelte.ts); the one of the active tab is `adventures.current`.
+import { untrack } from 'svelte';
 import { adventureExportUrl, api, pathToId } from '../api';
 import { addAdventureMusic, addMusic, appendBlock, assignMusic, refKey, removeBlock } from '../adventures';
 import { blockPrompt } from '../adventureAi';
@@ -78,6 +79,8 @@ export const pickBlockHas = (track: Track) => !!track.ufid && !!pickBlock()?.mus
 
 const SAVE_DELAY = 700;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let unsaved: Adventure | null = null; // the adventure with changes that are not saved yet
+let inflight: Promise<void> | null = null; // the save that is running
 
 const tabKey = (id: string) => `adventure:${id}`;
 
@@ -344,6 +347,7 @@ export async function deleteAdventure(id: string, title: string) {
   if (!(await askConfirm(t('Delete the adventure "{0}"? This cannot be undone.', title)))) return;
   try {
     await api.deleteAdventure(id);
+    if (unsaved?.id === id) unsaved = null; // nothing left to save
     if (adventures.current?.id === id) adventures.current = null;
     closeTab(tabKey(id));
     await loadAdventures();
@@ -381,6 +385,7 @@ export function change(apply: (adventure: Adventure) => void) {
   const adventure = adventures.current;
   if (!adventure?.editable) return;
   apply(adventure);
+  unsaved = adventure; // another adventure is opened only after flushSave (openAdventure), so its changes are saved by then
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => void flushSave(), SAVE_DELAY);
 }
@@ -408,15 +413,24 @@ export async function addSongsToAdventure(adventureId: string, refs: MusicRef[],
   return added;
 }
 
+/** Saves the changes now. It resolves once they are stored: a save that is running finishes first, changes made meanwhile are saved
+ *  after it. What is saved is the adventure that was changed, also when another one is open by then. */
 export async function flushSave() {
   clearTimeout(saveTimer);
   saveTimer = undefined;
-  const adventure = adventures.current;
-  if (!adventure?.editable) return;
-  if (adventures.saving) {
-    saveTimer = setTimeout(() => void flushSave(), SAVE_DELAY); // a save is running: this one follows
-    return;
+  while (inflight) await inflight;
+  const adventure = unsaved;
+  if (!adventure) return;
+  unsaved = null;
+  inflight = save(adventure);
+  try {
+    await inflight;
+  } finally {
+    inflight = null;
   }
+}
+
+async function save(adventure: Adventure) {
   const { id, title, blocks, links, music } = $state.snapshot(adventure);
   adventures.saving = true;
   try {
@@ -425,6 +439,7 @@ export async function flushSave() {
     const entry = adventures.list.find((item) => item.id === id);
     if (entry) Object.assign(entry, { title: saved.title, blocks: saved.blocks.length, played: saved.blocks.filter((block) => block.played).length, updated: saved.updated });
   } catch (e) {
+    unsaved ??= adventure; // tried again with the next save
     errorToast(e);
   } finally {
     adventures.saving = false;
@@ -550,7 +565,13 @@ export async function missingMusic(refs: MusicRef[], missing = new Set<string>()
 
 /** What a block holds that can no longer be found (deleted, moved out of the library, a playlist that may not be seen, an effect
  *  that is not in the effects folder), as `refKey`/`effectKey` keys; `songs` are the ids of song links in its notes. */
-export async function missingEntries(block: AdventureBlock, songs: string[] = []): Promise<Set<string>> {
+/** The songs, playlists and effects of `block` (and the songs `songs` its notes link to) that can no longer be found. Nothing it reads
+ *  is tracked: an effect that calls it re-runs only for what it reads itself (loading the effects would otherwise start it again). */
+export function missingEntries(block: AdventureBlock, songs: string[] = []): Promise<Set<string>> {
+  return untrack(() => findMissing(block, songs));
+}
+
+async function findMissing(block: AdventureBlock, songs: string[]): Promise<Set<string>> {
   const missing = new Set<string>();
   const checks: Promise<unknown>[] = [missingMusic(block.music, missing)];
   for (const ufid of new Set(songs)) checks.push(songExists(ufid).then((found) => { if (!found) missing.add(`song:${ufid}`); }));

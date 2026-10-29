@@ -12,20 +12,25 @@
       const delta = (e.clientX - startX) * (invert ? -1 : 1);
       size = Math.round(Math.max(min, Math.min(max, startSize + delta)));
     };
+    // the drag ends when the pointer is released, and also when the browser takes it over (a touch gesture) or the capture is lost
     const up = () => {
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', up);
+      target.removeEventListener('pointercancel', up);
+      target.removeEventListener('lostpointercapture', up);
       onchange?.();
     };
     target.addEventListener('pointermove', move);
     target.addEventListener('pointerup', up);
+    target.addEventListener('pointercancel', up);
+    target.addEventListener('lostpointercapture', up);
   }
 </script>
 
 <div class="splitter" role="separator" aria-orientation="vertical" onpointerdown={start}></div>
 
 <style>
-  .splitter { width: 10px; flex: none; cursor: col-resize; position: relative; }
+  .splitter { width: 10px; flex: none; cursor: col-resize; position: relative; touch-action: none; }
   .splitter::after { content: ''; position: absolute; left: 4px; top: 30%; bottom: 30%; width: 2px; border-radius: 1px; background: transparent; transition: background 0.15s; }
   .splitter:hover::after { background: var(--border-strong); }
 </style>

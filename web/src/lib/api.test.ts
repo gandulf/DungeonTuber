@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { pathToId } from './api';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api, ApiError, pathToId } from './api';
 import { volumeToGain } from './audio/engine';
 
 describe('pathToId', () => {
@@ -16,5 +16,20 @@ describe('volumeToGain', () => {
     expect(volumeToGain(70)).toBeCloseTo(0.49);
     expect(volumeToGain(80, true)).toBe(0);
     expect(volumeToGain(400)).toBeCloseTo(2.25);
+  });
+});
+
+describe('errors', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const answer = (status: number, statusText: string, body: string) =>
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status, statusText, headers: { 'Content-Type': 'application/json' } })));
+
+  it('carries the detail of the server, else the status text', async () => {
+    answer(404, 'Not Found', JSON.stringify({ detail: 'Adventure not found' }));
+    await expect(api.adventure('x')).rejects.toMatchObject({ status: 404, message: 'Adventure not found' });
+    answer(500, 'Internal Server Error', JSON.stringify({ error: 'boom' }));
+    const error = await api.adventure('x').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).message).toBe('Internal Server Error');
   });
 });

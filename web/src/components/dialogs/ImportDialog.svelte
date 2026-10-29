@@ -4,7 +4,7 @@
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { data } from '../../lib/stores/data.svelte';
-  import { closeDialog, errorToast, openDialog, toast } from '../../lib/stores/ui.svelte';
+  import { closeDialog, ownDialog, errorToast, openDialog, toast } from '../../lib/stores/ui.svelte';
   import type { ImportPreview } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import FolderSelect from './FolderSelect.svelte';
@@ -88,6 +88,8 @@
     savePrefs();
   }
 
+  const close = ownDialog(); // after the import is queued: this dialog, not one opened meanwhile
+
   async function start() {
     if (!preview || !chosen.length || !target) return;
     busy = true;
@@ -105,7 +107,7 @@
     try {
       const { queued } = await api.startImport(body);
       toast(t('{0} songs queued for import', queued), 'success');
-      closeDialog();
+      close();
     } catch (e) {
       busy = false;
       error = e instanceof Error ? e.message : String(e);

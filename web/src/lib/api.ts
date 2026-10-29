@@ -28,7 +28,7 @@ async function request<T>(method: string, url: string, body?: unknown, raw = fal
     let message = response.statusText;
     try {
       const data = await response.json();
-      message = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+      if (data?.detail != null) message = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail); // else the status text
     } catch { /* not json */ }
     if (response.status === 401 && onUnauthorized && !url.startsWith('/api/auth/')) onUnauthorized();
     throw new ApiError(response.status, message);
