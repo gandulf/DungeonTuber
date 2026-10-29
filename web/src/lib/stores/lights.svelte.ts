@@ -37,9 +37,9 @@ export function setLightState(list: Light[]) {
 }
 
 /** Applies a change to every selected light. */
-export async function patchSelected(patch: Partial<Light> & { clear_color?: boolean }) {
-  const macs = lights.selected.length ? lights.selected : [];
-  for (const mac of macs) {
+/** Changes the selected lights, or the lights `macs`. */
+export async function patchSelected(patch: Partial<Light> & { clear_color?: boolean }, macs: string[] = lights.selected) {
+  for (const mac of [...macs]) {
     try {
       const updated = await api.patchLight(mac, patch);
       const index = lights.list.findIndex((light) => light.mac === mac);

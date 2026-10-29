@@ -147,6 +147,8 @@
     if (!rect || next.left !== rect.left || next.top !== rect.top || next.width !== rect.width || next.height !== rect.height) rect = next;
     setTimeout(() => follow(element, current), 60);
   }
+  // the tour can also end without finish() (logout): the following stops with it
+  $effect(() => () => void run++);
 
   $effect(() => {
     if (!dialog) return;

@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { blockPrompt, plainText, tagsAndGenres, tldrPrompt } from '../../lib/adventureAi';
   import { t } from '../../lib/i18n.svelte';
-  import { imageUrl, renderNotes } from '../../lib/notes';
+  import { imageUrl, inertLinkClick, renderNotes } from '../../lib/notes';
   import { adventures, applyCoverWhenReady, change, createForBlock, searchSongsWithFilter, type BlockCreation } from '../../lib/stores/adventure.svelte';
   import { data } from '../../lib/stores/data.svelte';
   import { composeOptions, describeSoundYourself, describeYourself, effectOptions, type CreateKind } from '../../lib/stores/assistant.svelte';
@@ -263,7 +263,8 @@
 
       {#if task === 'tldr' && draft}
         <!-- as it will look in the block; it can be changed there afterwards -->
-        <div class="tldr-preview">{@html renderNotes(draft, adventure.blocks, adventure.id)}</div>
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <div class="tldr-preview" onclick={inertLinkClick}>{@html renderNotes(draft, adventure.blocks, adventure.id)}</div>
       {:else if task === 'draft' && draft}
         <textarea class="result" rows="10" bind:value={draft}></textarea>
       {:else if task === 'sound' && (piece || sound)}
@@ -292,7 +293,7 @@
 
       {#if ((task === 'draft' || task === 'tldr') && draft) || (task === 'cover' && caption)}
         <div class="row">
-          <input type="text" bind:value={refine} placeholder={t('Change it: darker, shorter, more tense…')} onkeydown={(e) => e.key === 'Enter' && void run(true)} />
+          <input type="text" bind:value={refine} placeholder={t('Change it: darker, shorter, more tense…')} onkeydown={(e) => e.key === 'Enter' && !busy && void run(true)} />
           <button class="btn" disabled={busy || !refine.trim()} onclick={() => void run(true)}>{t('Change')}</button>
         </div>
       {/if}

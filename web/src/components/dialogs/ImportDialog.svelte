@@ -51,14 +51,16 @@
     busy = true;
     error = '';
     preview = null;
+    const asked = url.trim(); // the link may be changed while it is looked up: then the answer is for another link
     try {
-      const result = await api.resolveImport(url.trim(), whole);
+      const result = await api.resolveImport(asked, whole);
+      if (url.trim() !== asked) return;
       preview = result;
       selected = new Set(result.entries.filter((entry) => !tooLong(entry.duration)).map((entry) => entry.url));
       playlistName = result.title;
       folderName = result.title;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      if (url.trim() === asked) error = e instanceof Error ? e.message : String(e);
     } finally {
       busy = false;
     }

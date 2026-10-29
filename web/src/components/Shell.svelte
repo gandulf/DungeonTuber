@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { cubicOut } from 'svelte/easing';
   import { fade, fly, slide as widthSlide } from 'svelte/transition';
   import { api, coverUrl } from '../lib/api';
@@ -85,12 +86,12 @@
     // the server remembers it per user: the desktop app gets a new port (and so an empty browser storage) on every start
     if (!prefs.tourDone && !data.user.tour_done) {
       newsChecked = true; // the tour shows everything
-      setTimeout(() => (ui.tour = true), 600);
+      tourTimer = setTimeout(() => (ui.tour = true), 600);
     } else if (!newsChecked && data.user.tour_done) {
       newsChecked = true;
       const news = data.user.news_off ? [] : unseenTourSteps();
       if (news.length) {
-        setTimeout(() => {
+        tourTimer = setTimeout(() => {
           if (ui.tour || ui.dialog) return;
           ui.tourNews = news.map((step) => step.id);
           ui.tour = true;
@@ -98,6 +99,8 @@
       }
     }
   });
+  let tourTimer: ReturnType<typeof setTimeout> | undefined;
+  onDestroy(() => clearTimeout(tourTimer)); // logged out before the tour came up
 
   let videoShown = false; // an announced video (lib/videos.ts) is shown once per user, at most one per page load
 

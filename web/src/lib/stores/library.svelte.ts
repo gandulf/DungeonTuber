@@ -71,6 +71,8 @@ export const duplicateInfo = $state({
 
 $effect.root(() => {
   $effect(() => {
+    // only while the duplicates are shown: comparing the whole library on every change of a song would be wasted otherwise
+    if (!library.duplicates) return;
     const result = findDuplicates(globalTab.tracks, duplicateInfo.exact);
     duplicatesTab.tracks = result.tracks;
     duplicateInfo.groups = result.groups;

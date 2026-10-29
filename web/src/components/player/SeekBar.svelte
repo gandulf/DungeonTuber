@@ -44,15 +44,23 @@
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
 
+  // while dragging the song follows the knob, but not on every move: each seek of a streamed song is a request
+  const SCRUB_MS = 150;
+  let lastSeek = 0;
+
   function move(event: PointerEvent) {
     if (!duration) return;
     hover = timeAt(event.clientX);
     if (dragging !== null) {
       dragging = hover;
-      seek(dragging);
+      if (event.timeStamp - lastSeek >= SCRUB_MS) {
+        lastSeek = event.timeStamp;
+        seek(dragging);
+      }
     }
   }
 
+  /** The end of a drag: the pointer is released, or the browser takes it over (a touch gesture) or the capture is lost. */
   function up() {
     if (dragging !== null) seek(dragging);
     dragging = null;
@@ -94,7 +102,7 @@
 <div class="seek">
   <span class="time">{format(position)}</span>
   <div class="bar" bind:this={bar} role="slider" tabindex="0" aria-label={t('Position')} aria-valuemin={0} aria-valuemax={duration}
-       aria-valuenow={position} onpointerdown={down} onpointermove={move} onpointerup={up} onpointerleave={() => (hover = null)}
+       aria-valuenow={position} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onlostpointercapture={up} onpointerleave={() => (hover = null)}
        use:longpress oncontextmenu={menu} onkeydown={(e) => { if (e.key === 'ArrowRight') seek(position + 5); if (e.key === 'ArrowLeft') seek(position - 5); }}>
     <div class="rail"><div class="progress" style:width="{duration ? (position / duration) * 100 : 0}%"></div></div>
     {#each chapters as chapter (chapter.time)}

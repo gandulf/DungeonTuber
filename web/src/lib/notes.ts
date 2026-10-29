@@ -129,6 +129,12 @@ export function blockLinkTarget(target: EventTarget | null): string | null {
   return link && !link.classList.contains('broken') ? link.dataset.block ?? null : null;
 }
 
+/** A click on a link of rendered notes that the page handles itself (blocks, songs, pages of the book; `href="#"`) does not jump to
+ *  the top of the page, also when it leads nowhere (a link to a block that was deleted). */
+export function inertLinkClick(event: MouseEvent) {
+  if ((event.target as Element | null)?.closest?.('a[href="#"]')) event.preventDefault();
+}
+
 /** The song (its UFID) a click on rendered notes points to, or null. */
 export function songLinkTarget(target: EventTarget | null): string | null {
   const link = (target as Element | null)?.closest?.<HTMLElement>('a[data-song]');

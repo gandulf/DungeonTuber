@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { api, coverUrl } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { fileNameFor, normalizedFlag } from '../../lib/normalize';
@@ -88,6 +89,9 @@
   }
 
   const close = ownDialog(); // after the save: this dialog, not one opened meanwhile
+  onDestroy(() => {
+    if (preview) URL.revokeObjectURL(preview); // the picked cover
+  });
 
   async function save() {
     if (saving) return; // Enter in a field submits the form as well

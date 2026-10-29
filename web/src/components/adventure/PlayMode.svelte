@@ -3,7 +3,7 @@
   import { blockById, defaultNext, linksFrom, nextBlock, refKey, startBlock } from '../../lib/adventures';
   import { clearHighlight, highlightTerms } from '../../lib/highlight';
   import { t } from '../../lib/i18n.svelte';
-  import { blockLinkTarget, imageUrl, markMissingSongLinks, pdfLinkTarget, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
+  import { blockLinkTarget, imageUrl, inertLinkClick, markMissingSongLinks, pdfLinkTarget, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
   import { adventures, effectKey, enterBlock, missingEntries, openPdf, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
   import { scrollsSideways, swipeOf } from '../../lib/swipe';
   import { startsPanelSwipe } from '../../lib/panelSwipe';
@@ -47,8 +47,10 @@
     void missingEntries(block, songs).then((found) => { if (!stale) missing = found; });
     return () => (stale = true);
   });
+  // the notes as HTML: the marks are set again whenever it is replaced (also when another block is renamed, not only on an edit)
+  const notesHtml = $derived(block ? renderNotes(block.markdown, adventure.blocks, adventure.id) : '');
   $effect(() => {
-    void block?.markdown;
+    void notesHtml;
     if (notesElement) markMissingSongLinks(notesElement, missing, t('This song was not found in the library.'));
   });
   const missingTitle = $derived(t('No longer found: removed, moved or not visible to you.'));
@@ -66,6 +68,7 @@
   }
 
   function notesClick(event: MouseEvent) {
+    inertLinkClick(event);
     const song = songLinkTarget(event.target);
     if (song) {
       event.preventDefault();
@@ -256,7 +259,7 @@
     {/if}
 
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-    <div class="notes selectable" bind:this={notesElement} onclick={notesClick}>{@html renderNotes(block.markdown, adventure.blocks, adventure.id) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
+    <div class="notes selectable" bind:this={notesElement} onclick={notesClick}>{@html notesHtml || `<p class="muted">${t('No notes yet.')}</p>`}</div>
 
     <footer>
       {#each choices as link (link)}

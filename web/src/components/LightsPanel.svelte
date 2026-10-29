@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { longpress } from '../lib/longpress';
   import { api } from '../lib/api';
   import { t } from '../lib/i18n.svelte';
@@ -38,12 +39,24 @@
     }
   }
 
-  let pending: ReturnType<typeof setTimeout> | null = null;
-  function debounced(patch: Partial<Light>) {
-    if (current) Object.assign(current, patch);
-    if (pending) clearTimeout(pending);
-    pending = setTimeout(() => patchSelected(patch), 150);
+  // the changes of a slider are sent once it rests for a moment: all of them (brightness, then temperature), to the lights that
+  // were selected when they were made (another selection sends what is waiting first)
+  let pending: { timer: ReturnType<typeof setTimeout>; patch: Partial<Light>; macs: string[] } | null = null;
+  function send() {
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    const { patch, macs } = pending;
+    pending = null;
+    void patchSelected(patch, macs);
   }
+  function debounced(patch: Partial<Light>) {
+    for (const light of selectedLights) Object.assign(light, patch);
+    const macs = [...lights.selected];
+    if (pending && pending.macs.join() !== macs.join()) send();
+    if (pending) clearTimeout(pending.timer);
+    pending = { timer: setTimeout(send, 150), patch: { ...pending?.patch, ...patch }, macs };
+  }
+  onDestroy(send);
 
   const brightnessPct = $derived(current ? Math.round(((current.brightness ?? 255) / 255) * 100) : 0);
   const tempMin = $derived(current?.temperature_min || 2200);

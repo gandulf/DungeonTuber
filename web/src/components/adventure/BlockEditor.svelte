@@ -4,7 +4,7 @@
   import { portal } from '../../lib/portal';
   import { addAdventureMusic, addLink, addMusic, assignMusic, linksFrom, linksTo, moveEntry, refKey, removeLink } from '../../lib/adventures';
   import { t } from '../../lib/i18n.svelte';
-  import { blockLinkTarget, imageUrl, markMissingSongLinks, pdfLinkTarget, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
+  import { blockLinkTarget, imageUrl, inertLinkClick, markMissingSongLinks, pdfLinkTarget, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
   import { adventures, change, cleanUpImages, effectKey, coverPending, missingEntries, openPdf, playSongLink, refTracks, searchSongsForBlock, selectedBlock, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
   import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import { data } from '../../lib/stores/data.svelte';
@@ -34,6 +34,7 @@
   const titleOf = (id: string) => adventure.blocks.find((item) => item.id === id)?.title || t('Untitled');
 
   function previewClick(event: MouseEvent) {
+    inertLinkClick(event);
     const song = songLinkTarget(event.target);
     if (song) {
       event.preventDefault();
@@ -182,8 +183,10 @@
   });
   const missingSongs = $derived([...missing].filter((key) => key.startsWith('song:')).map((key) => key.slice(5)));
   let previewElement = $state<HTMLDivElement | null>(null);
+  // the notes as HTML: the marks are set again whenever it is replaced (also when another block is renamed, not only on an edit)
+  const notesHtml = $derived(block ? renderNotes(block.markdown, adventure.blocks, adventure.id) : '');
   $effect(() => {
-    void block?.markdown;
+    void notesHtml;
     if (previewElement) markMissingSongLinks(previewElement, missing, t('This song was not found in the library.'));
   });
   const missingTitle = $derived(t('No longer found: removed, moved or not visible to you.'));
@@ -324,7 +327,7 @@
         {/await}
       {:else}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <div class="notes selectable" bind:this={previewElement} onclick={previewClick}>{@html renderNotes(block.markdown, adventure.blocks, adventure.id) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
+        <div class="notes selectable" bind:this={previewElement} onclick={previewClick}>{@html notesHtml || `<p class="muted">${t('No notes yet.')}</p>`}</div>
       {/if}
     </section>
 

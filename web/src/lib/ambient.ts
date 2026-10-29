@@ -1,8 +1,10 @@
 // Tints the UI with the average colour of the current cover (CSS variable --ambient).
 const cache = new Map<string, string>();
+let wanted: string | null = null; // the cover of the current track: a slow cover of an earlier one does not tint the UI any more
 
 export async function applyAmbient(url: string | null) {
   const root = document.documentElement;
+  wanted = url;
   if (!url) {
     root.style.removeProperty('--ambient'); // app.css: the colour of the accent
     return;
@@ -30,8 +32,8 @@ export async function applyAmbient(url: string | null) {
     }
     const value = `${Math.round(r / weight)}, ${Math.round(g / weight)}, ${Math.round(b / weight)}`;
     cache.set(url, value);
-    root.style.setProperty('--ambient', value);
+    if (wanted === url) root.style.setProperty('--ambient', value);
   } catch {
-    root.style.removeProperty('--ambient'); // app.css: the colour of the accent
+    if (wanted === url) root.style.removeProperty('--ambient'); // app.css: the colour of the accent
   }
 }

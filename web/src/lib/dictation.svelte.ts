@@ -57,12 +57,24 @@ export function createDictation(ontext: (text: string) => void) {
     });
   }
 
+  // while the browser asks for the microphone: another click or the end of the component cancels instead of starting a second recording
+  let starting = false;
+  let cancelled = false;
+
   async function start() {
     let stream: MediaStream;
+    starting = true;
+    cancelled = false;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       toast(t('The microphone is not available: {0}', e instanceof Error ? e.message : String(e)), 'error');
+      return;
+    } finally {
+      starting = false;
+    }
+    if (cancelled) {
+      stream.getTracks().forEach((track) => track.stop());
       return;
     }
     const mimeType = FORMATS.find((format) => MediaRecorder.isTypeSupported(format));
@@ -168,11 +180,13 @@ export function createDictation(ontext: (text: string) => void) {
 
   function toggle() {
     if (session) session.stop();
+    else if (starting) cancelled = true;
     else if (dictation.state === 'idle') void start();
   }
 
   /** Throws the running recording away (the component is gone). */
   function cancel() {
+    if (starting) cancelled = true;
     session?.stop(true);
   }
 

@@ -111,10 +111,14 @@ export function openAdventureTab(id: string, title?: string) {
 }
 
 /** Loads the adventure of the active tab; it opens in play mode. */
+let opening = 0; // the latest openAdventure: an earlier one that answers later is dropped
+
 export async function openAdventure(id: string) {
+  const request = ++opening;
   await flushSave();
   try {
     const adventure = await api.adventure(id);
+    if (request !== opening) return;
     adventures.current = adventure;
     adventures.selected = adventure.blocks[0]?.id ?? null;
     adventures.mode = 'play';
@@ -123,6 +127,7 @@ export async function openAdventure(id: string) {
     const tab = library.tabs.find((item) => item.key === tabKey(id));
     if (tab) tab.name = adventure.title;
   } catch (e) {
+    if (request !== opening) return;
     errorToast(e);
     const tab = library.tabs.find((item) => item.key === tabKey(id));
     if (tab) closeTab(tab.key);

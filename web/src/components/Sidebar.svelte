@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { longpress } from '../lib/longpress';
   import { api } from '../lib/api';
   import { cached } from '../lib/cache';
@@ -88,7 +89,8 @@
   }
 
   $effect(() => {
-    void loadRoots();
+    // loading reads and writes the expanded folders (at once from the cache): only the events may run it again, not that state
+    untrack(() => void loadRoots());
     const stops = [onEvent('library.changed', refreshSoon), onEvent('library.roots', refreshSoon), onEvent('storages.changed', () => void loadRoots())];
     return () => {
       clearTimeout(refreshTimer);

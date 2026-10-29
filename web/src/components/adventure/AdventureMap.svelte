@@ -15,14 +15,14 @@
   const at = (id: string) => layout.pos.get(id);
 
   /** A link as a curve from the right edge of a card to the left edge of the next (around the cards when it leads backwards). */
-  const edges = $derived(adventure.links.flatMap((link) => {
+  const edges = $derived(adventure.links.flatMap((link, index) => {
     const [from, to] = [at(link.from), at(link.to)];
     if (!from || !to) return [];
     const [x1, y1] = [from[0] + CARD.w + PAD, from[1] + CARD.h / 2 + PAD];
     const [x2, y2] = [to[0] + PAD, to[1] + CARD.h / 2 + PAD];
     const bend = Math.max(48, Math.abs(x2 - x1) / 2);
     return [{
-      key: `${link.from}>${link.to}>${link.label ?? ''}`,
+      key: `${index}:${link.from}>${link.to}`, // two links may have the same ends and label (labels are edited later)
       d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`,
       label: link.label, mx: (x1 + x2) / 2, my: (y1 + y2) / 2,
       on: link.from === current, choice: !!link.label,

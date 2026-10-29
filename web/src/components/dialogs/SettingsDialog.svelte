@@ -40,7 +40,8 @@
   let storagesDirty = $state(false);
   void api.storages().then((result) => {
     storagesAvailable = result.available;
-    storages = result.storages.map((c) => ({ ...c, access_key: '', secret_key: '', testing: false }));
+    // storages added before the list arrived stay, after the stored ones
+    storages = [...result.storages.map((c) => ({ ...c, access_key: '', secret_key: '', testing: false })), ...storages];
   }).catch(errorToast);
 
   const storagePayload = (row: StorageRow): StorageConfig => ({
@@ -101,7 +102,11 @@
   let proxy = $state('');
   let proxyFromEnv = $state(false);
   let proxySaved = '';
-  if (admin) void api.youtubeProxy().then((result) => { proxy = proxySaved = result.value; proxyFromEnv = result.fromEnv; }).catch(() => {});
+  if (admin) void api.youtubeProxy().then((result) => {
+    if (proxy === proxySaved) proxy = result.value; // a proxy typed before the stored one arrived stays
+    proxySaved = result.value;
+    proxyFromEnv = result.fromEnv;
+  }).catch(() => {});
 
   async function uploadCookies(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
@@ -282,7 +287,17 @@
   let assistantModels = $state<{ id: string; name: string }[]>([]);
   let groqKey = $state('');
   let groqModel = $state('');
-  if (admin) void api.assistantConfig().then(applyAssistant).catch(() => {});
+  // what is typed before the configuration arrives stays (the fields are shown at once)
+  if (admin) void api.assistantConfig().then((result) => {
+    const typed = { model: assistantModel, key: assistantKey, groqKey, groqModel, instructions: { ...instructions }, prompts: { ...prompts } };
+    applyAssistant(result);
+    if (typed.model.trim()) assistantModel = typed.model;
+    if (typed.key.trim()) assistantKey = typed.key;
+    if (typed.groqKey.trim()) groqKey = typed.groqKey;
+    if (typed.groqModel.trim()) groqModel = typed.groqModel;
+    for (const [mode, text] of Object.entries(typed.instructions)) if (text.trim()) instructions[mode as InstructionMode] = text;
+    for (const [name, text] of Object.entries(typed.prompts)) if (text.trim()) prompts[name] = text;
+  }).catch(() => {});
 
   /** The models of Google (with a stored key) or a built-in list; a stored model that is not listed stays selectable. */
   const modelOptions = $derived.by(() => {
@@ -399,7 +414,11 @@
 
   async function save() {
     saving = true;
+    let shown = false; // saveSettings shows its error itself
     try {
+      // everything is checked before the first change is stored, so an error does not leave half of them saved
+      if (storagesDirty && storages.some((row) => !row.bucket.trim())) throw new Error(t('Every storage needs a bucket name.'));
+      const categoryList = categoriesDirty ? categoryPayload() : null;
       const changed: Partial<Record<keyof ServerSettings, unknown>> = {};
       const keys: (keyof ServerSettings)[] = ['locale', 'skipAnalyzedMusic', 'skipNormalizedMusic', 'lightsEnabled', 'lightsBroadcastIP', 'lightsTimeout', 'shareOnNetwork', 'sharePort'];
       for (const key of keys) if (form[key] !== s[key]) changed[key] = form[key];
@@ -411,35 +430,44 @@
           || INSTRUCTION_TABS.some(({ mode }) => instructions[mode].trim() !== stored[mode]) || promptsChanged(assistantStatus))) {
         applyAssistant(await api.putAssistantConfig(assistantPayload()));
       }
-      if (Object.keys(changed).length) await saveSettings(changed);
+      if (Object.keys(changed).length) {
+        shown = true;
+        await saveSettings(changed);
+        shown = false;
+      }
       if ('lightsEnabled' in changed && form.lightsEnabled) void loadLights();
-      if (storagesDirty) {
-        if (storages.some((row) => !row.bucket.trim())) throw new Error(t('Every storage needs a bucket name.'));
-        await api.putStorages(storages.map(storagePayload));
-      }
-      if (categoriesDirty) {
-        const keysSeen = new Set<string>();
-        const list: MusicCategory[] = [];
-        for (const row of categories) {
-          const key = row.key.trim() || row.name.trim();
-          if (!key) continue;
-          if (keysSeen.has(key)) throw new Error(t('Category keys must be unique: {0}', key));
-          keysSeen.add(key);
-          list.push({ key, name: row.name.trim() || key, group: row.group.trim(), description: row.description, levels: levelsOf(row) });
-        }
-        await saveCategories(list);
-      }
+      if (storagesDirty) await api.putStorages(storages.map(storagePayload));
+      if (categoryList) await saveCategories(categoryList);
       close();
     } catch (e) {
-      errorToast(e);
+      if (!shown) errorToast(e);
     } finally {
       saving = false;
     }
   }
 
+  /** The categories to store; throws when two of them have the same key. */
+  function categoryPayload(): MusicCategory[] {
+    const keysSeen = new Set<string>();
+    const list: MusicCategory[] = [];
+    for (const row of categories) {
+      const key = row.key.trim() || row.name.trim();
+      if (!key) continue;
+      if (keysSeen.has(key)) throw new Error(t('Category keys must be unique: {0}', key));
+      keysSeen.add(key);
+      list.push({ key, name: row.name.trim() || key, group: row.group.trim(), description: row.description, levels: levelsOf(row) });
+    }
+    return list;
+  }
+
   async function resetCategories() {
     if (!(await askConfirm(t('Reset All') + '?'))) return;
-    await saveCategories(null);
+    try {
+      await saveCategories(null);
+    } catch (e) {
+      errorToast(e);
+      return;
+    }
     categories = data.categories.map(toRow);
     categoriesDirty = false;
   }
