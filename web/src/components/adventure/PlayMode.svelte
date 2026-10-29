@@ -6,6 +6,7 @@
   import { blockLinkTarget, imageUrl, markMissingSongLinks, pdfLinkTarget, renderNotes, songLinkIds, songLinkTarget } from '../../lib/notes';
   import { adventures, effectKey, enterBlock, missingEntries, openPdf, playSongLink, previousBlock, refTracks, setPlayed, startEffect } from '../../lib/stores/adventure.svelte';
   import { scrollsSideways, swipeOf } from '../../lib/swipe';
+  import { startsPanelSwipe } from '../../lib/panelSwipe';
   import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import type { MusicRef } from '../../lib/types';
   import { openDialog, ui } from '../../lib/stores/ui.svelte';
@@ -133,7 +134,7 @@
     swipe = null;
     const touch = event.touches[0];
     const target = event.target as Element | null;
-    if (event.touches.length !== 1 || !touch || overview) return;
+    if (event.touches.length !== 1 || !touch || overview || startsPanelSwipe(touch.clientX)) return; // the screen edges open the side panels
     if (target?.closest('input, textarea, select, [contenteditable], [role="slider"]') || scrollsSideways(target, event.currentTarget as Element)) return;
     swipe = { x: touch.clientX, y: touch.clientY, time: Date.now() };
   }

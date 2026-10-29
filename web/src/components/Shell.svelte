@@ -5,6 +5,7 @@
   import { applyAmbient } from '../lib/ambient';
   import { prefs, savePrefs } from '../lib/prefs.svelte';
   import { openDownloadsDialog } from '../lib/actions';
+  import { panelTouchEnd, panelTouchStart } from '../lib/panelSwipe';
   import { locale, t } from '../lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import { data } from '../lib/stores/data.svelte';
@@ -28,6 +29,7 @@
   import PlayerBar from './player/PlayerBar.svelte';
   import RightPanel from './RightPanel.svelte';
   import Sidebar from './Sidebar.svelte';
+  import SidebarToggle from './SidebarToggle.svelte';
   import Splitter from './Splitter.svelte';
   import SongTable from './table/SongTable.svelte';
   import Toasts from './Toasts.svelte';
@@ -176,7 +178,8 @@
   });
 </script>
 
-<svelte:window onkeydown={onKeydown} onclick={closeMenu} onblur={closeMenu} />
+<!-- touch screens: a swipe from a screen edge opens its side panel, one on the border of an open panel closes it (lib/panelSwipe.ts) -->
+<svelte:window onkeydown={onKeydown} onclick={closeMenu} onblur={closeMenu} ontouchstart={panelTouchStart} ontouchend={panelTouchEnd} />
 
 <div class="app">
   <div class="aura" aria-hidden="true"></div>
@@ -228,6 +231,9 @@
         <div class="panel-inner end" style:width="{prefs.rightWidth - 14}px"><RightPanel /></div>
       </aside>
     {/if}
+    <!-- wide screens: the buttons that open and close the side panels sit on their borders (tablets and phones use the top bar) -->
+    {#if !ui.narrow}<SidebarToggle side="left" />{/if}
+    {#if !ui.rightOverlay && hasRight}<SidebarToggle side="right" />{/if}
   </div>
 
   <PlayerBar />
@@ -276,7 +282,7 @@
       radial-gradient(700px 400px at 100% 0%, rgba(var(--ambient), 0.08), transparent 70%);
     transition: background 1.2s ease;
   }
-  .body { flex: 1; display: flex; min-height: 0; }
+  .body { flex: 1; display: flex; min-height: 0; position: relative; }
   .sidebar { flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--bg-2); border-right: 1px solid var(--border); }
   .right { flex: none; display: flex; flex-direction: column; min-height: 0; padding: 14px 14px 14px 0; overflow-y: auto; }
   .panel-inner { flex: 1 0 auto; display: flex; flex-direction: column; min-height: 0; }

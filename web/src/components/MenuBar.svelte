@@ -3,7 +3,7 @@
   import { t } from '../lib/i18n.svelte';
   import { assistant, toggleAssistant } from '../lib/stores/assistant.svelte';
   import { data } from '../lib/stores/data.svelte';
-  import { prefs, savePrefs } from '../lib/prefs.svelte';
+  import { prefs } from '../lib/prefs.svelte';
   import { searchBlocks } from '../lib/adventures';
   import { searchTerms } from '../lib/highlight';
   import { adventures, goToBlock } from '../lib/stores/adventure.svelte';
@@ -29,11 +29,6 @@
   $effect(() => {
     if (showLabel && buttonWidth > ICON_ONLY) labelRoom = buttonWidth - ICON_ONLY;
   });
-
-  function togglePanel(side: 'leftOpen' | 'rightOpen') {
-    prefs[side] = !prefs[side];
-    savePrefs();
-  }
 
   // --- the search of an open adventure: its blocks instead of songs
   const openAdventure = $derived(!library.global && !library.duplicates && activeTab()?.type === 'adventure' ? adventures.current : null);
@@ -79,10 +74,6 @@
 </script>
 
 <header class="topbar">
-  {#if !ui.narrow}
-    <button class="icon-btn" class:active={prefs.leftOpen} title={prefs.leftOpen ? t('Hide the library') : t('Show the library')} aria-label={t('Library')} aria-pressed={prefs.leftOpen}
-            onclick={() => togglePanel('leftOpen')}><Icon name="panel-left" size={18} /></button>
-  {/if}
   {#if ui.narrow}
     <button class="icon-btn" title={t('Library')} onclick={(e) => { e.stopPropagation(); ui.mobilePanel = ui.mobilePanel === 'tree' ? null : 'tree'; }}><Icon name="library" size={18} /></button>
   {/if}
@@ -135,10 +126,6 @@
     </button>
   {/if}
   <button class="icon-btn" title={t('Menu')} data-tour="menubar" onclick={showMenu}><Icon name="menu" size={18} /></button>
-  {#if !ui.rightOverlay && hasSidePanel}
-    <button class="icon-btn" class:active={prefs.rightOpen} title={prefs.rightOpen ? t('Hide effects and lights') : t('Show effects and lights')} aria-label={t('Effects and lights')}
-            aria-pressed={prefs.rightOpen} onclick={() => togglePanel('rightOpen')}><Icon name="panel-right" size={18} /></button>
-  {/if}
   <!-- tablets: the panel opens over the page (the library beside it stays); phones: the same with the bulb -->
   {#if ui.rightOverlay && !ui.narrow && hasSidePanel}
     <button class="icon-btn" class:active={ui.mobilePanel === 'side'} title={ui.mobilePanel === 'side' ? t('Hide effects and lights') : t('Show effects and lights')} aria-label={t('Effects and lights')}
