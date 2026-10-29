@@ -614,7 +614,7 @@
         <h4>{t('Cloud storage (S3 compatible)')}</h4>
         <p class="muted small">{t('Buckets of AWS S3, Cloudflare R2, Backblaze B2, MinIO and others. Song data is kept in the library database; the files in the bucket are never modified. Use s3://<id>/folder as effects directory.')}</p>
         {#if !storagesAvailable}<p class="warn small">{t('The S3 client is not installed on the server (pip install DungeonTuber[s3]).')}</p>{/if}
-        {#each storages as row, i (i)}
+        {#each storages as row, i (row)}
           <div class="storage" oninput={() => (storagesDirty = true)} onchange={() => (storagesDirty = true)} role="group">
             <input type="text" placeholder={t('Name')} bind:value={row.name} />
             <input type="text" placeholder={t('Bucket')} bind:value={row.bucket} />
@@ -802,7 +802,7 @@
           <table class="cat-table">
             <thead><tr><th>{t('Name')}</th><th>{t('Group')}</th><th>{t('Description')}</th><th></th></tr></thead>
             <tbody>
-              {#each categories as row, i (i)}
+              {#each categories as row, i (row)}
                 <tr>
                   <td class="strong">{row.name || row.key}</td>
                   <td>{row.group || '–'}</td>

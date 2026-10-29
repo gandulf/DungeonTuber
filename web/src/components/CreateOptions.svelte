@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { uploadTarget } from '../lib/actions';
   import { locale, t } from '../lib/i18n.svelte';
   import { COMPOSE_DURATIONS, composeOptions, CREATE_KIND_LABELS, effectOptions, saveComposeOptions, saveEffectOptions, SOUND_DURATIONS,
@@ -15,8 +16,12 @@
   const composing = $derived(kind === 'song');
   const formatDuration = (seconds: number) => (seconds < 60 ? `${seconds} s` : `${seconds / 60} min`);
 
+  // a kind the caller does not offer is replaced by its first one, and remembered like a choice of the user
   $effect(() => {
-    if (kinds.length && !kinds.includes(kind)) kind = kinds[0];
+    if (kinds.length && !kinds.includes(kind)) {
+      kind = kinds[0];
+      untrack(() => onkind?.()); // saving reads all options: they must not run this again
+    }
   });
   $effect(() => {
     if (composing && !composeOptions.dir) composeOptions.dir = uploadTarget() ?? '';

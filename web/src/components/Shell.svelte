@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { cubicOut } from 'svelte/easing';
+  import { prefersReducedMotion } from 'svelte/motion';
   import { fade, fly, slide as widthSlide } from 'svelte/transition';
   import { api, coverUrl } from '../lib/api';
   import { applyAmbient } from '../lib/ambient';
@@ -59,11 +60,10 @@
   const showRight = $derived(prefs.rightOpen && hasRight);
 
   // a flyout slides in from its own edge and back out to it
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const slide = (node: HTMLElement, x: string) => fly(node, { x, opacity: 1, duration: reducedMotion.matches ? 0 : 240, easing: cubicOut });
-  const scrimFade = (node: HTMLElement) => fade(node, { duration: reducedMotion.matches ? 0 : 200 });
+  const slide = (node: HTMLElement, x: string) => fly(node, { x, opacity: 1, duration: prefersReducedMotion.current ? 0 : 240, easing: cubicOut });
+  const scrimFade = (node: HTMLElement) => fade(node, { duration: prefersReducedMotion.current ? 0 : 200 });
   // on a wide screen a side panel grows from and shrinks to its edge; its content keeps its width, so it is uncovered instead of squeezed
-  const panelSlide = (node: HTMLElement) => widthSlide(node, { axis: 'x', duration: reducedMotion.matches ? 0 : 220, easing: cubicOut });
+  const panelSlide = (node: HTMLElement) => widthSlide(node, { axis: 'x', duration: prefersReducedMotion.current ? 0 : 220, easing: cubicOut });
 
   // a flyout closes with a swipe towards its own edge
   let swipeStart: { x: number; y: number } | null = null;

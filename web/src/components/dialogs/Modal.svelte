@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { t } from '../../lib/i18n.svelte';
   import Icon from '../Icon.svelte';
 
   let { title, onclose, width = '520px', resizable = false, children, footer }: {
@@ -7,6 +8,7 @@
   } = $props();
 
   let dialog = $state<HTMLDialogElement | null>(null);
+  const titleId = $props.id(); // the title names the dialog for screen readers
   // only a click that starts and ends on the backdrop closes the dialog (not a drag on the resize handle)
   let pressedBackdrop = false;
 
@@ -18,18 +20,21 @@
   $effect(() => {
     if (!dialog) return;
     dialog.showModal();
-    // focus the first form field instead of the close button
-    dialog.querySelector<HTMLElement>('.content input:not([type=hidden]):not([hidden]), .content textarea, .content select')?.focus();
+    // focus the field marked with data-autofocus ("select" also selects its text), else the first form field, not the close button
+    const field = dialog.querySelector<HTMLElement>('.content [data-autofocus]')
+      ?? dialog.querySelector<HTMLElement>('.content input:not([type=hidden]):not([hidden]), .content textarea, .content select');
+    field?.focus();
+    if (field instanceof HTMLInputElement && field.dataset.autofocus === 'select') field.select();
   });
 </script>
 
-<dialog bind:this={dialog} class:resizable style:width oncancel={(e) => { e.preventDefault(); onclose(); }}
+<dialog bind:this={dialog} class:resizable style:width aria-labelledby={titleId} oncancel={(e) => { e.preventDefault(); onclose(); }}
         onpointerdown={(e) => (pressedBackdrop = e.target === dialog && outside(e))}
         onclick={(e) => pressedBackdrop && e.target === dialog && outside(e) && onclose()}>
   <div class="box">
     <header>
-      <h2>{title}</h2>
-      <button class="icon-btn" aria-label="Close" onclick={onclose}><Icon name="close" size={16} /></button>
+      <h2 id={titleId}>{title}</h2>
+      <button class="icon-btn" aria-label={t('Close')} onclick={onclose}><Icon name="close" size={16} /></button>
     </header>
     <div class="content">{@render children()}</div>
     {#if footer}<footer>{@render footer()}</footer>{/if}

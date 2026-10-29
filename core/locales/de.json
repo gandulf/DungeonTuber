@@ -1114,5 +1114,7 @@
   "e.g. only the checks and the dangers": "z. B. nur die Proben und die Gefahren",
   "Summarize": "Zusammenfassen",
   "Summarize again": "Erneut zusammenfassen",
-  "Replace the summary": "Zusammenfassung ersetzen"
+  "Replace the summary": "Zusammenfassung ersetzen",
+  "Server not reachable: {0}": "Server nicht erreichbar: {0}",
+  "Retry": "Erneut versuchen"
 }

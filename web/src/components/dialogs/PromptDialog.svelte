@@ -9,10 +9,6 @@
     prompt.resolve = null;
     resolve?.(value === null ? null : value.trim() || null);
   }
-
-  function focus(node: HTMLInputElement) {
-    setTimeout(() => { node.focus(); node.select(); });
-  }
 </script>
 
 {#if prompt.open}
@@ -20,7 +16,7 @@
     <form onsubmit={(e) => { e.preventDefault(); close(prompt.value); }}>
       <label>
         {#if prompt.label}<span class="label-xs">{prompt.label}</span>{/if}
-        <input type="text" bind:value={prompt.value} use:focus />
+        <input type="text" bind:value={prompt.value} data-autofocus="select" />
       </label>
     </form>
     {#snippet footer()}

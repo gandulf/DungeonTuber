@@ -21,15 +21,13 @@
   const stranded = $derived(adventure ? new Set(unreachable(adventure).map((block) => block.id)) : new Set<string>());
 
   // below the blocks: the adventure's own music instead of the editor of a block
-  let showMusic = $state(false);
+  // (a block chosen elsewhere, e.g. by the search of the header, is shown instead of the music: another selection resets it)
+  let showMusic = $derived.by(() => {
+    void adventures.selected;
+    return false;
+  });
   let musicOver = $state(false);
   let blockOver = $state<string | null>(null);
-
-  // a block chosen elsewhere (the search of the header) is shown instead of the music
-  $effect(() => {
-    void adventures.selected;
-    showMusic = false;
-  });
 
   /** The menu of the edit header: the visibility of the adventure, the block, the images. */
   function openActions(event: MouseEvent) {

@@ -1114,5 +1114,7 @@
   "e.g. only the checks and the dangers": "e.g. only the checks and the dangers",
   "Summarize": "Summarize",
   "Summarize again": "Summarize again",
-  "Replace the summary": "Replace the summary"
+  "Replace the summary": "Replace the summary",
+  "Server not reachable: {0}": "Server not reachable: {0}",
+  "Retry": "Retry"
 }

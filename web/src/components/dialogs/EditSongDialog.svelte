@@ -37,10 +37,6 @@
   let saving = $state(false);
 
   // the dialog focuses its first field (the favorite checkbox) when it opens: the scene name wins afterwards
-  function focusLater(node: HTMLInputElement) {
-    setTimeout(() => node.focus());
-  }
-
   const split = (value: string) => value.split(',').map((s) => s.trim()).filter(Boolean);
 
   // --- normalize: the metadata of AcoustID / MusicBrainz -----------------------------------------------------------
@@ -173,7 +169,7 @@
       {#if playlist}
         <label class="wide scene">
           <span>{t('Scene name')} <span class="muted">· {t('Only used in this playlist')}</span></span>
-          <input type="text" bind:value={form.scene} use:focusLater />
+          <input type="text" bind:value={form.scene} data-autofocus />
         </label>
       {/if}
       <label class="wide">{t('Name')}<input type="text" bind:value={form.name} /></label>

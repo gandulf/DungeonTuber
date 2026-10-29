@@ -5,8 +5,10 @@
   import Icon from '../Icon.svelte';
 
   /** `popup`: only a button; a tap opens a vertical volume bar above it (phones, where the slider takes too much room of the player). */
-  let { volume = undefined, onchange = undefined, onmute = undefined, muted = undefined, compact = false, popup = false }: {
+  let { volume = undefined, onchange = undefined, onmute = undefined, muted = undefined, compact = false, popup = false, short = false }: {
     volume?: number; onchange?: (v: number) => void; onmute?: () => void; muted?: boolean; compact?: boolean; popup?: boolean;
+    /** A shorter slider without the percentage (the player bar next to the effect player). */
+    short?: boolean;
   } = $props();
 
   let open = $state(false);
@@ -112,14 +114,14 @@
     {/if}
   </div>
 {:else}
-  <div class="volume" class:compact>
+  <div class="volume" class:compact class:short>
     <button class="icon-btn" title="{t('Mute')} (Ctrl+M)" onclick={() => (onmute ?? toggleMute)()}>
       <Icon name={isMuted || value === 0 ? 'volume-x' : 'volume'} size={18} />
     </button>
     <input class="range" class:boost={value > 100} type="range" min="0" max="150" step="1" value={shown} aria-label={t('Volume')}
            style:--pct="{(shown / 150) * 100}%"
            oninput={(e) => (onchange ?? setVolume)(Number((e.currentTarget as HTMLInputElement).value))} />
-    <span class="pct">{shown}%</span>
+    {#if !short}<span class="pct">{shown}%</span>{/if}
   </div>
 {/if}
 
@@ -128,6 +130,7 @@
   input { width: 130px; }
   .compact input { width: auto; flex: 1; }
   .compact { flex: 1; }
+  .short input { width: 80px; }
   input.boost { background: linear-gradient(to right, var(--accent) 0, var(--accent-2) 66.6%, var(--gold) 66.6%, var(--gold) var(--pct), var(--track) var(--pct)); }
   .volume-pop { position: relative; display: flex; }
   /* a held finger slides the volume: no scrolling, selecting or callout from the button */

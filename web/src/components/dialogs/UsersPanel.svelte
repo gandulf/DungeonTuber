@@ -10,6 +10,7 @@
 </script>
 
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { data } from '../../lib/stores/data.svelte';
@@ -29,9 +30,7 @@
     }
   }
 
-  $effect(() => {
-    void load();
-  });
+  onMount(() => void load());
 
   function add() {
     askPassword({

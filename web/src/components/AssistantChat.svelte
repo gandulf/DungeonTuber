@@ -186,7 +186,7 @@
       </div>
     {/if}
 
-    {#each chat.turns as turn, i (i)}
+    {#each chat.turns as turn, i (turn)}
       {#if turn.role === 'user'}
         <div class="bubble user">{turn.content}</div>
       {:else if turn.role === 'error'}

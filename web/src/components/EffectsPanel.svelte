@@ -30,7 +30,7 @@
     return player.effectPlaying && player.effect?.id === effect.id;
   }
 
-  const admin = data.auth?.is_admin !== false;
+  const admin = $derived(data.auth?.is_admin !== false);
 
   function chooseDirectory() {
     openDialog(SelectFolderDialog, {

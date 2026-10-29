@@ -195,17 +195,16 @@
 
   let coverInput = $state<HTMLInputElement | null>(null);
   // on touch screens a tap on the cover shows its buttons (a mouse shows them on hover); another block closes them again
-  let coverOpen = $state(false);
+  let coverOpen = $derived.by(() => {
+    void block?.id;
+    return false;
+  });
   let coverTouch = false;
 
   /** The cover large (a double click on it, or its button: touch has no double click). */
   function enlargeCover() {
     if (block?.cover) openDialog(ImagePopup, { src: imageUrl(adventures.current!.id, block.cover), title: block.title || t('Cover image') });
   }
-  $effect(() => {
-    void block?.id;
-    coverOpen = false;
-  });
 
   async function uploadCover(file: File) {
     if (!block) return;

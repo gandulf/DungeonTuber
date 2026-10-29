@@ -41,10 +41,11 @@
   // the description of a piece (kind song) or of a sound, as the assistant wrote it; it can be changed before generating
   let piece = $state<ComposePiece | null>(null);
   let sound = $state<SoundDescription | null>(null);
-  $effect(() => {
-    void kind;
-    piece = sound = null; // a description is made for its kind
-  });
+  /** Another kind: a description is made for its kind, the one of the former kind goes. */
+  function setKind(value: CreateKind) {
+    if (value !== kind) piece = sound = null;
+    kind = value;
+  }
   let made = $state<Track | null>(null);
   // cover: the English description Stable Diffusion paints from, the format and the painted image (its name in the adventure)
   let caption = $state('');
@@ -222,7 +223,7 @@
   {:else}
     <div class="body">
       {#if task === 'sound'}
-        <div class="options"><CreateOptions {kinds} bind:kind /></div>
+        <div class="options"><CreateOptions {kinds} bind:kind={() => kind, setKind} /></div>
       {/if}
       {#if task === 'cover'}
         <div class="seg">

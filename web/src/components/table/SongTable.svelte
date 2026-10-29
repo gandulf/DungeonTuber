@@ -499,7 +499,10 @@
   }
 
   /** Shows as many tag chips as fit into the column and sums up the rest as "+N" (re-fitted whenever the column is resized). */
-  function fitChips(node: HTMLElement, _deps: string) {
+  /** Shows as many chips as fit the cell, then "+n". An attachment: it fits again whenever the chips change (`chips`: the tags, their
+   *  spelling and which of them match the filter) and when the cell is resized. */
+  const fitChips = (chips: unknown) => (node: HTMLElement) => {
+    void chips;
     const fit = () => {
       const pills = [...node.querySelectorAll<HTMLElement>('.pill')];
       const more = node.querySelector<HTMLElement>('.more-tags');
@@ -524,8 +527,8 @@
     const observer = new ResizeObserver(fit);
     observer.observe(node);
     fit();
-    return { update: fit, destroy: () => observer.disconnect() };
-  }
+    return () => observer.disconnect();
+  };
 
   // "pop" and "Pop" show up in one spelling, the same as in the tag bar
   const tagNames = $derived(tabTagNames());
@@ -636,7 +639,7 @@
                   {#if track.chapters.length}<span class="muted" title={t('Chapters')}><Icon name="marker" size={14} /></span>{/if}
                 </div>
               {:else if column.id === 'mood'}
-                <div class="tags" use:fitChips={track.tags.join('|') + '#' + filter.tags.join('|')}>
+                <div class="tags" {@attach fitChips(sortedTags(track))}>
                   {#each sortedTags(track) as { tag, match } (tag)}<span class="pill {match ? 'match' : tone(tag)}">{tag}</span>{/each}
                   <span class="more-tags" title={track.tags.join(', ')}></span>
                 </div>

@@ -64,11 +64,11 @@
     zoomAt(clampZoom(view.k * Math.exp(-delta * (Math.abs(delta) < 50 ? 0.01 : 0.001))), event.clientX - rect.left, event.clientY - rect.top);
   }
 
-  $effect(() => {
-    const element = frame;
-    element?.addEventListener('wheel', wheel, { passive: false });
-    return () => element?.removeEventListener('wheel', wheel);
-  });
+  /** An attachment of the frame: the wheel is not passive, so it can stop the browser from zooming the page. */
+  function wheelZoom(element: HTMLElement) {
+    element.addEventListener('wheel', wheel, { passive: false });
+    return () => element.removeEventListener('wheel', wheel);
+  }
 
   function zoomBy(factor: number) {
     const rect = frame!.getBoundingClientRect();
@@ -229,7 +229,7 @@
     <button class="btn sm ghost" title={t('Show all blocks')} onclick={fit}>{t('Fit')}</button>
   </div>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="frame" bind:this={frame} onpointerdowncapture={fingerDown} onpointerdown={backgroundDown} onpointermove={move} onpointerup={up} onpointercancel={up}>
+  <div class="frame" bind:this={frame} {@attach wheelZoom} onpointerdowncapture={fingerDown} onpointerdown={backgroundDown} onpointermove={move} onpointerup={up} onpointercancel={up}>
     <div class="world" style:transform="translate({view.x}px, {view.y}px) scale({view.k})">
       <svg class="edges" width="1" height="1" overflow="visible" aria-hidden="true">
         <defs>

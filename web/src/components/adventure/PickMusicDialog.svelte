@@ -58,12 +58,10 @@
 
   function pickEffect(item: Effect) {
     effectPick?.onpick(item);
-    added++;
   }
   let query = $state('');
   let lists = $state<PlaylistInfo[]>([]);
   let loadingLists = $state(false);
-  let added = $state(0); // makes the "added" marks update
 
   /** The songs of the adventure: its own songs, then the songs of its playlists (`from` names the playlist), each song once. */
   let poolSongs = $state<{ ref: SongRef; from: string | null }[]>([]);
@@ -126,7 +124,6 @@
   function pick(ref: MusicRef | null, fromPool = false) {
     if (!ref) return;
     onpick(ref, fromPool);
-    added++;
     if (single) closeDialog();
   }
 </script>
@@ -147,7 +144,7 @@
     </div>
     <input type="search" placeholder={t('Search…')} bind:value={query} />
   </div>
-  <div class="list" data-added={added}>
+  <div class="list">
     {#if kind === 'effect'}
       {#if effects.loading && !effects.list.length}<span class="muted">{t('Loading…')}</span>{/if}
       {#each effectList as item (item.id)}

@@ -86,9 +86,8 @@
     if (event.touches.length < 2) pinch = null;
   }
 
-  $effect(() => {
-    const element = frame;
-    if (!element) return;
+  /** An attachment of the frame: wheel and pinch are not passive, so they can stop the browser from zooming the page. */
+  function zoomGestures(element: HTMLElement) {
     element.addEventListener('wheel', wheel, { passive: false });
     element.addEventListener('touchstart', touchStart, { passive: true });
     element.addEventListener('touchmove', touchMove, { passive: false });
@@ -101,7 +100,7 @@
       element.removeEventListener('touchend', touchEnd);
       element.removeEventListener('touchcancel', touchEnd);
     };
-  });
+  }
 
   // --- moving the view by dragging with the left mouse button (touch screens scroll on their own); a drag is no click on a card
   let pan = $state<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
@@ -151,7 +150,7 @@
 {#if adventure.blocks.length}
   <div class="map-wrap">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="map" class:panning={pan?.moved} bind:this={frame} title={t('Drag to move the view, Ctrl + mouse wheel to zoom')}
+  <div class="map" class:panning={pan?.moved} bind:this={frame} {@attach zoomGestures} title={t('Drag to move the view, Ctrl + mouse wheel to zoom')}
        onpointerdown={panDown} onpointermove={panMove} onpointerup={panUp} onpointercancel={panUp} onclickcapture={maybeSwallow}>
     <div class="sizer" style:width="{size.w * zoom}px" style:height="{size.h * zoom}px">
     <div class="world" style:width="{size.w}px" style:height="{size.h}px" style:transform="scale({zoom})">

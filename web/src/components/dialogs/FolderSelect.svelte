@@ -33,12 +33,11 @@
     };
   }
 
-  // picking a folder closes the popup
-  let shown = '';
-  $effect(() => {
-    if (open && shown && selected !== shown) popup?.hidePopover();
-    shown = open ? selected : '';
-  });
+  /** Picking a folder in the open popup closes it. */
+  function pick(folder: string) {
+    if (open && folder !== selected) popup?.hidePopover();
+    selected = folder;
+  }
 </script>
 
 <button type="button" class="field" bind:this={button} popovertarget="{id}-folders" aria-haspopup="tree" aria-expanded={open} title={selected}>
@@ -52,7 +51,7 @@
 
 <div class="popup" id="{id}-folders" popover="auto" bind:this={popup} onbeforetoggle={place} ontoggle={(e) => (open = (e as ToggleEvent).newState === 'open')}
      style:left="{position.left}px" style:top="{position.top}px" style:width="{position.width}px" style:height="{position.height}px">
-  <FolderTree bind:selected height="0px" />
+  <FolderTree bind:selected={() => selected, pick} height="0px" />
 </div>
 
 <style>

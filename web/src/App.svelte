@@ -98,12 +98,12 @@
   <div class="center">
     <div class="panel box">
       <h2>Dungeon Tuber</h2>
-      <p>Server not reachable: {failed}</p>
-      <button class="btn primary" onclick={() => { failed = null; void start(); }}>Retry</button>
+      <p>{t('Server not reachable: {0}', failed)}</p>
+      <button class="btn primary" onclick={() => { failed = null; void start(); }}>{t('Retry')}</button>
     </div>
   </div>
 {:else if !ready}
-  <div class="center muted">Loading…</div>
+  <div class="center muted">{t('Loading…')}</div>
 {:else if !data.auth?.authenticated}
   <Login onLogin={loggedIn} />
 {:else}

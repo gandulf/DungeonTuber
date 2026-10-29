@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { api } from '../../lib/api';
   import { t } from '../../lib/i18n.svelte';
   import { askText, errorToast } from '../../lib/stores/ui.svelte';
@@ -34,9 +35,7 @@
     }
   }
 
-  $effect(() => {
-    void loadRoots();
-  });
+  onMount(() => void loadRoots());
 
   async function newFolder(parent = selected) {
     const name = await askText(t('New folder'), t('Name'));

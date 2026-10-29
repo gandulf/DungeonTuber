@@ -1,7 +1,7 @@
 <script lang="ts">
   import TagBar from './TagBar.svelte';
   import { longpress } from '../../lib/longpress';
-  import { onMount } from 'svelte';
+  import { MediaQuery } from 'svelte/reactivity';
   import { t } from '../../lib/i18n.svelte';
   import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import { emptyFilter } from '../../lib/scoring';
@@ -44,13 +44,8 @@
   }
 
   // the mood map does not fit on small screens (see the media query below): valence and arousal are plain sliders there
-  const compact = window.matchMedia('(max-width: 1100px)');
-  let small = $state(compact.matches);
-  onMount(() => {
-    const listener = (e: MediaQueryListEvent) => (small = e.matches);
-    compact.addEventListener('change', listener);
-    return () => compact.removeEventListener('change', listener);
-  });
+  const compact = new MediaQuery('max-width: 1100px');
+  const small = $derived(compact.current);
 
   const hasCircumplex = $derived(prefs.filter.circumplex && categories.some((c) => c.key === VALENCE) && categories.some((c) => c.key === AROUSAL));
   const visible = $derived(prefs.filter.presets || prefs.filter.sliders || hasCircumplex || prefs.filter.bpm);

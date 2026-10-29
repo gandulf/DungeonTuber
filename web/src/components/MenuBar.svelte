@@ -32,17 +32,15 @@
 
   // --- the search of an open adventure: its blocks instead of songs
   const openAdventure = $derived(!library.global && !library.duplicates && activeTab()?.type === 'adventure' ? adventures.current : null);
-  let blockQuery = $state('');
+  // another adventure starts with an empty search
+  let blockQuery = $derived.by(() => {
+    void openAdventure?.id;
+    return '';
+  });
   let hitsOpen = $state(false);
   let hitIndex = $state(0);
   const hits = $derived(openAdventure ? searchBlocks(openAdventure.blocks, blockQuery, 12) : []);
   const showHits = $derived(hitsOpen && !!blockQuery.trim());
-
-  // another adventure starts with an empty search
-  $effect(() => {
-    void openAdventure?.id;
-    blockQuery = '';
-  });
 
   function go(id: string) {
     goToBlock(id, searchTerms(blockQuery));

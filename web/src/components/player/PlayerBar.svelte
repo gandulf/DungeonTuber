@@ -19,6 +19,8 @@
   // in the right column, on a tablet as one line above the volume (the columns are narrow there); phones have no room for it
   const effectsShown = $derived(prefs.showEffects && (ui.rightOverlay ? ui.mobilePanel === 'side' : prefs.rightOpen));
   const effectHere = $derived(player.effectPlaying && !!player.effect && !effectsShown && !ui.narrow);
+  // the effect player beside the volume (not on a line of its own): the right column takes the room it needs, the volume gets shorter
+  const effectBeside = $derived(effectHere && !ui.rightOverlay);
   // phones only get a sign that an effect plays (its name as the tooltip) and a stop button
   const effectSign = $derived(player.effectPlaying && !!player.effect && !effectsShown && ui.narrow);
 
@@ -66,7 +68,7 @@
   </button>
 {/snippet}
 
-<footer class="player" data-tour="player">
+<footer class="player" class:with-effect={effectBeside} data-tour="player">
   <div class="now">
     <div class="art" class:vibrate={player.playing}>
       {#if player.track?.has_cover}
@@ -121,7 +123,7 @@
   <div class="right" class:stacked={effectHere && ui.rightOverlay}>
     {#if effectHere && ui.rightOverlay}<EffectMini inline />{/if}
     {#if !ui.narrow}
-      <VolumeControl />
+      <VolumeControl short={effectBeside} />
       {@render options()}
     {/if}
     {#if effectHere && !ui.rightOverlay}<EffectMini />{/if}
@@ -174,9 +176,7 @@
   @media (hover: hover) { .play:hover:not(:disabled) { transform: scale(1.05); filter: brightness(1.08); } }
   .right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   /* with the effect player the right column takes the room it needs and the main volume gets shorter */
-  .player:has(.right:not(.stacked) :global(.effect)) { grid-template-columns: minmax(200px, 1fr) minmax(300px, 1.6fr) auto; }
-  .right:not(.stacked):has(:global(.effect)) :global(.volume input) { width: 80px; }
-  .right:not(.stacked):has(:global(.effect)) :global(.volume .pct) { display: none; }
+  .player.with-effect { grid-template-columns: minmax(200px, 1fr) minmax(300px, 1.6fr) auto; }
   /* tablets: the effect on a line of its own above the volume */
   .right.stacked { flex-wrap: wrap; row-gap: 4px; }
   .right.stacked :global(.effect) { flex: 1 0 100%; min-width: 0; }

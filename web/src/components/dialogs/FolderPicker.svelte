@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { longpress } from '../../lib/longpress';
   import FolderPicker from './FolderPicker.svelte';
   import { api } from '../../lib/api';
@@ -19,9 +20,7 @@
   const isRoot = $derived(item.storage !== undefined);
 
   // children are loaded as soon as the node is shown, so the caret can be hidden for folders without subfolders
-  $effect(() => {
-    if (children === null) void load();
-  });
+  onMount(() => void load());
 
   async function load() {
     try {
