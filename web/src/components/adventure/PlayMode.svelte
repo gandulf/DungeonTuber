@@ -9,6 +9,7 @@
   import { player, playQueue, togglePlay } from '../../lib/stores/player.svelte';
   import type { MusicRef } from '../../lib/types';
   import { openDialog, ui } from '../../lib/stores/ui.svelte';
+  import { prefs, savePrefs } from '../../lib/prefs.svelte';
   import Icon from '../Icon.svelte';
   import ImagePopup from '../dialogs/ImagePopup.svelte';
   import AdventureMap from './AdventureMap.svelte';
@@ -239,6 +240,19 @@
       </div>
     {/if}
 
+    <!-- the short summary (TL;DR) to scan the scene at a glance; folded away it stays a one-line button -->
+    {#if block.tldr.trim()}
+      <section class="tldr" class:open={prefs.tldrOpen}>
+        <button type="button" class="tldr-head" aria-expanded={prefs.tldrOpen} onclick={() => { prefs.tldrOpen = !prefs.tldrOpen; savePrefs(); }}>
+          <Icon name={prefs.tldrOpen ? 'chevron-down' : 'chevron-right'} size={14} /><span class="label-xs">{t('TL;DR')}</span>
+        </button>
+        {#if prefs.tldrOpen}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div class="tldr-text selectable" onclick={notesClick}>{@html renderNotes(block.tldr, adventure.blocks, adventure.id)}</div>
+        {/if}
+      </section>
+    {/if}
+
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="notes selectable" bind:this={notesElement} onclick={notesClick}>{@html renderNotes(block.markdown, adventure.blocks, adventure.id) || `<p class="muted">${t('No notes yet.')}</p>`}</div>
 
@@ -295,6 +309,12 @@
   .notes { font-size: 1.1rem; line-height: 1.7; overflow-wrap: anywhere; }
   .notes :global(img) { max-width: 100%; border-radius: 8px; }
   .notes :global(blockquote) { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); }
+  .tldr { display: flex; flex-direction: column; gap: 4px; padding: 6px 14px; border-radius: 10px; background: var(--accent-soft); border-left: 3px solid var(--accent); }
+  .tldr.open { padding-bottom: 10px; }
+  .tldr-head { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 2px 0; color: var(--accent); }
+  .tldr-text { line-height: 1.55; overflow-wrap: anywhere; }
+  .tldr-text :global(ul) { margin: 0; padding-left: 1.2em; }
+  .tldr-text :global(p) { margin: 0 0 0.4em; }
   footer { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
   footer .btn { display: inline-flex; align-items: center; gap: 8px; }
 </style>

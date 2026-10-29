@@ -176,7 +176,7 @@ export const api = {
   locales: () => get<string[]>('/api/locales'),
 
   // AI assistant (song suggestions)
-  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' | 'compose' | 'effects' | 'story' | 'image' = 'music',
+  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[], mode: 'music' | 'general' | 'smart' | 'compose' | 'effects' | 'story' | 'tldr' | 'image' = 'music',
     context?: { tags?: string[]; genres?: string[]; instrumental?: boolean; duration?: number; language?: string; kind?: string }) =>
     request<AssistantReply>('POST', '/api/assistant/chat', { messages, mode, context }),
   /** The text of a recording of the microphone; `language` (e.g. "de") is a hint for the recognition. */

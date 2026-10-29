@@ -53,6 +53,8 @@ export interface Prefs {
   tourDone: boolean;
   /** Accent colour of the signed in user (a key of lib/accent.ts), cached from the server. */
   accent: string;
+  /** Play mode shows the short summary (TL;DR) of a block unfolded above its notes. */
+  tldrOpen: boolean;
   /** The options of the last YouTube import, preselected the next time. */
   importOptions: { makePlaylist: boolean; makeFolder: boolean; split: boolean; analyze: boolean; limitMinutes: number };
 }
@@ -97,6 +99,7 @@ const defaults: Prefs = {
   activeTab: null,
   tourDone: false,
   accent: '',
+  tldrOpen: true,
   importOptions: { makePlaylist: false, makeFolder: false, split: false, analyze: false, limitMinutes: 0 },
 };
 

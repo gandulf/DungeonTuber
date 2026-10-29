@@ -1104,5 +1104,15 @@
   "\"{0}\" exists already. Overwrite it?": "\"{0}\" exists already. Overwrite it?",
   "\"{0}\" exists already and belongs to somebody else, so it cannot be overwritten. Import it as a copy?": "\"{0}\" exists already and belongs to somebody else, so it cannot be overwritten. Import it as a copy?",
   "\"{0}\" was overwritten.": "\"{0}\" was overwritten.",
-  "\"{0}\" was imported.": "\"{0}\" was imported."
+  "\"{0}\" was imported.": "\"{0}\" was imported.",
+  "TL;DR": "TL;DR",
+  "The most important points of the notes as keywords, to scan the block quickly during play.": "The most important points of the notes as keywords, to scan the block quickly during play.",
+  "Keywords: goal, persons, checks, dangers, secrets, next… Type [[ to link a block.": "Keywords: goal, persons, checks, dangers, secrets, next… Type [[ to link a block.",
+  "Summarize the notes": "Summarize the notes",
+  "This block has no notes to summarize yet.": "This block has no notes to summarize yet.",
+  "Wishes (optional)": "Wishes (optional)",
+  "e.g. only the checks and the dangers": "e.g. only the checks and the dangers",
+  "Summarize": "Summarize",
+  "Summarize again": "Summarize again",
+  "Replace the summary": "Replace the summary"
 }

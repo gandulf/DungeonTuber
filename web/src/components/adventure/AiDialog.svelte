@@ -1,9 +1,10 @@
 <script lang="ts">
   import { api } from '../../lib/api';
-  import { blockPrompt, plainText, tagsAndGenres } from '../../lib/adventureAi';
+  import { onMount } from 'svelte';
+  import { blockPrompt, plainText, tagsAndGenres, tldrPrompt } from '../../lib/adventureAi';
   import { t } from '../../lib/i18n.svelte';
-  import { imageUrl } from '../../lib/notes';
-    import { adventures, applyCoverWhenReady, change, createForBlock, searchSongsWithFilter, type BlockCreation } from '../../lib/stores/adventure.svelte';
+  import { imageUrl, renderNotes } from '../../lib/notes';
+  import { adventures, applyCoverWhenReady, change, createForBlock, searchSongsWithFilter, type BlockCreation } from '../../lib/stores/adventure.svelte';
   import { data } from '../../lib/stores/data.svelte';
   import { composeOptions, describeSoundYourself, describeYourself, effectOptions, type CreateKind } from '../../lib/stores/assistant.svelte';
   import { globalTab, loadGlobal } from '../../lib/stores/library.svelte';
@@ -17,14 +18,15 @@
   /** The AI helpers of a block: `draft` writes its notes, `songs` chooses filters for it and opens the library to add songs (like
    *  "Search…" of its music), `sound` creates what
    *  `kinds` allows (a piece of the music generation, background music, an ambience or an effect) with the options of the create mode
-   *  of the assistant (CreateOptions.svelte), `cover` paints its cover with the image generation. */
-  let { task, blockId, kinds = ['ambience', 'sfx'] }: { task: 'draft' | 'songs' | 'sound' | 'cover'; blockId: string; kinds?: CreateKind[] } = $props();
+   *  of the assistant (CreateOptions.svelte), `cover` paints its cover with the image generation, `tldr` sums the whole notes up in
+   *  keywords (the short summary of the block; it is written as soon as the dialog opens). */
+  let { task, blockId, kinds = ['ambience', 'sfx'] }: { task: 'draft' | 'songs' | 'sound' | 'cover' | 'tldr'; blockId: string; kinds?: CreateKind[] } = $props();
 
   const adventure = $derived(adventures.current!);
   const block = $derived(adventure.blocks.find((item) => item.id === blockId) ?? null);
 
   // svelte-ignore state_referenced_locally
-  let input = $state(task === 'draft' ? '' : block ? blockPrompt(block) : '');
+  let input = $state(task === 'draft' || task === 'tldr' ? '' : block ? blockPrompt(block) : '');
   let refine = $state('');
   let busy = $state(false);
   let message = $state('');
@@ -52,11 +54,11 @@
   const sizes = [['landscape', 'Landscape'], ['square', 'Square'], ['portrait', 'Portrait']] as const;
 
   const titles = $derived({
-    draft: 'Draft the notes', songs: 'AI search', sound: kinds.includes('song') || kinds.includes('music') ? 'Create music' : 'Create a sound', cover: 'Create a cover image',
+    draft: 'Draft the notes', tldr: 'Summarize the notes', songs: 'AI search', sound: kinds.includes('song') || kinds.includes('music') ? 'Create music' : 'Create a sound', cover: 'Create a cover image',
   });
 
   /** Asks the assistant; a follow-up (refine) continues the conversation, so "darker" changes the last answer. */
-  async function ask(text: string, mode: 'story' | 'smart' | 'compose' | 'effects' | 'image', context: Parameters<typeof api.assistantChat>[2]): Promise<AssistantReply | null> {
+  async function ask(text: string, mode: 'story' | 'tldr' | 'smart' | 'compose' | 'effects' | 'image', context: Parameters<typeof api.assistantChat>[2]): Promise<AssistantReply | null> {
     history.push({ role: 'user', content: text });
     busy = true;
     try {
@@ -78,9 +80,14 @@
   async function run(followUp = false) {
     if (!block) return;
     const text = request(followUp ? refine : input);
-    if (!text) return;
+    if (!text && task !== 'tldr') return;
+    if (followUp && !text) return;
     if (!followUp) history = [];
-    if (task === 'draft') {
+    if (task === 'tldr') {
+      // the wishes are optional: the summary is written from the notes alone
+      const reply = await ask(followUp ? text : tldrPrompt(adventure.title, block, text), 'tldr', undefined);
+      if (reply?.text) draft = reply.text;
+    } else if (task === 'draft') {
       const notes = wholeText ? block.markdown.trim().slice(0, MAX_WHOLE_TEXT) : plainText(block.markdown);
       const context = followUp ? text : `Adventure: ${adventure.title}\nScene: ${block.title}\nNotes so far${wholeText ? ' (Markdown)' : ''}:\n${notes || '(none)'}\n\n${text}`;
       const reply = await ask(context, 'story', undefined);
@@ -109,6 +116,17 @@
   }
 
   // --- what a result does to the block ---
+
+  function useSummary() {
+    if (!block || !draft.trim()) return;
+    change(() => (block.tldr = draft.trim()));
+    closeDialog();
+  }
+
+  // the summary needs nothing but the notes: it is written right away
+  onMount(() => {
+    if (task === 'tldr' && aiReady && block?.markdown.trim()) void run();
+  });
 
   function useDraft(append: boolean) {
     if (!block || !draft.trim()) return;
@@ -214,10 +232,18 @@
         </div>
       {/if}
 
+      {#if task === 'tldr'}
+        {#if !block.markdown.trim()}<p class="muted">{t('This block has no notes to summarize yet.')}</p>{/if}
+        <label class="field">
+          <span class="label-xs">{t('Wishes (optional)')}</span>
+          <textarea rows="2" bind:value={input} placeholder={t('e.g. only the checks and the dangers')}></textarea>
+        </label>
+      {:else}
       <label class="field">
         <span class="label-xs">{task === 'draft' ? t('What should the notes say? (bullet points are fine)') : task === 'cover' && !aiReady ? t('Describe the picture (in English)') : t('Describe the scene')}</span>
         <textarea rows={task === 'draft' ? 4 : 5} bind:value={input} placeholder={task === 'draft' ? t('A smoky tavern, the innkeeper hides a secret…') : ''}></textarea>
       </label>
+      {/if}
       {#if task === 'draft'}
         <label class="check" title={t('Without it the AI gets a shortened plain text of the notes (about 1500 characters).')}>
           <input type="checkbox" bind:checked={wholeText} disabled={!block.markdown.trim()} />{t('Include the whole text of this block')}
@@ -226,6 +252,8 @@
       <div class="row">
         {#if task === 'cover' && !aiReady}
           <button class="btn primary" disabled={busy || !input.trim()} onclick={() => void paint()}><Icon name="sparkles" size={14} />{t('Generate')}</button>
+        {:else if task === 'tldr'}
+          <button class="btn primary" disabled={busy || !block.markdown.trim()} onclick={() => void run()}><Icon name="sparkles" size={14} />{draft ? t('Summarize again') : t('Summarize')}</button>
         {:else}
           <button class="btn primary" disabled={busy || !input.trim()} onclick={() => void run()}><Icon name="sparkles" size={14} />{task === 'sound' ? (kind === 'song' ? t('Describe the piece') : t('Describe the sound')) : task === 'cover' ? t('Describe the picture') : task === 'songs' ? t('Find songs in the library') : t('Ask')}</button>
         {/if}
@@ -233,7 +261,10 @@
       </div>
       {#if message}<p class="message">{message}</p>{/if}
 
-      {#if task === 'draft' && draft}
+      {#if task === 'tldr' && draft}
+        <!-- as it will look in the block; it can be changed there afterwards -->
+        <div class="tldr-preview">{@html renderNotes(draft, adventure.blocks, adventure.id)}</div>
+      {:else if task === 'draft' && draft}
         <textarea class="result" rows="10" bind:value={draft}></textarea>
       {:else if task === 'sound' && (piece || sound)}
         {@const description = (piece ?? sound)!}
@@ -259,7 +290,7 @@
         <img class="painted" src={imageUrl(adventure.id, painted)} alt={t('Cover image')} />
       {/if}
 
-      {#if (task === 'draft' && draft) || (task === 'cover' && caption)}
+      {#if ((task === 'draft' || task === 'tldr') && draft) || (task === 'cover' && caption)}
         <div class="row">
           <input type="text" bind:value={refine} placeholder={t('Change it: darker, shorter, more tense…')} onkeydown={(e) => e.key === 'Enter' && void run(true)} />
           <button class="btn" disabled={busy || !refine.trim()} onclick={() => void run(true)}>{t('Change')}</button>
@@ -268,7 +299,10 @@
     </div>
   {/if}
   {#snippet footer()}
-    {#if task === 'draft' && draft}
+    {#if task === 'tldr'}
+      <button class="btn" onclick={closeDialog}>{t('Close')}</button>
+      <button class="btn primary" disabled={!draft.trim() || busy} onclick={useSummary}>{t('Replace the summary')}</button>
+    {:else if task === 'draft' && draft}
       <button class="btn" onclick={() => useDraft(true)}>{t('Append to notes')}</button>
       <button class="btn primary" onclick={() => useDraft(false)}>{t('Replace notes')}</button>
     {:else if task === 'cover'}
@@ -298,6 +332,9 @@
   .message { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
   .small { font-size: var(--fs-xs); }
   .result { min-height: 180px; line-height: 1.5; }
+  .tldr-preview { padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--border); line-height: 1.5; overflow-wrap: anywhere; }
+  .tldr-preview :global(ul) { margin: 0; padding-left: 1.2em; }
+  .tldr-preview :global(p) { margin: 0 0 0.4em; }
   .sound { display: flex; flex-direction: column; gap: 8px; }
   .seg button { padding: 5px 13px; }
   .painted { display: block; max-width: 100%; max-height: 340px; margin: 0 auto; border-radius: 10px; object-fit: contain; }

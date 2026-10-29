@@ -87,7 +87,7 @@
   const aiSounds = $derived(!!data.settings?.soundGenConfigured);
   // music: a piece of the music generation (ACE-Step) and background music of the sound generation, as far as they are set up
   const musicKinds = $derived<CreateKind[]>([...(data.settings?.musicGenConfigured ? ['song' as const] : []), ...(aiSounds ? ['music' as const] : [])]);
-  function openAi(task: 'draft' | 'songs' | 'sound', kinds?: CreateKind[]) {
+  function openAi(task: 'draft' | 'tldr' | 'songs' | 'sound', kinds?: CreateKind[]) {
     if (block) openDialog(AiDialog, { task, blockId: block.id, kinds });
   }
 
@@ -274,6 +274,34 @@
       </div>
     </div>
 
+    <!-- the short summary (TL;DR): the most important points as keywords, to scan the block quickly during play -->
+    {#if editable || block.tldr.trim()}
+      <section class="tldr">
+        <div class="bar">
+          <span class="label-xs" title={t('The most important points of the notes as keywords, to scan the block quickly during play.')}>{t('TL;DR')}</span>
+          <span class="grow"></span>
+          {#if editable}<button class="btn sm ghost" disabled={!aiText || !block.markdown.trim()}
+                                title={!aiText ? t('The AI assistant is not configured') : block.markdown.trim() ? t('Summarize the notes') : t('This block has no notes to summarize yet.')}
+                                onclick={() => openAi('tldr')}><Icon name="sparkles" size={13} />{t('AI')}</button>{/if}
+        </div>
+        {#if editable}
+          {#await loadNotesEditor()}
+            <div class="notes muted">{t('Loading…')}</div>
+          {:then NotesEditor}
+            {#key block.id}
+              <NotesEditor value={block.tldr} adventureId={adventure.id} blocks={others} pool={adventure.music} compact
+                           placeholder={t('Keywords: goal, persons, checks, dangers, secrets, next… Type [[ to link a block.')}
+                           onchange={(markdown: string) => change(() => (block.tldr = markdown))}
+                           onopenblock={(id: string) => (adventures.selected = id)} onplaysong={(ufid: string) => void playSongLink(ufid)} />
+            {/key}
+          {/await}
+        {:else}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div class="notes selectable" onclick={previewClick}>{@html renderNotes(block.tldr, adventure.blocks, adventure.id)}</div>
+        {/if}
+      </section>
+    {/if}
+
     <section>
       <div class="bar">
         <span class="label-xs">{t('Notes')}</span>
@@ -452,6 +480,7 @@
   .bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .grow { flex: 1; }
   .notes { line-height: 1.6; overflow-wrap: anywhere; }
+  section.tldr { border-left: 3px solid var(--accent); }
   .notes :global(img) { max-width: 100%; border-radius: 8px; }
   .notes :global(h1), .notes :global(h2), .notes :global(h3) { margin: 0.6em 0 0.3em; }
   .notes :global(blockquote) { margin: 0.6em 0; padding-left: 12px; border-left: 3px solid var(--accent); color: var(--muted); }

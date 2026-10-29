@@ -20,7 +20,11 @@
   /** The notes of a block as a WYSIWYG editor (Tiptap). They are stored as Markdown (lib/notesMarkdown.ts): `onchange` gets the
    *  Markdown after each change, a new `value` from outside (the AI draft) replaces the text. Links to blocks (typed with `[[`)
    *  and songs open with Ctrl/Cmd + click; images are pasted, dropped or picked and stored in the adventure. */
-  let { value, adventureId, blocks, pool, highlight = null, onhighlighted = () => {}, onchange, onopenblock, onplaysong, missingSongs = [] }: {
+  let { value, adventureId, blocks, pool, highlight = null, onhighlighted = () => {}, onchange, onopenblock, onplaysong, missingSongs = [], placeholder = '', compact = false }: {
+    /** The text shown while the editor is empty (otherwise the hint for the notes). */
+    placeholder?: string;
+    /** A smaller editor (the short summary of a block). */
+    compact?: boolean;
     /** Songs (UFIDs) of song links that can no longer be found: their links are marked. */
     missingSongs?: string[];
     /** Words of the header search to mark (once); `onhighlighted` says they were taken. */
@@ -275,7 +279,7 @@
       extensions: noteExtensions({
         resize: true,
         resolveImage: (src) => (src.startsWith(IMAGE_PREFIX) ? imageUrl(adventureId, src.slice(IMAGE_PREFIX.length)) : src),
-        extra: [Placeholder.configure({ placeholder: t('Describe the scene… Type [[ to link a block.') }), BlockSuggestion],
+        extra: [Placeholder.configure({ placeholder: placeholder || t('Describe the scene… Type [[ to link a block.') }), BlockSuggestion],
       }),
       ...content(value),
       onUpdate: ({ editor: changed }) => {
@@ -371,7 +375,7 @@
   }
 </script>
 
-<div class="notes-editor" bind:this={host}>
+<div class="notes-editor" class:compact bind:this={host}>
   <div class="toolbar" role="toolbar" aria-label={t('Format')} bind:this={toolbarEl}>
     {#each tools as tool, index (index)}
       {#if tool?.hidden?.()}
@@ -448,6 +452,8 @@
   .hl-swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
   .hl-swatch.on, .hl-swatch:hover { border-color: var(--text); }
   .hint { font-size: var(--fs-xs); }
+  .compact .hint { display: none; }
+  .compact .surface :global(.ProseMirror) { min-height: 70px; }
   .link-pop { position: absolute; z-index: 4; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; padding: 6px 8px; border-radius: 10px;
               background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: var(--shadow); color: var(--accent); }
   .link-pop .target { min-width: 0; max-width: 240px; font-size: var(--fs-sm); }

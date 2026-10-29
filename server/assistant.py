@@ -3,7 +3,7 @@ role playing session, "general" answers questions of the game master (rules like
 scene into the filter of the app so that the songs of the library are ranked by it (see server/smartsearch.py), "compose" writes the
 description of a new piece that the music generation composes (see server/musicgen.py), "effects" the description of a sound
 effect, an ambience or background music for the sound generation (see server/soundgen.py), "story" helps with the blocks of an adventure:
-it drafts their notes, "image" writes the description of a block's cover for the image generation (see server/imagegen.py).
+it drafts their notes, "tldr" sums their notes up in keywords (the TL;DR of a block), "image" writes the description of a block's cover for the image generation (see server/imagegen.py).
 
 The smart search, the compose and the effects mode run on Groq when a Groq key is stored (an open model like gpt-oss-120b is as good at choosing
 values as Gemini and has a quota of its own); the song suggestions and the general chat need the knowledge of Gemini.
@@ -51,7 +51,7 @@ GROQ_MODELS = [
     {"id": "openai/gpt-oss-120b", "name": "GPT-OSS 120B"},
     {"id": "openai/gpt-oss-20b", "name": "GPT-OSS 20B"},
 ]
-GROQ_MODES = ("smart", "compose", "effects", "story", "image")
+GROQ_MODES = ("smart", "compose", "effects", "story", "tldr", "image")
 USER_AGENT = "DungeonTuber (+https://github.com/gandulf/DungeonTuber)"
 SONG_COUNT = 10
 TIMEOUT = 60
@@ -180,6 +180,20 @@ players see, hear and smell), followed by short bullet points for the game maste
 players can find out or try, and what happens next. Keep every name, place and fact the user gave and do not invent a different plot.
 Use plain Markdown only (**bold**, lists, > quotes, no heading above ##), no tables and no HTML.
 Write in the language of the user's notes. When the user asks for changes, change the previous text accordingly."""
+# what the short summary (TL;DR) of a block holds: written along with the notes by the import (server/adventureimport.py) and
+# again from the notes in the "tldr" mode
+TLDR_RULES = """The short summary (tldr) is what the game master glances at during play so that nothing important is forgotten:
+3 to 8 bullet points ("- "), the most important first, each only a few keywords, no whole sentences: the goal or the core of the
+scene, who is there, the decisive checks and values, dangers, clues and secrets, and where it leads. Mark the key word of a point
+**bold**. Where a point names a scene, a person, a song or a page of the book that the notes link, link it the same way (copy the
+link with its target exactly, e.g. [Torben](block:…), [[s4]] or [Map](pdf:12)). At most about 80 words, plain Markdown only."""
+STORY_TLDR_PROMPT = """You write the short summary (TL;DR) of the notes of one scene (a block) of an adventure for a tabletop role
+playing session.
+Answer with a JSON object only:
+{"message": "<one short sentence for the user>", "text": "<the summary in Markdown>"}
+""" + TLDR_RULES + """
+Use only what the notes say and do not invent anything. Write in the language of the notes. When the user asks for changes, change
+the previous summary accordingly."""
 IMAGE_PROMPT = """You write the description for an AI image generator (Stable Diffusion 3.5) that paints the cover picture of one scene
 (a block) of a tabletop role playing adventure. The game master shows it to the players.
 Answer with a JSON object only:
@@ -225,6 +239,9 @@ MAX_CAPTION_LENGTH = 512
 MAX_STORY_TEXT = 6000
 # a request of the story mode may carry the whole notes of a block (the option of the AI dialog) next to the wishes of the user
 MAX_STORY_MESSAGE_LENGTH = MAX_STORY_TEXT + MAX_MESSAGE_LENGTH
+# the summary is written from the whole notes of a block (imported ones can be long)
+MAX_TLDR_SOURCE = 20000
+MAX_TLDR_MESSAGE_LENGTH = MAX_TLDR_SOURCE + MAX_MESSAGE_LENGTH
 
 STORY_DRAFT_SCHEMA = {
     "type": "OBJECT",
@@ -330,6 +347,7 @@ def provider(mode: str) -> str | None:
 
 
 _INSTRUCTION_KEYS = {"general": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS, "story": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS,
+                     "tldr": SettingKeys.ASSISTANT_GENERAL_INSTRUCTIONS,
                      "image": SettingKeys.ASSISTANT_IMAGE_INSTRUCTIONS, "compose": SettingKeys.ASSISTANT_COMPOSE_INSTRUCTIONS,
                      "smart": SettingKeys.ASSISTANT_SMART_INSTRUCTIONS, "effects": SettingKeys.ASSISTANT_EFFECTS_INSTRUCTIONS,
                      "import": SettingKeys.ASSISTANT_IMPORT_INSTRUCTIONS}
@@ -343,6 +361,7 @@ PROMPTS = {
     "effects.system": EFFECTS_PROMPT,
     "general.system": GENERAL_PROMPT,
     "story.draft": STORY_DRAFT_PROMPT,
+    "story.tldr": STORY_TLDR_PROMPT,
     "image.system": IMAGE_PROMPT,
 }
 MAX_PROMPT_LENGTH = 12000
@@ -407,6 +426,8 @@ def system_prompt(mode: str = "music", context: dict | None = None) -> str:
         base = prompt_text("effects.system") + "\n" + EFFECT_KINDS[effect_kind((context or {}).get("kind"))]
     elif mode == "story":
         base = prompt_text("story.draft")
+    elif mode == "tldr":
+        base = prompt_text("story.tldr")
     elif mode == "image":
         base = prompt_text("image.system")
         intro = "The picture style the game master wants; work it into the start of the caption:"
@@ -689,11 +710,11 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
     The general mode answers in Markdown and suggests no songs. The smart mode returns a filter (categories, tags, genres, bpm)
     instead of songs; `context` holds the tags and genres it may choose from.
     """
-    limit = MAX_STORY_MESSAGE_LENGTH if mode == "story" else MAX_MESSAGE_LENGTH
+    limit = {"story": MAX_STORY_MESSAGE_LENGTH, "tldr": MAX_TLDR_MESSAGE_LENGTH}.get(mode, MAX_MESSAGE_LENGTH)
     history = [{"role": m["role"], "content": m["content"][:limit]} for m in messages[-MAX_MESSAGES:]]
     tags, genres = (context or {}).get("tags") or [], (context or {}).get("genres") or []
     schema = {"smart": smartsearch.schema(tags, genres), "compose": COMPOSE_SCHEMA, "effects": EFFECTS_SCHEMA,
-              "story": STORY_DRAFT_SCHEMA, "image": IMAGE_SCHEMA,
+              "story": STORY_DRAFT_SCHEMA, "tldr": STORY_DRAFT_SCHEMA, "image": IMAGE_SCHEMA,
               "general": None}.get(mode, RESPONSE_SCHEMA)
     service = provider(mode)
     if service is None:
@@ -718,7 +739,7 @@ def chat(messages: list[dict[str, str]], mode: str = "music", context: dict | No
         if piece and not instrumental and chosen:
             piece["language"] = chosen  # the language the user chose, also when the model named another one
         return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content, "piece": piece}
-    if mode == "story":
+    if mode in ("story", "tldr"):
         return {"message": str(parsed.get("message") or "").strip(), "songs": [], "content": content,
                 "text": str(parsed.get("text") or "").strip()[:MAX_STORY_TEXT]}
     if mode == "image":

@@ -66,14 +66,25 @@ def test_the_book_is_read_in_batches_and_the_upload_is_removed(monkeypatch):
             return OUTLINE
         if "s3" in text.split("these scenes:")[1]:
             raise adventureimport.ImportFailed("busy")  # these scenes keep their summary
-        return {"scenes": [{"key": "s1", "markdown": "Notes 1"}, {"key": "s2", "markdown": "Notes 2"}]}
+        return {"scenes": [{"key": "s1", "markdown": "Notes 1", "tldr": "- Kurz 1"}, {"key": "s2", "markdown": "Notes 2"}]}
 
     monkeypatch.setattr(adventureimport, "ask", ask)
     steps = []
     adventure = adventureimport.convert(b"%PDF", "gruft.pdf", "anna", lambda step, total: steps.append((step, total)))
     assert len(asked) == 3 and steps == [(0, 1), (1, 3), (2, 3)]
     assert [block["markdown"].split("\n")[0] for block in adventure["blocks"]] == ["Notes 1", "Notes 2", "Ende."]
+    assert [block["tldr"] for block in adventure["blocks"]] == ["- Kurz 1", "", ""]
     assert removed == ["files/1"]
+
+
+def test_the_short_summaries_are_linked_like_the_notes():
+    outline = {**OUTLINE, "characters": PEOPLE}
+    adventure = adventureimport.build(outline, {"s1": "Notes."}, "anna", {"s1": "- **Torben** wartet\n- weiter: [[s2]]"})
+    ids = {block["title"]: block["id"] for block in adventure["blocks"]}
+    first, second = adventure["blocks"][:2]
+    assert first["tldr"] == f"- **[Torben](block:{ids['Hauptmann Torben']})** wartet\n- weiter: [Die Gruft](block:{second['id']})"
+    assert second["tldr"] == ""  # no summary from the AI: none
+    assert "tldr" in adventureimport.NOTES_SCHEMA["properties"]["scenes"]["items"]["required"]
 
 
 def test_an_import_runs_in_the_background_and_stores_a_private_adventure(client, monkeypatch):

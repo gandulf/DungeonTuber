@@ -82,7 +82,7 @@ first available one plays. A missing target shows a "missing, relink" chip and u
 - Always a suggestion the user accepts; nothing is changed silently.
 
 ### Later (not committed)
-- Session recap from played blocks, "plausible next blocks" suggestions, export/import of an adventure as a bundle (file + assets), printable GM notes.
+- Session recap from played blocks, "plausible next blocks" suggestions, printable GM notes.
 
 ## Risks
 - UFID backfill writes to every local mp3: must be resumable, skip read-only files and report failures.

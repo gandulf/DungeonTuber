@@ -15,7 +15,7 @@ router = APIRouter(dependencies=[Depends(require_auth)])
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: str = Field(min_length=1, max_length=20000)
+    content: str = Field(min_length=1, max_length=assistant.MAX_TLDR_MESSAGE_LENGTH)
 
 
 class SearchContext(BaseModel):
@@ -30,7 +30,7 @@ class SearchContext(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=200)
-    mode: Literal["music", "general", "smart", "compose", "effects", "story", "image"] = "music"
+    mode: Literal["music", "general", "smart", "compose", "effects", "story", "tldr", "image"] = "music"
     context: SearchContext | None = None
 
 

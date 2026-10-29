@@ -1104,5 +1104,15 @@
   "\"{0}\" exists already. Overwrite it?": "\"{0}\" gibt es schon. Überschreiben?",
   "\"{0}\" exists already and belongs to somebody else, so it cannot be overwritten. Import it as a copy?": "\"{0}\" gibt es schon und gehört jemand anderem, es kann also nicht überschrieben werden. Als Kopie importieren?",
   "\"{0}\" was overwritten.": "\"{0}\" wurde überschrieben.",
-  "\"{0}\" was imported.": "\"{0}\" wurde importiert."
+  "\"{0}\" was imported.": "\"{0}\" wurde importiert.",
+  "TL;DR": "TL;DR",
+  "The most important points of the notes as keywords, to scan the block quickly during play.": "Die wichtigsten Punkte der Notizen als Stichworte, um den Block während des Spiels schnell zu überfliegen.",
+  "Keywords: goal, persons, checks, dangers, secrets, next… Type [[ to link a block.": "Stichworte: Ziel, Personen, Proben, Gefahren, Geheimnisse, weiter… [[ tippen, um einen Block zu verlinken.",
+  "Summarize the notes": "Notizen zusammenfassen",
+  "This block has no notes to summarize yet.": "Dieser Block hat noch keine Notizen zum Zusammenfassen.",
+  "Wishes (optional)": "Wünsche (optional)",
+  "e.g. only the checks and the dangers": "z. B. nur die Proben und die Gefahren",
+  "Summarize": "Zusammenfassen",
+  "Summarize again": "Erneut zusammenfassen",
+  "Replace the summary": "Zusammenfassung ersetzen"
 }

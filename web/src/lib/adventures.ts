@@ -10,7 +10,7 @@ export function newId(): string {
 }
 
 export function newBlock(title = '', index = 0): AdventureBlock {
-  return { id: newId(), title, markdown: '', played: false, pos: [index * 40, index * 40], autoplay: true, inline: false, music: [], effects: [], images: [], cover: null };
+  return { id: newId(), title, markdown: '', tldr: '', played: false, pos: [index * 40, index * 40], autoplay: true, inline: false, music: [], effects: [], images: [], cover: null };
 }
 
 /** The grid of the stored block positions: a block took this much room and these gaps when the graph showed small nodes. The cards of

@@ -13,6 +13,7 @@ VISIBILITIES = ("private", "public")
 MAX_BLOCKS = 500
 MAX_LINKS = 2000
 MAX_TEXT = 100_000
+MAX_TLDR = 10_000
 MAX_TITLE = 200
 MAX_REFS = 100
 MAX_ADVENTURE_MUSIC = 1000
@@ -81,6 +82,8 @@ def normalize_block(raw: dict) -> dict:
         "id": _text(raw.get("id"), 64) or new_id(),
         "title": _text(raw.get("title"), MAX_TITLE),
         "markdown": raw["markdown"][:MAX_TEXT] if isinstance(raw.get("markdown"), str) else "",
+        # the short summary of the notes (keywords and links) to scan the block quickly during play
+        "tldr": raw["tldr"][:MAX_TLDR] if isinstance(raw.get("tldr"), str) else "",
         "played": bool(raw.get("played", False)),
         "pos": [_number(pos[0]), _number(pos[1])] if isinstance(pos, list) and len(pos) == 2 else [0.0, 0.0],
         "autoplay": bool(raw.get("autoplay", True)),

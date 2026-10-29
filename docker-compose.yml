@@ -110,9 +110,9 @@ services:
       RUSTFS_ACCESS_KEY: rustfsadmin
       RUSTFS_SECRET_KEY: rustfsadmin
       RUSTFS_CONSOLE_ENABLE: "true"
-    ports:
-      - "9000:9000"                       # S3 API
-      - "9001:9001"                       # web console
+    #ports:
+    #  - "9000:9000"                       # S3 API
+    #  - "9001:9001"                       # web console
     volumes:
       - rustfs-data:/data
 

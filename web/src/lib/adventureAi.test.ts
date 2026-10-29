@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockPrompt, plainText, rankTracks, tagsAndGenres } from './adventureAi';
+import { blockPrompt, cardText, MAX_TLDR_SOURCE, plainText, rankTracks, tagsAndGenres, tldrPrompt } from './adventureAi';
 import type { Track } from './types';
 
 const song = (name: string, categories: Record<string, number>, tags: string[] = [], genres: string[] = []): Track =>
@@ -41,5 +41,20 @@ describe('rankTracks', () => {
     const tracks = [song('plain', { Darkness: 9 }), song('tagged', { Darkness: 9 }, ['Ritual'])];
     const ranked = rankTracks(tracks, { categories: { Darkness: 9 }, tags: ['Ritual'], genres: [], bpm: null });
     expect(ranked.map((item) => item.track.name)).toEqual(['tagged', 'plain']);
+  });
+});
+
+describe('tldrPrompt', () => {
+  it('sends the whole notes with their links, cut to what the server takes', () => {
+    const prompt = tldrPrompt('Crypt', { title: 'Door', markdown: 'Roll [perception](block:b1).' }, ' only checks ');
+    expect(prompt.split('\n')).toEqual(['Adventure: Crypt', 'Scene: Door', 'Wishes: only checks', 'Notes (Markdown):', 'Roll [perception](block:b1).']);
+    expect(tldrPrompt('A', { title: 'B', markdown: 'x'.repeat(30000) })).toHaveLength(MAX_TLDR_SOURCE);
+  });
+});
+
+describe('cardText', () => {
+  it('shows the summary point by point, else the notes', () => {
+    expect(cardText({ tldr: '- **Goal**: the crypt\n- go to [Door](block:b2)', markdown: 'Long notes' })).toBe('Goal: the crypt · go to Door');
+    expect(cardText({ tldr: '  ', markdown: '> The *wind* howls.' })).toBe('The wind howls.');
   });
 });

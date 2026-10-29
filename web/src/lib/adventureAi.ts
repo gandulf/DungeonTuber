@@ -19,9 +19,25 @@ export function plainText(markdown: string, limit = MAX_NOTES): string {
     .slice(0, limit);
 }
 
+/** The short text of a block card (the graph and the map): its summary (TL;DR), one point after the other, or else the start of its notes. */
+export function cardText(block: Pick<AdventureBlock, 'markdown' | 'tldr'>): string {
+  const summary = plainText(block.tldr ?? '').split(/\n+/).map((line) => line.trim()).filter(Boolean).join(' · ');
+  return summary || plainText(block.markdown);
+}
+
 /** What the AI gets to know of a block: its title and its notes. */
 export function blockPrompt(block: Pick<AdventureBlock, 'title' | 'markdown'>): string {
   return [block.title.trim(), plainText(block.markdown)].filter(Boolean).join('\n\n');
+}
+
+/** The most the summary (TL;DR) of a block is written from (see MAX_TLDR_SOURCE in server/assistant.py). */
+export const MAX_TLDR_SOURCE = 20000;
+
+/** What the AI gets to write the summary (TL;DR) of a block from: the whole notes as Markdown, links included, so that the summary
+ *  can link the same blocks, songs and pages. */
+export function tldrPrompt(adventureTitle: string, block: Pick<AdventureBlock, 'title' | 'markdown'>, wishes = ''): string {
+  const head = [`Adventure: ${adventureTitle}`, `Scene: ${block.title}`, ...(wishes.trim() ? [`Wishes: ${wishes.trim()}`] : []), 'Notes (Markdown):', ''].join('\n');
+  return head + block.markdown.trim().slice(0, MAX_TLDR_SOURCE - head.length);
 }
 
 /** The tags and genres of the songs, "Pop" and "pop" listed once: the values the smart search may choose from. */

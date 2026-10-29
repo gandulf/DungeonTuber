@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { plainText } from '../../lib/adventureAi';
+  import { cardText } from '../../lib/adventureAi';
   import { t } from '../../lib/i18n.svelte';
   import { imageUrl } from '../../lib/notes';
   import type { AdventureBlock } from '../../lib/types';
   import Icon from '../Icon.svelte';
 
   /** What a block card shows (the map of play mode and the graph of the editor draw the frame around it): the cover, a badge, the
-   *  title, the start of the notes and what the block plays. `badge` replaces the "played" mark. */
+   *  title, the summary (TL;DR) or else the start of the notes, and what the block plays. `badge` replaces the "played" mark. */
   let { block, adventureId, badge = null }: { block: AdventureBlock; adventureId: string; badge?: string | null } = $props();
 
-  const notes = $derived(plainText(block.markdown));
+  const notes = $derived(cardText(block));
 </script>
 
 <span class="art">

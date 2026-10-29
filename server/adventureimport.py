@@ -83,7 +83,7 @@ The line names above are English: write them, and the names of skills, weapons a
 
 NOTES_PROMPT = """You write the notes of some scenes of a published adventure for a tabletop role playing game, from the attached
 book, for the game master's software. The game master reads them during play.
-Answer with a JSON object only: {"scenes": [{"key": "<key of the scene>", "markdown": "<the notes>"}]}
+Answer with a JSON object only: {"scenes": [{"key": "<key of the scene>", "markdown": "<the notes>", "tldr": "<the short summary>"}]}
 For each scene:
 - Start with the read-aloud text of the book as a quote (lines starting with "> "), in the words of the book; without one, write two
   to four vivid sentences of what the heroes see, hear and smell.
@@ -98,7 +98,8 @@ For each scene:
   manner, voice), then what the person wants and knows, how they treat the heroes, and the stat block if the book has one.
 - Keep every name, place and number of the book; do not invent a different plot. Plain Markdown only: **bold**, *italic*, lists,
   "> " quotes and "## "/"### " headings; no tables and no HTML.
-- Write in the language of the book. __NOTES_DETAIL__"""
+- Write in the language of the book. __NOTES_DETAIL__
+__TLDR__"""
 
 OUTLINE_SCHEMA = {
     "type": "OBJECT",
@@ -128,8 +129,8 @@ NOTES_SCHEMA = {
     "type": "OBJECT",
     "properties": {"scenes": {"type": "ARRAY", "items": {
         "type": "OBJECT",
-        "properties": {"key": {"type": "STRING"}, "markdown": {"type": "STRING"}},
-        "required": ["key", "markdown"],
+        "properties": {"key": {"type": "STRING"}, "markdown": {"type": "STRING"}, "tldr": {"type": "STRING"}},
+        "required": ["key", "markdown", "tldr"],
     }}},
     "required": ["scenes"],
 }
@@ -350,9 +351,11 @@ def page_link(pages: str) -> str:
     return PAGES.sub(lambda match: f"[{match.group(0)}](pdf:{int(match.group(1))})" if int(match.group(1)) > 0 else match.group(0), pages)
 
 
-def build(outline: dict, notes: dict[str, str], owner: str) -> dict:
+def build(outline: dict, notes: dict[str, str], owner: str, tldrs: dict[str, str] | None = None) -> dict:
     """The adventure of the outline and the notes: one block per scene, [[key]] references become links to the blocks. With at least
-    MIN_OVERVIEW persons there is a block "Dramatis Personae"; every person has a block, their names in the notes link to it."""
+    MIN_OVERVIEW persons there is a block "Dramatis Personae"; every person has a block, their names in the notes link to it. `tldrs` are
+    the short summaries of the scenes and persons (TL;DR), linked like the notes."""
+    tldrs = tldrs or {}
     scenes, people = scenes_of(outline), characters_of(outline)
     ids = {item["key"]: model.new_id() for item in [*scenes, *people]}
     titles = {**{scene["key"]: str(scene["title"]).strip() for scene in scenes}, **{person["key"]: person["name"] for person in people}}
@@ -368,7 +371,8 @@ def build(outline: dict, notes: dict[str, str], owner: str) -> dict:
         pages = str(item.get("pages") or "").strip()
         if pages:
             text += f"\n\n*{_('Pages')}: {page_link(pages)}*"
-        return {"id": ids[key], "title": titles[key], "markdown": text, "pos": [0, 0], "inline": inline}
+        tldr = link_people(SCENE_LINK.sub(link, tldrs.get(key) or "").strip(), names, ids[key])
+        return {"id": ids[key], "title": titles[key], "markdown": text, "tldr": tldr, "pos": [0, 0], "inline": inline}
 
     blocks = [block_of(scene) for scene in scenes]
     if len(people) >= MIN_OVERVIEW:
@@ -405,7 +409,7 @@ def outline_prompt(detail: str) -> str:
 
 
 def notes_prompt(detail: str) -> str:
-    return NOTES_PROMPT.replace("__NOTES_DETAIL__", DETAILS[detail_of(detail)][1])
+    return NOTES_PROMPT.replace("__NOTES_DETAIL__", DETAILS[detail_of(detail)][1]).replace("__TLDR__", assistant.TLDR_RULES)
 
 
 def convert(pdf: bytes, name: str, owner: str, progress=lambda step, total: None, detail: str | None = None) -> dict:
@@ -428,6 +432,7 @@ def convert(pdf: bytes, name: str, owner: str, progress=lambda step, total: None
         batches += [("persons", people[index:index + SCENES_PER_REQUEST]) for index in range(0, len(people), SCENES_PER_REQUEST)]
         note(f"Outline: {len(scenes)} scenes and {len(people)} persons, the notes are written in {len(batches)} steps")
         notes: dict[str, str] = {}
+        tldrs: dict[str, str] = {}
         for number, (kind, batch) in enumerate(batches, start=1):
             progress(number, len(batches) + 1)
             stage("Writing the notes ({0} of {1})", number, len(batches))
@@ -442,8 +447,10 @@ def convert(pdf: bytes, name: str, owner: str, progress=lambda step, total: None
             for item in answer.get("scenes") or []:
                 if isinstance(item, dict) and isinstance(item.get("markdown"), str):
                     notes[str(item.get("key"))] = item["markdown"]
+                    if isinstance(item.get("tldr"), str):
+                        tldrs[str(item.get("key"))] = item["tldr"]
         stage("Building the adventure")
-        adventure = build(outline, notes, owner)
+        adventure = build(outline, notes, owner, tldrs)
         note(f"Built the adventure with {len(adventure['blocks'])} blocks, {len(notes)} of {len(scenes) + len(people)} with notes")
         return adventure
     finally:

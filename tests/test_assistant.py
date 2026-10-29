@@ -437,6 +437,18 @@ def test_the_story_mode_drafts_notes(client, gemini):
     assert set(calls[0]["body"]["generationConfig"]["responseSchema"]["properties"]) == {"message", "text"}
 
 
+def test_the_tldr_mode_sums_up_the_whole_notes(client, gemini):
+    calls, answers = gemini
+    client.put("/api/assistant/config", json={"key": "gsk_secret_1234"})
+    summary = "- **Wächter** an der Tür\n- weiter: [Gruft](block:b2)"
+    answers.append(json.dumps({"message": "Kurzfassung", "text": summary}))
+    notes = "x" * 15000  # longer than a draft may send, the summary needs all of the notes
+    reply = client.post("/api/assistant/chat", json={"mode": "tldr", "messages": [{"role": "user", "content": notes}]}).json()
+    assert reply["text"] == summary
+    assert calls[0]["body"]["systemInstruction"]["parts"][0]["text"].startswith(assistant.STORY_TLDR_PROMPT)
+    assert calls[0]["body"]["contents"][0]["parts"][0]["text"] == notes
+
+
 
 def test_the_image_mode_has_its_own_instructions_with_a_style_default(client):
     style = assistant.DEFAULT_IMAGE_INSTRUCTIONS

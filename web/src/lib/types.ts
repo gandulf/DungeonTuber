@@ -447,6 +447,8 @@ export interface AdventureBlock {
   id: string;
   title: string;
   markdown: string;
+  /** The short summary of the notes (TL;DR): the most important points as keywords and links, to scan the block during play. */
+  tldr: string;
   played: boolean;
   pos: [number, number];
   autoplay: boolean;
