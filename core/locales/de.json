@@ -1105,6 +1105,7 @@
   "\"{0}\" exists already and belongs to somebody else, so it cannot be overwritten. Import it as a copy?": "\"{0}\" gibt es schon und gehört jemand anderem, es kann also nicht überschrieben werden. Als Kopie importieren?",
   "\"{0}\" was overwritten.": "\"{0}\" wurde überschrieben.",
   "\"{0}\" was imported.": "\"{0}\" wurde importiert.",
+  "The app was updated. The page reloads now.": "Die App wurde aktualisiert. Die Seite wird neu geladen.",
   "TL;DR": "TL;DR",
   "The most important points of the notes as keywords, to scan the block quickly during play.": "Die wichtigsten Punkte der Notizen als Stichworte, um den Block während des Spiels schnell zu überfliegen.",
   "Keywords: goal, persons, checks, dangers, secrets, next… Type [[ to link a block.": "Stichworte: Ziel, Personen, Proben, Gefahren, Geheimnisse, weiter… [[ tippen, um einen Block zu verlinken.",
